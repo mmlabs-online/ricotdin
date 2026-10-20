@@ -5,13 +5,15 @@
 // Idempotent: re-running UPSERTs by key — no duplicates created.
 //
 // Usage:
-//   npx tsx scripts/seed-features.ts
+//   npx tsx scripts/seed-features.ts                  # all features (overwrites /admin/features edits)
+//   npx tsx scripts/seed-features.ts --only PRO-09    # just these keys (comma-separated)
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import { parseModuleFile, parseTrackingMd, mergeWithTracking } from '../lib/features/parser.js'
+import { parseOnlyKeys, selectFeatures, SeedArgsError } from '../lib/features/seedFilter.js'
 
 dotenv.config({ path: '.env.local' })
 
@@ -19,6 +21,17 @@ const FEATURES_DIR = path.join(process.cwd(), 'ai-instruction', 'features')
 const TRACKING_FILE = path.join(process.cwd(), 'ai-instruction', 'tracking.md')
 
 async function main() {
+  let onlyKeys: string[] | null
+  try {
+    onlyKeys = parseOnlyKeys(process.argv.slice(2))
+  } catch (e) {
+    if (e instanceof SeedArgsError) {
+      console.error(e.message)
+      process.exit(1)
+    }
+    throw e
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -60,6 +73,15 @@ async function main() {
 
   console.log(`Parsed ${allMerged.length} features from ${files.length} module files`)
 
+  const { selected: toSeed, missing } = selectFeatures(allMerged, onlyKeys)
+  if (missing.length > 0) {
+    console.error(
+      `No "### <KEY> — <Title>" section found in ai-instruction/features/ for: ${missing.join(', ')}`,
+    )
+    process.exit(1)
+  }
+  if (onlyKeys) console.log(`--only: seeding ${toSeed.length} of ${allMerged.length} features`)
+
   // ── Check existing count for reporting ────────────────────────────────────
   const { count: existingCount } = await db
     .from('features')
@@ -69,7 +91,7 @@ async function main() {
   // ── Upsert ─────────────────────────────────────────────────────────────────
   let errors = 0
 
-  for (const f of allMerged) {
+  for (const f of toSeed) {
     const row = {
       key: f.key,
       source_path: f.source_path,
@@ -107,9 +129,9 @@ async function main() {
   const after = afterCount ?? 0
   const inserted = after - before
 
-  console.log(`\nDone! ${allMerged.length} features processed.`)
+  console.log(`\nDone! ${toSeed.length} features processed.`)
   console.log(`  Inserted: ${inserted}`)
-  console.log(`  Updated:  ${allMerged.length - inserted - errors}`)
+  console.log(`  Updated:  ${toSeed.length - inserted - errors}`)
   if (errors > 0) console.error(`  Errors:   ${errors}`)
 
   if (errors > 0) process.exit(1)

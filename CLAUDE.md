@@ -593,6 +593,9 @@ Auto-bump trigger on updated_at.
 - UPSERTs by `key` — idempotent; re-running is safe.
 - Reports: N features processed (X inserted, Y updated).
 - Run once: `npx tsx scripts/seed-features.ts`
+- Adding a feature later: `npx tsx scripts/seed-features.ts --only <KEY>[,<KEY>]` upserts just
+  those keys (`lib/features/seedFilter.ts`, tested in `tests/features-seed-filter.test.ts`).
+  A full re-run overwrites every edit made at `/admin/features` — never do that after seeding.
 
 **Pure parser (`lib/features/parser.ts`):**
 - `parseStatus(raw)` — maps ✅/❌/⚠️ or [x] to enum.
