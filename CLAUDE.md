@@ -177,6 +177,28 @@ choosing the tag (available versions = `git tag -l 'v*'` / Docker Hub tags / Git
 Never deploy `dev` or `latest`. Apply that release's new migrations BEFORE starting the new
 image. Rollback = redeploy the previous tag (only safe if no destructive migration ran in between).
 
+## 9l. Traceability (feature / bug ↔ branch ↔ commit ↔ PR)
+
+Tickets live **in the repo only** — no GitHub Issues. Features: `ai-instruction/tracking.md`
+(`ABC-12`). Bugs: `ai-instruction/bugs.md` (`BUG-NNN`). Linking is by convention (no CI check);
+the `/add-feature`, `/ship-feature` and `/fix-bug` skills apply it automatically.
+
+| Artifact | Convention |
+|---|---|
+| Branch | `feat/<CODE>-<slug>` · `fix/BUG-NNN-<slug>` (from `dev`) · `hotfix/BUG-NNN-<slug>` (from `release/X.Y`) · `docs/<CODE>-<slug>` |
+| Commit | Conventional Commits with the code at the end: `feat(rag): folder export (RAG-05)`, `fix(quota): no double charge (BUG-004)` |
+| PR title | `[<CODE>] <summary>`; body from `.github/pull_request_template.md` |
+| Release PR | `chore(release): vX.Y.Z`; body lists every code included (command below) |
+| CHANGELOG | each bullet ends with its code(s): `- … (PRO-09)` |
+| Back-link | after a PR is opened, add `PR #N` to the Note cell in `tracking.md` / the Link cell in `bugs.md` |
+
+Look-ups:
+```
+git log --oneline --grep 'PRO-09'                         # commits for a code
+gh pr list --state all --search 'PRO-09 in:title'          # PRs for a code
+git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes in the next release
+```
+
 ## 9a. Manual Supabase dashboard actions required
 
 Before Phase 2 features work end-to-end, you must do the following once in the
@@ -593,6 +615,9 @@ Auto-bump trigger on updated_at.
 - UPSERTs by `key` — idempotent; re-running is safe.
 - Reports: N features processed (X inserted, Y updated).
 - Run once: `npx tsx scripts/seed-features.ts`
+- Adding a feature later: `npx tsx scripts/seed-features.ts --only <KEY>[,<KEY>]` upserts just
+  those keys (`lib/features/seedFilter.ts`, tested in `tests/features-seed-filter.test.ts`).
+  A full re-run overwrites every edit made at `/admin/features` — never do that after seeding.
 
 **Pure parser (`lib/features/parser.ts`):**
 - `parseStatus(raw)` — maps ✅/❌/⚠️ or [x] to enum.
@@ -662,6 +687,23 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 - When you hit an error, surface the exact error/log rather than guessing silently.
 - If a request seems to contradict this file (e.g. would expose a key to the client,
   or pull in an out-of-scope feature), flag it instead of just doing it.
+- **Feature intake workflow:** to turn a new idea into a tracked feature, use the
+  `/add-feature "<idea>"` skill (`.claude/skills/add-feature/SKILL.md`): ground in repo
+  (dedupe/scope/code) → brainstorm Q&A → 2–3 options + recommendation → converge on the
+  smallest valuable slice that passes a Definition of Ready (testable criteria, test plan,
+  structural flags, done check) → approved spec → write `tracking.md` + `features/*.md`
+  → `seed-features.ts --only <CODE>`. Docs only, no code.
+- **Feature delivery workflow:** to build a feature from `tracking.md`, use the
+  `/ship-feature <CODE>` skill (`.claude/skills/ship-feature/SKILL.md`). It sequences
+  spec → plan → TDD → implement → verify → specialist review gates (subagents in
+  `.claude/agents/`) → close-out, and applies the rules in this section.
+- **Bug workflow:** for any bug, regression or production incident, use the
+  `/fix-bug "<description>"` skill (`.claude/skills/fix-bug/SKILL.md`). It logs `BUG-NNN` in
+  `ai-instruction/bugs.md`, decides bugfix (`dev`) vs hotfix (`release/X.Y`, per §9k) with
+  your confirmation, writes a failing regression test first, then fixes, verifies, reviews
+  and walks through the §9k hotfix steps.
+- **Traceability:** every branch, commit, PR title and CHANGELOG bullet carries its feature
+  code or `BUG-NNN` (§9l).
 
 ## 11. Build order (current plan)
 
