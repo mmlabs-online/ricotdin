@@ -706,7 +706,8 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 - **Feature delivery workflow:** to build a feature from `tracking.md`, use the
   `/ship-feature <CODE>` skill (`.claude/skills/ship-feature/SKILL.md`). It sequences
   spec → plan → TDD → implement → verify → specialist review gates (subagents in
-  `.claude/agents/`) → close-out, and applies the rules in this section.
+  `.claude/agents/`) → close-out → pushes `feat/<CODE>-<slug>` and opens a PR into `dev`
+  automatically (draft if checks are open; never merges). Applies the rules in this section.
 - **Bug workflow:** for any bug, regression or production incident, use the
   `/fix-bug "<description>"` skill (`.claude/skills/fix-bug/SKILL.md`). It logs `BUG-NNN` in
   `ai-instruction/bugs.md`, decides bugfix (`dev`) vs hotfix (`release/X.Y`, per §9k) with
