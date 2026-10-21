@@ -1,0 +1,33 @@
+-- Migration 035: browser clients can no longer write transcript_segments / transcript_chunks (BUG-007)
+--
+-- The *_insert / *_update / *_delete RLS policies (migration 025) let the meeting owner write
+-- these tables directly through PostgREST, including transcript_chunks.content and .embedding.
+-- The owner of a shared folder could plant chunks crafted for retrieval, which then
+-- land in grantees' RAG prompts (prompt injection, CWE-1426), bypassing the pipeline.
+--
+-- Safe: every write goes through server code using the service-role client
+-- (pipeline: lib/jobs/steps/{transcribePoll,embed}.ts, lib/pipeline/processMeeting.ts;
+-- admin requeue route; regenerate only reads). The browser only SELECTs transcript_segments
+-- (app/(routes)/meetings/[id]/page.tsx); chunks are read via the match_transcript_chunks RPC
+-- (SECURITY INVOKER, SELECT only). SELECT is unchanged. service_role is unchanged.
+-- Cascades from a meeting delete are referential actions and do not need the caller's grant.
+--
+-- After this, the insert/update/delete policies on both tables are inert for browser
+-- clients; they are kept so the rollback restores the previous behaviour exactly.
+--
+-- Verify after applying (expect all false):
+--   select r.role, t.tbl, p.priv, has_table_privilege(r.role, t.tbl, p.priv)
+--   from (values ('anon'), ('authenticated')) r(role),
+--        (values ('public.transcript_segments'), ('public.transcript_chunks')) t(tbl),
+--        (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(priv);
+--
+-- Rows planted BEFORE this migration are not detected here. Admin requeue of a meeting
+-- deletes and rebuilds its segments + chunks from the audio (if the audio is still kept).
+--
+-- Rollback:
+--   GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.transcript_segments TO anon, authenticated;
+--   GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.transcript_chunks   TO anon, authenticated;
+
+-- TRUNCATE is not reachable via PostgREST and bypasses RLS; revoked as defence in depth.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.transcript_segments FROM anon, authenticated;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.transcript_chunks   FROM anon, authenticated;
