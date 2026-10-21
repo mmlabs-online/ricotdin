@@ -123,10 +123,14 @@ Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still ope
 **Bugfix**
 1. Push `fix/BUG-NNN-<slug>` and open a PR into `dev`, or merge into `dev` locally if the
    user prefers. PR title: `[BUG-NNN] <summary>`; fill `.github/pull_request_template.md`.
+   Always pass the base explicitly — the repo default branch is `main`, so a bare
+   `gh pr create` would target the wrong branch:
+   `gh pr create --base dev --head fix/BUG-NNN-<slug> --title "[BUG-NNN] <summary>" --body-file <file>`.
 2. Record `PR #N` in the `Link` cell of `bugs.md`. It ships with the next normal release.
 
 **Hotfix** (`CLAUDE.md` §9k "Hotfix")
-1. Push `hotfix/BUG-NNN-<slug>`; PR into `release/X.Y`, title `[BUG-NNN] <summary>`.
+1. Push `hotfix/BUG-NNN-<slug>`; PR into `release/X.Y`, title `[BUG-NNN] <summary>`
+   (`gh pr create --base release/X.Y --head hotfix/BUG-NNN-<slug> …`).
    Record `PR #N` in `bugs.md`.
 2. After it's merged: `git checkout release/X.Y && git pull && git tag -a vX.Y.(Z+1) -m "Release vX.Y.(Z+1)" && git push origin vX.Y.(Z+1)`
    → `release.yml` builds `ricotdin:X.Y.(Z+1)`.

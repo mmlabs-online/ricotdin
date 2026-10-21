@@ -144,7 +144,8 @@ npm run test       # run tests (not yet configured)
 
 ## 9k. Release process
 
-**Branches:**
+**Branches** (GitHub default branch = `main`, so fresh clones land on `main` and a bare
+`gh pr create` targets `main` — always pass `--base` explicitly):
 - `dev` — day-to-day work; every push → Docker image `ricotdin:dev` (`release-dev.yml`).
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
@@ -159,7 +160,7 @@ npm run test       # run tests (not yet configured)
 1. On `dev`: `npm run lint && npm run typecheck && npm run test && npm run build`.
 2. `npm version X.Y.0 --no-git-tag-version`; add a `## [X.Y.0]` section to `CHANGELOG.md`
    (features + deploy checklist: new migrations, new env vars, dashboard steps + known issues).
-3. Commit `chore(release): vX.Y.0`, PR `dev` → `main`, merge (merge commit, not squash) after CI is green.
+3. Commit `chore(release): vX.Y.0`, PR `dev` → `main` (`gh pr create --base main --head dev`), merge (merge commit, not squash) after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
 5. Tag on it: `git tag -a vX.Y.0 -m "Release vX.Y.0" && git push origin vX.Y.0`
    → `release.yml` pushes `mingming21400/ricotdin:vX.Y.0` (+ `:latest` if highest) and opens
