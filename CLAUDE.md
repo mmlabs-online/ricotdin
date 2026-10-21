@@ -704,6 +704,10 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
   and walks through the §9k hotfix steps.
 - **Traceability:** every branch, commit, PR title and CHANGELOG bullet carries its feature
   code or `BUG-NNN` (§9l).
+- **Owner copilot:** `/copilot` (status brief), `/copilot <question>`, `/copilot plan`
+  (`.claude/skills/copilot/SKILL.md`). Advises and plans only; uses the read-only
+  `Project Status Analyst` agent and `scripts/backlog-snapshot.ts` for facts. Strategy and
+  decisions persist in `ai-instruction/roadmap.md` (written only with owner approval).
 
 ## 11. Build order (current plan)
 
