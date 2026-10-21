@@ -13,6 +13,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { createSignedDownloadUrl, deleteObject } from '@/lib/storage'
 import { normalizeUsername, validateUsername } from '@/lib/auth/validate'
 import { logger } from '@/lib/logger'
+import { isOwnedAvatarKey } from '@/lib/profile/avatarKey'
 import type { Database, Profile } from '@/types/database'
 
 type Theme = 'luxury' | 'default' | 'playful'
@@ -56,7 +57,8 @@ export async function GET(req: NextRequest) {
 
   // Resolve avatar signed URL if a key is stored
   let avatarUrl: string | null = null
-  if (profile.avatar_key) {
+  // BUG-002: never sign a URL for a key that isn't this user's avatar (it could be anyone's audio).
+  if (profile.avatar_key && isOwnedAvatarKey(profile.avatar_key, user.id)) {
     try {
       avatarUrl = await createSignedDownloadUrl({
         key: profile.avatar_key,
@@ -166,8 +168,13 @@ export async function PATCH(req: NextRequest) {
     if (newKey !== null && typeof newKey !== 'string') {
       return NextResponse.json({ error: 'avatar_key must be a string or null.' }, { status: 400 })
     }
+    // BUG-002: only a key issued to this user by POST /api/profile/avatar.
+    if (newKey !== null && !isOwnedAvatarKey(newKey, user.id)) {
+      return NextResponse.json({ error: 'Invalid avatar_key.' }, { status: 422 })
+    }
 
-    // If replacing an existing avatar, delete the old R2 object
+    // If replacing an existing avatar, delete the old R2 object — but only if it really is
+    // this user's avatar: the column is also writable directly under the column grant.
     const db = createServerClient()
     const { data: current } = await db
       .from('profiles')
@@ -176,7 +183,9 @@ export async function PATCH(req: NextRequest) {
       .single()
 
     const oldKey = current?.avatar_key ?? null
-    if (oldKey && oldKey !== newKey) {
+    if (oldKey && oldKey !== newKey && !isOwnedAvatarKey(oldKey, user.id)) {
+      logger.warn('[PATCH /api/profile] stored avatar_key is not this user\'s avatar — not deleting', { userId: user.id })
+    } else if (oldKey && oldKey !== newKey) {
       try {
         await deleteObject({ key: oldKey, provider: 'r2' })
       } catch (e) {

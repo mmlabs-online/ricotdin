@@ -11,6 +11,7 @@
 
 ### Bảo mật
 - Mọi lệnh xoá audio bằng service role (purge, xoá cuộc họp, admin xoá user) chỉ xoá đúng object `<user_id>/<meeting_id>.<ext>` của chính cuộc họp đó — trước đây `audio_path` do người dùng sửa được có thể trỏ sang file của người khác (PRV-02)
+- `avatar_key` trong hồ sơ không còn trỏ được tới object bất kỳ trên R2: trước đây người dùng có thể lấy link nghe hoặc xoá audio cuộc họp của người khác qua `GET`/`PATCH /api/profile`. Nay chỉ chấp nhận `avatars/<user_id>/<uuid>.(jpg|png|webp)` của chính mình (BUG-002)
 
 ### Sửa lỗi
 - `docker compose up` không truy cập được app ở `localhost:3333` và container luôn `unhealthy`: compose map `3333:3333` trong khi image lắng nghe cổng `80`. Nay map `3333:80`, dùng `HEALTHCHECK` của image (`/api/health`); README cập nhật (`-p 3333:80`, bỏ mô tả nginx) (BUG-001)
