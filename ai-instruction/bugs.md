@@ -19,8 +19,8 @@
 | BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-007-revoke-transcript-client-writes, PR #10 |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
-| BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes |
-| BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes |
+| BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
+| BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 
 ---
 
