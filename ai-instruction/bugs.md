@@ -15,7 +15,7 @@
 | BUG-002 | avatar_key is unvalidated: any user can read (signed URL) and delete any R2 object | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-002-avatar-key-ownership, PR #7 |
 | BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-003-meetings-audio-path-trust, PR #8 |
 | BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
-| BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute |
+| BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute, PR #9 |
 | BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | open | v1.0.0 | — | — | — | — |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
