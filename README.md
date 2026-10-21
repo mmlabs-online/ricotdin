@@ -3,13 +3,13 @@
 Record meetings in the browser → AI transcript + summary + to-dos + RAG chatbot.  
 Powered by Next.js 16, Supabase, Google Gemini, and Speechmatics.
 
-**Stack:** Next.js (App Router) · TypeScript · Supabase (Postgres + pgvector + Storage) · nginx · Docker
+**Stack:** Next.js (App Router) · TypeScript · Supabase (Postgres + pgvector + Storage) · Docker
 
 ---
 
 ## Running with Docker (recommended)
 
-The container runs nginx on **port 3333** as a reverse proxy in front of Next.js on port 3000.
+The container runs Next.js directly on **port 80**; Compose publishes it on host port **3333**.
 
 ### Prerequisites
 
@@ -81,7 +81,7 @@ Run, injecting server-only secrets at runtime (never at build time):
 
 ```bash
 docker run -d \
-  -p 3333:3333 \
+  -p 3333:80 \
   --env-file .env.local \
   --name ricotdin \
   ricotdin
@@ -96,8 +96,8 @@ docker stop ricotdin && docker rm ricotdin
 
 | Port | Service |
 |------|---------|
-| **3333** | nginx (expose this one) |
-| 3000 | Next.js (internal — not exposed) |
+| **3333** | Host port (open http://localhost:3333) |
+| 80 | Next.js inside the container (`PORT=80`) |
 
 ---
 
