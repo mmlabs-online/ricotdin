@@ -21,6 +21,8 @@ import { log } from '@/lib/logger'
 import { logActivity } from '@/lib/activity/logActivity'
 import { createServerClient } from '@/lib/supabase/server'
 import { getObjectBytes } from '@/lib/storage'
+import { ownedAudioPath } from '@/lib/retention/policy'
+import { PipelineError } from '@/lib/gemini/errors'
 import { isFfmpegAvailable, transcodeForGemini } from '@/lib/audio/transcode'
 import {
   submitJob,
@@ -172,14 +174,17 @@ export async function runTranscribePoll(job: JobRow): Promise<void> {
       // Re-download the audio from storage and resubmit with explicit language.
       const { data: mtg } = await db
         .from('meetings')
-        .select('audio_path, storage_provider')
+        .select('id, user_id, audio_path, storage_provider')
         .eq('id', meetingId)
         .maybeSingle()
 
-      if (!mtg?.audio_path) throw new Error('transcribe_poll: cannot retry lang — missing audio_path')
-
-      // Release the old key slot; acquire a new one for the re-submitted job.
+      // Release the old key slot first (also on the throws below); acquire a new one for the
+      // re-submitted job.
       releaseKey()
+      if (!mtg?.audio_path) throw new Error('transcribe_poll: cannot retry lang — missing audio_path')
+      // BUG-003: never download a forged audio_path (another user's recording). Terminal: retrying can't fix it.
+      const ownedPath = ownedAudioPath(mtg)
+      if (!ownedPath) throw new PipelineError('transcribe_poll: audio_path does not belong to this meeting')
       const smPool = await getSpeechmaticsPoolAsync()
       const { apiKey: newApiKey, keyIndex: newKeyIndex } = smPool.acquire()
       let newKeyHandedOff = false
@@ -188,8 +193,8 @@ export async function runTranscribePoll(job: JobRow): Promise<void> {
       let tmpTranscodeDir: string | null = null
 
       try {
-        const audioBuffer = await getObjectBytes({ key: mtg.audio_path, provider: mtg.storage_provider })
-        const ext = extname(mtg.audio_path) || '.webm'
+        const audioBuffer = await getObjectBytes({ key: ownedPath, provider: mtg.storage_provider })
+        const ext = extname(ownedPath) || '.webm'
         tmpAudioPath = join(tmpdir(), `job-lang-${randomUUID()}${ext}`)
         await writeFile(tmpAudioPath, audioBuffer)
 

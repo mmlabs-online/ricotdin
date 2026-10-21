@@ -67,12 +67,21 @@ export function audioState(m: { audio_path: string | null; audio_purged_at?: str
 
 /**
  * True only when `key` is THIS meeting's own audio object: `${userId}/${meetingId}` plus an
- * optional `.ext`. Users can UPDATE their meetings row under RLS, so service-role deletes must
- * not trust `audio_path` blindly — otherwise a forged path deletes another user's audio.
+ * optional `.ext`. Users could UPDATE their meetings row under RLS until migration 033 (BUG-003),
+ * and rows forged before it may remain, so service-role code must never trust `audio_path` blindly.
  */
 export function isOwnedAudioKey(key: string, userId: string, meetingId: string): boolean {
   if (!key || !userId || !meetingId) return false
   const prefix = `${userId}/${meetingId}`
   if (!key.startsWith(prefix)) return false
   return /^(\.[A-Za-z0-9]{1,10})?$/.test(key.slice(prefix.length))
+}
+
+/**
+ * The audio key to sign or download for a meeting, or null when there is none or it is not
+ * this meeting's own object (BUG-003: a forged audio_path must never reach storage).
+ */
+export function ownedAudioPath(m: { id: string; user_id: string; audio_path: string | null }): string | null {
+  if (!m.audio_path) return null
+  return isOwnedAudioKey(m.audio_path, m.user_id, m.id) ? m.audio_path : null
 }

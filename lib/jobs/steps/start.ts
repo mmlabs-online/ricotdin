@@ -22,6 +22,8 @@ import { logActivity } from '@/lib/activity/logActivity'
 import { createServerClient } from '@/lib/supabase/server'
 import { resolveGenerationModel } from '@/lib/ai/resolve'
 import { getObjectBytes } from '@/lib/storage'
+import { ownedAudioPath } from '@/lib/retention/policy'
+import { PipelineError } from '@/lib/gemini/errors'
 import { isFfmpegAvailable, transcodeForGemini } from '@/lib/audio/transcode'
 import { getAudioDurationSeconds } from '@/lib/audio/ffprobe'
 import { submitJob } from '@/lib/speechmatics/transcribe'
@@ -70,8 +72,11 @@ export async function runStart(job: JobRow): Promise<void> {
   }
 
   const userId = meeting.user_id
-  const audioPath = meeting.audio_path
-  if (!audioPath) throw new Error('Meeting has no audio_path — cannot process')
+  if (!meeting.audio_path) throw new Error('Meeting has no audio_path — cannot process')
+  // BUG-003: never download a forged audio_path (another user's recording).
+  const audioPath = ownedAudioPath(meeting)
+  // Terminal (PipelineError): a forged path never becomes valid, so don't retry.
+  if (!audioPath) throw new PipelineError('Meeting audio_path does not belong to this meeting — refusing to process')
 
   // ── AIP-06: write model lock (idempotent on restart) ──────────────────────
   if (!meeting.generation_provider) {

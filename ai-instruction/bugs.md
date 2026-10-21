@@ -13,8 +13,12 @@
 |---|---|---|---|---|---|---|---|---|
 | BUG-001 | docker-compose maps port 3333 but the image listens on 80 | S3 | fixed | v1.0.0 | OPS-04 | bugfix | dev | fix/BUG-001-compose-port, PR #3 |
 | BUG-002 | avatar_key is unvalidated: any user can read (signed URL) and delete any R2 object | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-002-avatar-key-ownership, PR #7 |
-| BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | open | v1.0.0 | PRV-02 | — | — | — |
+| BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-003-meetings-audio-path-trust |
 | BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
+| BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | open | v1.0.0 | — | — | — | — |
+| BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
+| BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | open | v1.0.0 | — | — | — | — |
+| BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
 
 ---
 
@@ -112,7 +116,9 @@ Users can only change the columns the UI edits (title, pinned_at, folder_id, …
 No `REVOKE UPDATE … GRANT UPDATE(<columns>)` on `meetings` (the pattern used for `profiles`, §9b), plus read paths that trust `audio_path`.
 
 **Fix**
-<pending: (1) apply isOwnedAudioKey(audio_path, user_id, id) in audio-url (404) and in the pipeline download (fail the job); (2) migration with a column-level UPDATE grant on meetings; confirm the real column list the app writes from the browser first>
+(1) New pure `ownedAudioPath(meeting)` (`lib/retention/policy.ts`, on top of `isOwnedAudioKey`; it binds the key to both `user_id` and `id`). `GET /api/audio-url/:id` returns 404 and logs `{ meetingId, userId }` for a non-owned path. The three pipeline download sites (`lib/jobs/steps/start.ts`, `lib/jobs/steps/transcribePoll.ts` lang-retry, `lib/pipeline/processMeeting.ts`) throw. In the job steps it is a terminal `PipelineError`, so there is no retry loop, and `transcribePoll` releases its Speechmatics key slot before the check.
+(2) `migrations/033_meetings_revoke_client_writes.sql`: `REVOKE INSERT, UPDATE ON public.meetings FROM anon, authenticated`. Every app write already used the service role (verified in review: no browser or user-scoped writes, no realtime, no SQL function writing as the caller). SELECT and DELETE are unchanged. The file includes a privilege check and a forensics query.
+Regression tests in `tests/retention.test.ts`, including "BUG-003: a forged audio_path pointing at another user's recording is not signable or downloadable" and the rewritten-user_id case. They failed first with `(0 , import_policy.ownedAudioPath) is not a function`, then 29/29.
 
 ## BUG-004 — Folder delete with deleteMeetings=true ignores R2
 
@@ -132,3 +138,55 @@ Predates the R2 move; does not use `lib/storage` `deleteObjects`.
 
 **Fix**
 <pending: use deleteObjects({ key, provider }) like DELETE /api/admin/users/:id>
+
+## BUG-005 — SECURITY DEFINER RPCs callable by anon/authenticated
+
+**Reported:** 2026-10-21 · **Severity:** S1 (verify first) · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-003 security review.
+
+**Steps to reproduce**
+1. Check: `select has_function_privilege('authenticated','public.quota_apply_movement(uuid,bigint,int,text,text,boolean,uuid,uuid,jsonb)','execute');`
+2. If true: `POST /rest/v1/rpc/quota_apply_movement` with a user JWT, any `p_user_id` and a positive delta.
+
+**Expected**
+Only the service role can call `quota_apply_movement` (migration 020) and `claim_next_job` (migration 021).
+
+**Actual**
+Neither function revokes EXECUTE. Postgres grants EXECUTE to PUBLIC by default (and Supabase default privileges grant it to anon/authenticated), so the comments "no GRANT = not callable" are wrong. Likely impact: minting quota for any user; grabbing or stalling pipeline jobs and reading job rows. Related: migration 024 revokes `can_access_meeting` from anon only, so PUBLIC still has it (boolean result, low impact).
+
+**Root cause**
+SECURITY DEFINER functions created without `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated`.
+
+**Fix**
+<pending: migration revoking EXECUTE on both functions from PUBLIC, anon, authenticated (keep service_role); also PUBLIC on can_access_meeting>
+
+## BUG-006 — admin_config ciphertext readable over REST
+
+**Reported:** 2026-10-21 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
+
+**Actual**
+`migrations/023_rls_admin_config_column_privilege.sql` revokes SELECT on `value_ciphertext, value_iv, value_auth_tag` at column level, which does not override the table-level SELECT grant. Admins can read the ciphertext via REST. This is useless without `KEY_ENCRYPTION_SECRET`, but it breaks the §9f "ciphertext never returned" invariant.
+
+**Fix**
+<pending: REVOKE SELECT ON admin_config FROM authenticated; GRANT SELECT (<safe columns>) ON admin_config TO authenticated>
+
+## BUG-007 — transcript_segments / transcript_chunks are client-writable
+
+**Reported:** 2026-10-21 · **Severity:** S2 · **Found in:** v1.0.0 · **Feature:** —
+
+**Actual**
+The RLS in migration 025 lets the meeting owner INSERT/UPDATE `transcript_segments` and `transcript_chunks` (including `content` and `embedding`) directly. The owner of a shared folder can plant chunks crafted for retrieval that then appear in grantees' RAG prompts (prompt injection, CWE-1426), bypassing the pipeline.
+
+**Fix**
+<pending: revoke client INSERT/UPDATE on both tables (all writes are service-role), like migration 033>
+
+## BUG-008 — Direct DELETE of an own meeting skips storage cleanup
+
+**Reported:** 2026-10-21 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** PRV-02
+
+**Actual**
+Owner-only RLS DELETE on `meetings` lets a user delete the row via PostgREST, skipping `DELETE /api/meetings/:id`, which removes the audio first (§6). The object is orphaned, and the retention purge never sees it because there is no row.
+
+**Fix**
+<pending: revoke client DELETE on meetings (the UI uses the route), or add an orphan sweep to the purge job>

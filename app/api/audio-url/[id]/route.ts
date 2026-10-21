@@ -14,6 +14,7 @@ import { createSignedDownloadUrl } from '@/lib/storage'
 import { checkMeetingAccess } from '@/lib/access'
 import { getAppConfigBool } from '@/lib/config/appConfig'
 import { logger } from '@/lib/logger'
+import { ownedAudioPath } from '@/lib/retention/policy'
 import type { Database } from '@/types/database'
 
 const SIGNED_URL_EXPIRY_SECS = 3_600 // 1 hour
@@ -65,12 +66,17 @@ export async function GET(
   if (!(await checkMeetingAccess(db, meeting, userId, 'viewer'))) {
     return NextResponse.json({ error: 'Forbidden.' }, { status: 403 })
   }
-  if (!meeting.audio_path) return NextResponse.json({ error: 'No audio for this meeting.' }, { status: 404 })
+  // BUG-003: only ever sign this meeting's own object, never a forged audio_path.
+  const audioKey = ownedAudioPath(meeting)
+  if (meeting.audio_path && !audioKey) {
+    logger.warn('[audio-url] audio_path does not belong to this meeting — refusing to sign', { meetingId: meeting.id, userId })
+  }
+  if (!audioKey) return NextResponse.json({ error: 'No audio for this meeting.' }, { status: 404 })
 
   let signedUrl: string
   try {
     signedUrl = await createSignedDownloadUrl({
-      key: meeting.audio_path,
+      key: audioKey,
       provider: meeting.storage_provider,
       expiresIn: SIGNED_URL_EXPIRY_SECS,
     })
