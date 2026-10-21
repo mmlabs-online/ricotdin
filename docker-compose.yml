@@ -18,15 +18,11 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     ports:
-      - "3333:3333"
+      # Host 3333 -> container 80 (the image sets PORT=80 / EXPOSE 80).
+      - "3333:80"
     env_file:
       - .env.local    # server-only secrets injected at runtime, never baked in
     environment:
       NODE_ENV: production
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3333/"]
-      interval: 30s
-      timeout: 5s
-      start_period: 35s
-      retries: 3
+    # Health is checked by the image's own HEALTHCHECK (GET /api/health on :80).

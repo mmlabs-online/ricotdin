@@ -8,6 +8,9 @@
 ### Tính năng
 - Release theo tag: push `vX.Y.Z` → build `mingming21400/ricotdin:vX.Y.Z` (+ `latest` nếu cao nhất) và mở PR `ricotdin vX.Y.Z` trên `mmlabs-online/deployment` ghim image theo digest; thêm `GET /api/health` và `GET /version.json` công khai, `HEALTHCHECK` trong image (OPS-04)
 
+### Sửa lỗi
+- `docker compose up` không truy cập được app ở `localhost:3333` và container luôn `unhealthy`: compose map `3333:3333` trong khi image lắng nghe cổng `80`. Nay map `3333:80`, dùng `HEALTHCHECK` của image (`/api/health`); README cập nhật (`-p 3333:80`, bỏ mô tả nginx) (BUG-001)
+
 ### Checklist deploy
 - Không có migration mới.
 - Secret GitHub mới `DEPLOY_REPO_TOKEN` (fine-grained PAT, chỉ `mmlabs-online/deployment`, Contents + Pull requests read/write).
