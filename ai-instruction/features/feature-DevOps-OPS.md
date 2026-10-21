@@ -130,7 +130,7 @@ deployment PR. Rejected: replacing with the bare template (loses verify/guards);
   - If a GitHub Release step is ever added: that job needs `permissions: contents: write` and `GH_TOKEN: ${{ github.token }}`, never `DEPLOY_REPO_TOKEN`.
 - `app/api/health/route.ts`: public `GET` → 200 `{ "status": "ok" }`, no DB/provider calls, `dynamic = 'force-dynamic'`.
 - `app/version.json/route.ts`: public `GET` → `{ "version": resolveAppVersion(...) }` from `process.env.RICOTDIN_VERSION` / `BUILD_COMMIT`, `Cache-Control: no-store`.
-- `Dockerfile`: `ARG BUILD_COMMIT` → `ENV BUILD_COMMIT` in the runtime stage; still `PORT=80`; busybox `wget` present (node:20-alpine); `HEALTHCHECK` with `wget -q --spider http://127.0.0.1/api/health`.
+- `Dockerfile`: `ARG BUILD_COMMIT` → `ENV BUILD_COMMIT` in the runtime stage; `PORT=3000`, non-root `node` user (changed from `:80` after BUG-001); busybox `wget` present (node:20-alpine); `HEALTHCHECK` with `wget -q --spider http://127.0.0.1:3000/api/health`.
 - Docs: CLAUDE.md §9k (image `mingming21400/ricotdin`, v-prefixed tags, deploy = merge the deployment PR, secret `DEPLOY_REPO_TOKEN`, runtime `RICOTDIN_VERSION`); CHANGELOG deploy checklist.
 
 **Acceptance Criteria**
@@ -138,7 +138,7 @@ deployment PR. Rejected: replacing with the bare template (loses verify/guards);
 - Given a tag not on `release/X.Y` or not matching package.json, when it is pushed, then no image is pushed and no deployment PR is opened.
 - Given a container started with no secrets, when `GET /api/health` is called, then it returns 200 `{"status":"ok"}` and the process stays up.
 - Given `RICOTDIN_VERSION=v1.2.3`, when `GET /version.json` is called, then it returns `{"version":"v1.2.3"}`; given it is empty/unset, then it returns the baked `BUILD_COMMIT`; given both empty, then `"unknown"`.
-- The image contains `wget`, listens on :80, and has no tag-derived value baked in.
+- The image contains `wget`, listens on :3000, and has no tag-derived value baked in.
 - `actionlint .github/workflows/release.yml` reports no errors.
 
 **Test Plan**
@@ -153,7 +153,7 @@ deployment PR. Rejected: replacing with the bare template (loses verify/guards);
 
 **Done check**
 - `actionlint .github/workflows/release.yml` passes; `npm test` passes.
-- `docker build --build-arg BUILD_COMMIT=$(git rev-parse HEAD) -t ricotdin:local . && docker run -d -p 8080:80 -e RICOTDIN_VERSION=v9.9.9 ricotdin:local` → `curl -i :8080/api/health` is 200, `curl :8080/version.json` is `{"version":"v9.9.9"}`, `docker exec <id> wget --help` succeeds.
+- `docker build --secret id=env,src=.env.local --build-arg BUILD_COMMIT=$(git rev-parse HEAD) -t ricotdin:local . && docker run -d -p 8080:3000 -e RICOTDIN_VERSION=v9.9.9 ricotdin:local` → `curl -i :8080/api/health` is 200, `curl :8080/version.json` is `{"version":"v9.9.9"}`, `docker exec <id> wget --help` succeeds.
 - Delivered as one commit + one PR (not merged).
 
 **Out of scope**
@@ -194,7 +194,7 @@ prompt (below) that checks every link of the chain after each release.
 - None.
 
 **Backend**
-- `docs/ops/deployment-repo/apps/ricotdin/compose.yml` (draft): project `ricotdin`; `image: ${RICOTDIN_IMAGE:?...}`; `environment: RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}`; `env_file:` the server-side secrets file (fixed absolute path on the home server, chmod 600, outside every repo); healthcheck `wget -q --spider http://127.0.0.1:80/api/health` with a `start_period` long enough for Next start; `restart: unless-stopped`; no published ports; network `web` (external) so cloudflared reaches it by service name; generous `stop_grace_period` for in-flight pipeline jobs.
+- `docs/ops/deployment-repo/apps/ricotdin/compose.yml` (draft): project `ricotdin`; `image: ${RICOTDIN_IMAGE:?...}`; `environment: RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}`; `env_file:` the server-side secrets file (fixed absolute path on the home server, chmod 600, outside every repo); healthcheck `wget -q --spider http://127.0.0.1:3000/api/health` with a `start_period` long enough for Next start; `restart: unless-stopped`; no published ports; network `web` (external) so cloudflared reaches it by service name; generous `stop_grace_period` for in-flight pipeline jobs.
 - `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin.yml` (draft): copy of `deploy-site.yml` with `APP_DIR=apps/ricotdin`, `PROJECT=ricotdin`, `RICOTDIN_IMAGE` and the pattern `^mingming21400/ricotdin:v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?@sha256:[0-9a-f]{64}$`; fails early with a clear error if the server env file is missing.
 - `docs/ops/deployment-repo/README.md`: copy steps, server env file contents (variable NAMES only, from CLAUDE.md §8), cloudflared hostname, first manual deploy, rollback, and the verification prompt.
 - Migrations for a release are still applied before merging its deployment PR (§9k).
