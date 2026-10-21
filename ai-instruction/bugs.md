@@ -11,7 +11,7 @@
 
 | Bug ID | Title | Severity | Status | Found in | Feature | Fix type | Fixed in | Link |
 |---|---|---|---|---|---|---|---|---|
-| BUG-001 | docker-compose maps port 3333 but the image listens on 80 | S3 | fixed | v1.0.0 | OPS-04 | bugfix | dev | fix/BUG-001-compose-port |
+| BUG-001 | docker-compose maps port 3333 but the image listens on 80 | S3 | fixed | v1.0.0 | OPS-04 | bugfix | dev | fix/BUG-001-compose-port, PR #3 |
 
 ---
 
