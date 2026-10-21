@@ -104,6 +104,9 @@ Rules:
 - `transcript_segments` / `transcript_chunks`: browser is SELECT-only (INSERT/UPDATE/DELETE revoked,
   migration 035, BUG-007) — only the pipeline (service role) writes transcript/RAG content. Never add a
   browser or user-scoped write to these tables.
+- `todos`, `calendar_suggestions`, `chat_sessions`, `chat_messages`: browser is SELECT-only too (migration 036,
+  BUG-009/010). Status/dismiss changes go through the PATCH routes; chat writes through `POST /api/chat`.
+  Never add a browser or user-scoped write to these tables.
 - Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
   belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
 - Every `SECURITY DEFINER` function MUST `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` and grant
@@ -294,6 +297,10 @@ Supabase dashboard:
 13. **Apply transcript client-write revoke (BUG-007):**
    - `migrations/035_transcript_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE on
      `transcript_segments` + `transcript_chunks` (plus TRUNCATE). Independent of app code. Verify with the query in the file.
+
+14. **Apply content-table client-write revoke (BUG-009, BUG-010):**
+   - `migrations/036_content_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE/TRUNCATE on `todos`,
+     `calendar_suggestions`, `chat_sessions`, `chat_messages`. Independent of app code. Verify with the query in the file.
 
 ## 9m. Audio retention purge (PRV-02)
 
