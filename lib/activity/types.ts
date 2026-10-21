@@ -18,6 +18,8 @@ export const ALLOWED_EVENT_TYPES = new Set<string>([
   // Recording lifecycle — client best-effort (via POST /api/activity)
   'record_start',
   'record_stop',
+  // COM-01: user acknowledged the recording notice before starting
+  'recording_notice_ack',
 
   // Meeting lifecycle — server-side
   'meeting_created',
@@ -36,6 +38,7 @@ export type ActivityEventType =
   | 'logout'
   | 'record_start'
   | 'record_stop'
+  | 'recording_notice_ack'
   | 'meeting_created'
   | 'processing_done'
   | 'processing_failed'
@@ -48,6 +51,7 @@ export type ActivityEventType =
 export const CLIENT_EVENT_TYPES = new Set<string>([
   'record_start',
   'record_stop',
+  'recording_notice_ack',
 ])
 
 /** Returns true iff the event type is in the allowed set. */
