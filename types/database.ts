@@ -94,6 +94,8 @@ export type Meeting = {
   source: MeetingSource
   storage_provider: StorageProvider
   audio_path: string | null
+  /** Set when the retention job deleted the audio (PRV-02, migration 032). */
+  audio_purged_at: string | null
   duration_seconds: number | null
   language: string | null
   summary: string | null
@@ -295,6 +297,7 @@ export interface Database {
           source?: MeetingSource
           storage_provider?: StorageProvider
           audio_path?: string | null
+          audio_purged_at?: string | null
           duration_seconds?: number | null
           language?: string | null
           summary?: string | null

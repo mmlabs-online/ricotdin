@@ -22,6 +22,7 @@ import { requireAdmin } from '@/lib/auth/server'
 import { enqueueJob } from '@/lib/jobs/enqueue'
 import { writeAuditLog, requestContext } from '@/lib/admin/audit'
 import { logger } from '@/lib/logger'
+import { canReprocess } from '@/lib/retention/policy'
 
 export async function POST(
   req: NextRequest,
@@ -56,6 +57,14 @@ export async function POST(
 
   if (!meeting) {
     return NextResponse.json({ error: 'Meeting not found.' }, { status: 404 })
+  }
+
+  // PRV-02: without audio a re-run would wipe the transcript below and then fail.
+  if (!canReprocess(meeting)) {
+    return NextResponse.json(
+      { error: 'This meeting has no audio (deleted by the retention policy), so it cannot be reprocessed.' },
+      { status: 409 },
+    )
   }
 
   // ── Clear child rows so the pipeline re-runs cleanly ──────────────────────

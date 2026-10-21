@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
+import { isOwnedAudioKey } from '@/lib/retention/policy'
 
 async function requireUser(req: NextRequest): Promise<string> {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim()
@@ -94,12 +95,13 @@ export async function DELETE(
     // Collect audio paths so we can clean up Storage before deleting rows
     const { data: meetingRows } = await serverClient
       .from('meetings')
-      .select('id, audio_path')
+      .select('id, user_id, audio_path')
       .eq('folder_id', id)
 
+    // audio_path is user-editable under RLS: only delete each meeting's own object (PRV-02 SEC).
     const audioPaths = (meetingRows ?? [])
-      .map((m) => m.audio_path)
-      .filter((p): p is string => typeof p === 'string' && p.length > 0)
+      .filter((m) => typeof m.audio_path === 'string' && isOwnedAudioKey(m.audio_path, m.user_id, m.id))
+      .map((m) => m.audio_path as string)
 
     if (audioPaths.length > 0) {
       await serverClient.storage.from('recordings').remove(audioPaths)

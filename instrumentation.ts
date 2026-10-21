@@ -40,5 +40,10 @@ export async function register() {
     // 4. Start the daily API key health-check scheduler.
     const { startHealthCheckScheduler } = await import('./lib/keys/healthScheduler')
     startHealthCheckScheduler()
+
+    // 5. Start the daily audio retention purge (PRV-02). No-op until
+    //    storage.audio_retention_days is set in /admin/config.
+    const { startRetentionPurgeScheduler } = await import('./lib/retention/purgeScheduler')
+    startRetentionPurgeScheduler()
   }
 }
