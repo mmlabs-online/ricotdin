@@ -95,7 +95,7 @@ As an operator, I want periodic DB backups to recover from incidents.
 ---
 
 ### OPS-04 — Tag-driven release to deployment repo
-**Priority:** High | **Status:** ⚠️ Partial — implemented; actionlint + Docker done-check pending
+**Priority:** High | **Status:** ✅ Done — done-check passed 2026-10-21 (end-to-end tag push first exercised at v1.1.0)
 
 **User Story**  
 As the owner, I want pushing a vX.Y.Z tag to build the image and open a deploy PR on mmlabs-online/deployment so that releasing to the home server is one reviewed merge.
