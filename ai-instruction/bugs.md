@@ -19,8 +19,8 @@
 | BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-007-revoke-transcript-client-writes, PR #10 |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
-| BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | open | v1.0.0 | — | — | — | — |
-| BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | open | v1.0.0 | — | — | — | — |
+| BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes |
+| BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes |
 
 ---
 
@@ -209,7 +209,9 @@ Found in the BUG-007 security review.
 Migration 025 lets the owner INSERT and the owner or a shared-folder editor UPDATE/DELETE any column of `todos` and `calendar_suggestions` via PostgREST. The intended path, the PATCH routes, only sets `status` / `dismissed`. Users can spoof `content`, `assignee`, `due_date`, `title`, `raw_mention` and `proposed_at`, and the `.ics` export uses those values. These tables are not fed to the RAG prompt, so the risk is content spoofing in the UI and `.ics`, not prompt injection.
 
 **Fix**
-<pending: revoke client INSERT/UPDATE/DELETE on both tables (all writes are service-role: lib/jobs/steps/analyse.ts, processMeeting.ts, the PATCH routes), like migrations 033/035>
+**Pending DB apply:** the migration is independent of app code, so apply it now.
+`migrations/036_content_revoke_client_writes.sql` (shared with BUG-010): `REVOKE INSERT, UPDATE, DELETE, TRUNCATE` on `todos` and `calendar_suggestions` (plus the chat tables) `FROM anon, authenticated`. All writes were already service-role (`lib/jobs/steps/analyse.ts`, `processMeeting.ts`, the PATCH routes, admin requeue). The browser only SELECTs. Status/dismiss changes still work through the PATCH routes.
+**No automated test:** this is a DB privilege, and tests must be pure (§10). Verify = the query in the migration (all false).
 
 ## BUG-010 — chat_sessions / chat_messages are client-writable
 
@@ -219,4 +221,4 @@ Migration 025 lets the owner INSERT and the owner or a shared-folder editor UPDA
 The session owner can INSERT/UPDATE/DELETE their own chat messages, including `role='assistant'` and `citations` (migrations 012, 025). The last 4 history messages go into their own RAG prompt (`app/api/chat/route.ts`). This is self-injection only, because sessions are scoped to `auth.uid()`. All app writes already use the service role.
 
 **Fix**
-<pending: revoke client writes on both tables (hygiene)>
+Fixed by `migrations/036_content_revoke_client_writes.sql` together with BUG-009. All chat writes were already service-role (`app/api/chat/route.ts`, `createServerClient`). **Pending DB apply.** No automated test (DB privilege).

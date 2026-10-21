@@ -1,0 +1,41 @@
+-- Migration 036: browser clients can no longer write todos / calendar_suggestions /
+-- chat_sessions / chat_messages (BUG-009, BUG-010)
+--
+-- BUG-009: RLS (migration 025) lets the meeting owner INSERT and the owner or a shared-folder
+-- editor UPDATE/DELETE any column of todos / calendar_suggestions via PostgREST, so they
+-- could spoof content, assignee, due_date, title, raw_mention or proposed_at that grantees
+-- see (and that the .ics export uses). The app only ever changes status / dismissed, through
+-- PATCH routes.
+-- BUG-010: the session owner can INSERT/UPDATE/DELETE their own chat messages, including
+-- role='assistant' and citations, which feed back into their own RAG history.
+--
+-- Safe: every write goes through server code using the service-role client:
+--   todos / calendar_suggestions — lib/jobs/steps/analyse.ts, lib/pipeline/processMeeting.ts,
+--     PATCH /api/todos/:id, PATCH /api/calendar-suggestions/:id, admin requeue route.
+--   chat_sessions / chat_messages — app/api/chat/route.ts (createServerClient).
+-- The browser only SELECTs todos / calendar_suggestions (app/(routes)/meetings/[id]/page.tsx).
+-- SELECT is unchanged. service_role is unchanged. Meeting / session delete cascades are
+-- referential actions and do not need the caller's grant.
+--
+-- After this, the insert/update/delete RLS policies on these tables are inert for browser
+-- clients; they are kept so the rollback restores the previous behaviour exactly.
+--
+-- Verify after applying (expect all false):
+--   select r.role, t.tbl, p.priv, has_table_privilege(r.role, t.tbl, p.priv)
+--   from (values ('anon'), ('authenticated')) r(role),
+--        (values ('public.todos'), ('public.calendar_suggestions'),
+--                ('public.chat_sessions'), ('public.chat_messages')) t(tbl),
+--        (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(priv);
+--
+-- Rows spoofed BEFORE this migration are not cleaned up. Admin requeue rebuilds a meeting's
+-- todos + calendar suggestions; chat rows are never rebuilt.
+--
+-- Rollback:
+--   GRANT INSERT, UPDATE, DELETE, TRUNCATE
+--     ON public.todos, public.calendar_suggestions, public.chat_sessions, public.chat_messages
+--     TO anon, authenticated;
+
+-- TRUNCATE is not reachable via PostgREST and bypasses RLS; revoked as defence in depth.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE
+  ON public.todos, public.calendar_suggestions, public.chat_sessions, public.chat_messages
+  FROM anon, authenticated;

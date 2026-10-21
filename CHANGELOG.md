@@ -15,6 +15,7 @@
 - Không còn nghe hoặc xử lý được audio của người khác bằng cách sửa `meetings.audio_path`: link nghe (`/api/audio-url`) và pipeline chỉ dùng file `<user_id>/<meeting_id>.<ext>` của chính cuộc họp; trình duyệt không còn quyền INSERT/UPDATE bảng `meetings` (migration 033) (BUG-003)
 - Người dùng không còn gọi trực tiếp được hàm SQL `quota_apply_movement` (tự cộng quota cho bất kỳ ai) và `claim_next_job` (chiếm job xử lý) qua REST; chỉ service role được gọi (migration 034) (BUG-005)
 - Người dùng không còn ghi thẳng được vào `transcript_segments` / `transcript_chunks` qua REST — trước đây chủ một folder chia sẻ có thể cài nội dung giả vào dữ liệu chatbot của người được chia sẻ; chỉ pipeline (service role) được ghi (migration 035) (BUG-007)
+- Người dùng không còn sửa thẳng được todos, gợi ý lịch và lịch sử chat qua REST (trước đây chủ/editor folder chia sẻ có thể giả mạo nội dung todo/sự kiện `.ics` mà người được chia sẻ thấy); chỉ server được ghi, đổi trạng thái vẫn qua các route PATCH (migration 036) (BUG-009, BUG-010)
 
 ### Sửa lỗi
 - `docker compose up` không truy cập được app ở `localhost:3333` và container luôn `unhealthy`: compose map `3333:3333` trong khi image lắng nghe cổng `80`. Nay map `3333:80`, dùng `HEALTHCHECK` của image (`/api/health`); README cập nhật (`-p 3333:80`, bỏ mô tả nginx) (BUG-001)
@@ -27,6 +28,7 @@
 - **Migration mới `migrations/033_meetings_revoke_client_writes.sql`** — thu hồi INSERT/UPDATE trên `meetings` từ `anon`/`authenticated`; chạy trước khi khởi động image mới, rồi chạy câu `has_table_privilege` trong file để xác nhận (đều `false`) (BUG-003).
 - **Migration mới `migrations/034_revoke_definer_rpc_execute.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu `has_function_privilege` trong file (BUG-005).
 - **Migration mới `migrations/035_transcript_revoke_client_writes.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-007).
+- **Migration mới `migrations/036_content_revoke_client_writes.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-009, BUG-010).
 - **Cổng container đổi 80 → 3000.** Compose trên repo deployment (OPS-05) phải trỏ healthcheck/route vào `ricotdin:3000` (`wget -q --spider http://127.0.0.1:3000/api/health`), nếu không container sẽ `unhealthy`.
 - Secret GitHub mới `DEPLOY_REPO_TOKEN` (fine-grained PAT, chỉ `mmlabs-online/deployment`, Contents + Pull requests read/write).
 - Env runtime mới `RICOTDIN_VERSION` (không bí mật, do `release.env` của repo deployment đặt); build arg `BUILD_COMMIT`.
