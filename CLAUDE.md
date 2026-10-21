@@ -327,6 +327,22 @@ Policy for people: `docs/privacy/retention-policy.md`.
   pipeline download) use `ownedAudioPath`. Client INSERT/UPDATE on `meetings` is revoked (migration 033,
   BUG-003). Avatar keys: `isOwnedAvatarKey` (BUG-002).
 
+## 9n. Recording notice (COM-01)
+
+- Clicking **Start recording** (`components/RecorderUI.tsx`) opens `components/RecordingNoticeModal.tsx`:
+  notice text + suggested verbal script; recording starts only on **"I understand — start recording"**
+  (Cancel / Escape / backdrop abort). `beginRecording()` runs synchronously inside that click so the
+  browser's capture prompts keep user activation.
+- Acknowledgement is kept per tab in `sessionStorage` for 12h (`lib/consent/recordingNotice.ts`:
+  `RECORDING_NOTICE_TTL_MS`, `isNoticeAckFresh`, `parseStoredAck`; tested in `tests/recording-notice.test.ts`),
+  then the notice shows again. Storage blocked / malformed / future value → notice shows.
+- Each acknowledgement is logged best-effort as activity event `recording_notice_ack` (`POST /api/activity`,
+  own user only, rate-limited) → visible at `/admin/activity`. It is a **self-reported trail**, not proof of
+  consent: it is not tied to a specific meeting and a failed log does not block recording.
+- Dialog a11y: portal into `<body>`, rest of page `inert`, focus on the heading (never the confirm button),
+  Tab trapped, focus returned to the opener.
+- Not built: admin toggle (notice is always mandatory); notice before file upload (upload is not recording).
+
 ## 9i. API key health check design
 
 **Goal:** Detect dead/revoked provider keys (the `key #N rejected with 401 — permanently disabled` case)
@@ -619,7 +635,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 
 **Allowed event types (ALLOWED_EVENT_TYPES in `lib/activity/types.ts`):**
 - Auth: `login`, `logout`
-- Recording (client best-effort): `record_start`, `record_stop`
+- Recording (client best-effort): `record_start`, `record_stop`, `recording_notice_ack` (COM-01)
 - Meeting lifecycle (server): `meeting_created`, `processing_done`, `processing_failed`, `chat_message`, `meeting_deleted`
 - Sharing (schema ready, instrumentation TODO): `meeting_shared`, `meeting_unshared`
 - `meeting_viewed` is **intentionally absent** — too noisy, low value. Enforced by test regression guard.
@@ -631,7 +647,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 - `lib/pipeline/processMeeting.ts` → `processing_done` / `processing_failed`
 - `app/api/chat/route.ts` (POST) → `chat_message` after user message persisted (no content in metadata)
 - `app/api/meetings/[id]/route.ts` (DELETE) → `meeting_deleted` after row delete
-- `app/api/activity` (POST) → browser hook: `record_start`, `record_stop` only
+- `app/api/activity` (POST) → browser hook: `record_start`, `record_stop`, `recording_notice_ack` only
 
 **Central helper (`lib/activity/logActivity.ts`):**
 - `logActivity(ActivityEntry): void` — fire-and-forget; uses service-role client; never throws; never blocks caller.
@@ -642,7 +658,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 - `lib/activity/guards.ts` — `isCallerOwn(callerUserId, requestedUserId): boolean`
 
 **Endpoints:**
-- `POST /api/activity` — browser hook; accepts only CLIENT_EVENT_TYPES (`record_start`, `record_stop`); validates `isCallerOwn`; in-memory rate limit 10/user/minute. Returns 422 for non-client event types, 403 for cross-user logging.
+- `POST /api/activity` — browser hook; accepts only CLIENT_EVENT_TYPES (`record_start`, `record_stop`, `recording_notice_ack`); validates `isCallerOwn`; in-memory rate limit 10/user/minute. Returns 422 for non-client event types, 403 for cross-user logging.
 - `GET /api/admin/activity?userId=&eventType=&from=&to=&page=&perPage=` — admin-only paginated feed; joins `meetings(title)` (no content); returns `{ rows, total, page, perPage }`.
 
 **UI:**

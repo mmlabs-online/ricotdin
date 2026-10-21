@@ -64,6 +64,10 @@ describe('validateEventType', () => {
     assert.equal(validateEventType('meeting_unshared'), true)
   })
 
+  it('accepts recording_notice_ack (COM-01 client event)', () => {
+    assert.equal(validateEventType('recording_notice_ack'), true)
+  })
+
   it('rejects unknown event type', () => {
     assert.equal(validateEventType('some_random_event'), false)
   })

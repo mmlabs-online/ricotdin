@@ -1,7 +1,7 @@
 // POST /api/activity
 //
 // Client-side best-effort event hook for browser-generated events.
-// Only CLIENT_EVENT_TYPES (record_start, record_stop) are accepted.
+// Only CLIENT_EVENT_TYPES (record_start, record_stop, recording_notice_ack) are accepted.
 // The caller can only log events for themselves — cross-user logging is
 // rejected by the isCallerOwn guard.
 //
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   const { ipAddress, userAgent } = requestContext(req)
   logActivity({
     userId: caller.id,
-    eventType: eventType as 'record_start' | 'record_stop',
+    eventType: eventType as 'record_start' | 'record_stop' | 'recording_notice_ack',
     meetingId,
     ip: ipAddress,
     userAgent,
