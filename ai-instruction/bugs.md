@@ -12,8 +12,8 @@
 | Bug ID | Title | Severity | Status | Found in | Feature | Fix type | Fixed in | Link |
 |---|---|---|---|---|---|---|---|---|
 | BUG-001 | docker-compose maps port 3333 but the image listens on 80 | S3 | fixed | v1.0.0 | OPS-04 | bugfix | dev | fix/BUG-001-compose-port, PR #3 |
-| BUG-002 | PATCH /api/profile deletes any R2 object named by a user-supplied avatar_key | S1 | open | v1.0.0 | — | — | — | — |
-| BUG-003 | meetings columns (audio_path, status, created_at, audio_purged_at) are user-editable under RLS | S2 | open | v1.0.0 | PRV-02 | — | — | — |
+| BUG-002 | avatar_key is unvalidated: any user can read (signed URL) and delete any R2 object | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-002-avatar-key-ownership, PR #7 |
+| BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | open | v1.0.0 | PRV-02 | — | — | — |
 | BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
 
 ---
@@ -69,46 +69,50 @@ Commit `e727faf` (2026-07-13) removed nginx from the image (nginx :80 → Next :
 
 Follow-ups (not in this fix): delete dead `start.sh` + `nginx.conf` (pre-`e727faf` nginx setup); optionally pin `PORT: "80"` in compose `environment:` so a `PORT` in `.env.local` can't override it; Dockerfile comments still say secrets come from Kubernetes.
 
-## BUG-002 — PATCH /api/profile deletes any R2 object named by a user-supplied avatar_key
+## BUG-002 — avatar_key is unvalidated: any user can read and delete any R2 object
 
 **Reported:** 2026-10-21 · **Severity:** S1 (security) · **Found in:** v1.0.0 · **Feature:** —
 
-Found during the PRV-02 security review (not fixed there; different key class).
+Found during the PRV-02 security review.
 
 **Steps to reproduce**
-1. As a signed-in user, `PATCH /api/profile` with `{ "avatar_key": "<another user's audio key, e.g. <victimId>/<meetingId>.webm>" }`.
-2. `PATCH /api/profile` again with any other `avatar_key`.
+1. As a signed-in user, set `profiles.avatar_key` to another user's audio key (`<victimId>/<meetingId>.webm`), either with `PATCH /api/profile { "avatar_key": … }` or directly via PostgREST (migration 018 grants UPDATE on `avatar_key`).
+2. `GET /api/profile` → `avatar_url` is a signed R2 URL for the victim's recording (**read**).
+3. `PATCH /api/profile` with any other `avatar_key` → the server deletes the stored key with R2 credentials (**delete**).
 
 **Expected**
-Only the caller's own avatar object can ever be deleted.
+Only the caller's own avatar object (`avatars/<user_id>/<uuid>.<ext>`) can be signed or deleted.
 
 **Actual**
-Step 2 calls `deleteObject({ key: oldKey, provider: 'r2' })` (app/api/profile/route.ts ~L181) with R2 credentials on the key stored in step 1, which is never validated, so any R2 object can be deleted, including other users' meeting audio.
+Any R2 object could be read or deleted, including other users' meeting audio.
 
 **Root cause**
-`avatar_key` is accepted as any string and later trusted for a service-credential delete.
+`avatar_key` was accepted as any string and later trusted by `createSignedDownloadUrl` (GET) and `deleteObject` (PATCH) in `app/api/profile/route.ts`.
 
 **Fix**
-<pending: validate avatar_key against the avatar key format/prefix for the caller on write, and check it again before deleting>
+New pure `isOwnedAvatarKey(key, userId)` (`lib/profile/avatarKey.ts`): only `^avatars/<userId>/<lowercase uuid>.(jpg|png|webp)$`, the exact format `POST /api/profile/avatar` issues. Checked at use time in all three places: GET signs only an owned key; PATCH returns 422 for a non-owned new key; PATCH deletes the old key only if it is owned (otherwise logs a warning and leaves it). Regression tests: `tests/avatar-key.test.ts`, e.g. "BUG-002: rejects another user's meeting audio key (read via signed URL / delete via R2)". They failed first (module missing), then 8/8.
+Follow-ups (not fixed here): PATCH deletes the old avatar before the DB update, so a failed update leaves a broken avatar; `avatar_key` is still in the column grant (a CHECK or dropping it from the grant would add defence in depth); the presigned avatar PUT is not length-bound (the 2 MB limit is advisory); `profile/page.tsx:510` expects `avatar_url` from PATCH, which returns `{ ok: true }`.
 
-## BUG-003 — meetings columns are user-editable under RLS
+## BUG-003 — meetings.audio_path (and other columns) user-editable under RLS
 
-**Reported:** 2026-10-21 · **Severity:** S2 (security hardening) · **Found in:** v1.0.0 · **Feature:** PRV-02
+**Reported:** 2026-10-21 · **Severity:** S1 (raised from S2 during the BUG-002 review) · **Found in:** v1.0.0 · **Feature:** PRV-02
 
 **Steps to reproduce**
-1. With the anon key and a user JWT, `PATCH /rest/v1/meetings?id=eq.<own or editor-shared meeting>` with `{ "audio_path": "...", "status": "done", "created_at": "2000-01-01", "audio_purged_at": "..." }`.
+1. With the anon key and a user JWT: `PATCH /rest/v1/meetings?id=eq.<own meeting>` with `{ "audio_path": "<victimId>/<victimMeetingId>.webm" }`.
+2. `GET /api/audio-url/<ownMeetingId>` → a signed URL to the victim's recording (**read**).
+3. Or trigger `POST /api/meetings/<ownMeetingId>/process` (failed/pending meeting) → the victim's audio is downloaded, transcribed and summarized into the attacker's meeting.
 
 **Expected**
-Users can only change the columns the UI edits (title, pinned_at, folder_id, …).
+Users can only change the columns the UI edits (title, pinned_at, folder_id, …). Server code only touches a meeting's own object.
 
 **Actual**
-`meetings_update` (migration 025) allows owner + editor UPDATE on every column, with no column-level grant. Service-role deletes now go through `isOwnedAudioKey` (PRV-02), but users can still fake the "Audio deleted" notice, force an early purge of a shared meeting (an editor setting `created_at`), or block reprocessing on meetings they can edit.
+`meetings_update` (migration 025) allows owner and editor UPDATE on every column, with no column-level grant. The service-role **deletes** now check `isOwnedAudioKey` (PRV-02: purge, meeting delete, admin user delete, folder delete, /uploaded), but the **reads** do not: `app/api/audio-url/[id]/route.ts` (~L70) and the pipeline download in `lib/jobs/steps/start.ts` (~L73) / `lib/pipeline/processMeeting.ts` (~L64). Users can also fake the "Audio deleted" notice, force an early purge of a shared meeting (an editor setting `created_at`), or block reprocessing.
 
 **Root cause**
-No `REVOKE UPDATE … GRANT UPDATE(<columns>)` on `meetings` (the pattern already used for `profiles`, §9b).
+No `REVOKE UPDATE … GRANT UPDATE(<columns>)` on `meetings` (the pattern used for `profiles`, §9b), plus read paths that trust `audio_path`.
 
 **Fix**
-<pending: migration with column-level UPDATE grant; confirm the real column list the app writes from the browser first>
+<pending: (1) apply isOwnedAudioKey(audio_path, user_id, id) in audio-url (404) and in the pipeline download (fail the job); (2) migration with a column-level UPDATE grant on meetings; confirm the real column list the app writes from the browser first>
 
 ## BUG-004 — Folder delete with deleteMeetings=true ignores R2
 
