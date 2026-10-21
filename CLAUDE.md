@@ -98,6 +98,11 @@ chat_messages).
 Rules:
 - RLS is ON. The browser uses the anon key (RLS-scoped to the logged-in user).
 - The **server pipeline uses the service role key** (bypasses RLS) for background writes.
+- `meetings`: the browser may only SELECT/DELETE (RLS-scoped). INSERT/UPDATE are revoked from
+  `anon`/`authenticated` (migration 033, BUG-003) — every write goes through a server route with the
+  service-role client. Never add a browser or user-scoped write to `meetings`.
+- Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
+  belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
 - Embedding dimension is **768** and must match the `output_dimensionality` we
   request from Gemini's embedding model. Do not change one without the other.
 
@@ -269,6 +274,10 @@ Supabase dashboard:
      Apply BEFORE starting the image that contains PRV-02. Purging stays OFF until
      `storage.audio_retention_days` is set at `/admin/config`. See §9m.
 
+11. **Apply meetings client-write revoke (BUG-003):**
+   - `migrations/033_meetings_revoke_client_writes.sql` — `REVOKE INSERT, UPDATE ON meetings FROM anon, authenticated`.
+     Verify with the `has_table_privilege` query in the file (all false).
+
 ## 9m. Audio retention purge (PRV-02)
 
 Policy for people: `docs/privacy/retention-policy.md`.
@@ -290,8 +299,9 @@ Policy for people: `docs/privacy/retention-policy.md`.
 - **Storage-key ownership rule (SEC):** `meetings.audio_path` is user-editable under RLS. Every
   service-role audio read/delete (purge, `DELETE /api/meetings/:id`, `DELETE /api/admin/users/:id`,
   `DELETE /api/folders/:id?deleteMeetings=true`, `POST /api/meetings/:id/uploaded`) MUST pass
-  `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`). Durable fix
-  (column-level UPDATE grant on `meetings`) is BUG-003. Avatar keys are a separate hole (BUG-002).
+  `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`); reads (`/api/audio-url`,
+  pipeline download) use `ownedAudioPath`. Client INSERT/UPDATE on `meetings` is revoked (migration 033,
+  BUG-003). Avatar keys: `isOwnedAvatarKey` (BUG-002).
 
 ## 9i. API key health check design
 

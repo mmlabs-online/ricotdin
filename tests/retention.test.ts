@@ -10,6 +10,7 @@ import {
   canReprocess,
   audioState,
   isOwnedAudioKey,
+  ownedAudioPath,
   RETENTION_SETTING_KEY,
   PURGE_INTERVAL_MS,
   PURGE_BATCH_LIMIT,
@@ -164,5 +165,29 @@ describe('isOwnedAudioKey', () => {
     assert.equal(isOwnedAudioKey('', u, m), false)
     assert.equal(isOwnedAudioKey(`${u}/${m}.webm`, '', m), false)
     assert.equal(isOwnedAudioKey(`${u}/${m}.webm`, u, ''), false)
+  })
+})
+
+// ── ownedAudioPath (BUG-003) ────────────────────────────────────────────────
+// audio_path was writable by the meeting owner/editor via PostgREST, and the audio-url
+// signing + pipeline download used it as-is → another user's recording could be read.
+
+describe('ownedAudioPath', () => {
+  const u = '11111111-1111-1111-1111-111111111111'
+  const m = '22222222-2222-2222-2222-222222222222'
+  const victim = '99999999-9999-9999-9999-999999999999/33333333-3333-3333-3333-333333333333.webm'
+
+  it("returns the meeting's own audio key", () => {
+    assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: `${u}/${m}.webm` }), `${u}/${m}.webm`)
+  })
+  it("BUG-003: a forged audio_path pointing at another user's recording is not signable or downloadable", () => {
+    assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: victim }), null)
+  })
+  it('binds to both id and user_id: a rewritten user_id does not validate the old key', () => {
+    assert.equal(ownedAudioPath({ id: m, user_id: '99999999-9999-9999-9999-999999999999', audio_path: `${u}/${m}.webm` }), null)
+  })
+  it('null / empty audio_path → null', () => {
+    assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: null }), null)
+    assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: '' }), null)
   })
 })

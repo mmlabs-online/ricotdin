@@ -1,0 +1,30 @@
+-- Migration 033: browser clients can no longer INSERT or UPDATE meetings (BUG-003)
+--
+-- meetings_insert / meetings_update RLS (migration 025) let the owner (and an editor
+-- grantee) write EVERY column through PostgREST with the anon key, including
+-- audio_path, storage_provider, status, created_at and audio_purged_at. A forged
+-- audio_path pointed server code (service role) at another user's recording.
+-- The server now checks key ownership (isOwnedAudioKey / ownedAudioPath); this removes
+-- the client write path entirely as defence in depth.
+--
+-- Safe: every meetings write in the app goes through server routes using the
+-- service-role client (verified: no browser .from('meetings').insert/update, no
+-- user-scoped client writes meetings). service_role privileges are unchanged.
+-- SELECT and DELETE are unchanged (RLS still scopes them).
+--
+-- After this, the meetings_insert / meetings_update RLS policies (migration 025) are inert
+-- for browser clients (no privilege to reach them); they are kept so a rollback restores
+-- the previous behaviour exactly.
+--
+-- Rollback: GRANT INSERT, UPDATE ON public.meetings TO anon, authenticated;
+--
+-- Verify after applying (expect all false):
+--   select has_table_privilege('authenticated','public.meetings','INSERT'),
+--          has_table_privilege('authenticated','public.meetings','UPDATE'),
+--          has_table_privilege('anon','public.meetings','UPDATE');
+-- Optional forensics — rows whose audio_path is not their own object:
+--   select id, user_id, audio_path from public.meetings
+--   where audio_path is not null
+--     and audio_path !~ ('^' || user_id || '/' || id || '(\.[A-Za-z0-9]{1,10})?$');
+
+REVOKE INSERT, UPDATE ON public.meetings FROM anon, authenticated;
