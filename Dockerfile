@@ -71,7 +71,24 @@ COPY --from=builder /app/public ./public
 # SPEECHMATICS_API_KEY, KEY_ENCRYPTION_SECRET, R2_*) are injected at runtime by
 # Kubernetes — they are never baked into the image.
 ENV PORT=80
+# Next standalone binds to $HOSTNAME; Docker sets it to the container id, which
+# would not answer on 127.0.0.1 (HEALTHCHECK). Listen on all interfaces.
+ENV HOSTNAME=0.0.0.0
 EXPOSE 80
+
+
+
+# Commit the image was built from — fallback for GET /version.json when the
+# runtime RICOTDIN_VERSION (set by the deployment repo's release.env) is empty.
+# The release tag is NOT baked in: the image is promoted by digest.
+ARG BUILD_COMMIT
+ENV BUILD_COMMIT=$BUILD_COMMIT
+
+
+
+# busybox wget ships with node:20-alpine. /api/health has no DB/provider calls.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1/api/health || exit 1
 
 
 

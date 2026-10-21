@@ -162,7 +162,8 @@ npm run test       # run tests (not yet configured)
 3. Commit `chore(release): vX.Y.0`, PR `dev` → `main`, merge (merge commit, not squash) after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
 5. Tag on it: `git tag -a vX.Y.0 -m "Release vX.Y.0" && git push origin vX.Y.0`
-   → `release.yml` pushes Docker images `ricotdin:X.Y.0` + `ricotdin:latest`.
+   → `release.yml` pushes `mingming21400/ricotdin:vX.Y.0` (+ `:latest` if highest) and opens
+   PR `ricotdin vX.Y.0` on `mmlabs-online/deployment` (OPS-04, see Deploy below).
 6. Create the GitHub Release from the `CHANGELOG.md` section.
 
 **Hotfix `X.Y.(Z+1)` for an existing line:**
@@ -172,10 +173,19 @@ npm run test       # run tests (not yet configured)
    `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
    an old line never drags `latest` backwards.
 
-**Deploy (manual):** production runs a pinned image `ricotdin:X.Y.Z` — choose the version by
-choosing the tag (available versions = `git tag -l 'v*'` / Docker Hub tags / GitHub Releases).
-Never deploy `dev` or `latest`. Apply that release's new migrations BEFORE starting the new
-image. Rollback = redeploy the previous tag (only safe if no destructive migration ran in between).
+**Deploy = merge the deployment PR (OPS-04):** image `mingming21400/ricotdin`, tags are
+v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the image, then
+(secret `DEPLOY_REPO_TOKEN` — fine-grained PAT on `mmlabs-online/deployment` only, Contents +
+Pull requests RW) opens PR `ricotdin vX.Y.Z` on `mmlabs-online/deployment` that writes ONLY
+`apps/ricotdin/release.env`:
+`RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@<digest>` (pinned by digest) + `RICOTDIN_VERSION=vX.Y.Z`.
+Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05).
+The tag is never baked into the image; runtime `RICOTDIN_VERSION` (non-secret) is served by
+public `GET /version.json` (fallback: baked `BUILD_COMMIT`, then `"unknown"` —
+`lib/release/version.ts`). Public `GET /api/health` → `{"status":"ok"}` (no DB/provider calls)
+backs the image `HEALTHCHECK`. Never deploy `dev` or `latest`. Apply that release's new
+migrations BEFORE merging the deployment PR. Rollback = a deployment PR pinning the previous
+release's digest (only safe if no destructive migration ran in between).
 
 ## 9l. Traceability (feature / bug ↔ branch ↔ commit ↔ PR)
 

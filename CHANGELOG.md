@@ -3,6 +3,17 @@
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/),
 đánh số theo [Semantic Versioning](https://semver.org/lang/vi/).
 
+## [Unreleased]
+
+### Tính năng
+- Release theo tag: push `vX.Y.Z` → build `mingming21400/ricotdin:vX.Y.Z` (+ `latest` nếu cao nhất) và mở PR `ricotdin vX.Y.Z` trên `mmlabs-online/deployment` ghim image theo digest; thêm `GET /api/health` và `GET /version.json` công khai, `HEALTHCHECK` trong image (OPS-04)
+
+### Checklist deploy
+- Không có migration mới.
+- Secret GitHub mới `DEPLOY_REPO_TOKEN` (fine-grained PAT, chỉ `mmlabs-online/deployment`, Contents + Pull requests read/write).
+- Env runtime mới `RICOTDIN_VERSION` (không bí mật, do `release.env` của repo deployment đặt); build arg `BUILD_COMMIT`.
+- Thay đổi hợp đồng release: image cố định `mingming21400/ricotdin`, tag image có tiền tố `v`. Deploy = merge PR trên repo deployment (cần OPS-05).
+
 ## [1.0.0] — 2026-09-19
 
 Bản release ổn định đầu tiên. Toàn bộ phạm vi MVP (phase 1–15 trong `CLAUDE.md` §11)
