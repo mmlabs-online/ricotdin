@@ -15,7 +15,7 @@
 | BUG-002 | avatar_key is unvalidated: any user can read (signed URL) and delete any R2 object | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-002-avatar-key-ownership, PR #7 |
 | BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-003-meetings-audio-path-trust, PR #8 |
 | BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
-| BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | open | v1.0.0 | — | — | — | — |
+| BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute, PR #9 |
 | BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | open | v1.0.0 | — | — | — | — |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
@@ -159,7 +159,10 @@ Neither function revokes EXECUTE. Postgres grants EXECUTE to PUBLIC by default (
 SECURITY DEFINER functions created without `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated`.
 
 **Fix**
-<pending: migration revoking EXECUTE on both functions from PUBLIC, anon, authenticated (keep service_role); also PUBLIC on can_access_meeting>
+**Pending DB apply:** the hole stays open on the live DB until migration 034 is applied and verified. It is independent of app code, so apply it now.
+`migrations/034_revoke_definer_rpc_execute.sql`: `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` plus `GRANT EXECUTE … TO service_role` for `quota_apply_movement(uuid,bigint,int,text,text,boolean,uuid,uuid,jsonb)` and `claim_next_job(text)`. Both are only called server-side with the service-role client (`lib/quota/applyQuotaMovement.ts`, `lib/jobs/worker.ts`), so app behaviour is unchanged. New CLAUDE.md §6 rule: every SECURITY DEFINER function must revoke EXECUTE from PUBLIC.
+**No automated test:** this is a database privilege, and project tests must be pure with no I/O (§10). Repro/verify = the `has_function_privilege` query in the migration (before: true for anon/authenticated; after: false for anon/authenticated, true for service_role).
+Not changed: `can_access_meeting` still has PUBLIC EXECUTE (it returns a boolean for the caller, low impact). Revoking PUBLIC would also make anon RLS evaluation raise errors instead of returning empty, so it needs its own check. `prevent_role_escalation` is SECURITY DEFINER but returns `trigger`, which PostgREST cannot call; `custom_access_token_hook` was already revoked in migration 002.
 
 ## BUG-006 — admin_config ciphertext readable over REST
 

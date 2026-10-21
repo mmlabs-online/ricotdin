@@ -103,6 +103,11 @@ Rules:
   service-role client. Never add a browser or user-scoped write to `meetings`.
 - Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
   belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
+- Every `SECURITY DEFINER` function MUST `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` and grant
+  only the roles that need it. "No GRANT" does NOT mean "not callable": Postgres grants EXECUTE to
+  PUBLIC by default (BUG-005, migration 034). Exceptions: trigger functions (not callable via PostgREST)
+  and `can_access_meeting`, which RLS policies call as `authenticated` and which only answers for
+  `auth.uid()` (it keeps EXECUTE; see BUG-005).
 - Embedding dimension is **768** and must match the `output_dimensionality` we
   request from Gemini's embedding model. Do not change one without the other.
 
@@ -277,6 +282,11 @@ Supabase dashboard:
 11. **Apply meetings client-write revoke (BUG-003):**
    - `migrations/033_meetings_revoke_client_writes.sql` — `REVOKE INSERT, UPDATE ON meetings FROM anon, authenticated`.
      Verify with the `has_table_privilege` query in the file (all false).
+
+12. **Apply SECURITY DEFINER RPC revoke (BUG-005):**
+   - `migrations/034_revoke_definer_rpc_execute.sql` — `quota_apply_movement` and `claim_next_job` become
+     service-role only. Independent of app code, so it can be applied immediately. Verify with the
+     `has_function_privilege` query in the file (anon/authenticated false, service_role true).
 
 ## 9m. Audio retention purge (PRV-02)
 
