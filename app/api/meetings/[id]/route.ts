@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/auth/server'
 import { deleteObject } from '@/lib/storage'
+import { isOwnedAudioKey } from '@/lib/retention/policy'
 import { checkMeetingAccess, canAssignToFolder } from '@/lib/access'
 import { logActivity } from '@/lib/activity/logActivity'
 import { requestContext } from '@/lib/admin/audit'
@@ -140,7 +141,10 @@ export async function DELETE(
 
   // Delete audio from storage first. Failure here is non-fatal.
   let storageWarning: string | null = null
-  if (meeting.audio_path) {
+  // audio_path is user-editable under RLS: only delete this meeting's own object.
+  if (meeting.audio_path && !isOwnedAudioKey(meeting.audio_path, meeting.user_id, meeting.id)) {
+    logger.warn('[meetings] audio_path does not belong to this meeting — skipping storage delete', { meetingId: meeting.id })
+  } else if (meeting.audio_path) {
     try {
       await deleteObject({ key: meeting.audio_path, provider: meeting.storage_provider })
     } catch (storageErr) {

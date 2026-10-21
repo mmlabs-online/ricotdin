@@ -28,6 +28,7 @@ import {
   deleteObject,
 } from '@/lib/storage'
 import { logger } from '@/lib/logger'
+import { isOwnedAudioKey } from '@/lib/retention/policy'
 import type { Database } from '@/types/database'
 
 async function requireUser(req: NextRequest): Promise<string> {
@@ -106,6 +107,12 @@ export async function POST(
 
   if (meeting.user_id !== userId) {
     return NextResponse.json({ error: 'Forbidden.' }, { status: 403 })
+  }
+
+  // audio_path is user-editable under RLS, and the checks below read, transcode and may
+  // delete it with service-role storage access: it must be this meeting's own object.
+  if (meeting.audio_path && !isOwnedAudioKey(meeting.audio_path, meeting.user_id, meeting.id)) {
+    return NextResponse.json({ error: 'Invalid audio path for this meeting.' }, { status: 422 })
   }
 
   // ── Confirm file exists + check size ─────────────────────────────────────

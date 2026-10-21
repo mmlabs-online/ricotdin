@@ -23,6 +23,7 @@ import { requireAdmin } from '@/lib/auth/server'
 import { guardDelete } from '@/lib/admin/guards'
 import { deriveUserStatus } from '@/lib/admin/userStatus'
 import { deleteObjects } from '@/lib/storage'
+import { isOwnedAudioKey } from '@/lib/retention/policy'
 import { logger } from '@/lib/logger'
 
 export async function GET(
@@ -108,12 +109,14 @@ export async function DELETE(
   // Collect audio paths + providers from all of the target's meetings before deleting
   const { data: meetings } = await db
     .from('meetings')
-    .select('audio_path, storage_provider')
+    .select('id, user_id, audio_path, storage_provider')
     .eq('user_id', targetId)
 
+  // audio_path is user-editable under RLS: only delete each meeting's own object, so a
+  // forged path can't make this delete another user's audio.
   const audioItems = (meetings ?? [])
-    .filter((m): m is { audio_path: string; storage_provider: import('@/types/database').StorageProvider } => typeof m.audio_path === 'string')
-    .map((m) => ({ key: m.audio_path, provider: m.storage_provider }))
+    .filter((m) => typeof m.audio_path === 'string' && isOwnedAudioKey(m.audio_path, m.user_id, m.id))
+    .map((m) => ({ key: m.audio_path as string, provider: m.storage_provider }))
 
   // Delete storage objects (handles mixed supabase/r2 providers). Failures are non-fatal.
   const storageWarnings: string[] = []

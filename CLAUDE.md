@@ -264,6 +264,35 @@ Supabase dashboard:
    - `migrations/031_audio_render_hack_flag.sql` — seeds the `user_hack_audio_render` row in `app_config`
      (default `false`). Toggle it at `/admin/config`. See §9j.
 
+10. **Apply audio retention purge migration (PRV-02):**
+   - `migrations/032_meetings_audio_purged.sql` — adds `meetings.audio_purged_at` + partial index.
+     Apply BEFORE starting the image that contains PRV-02. Purging stays OFF until
+     `storage.audio_retention_days` is set at `/admin/config`. See §9m.
+
+## 9m. Audio retention purge (PRV-02)
+
+Policy for people: `docs/privacy/retention-policy.md`.
+- **Setting:** `app_config.storage.audio_retention_days` (seeded `null` in migration 006). A whole number
+  1–3650 turns purging on; anything else = keep forever (fails closed, `parseRetentionDays`).
+- **Rule** (pure, `lib/retention/policy.ts`, tested in `tests/retention.test.ts`): `isPurgeEligible` —
+  `status = 'done'`, `audio_path` set, `created_at` strictly before `now − N days`.
+- **Runner** (`lib/retention/purge-runner.ts`, service role): oldest first, ≤ 500 per run. Per meeting:
+  re-read the row → `isOwnedAudioKey` → delete the object → compare-and-set update
+  (`status='done'` + same `audio_path`) to `audio_path = NULL, audio_purged_at = now()` → audit row
+  `meeting.audio_purged` (actor_id null, actor_email `system:retention`). Delete failure = row untouched,
+  retried next run. Transcript/notes/todos/chat are never touched.
+- **Scheduler:** `lib/retention/purgeScheduler.ts`, started from `instrumentation.ts`; first run 60s after
+  startup, then every 24h (idempotent, `unref()`ed, no overlapping runs).
+- **Reprocess guard:** `canReprocess` — `POST /api/meetings/:id/process` and admin requeue return **409**
+  when `audio_path` is null (requeue would otherwise wipe the transcript, then fail).
+- **UI:** meeting page shows "Audio deleted (retention policy)" when `audioState(meeting) === 'purged'`;
+  transcript timestamps render as plain text when there is no audio.
+- **Storage-key ownership rule (SEC):** `meetings.audio_path` is user-editable under RLS. Every
+  service-role audio read/delete (purge, `DELETE /api/meetings/:id`, `DELETE /api/admin/users/:id`,
+  `DELETE /api/folders/:id?deleteMeetings=true`, `POST /api/meetings/:id/uploaded`) MUST pass
+  `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`). Durable fix
+  (column-level UPDATE grant on `meetings`) is BUG-003. Avatar keys are a separate hole (BUG-002).
+
 ## 9i. API key health check design
 
 **Goal:** Detect dead/revoked provider keys (the `key #N rejected with 401 — permanently disabled` case)

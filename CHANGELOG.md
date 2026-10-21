@@ -7,6 +7,10 @@
 
 ### Tính năng
 - Release theo tag: push `vX.Y.Z` → build `mingming21400/ricotdin:vX.Y.Z` (+ `latest` nếu cao nhất) và mở PR `ricotdin vX.Y.Z` trên `mmlabs-online/deployment` ghim image theo digest; thêm `GET /api/health` và `GET /version.json` công khai, `HEALTHCHECK` trong image (OPS-04)
+- Tự động xoá audio theo thời hạn lưu: mỗi ngày xoá file audio của các cuộc họp `done` cũ hơn `storage.audio_retention_days` ngày (mặc định `null` = giữ mãi, tắt), giữ nguyên transcript/ghi chú/todos/chat, ghi audit `meeting.audio_purged`; trang cuộc họp hiện "Audio deleted (retention policy)"; `/process` và admin requeue trả 409 khi không còn audio (tránh mất transcript); chính sách nội bộ `docs/privacy/retention-policy.md` (PRV-02)
+
+### Bảo mật
+- Mọi lệnh xoá audio bằng service role (purge, xoá cuộc họp, admin xoá user) chỉ xoá đúng object `<user_id>/<meeting_id>.<ext>` của chính cuộc họp đó — trước đây `audio_path` do người dùng sửa được có thể trỏ sang file của người khác (PRV-02)
 
 ### Sửa lỗi
 - `docker compose up` không truy cập được app ở `localhost:3333` và container luôn `unhealthy`: compose map `3333:3333` trong khi image lắng nghe cổng `80`. Nay map `3333:80`, dùng `HEALTHCHECK` của image (`/api/health`); README cập nhật (`-p 3333:80`, bỏ mô tả nginx) (BUG-001)
@@ -15,7 +19,7 @@
 - Dockerfile viết lại theo mẫu CaleChip: stage deps/build/runner, cache npm, `NODE_VERSION` arg; giá trị `NEXT_PUBLIC_*` lấy từ BuildKit secret (`--secret id=env,src=.env.local`, chỉ đọc các dòng `NEXT_PUBLIC_*`) hoặc `--build-arg`, build báo lỗi nếu thiếu URL/anon key Supabase; container chạy user non-root `node` trên **cổng 3000** (trước là 80), `HEALTHCHECK` `:3000/api/health`. Compose: `3333:3000`, ghim `PORT=3000`, không cần `--env-file` nữa. Xoá `start.sh` + `nginx.conf` không còn dùng (OPS-04, BUG-001)
 
 ### Checklist deploy
-- Không có migration mới.
+- **Migration mới `migrations/032_meetings_audio_purged.sql`** (thêm cột `meetings.audio_purged_at` + index) — chạy TRƯỚC khi khởi động image mới. Sau đó (tuỳ chọn) đặt `storage.audio_retention_days` ở `/admin/config` để bật purge (PRV-02).
 - **Cổng container đổi 80 → 3000.** Compose trên repo deployment (OPS-05) phải trỏ healthcheck/route vào `ricotdin:3000` (`wget -q --spider http://127.0.0.1:3000/api/health`), nếu không container sẽ `unhealthy`.
 - Secret GitHub mới `DEPLOY_REPO_TOKEN` (fine-grained PAT, chỉ `mmlabs-online/deployment`, Contents + Pull requests read/write).
 - Env runtime mới `RICOTDIN_VERSION` (không bí mật, do `release.env` của repo deployment đặt); build arg `BUILD_COMMIT`.

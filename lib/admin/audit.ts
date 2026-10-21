@@ -8,7 +8,8 @@ import { createServerClient } from '@/lib/supabase/server'
 import { logger } from '@/lib/logger'
 
 export interface AuditEntry {
-  actorId: string
+  /** null for system actions (e.g. the PRV-02 retention job); actor_email then names the job. */
+  actorId: string | null
   actorEmail: string
   /** Dot-namespaced action. e.g. 'meeting.requeue', 'user.role_change' */
   action: string
