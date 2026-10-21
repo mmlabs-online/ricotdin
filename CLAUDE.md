@@ -101,6 +101,9 @@ Rules:
 - `meetings`: the browser may only SELECT/DELETE (RLS-scoped). INSERT/UPDATE are revoked from
   `anon`/`authenticated` (migration 033, BUG-003) — every write goes through a server route with the
   service-role client. Never add a browser or user-scoped write to `meetings`.
+- `transcript_segments` / `transcript_chunks`: browser is SELECT-only (INSERT/UPDATE/DELETE revoked,
+  migration 035, BUG-007) — only the pipeline (service role) writes transcript/RAG content. Never add a
+  browser or user-scoped write to these tables.
 - Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
   belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
 - Every `SECURITY DEFINER` function MUST `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` and grant
@@ -287,6 +290,10 @@ Supabase dashboard:
    - `migrations/034_revoke_definer_rpc_execute.sql` — `quota_apply_movement` and `claim_next_job` become
      service-role only. Independent of app code, so it can be applied immediately. Verify with the
      `has_function_privilege` query in the file (anon/authenticated false, service_role true).
+
+13. **Apply transcript client-write revoke (BUG-007):**
+   - `migrations/035_transcript_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE on
+     `transcript_segments` + `transcript_chunks` (plus TRUNCATE). Independent of app code. Verify with the query in the file.
 
 ## 9m. Audio retention purge (PRV-02)
 
