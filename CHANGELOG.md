@@ -10,9 +10,11 @@
 
 ### Bảo mật
 - Admin không còn đọc được ciphertext của API key, secret R2 (`admin_config`, `storage_config`) qua REST trực tiếp; migration 023 trước đây không có tác dụng. Trình duyệt mất mọi quyền trên 2 bảng này, UI admin vẫn dùng API phía server (migration 037) (BUG-006)
+- Người dùng không còn xoá thẳng được cuộc họp qua REST (trước đây làm vậy sẽ bỏ lại file audio trên storage mãi mãi, ngoài tầm của job purge); xoá luôn đi qua `DELETE /api/meetings/:id` để xoá audio trước (migration 038) (BUG-008)
 
 ### Checklist deploy
 - **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
+- **Migration mới `migrations/038_meetings_revoke_client_delete.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-008).
 - **OPS-05:** tạo `/etc/mmlabs/ricotdin.env` (600, user của runner) với secret production; copy 2 bản nháp vào repo deployment; thêm hostname cloudflared → `http://ricotdin:3000`; cập nhật Supabase Site URL/redirect; dừng container ricotdin chạy tay; rồi merge PR `ricotdin v1.1.0` (đã mở) để deploy qua pipeline. Trước đó nên rotate token Cloudflare Tunnel đang bị commit trong `proxy/compose.yml` của repo deployment.
 
 ## [1.1.0] — 2026-10-22
