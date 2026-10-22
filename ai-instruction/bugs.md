@@ -14,13 +14,16 @@
 | BUG-001 | docker-compose maps port 3333 but the image listens on 80 | S3 | fixed | v1.0.0 | OPS-04 | bugfix | dev | fix/BUG-001-compose-port, PR #3 |
 | BUG-002 | avatar_key is unvalidated: any user can read (signed URL) and delete any R2 object | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-002-avatar-key-ownership, PR #7 |
 | BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-003-meetings-audio-path-trust, PR #8 |
-| BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
+| BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
 | BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute, PR #9 |
 | BUG-006 | admin_config + storage_config ciphertext readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-006-revoke-ciphertext-tables, PR #17 |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-007-revoke-transcript-client-writes, PR #10 |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-008-revoke-meetings-delete, PR #18 |
 | BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 | BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
+| BUG-011 | Folder delete with deleteMeetings=true also deletes OTHER users' meetings (shared-folder editors) and their audio | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
+| BUG-012 | `meeting_deleted` activity events were never stored (FK to the already-deleted meeting row) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
+| BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | open | v1.0.0 | — | — | — | — |
 
 ---
 
@@ -139,7 +142,8 @@ Their audio objects are removed from R2.
 Predates the R2 move; does not use `lib/storage` `deleteObjects`. Also: the route ignores the result of the meetings row delete (`app/api/folders/[id]/route.ts` ~L114), so a failed delete is silent. (Re-confirmed in the BUG-008 review.)
 
 **Fix**
-<pending: use deleteObjects({ key, provider }) like DELETE /api/admin/users/:id>
+New pure `ownedAudioDeleteItems(rows)` in `lib/retention/policy.ts` returns `{ key, provider }` for each meeting's own audio (via `ownedAudioPath`; forged/foreign keys and meetings without audio are skipped). `DELETE /api/folders/:id?deleteMeetings=true` now selects `storage_provider`, deletes with provider-aware `deleteObjects` (failures logged by count, non-fatal), and returns 500 instead of continuing when the meetings lookup or row delete fails. If the row delete fails after the audio was removed, retrying the folder delete is safe (deleting a missing object succeeds on R2 and Supabase).
+Regression tests in `tests/retention.test.ts`, incl. "BUG-004: keeps each object's provider so R2 audio is deleted from R2" — failed first (`ownedAudioDeleteItems is not a function`), then 32/32.
 
 ## BUG-005 — SECURITY DEFINER RPCs callable by anon/authenticated
 
@@ -226,3 +230,51 @@ The session owner can INSERT/UPDATE/DELETE their own chat messages, including `r
 
 **Fix**
 Fixed by `migrations/036_content_revoke_client_writes.sql` together with BUG-009. All chat writes were already service-role (`app/api/chat/route.ts`, `createServerClient`). **Pending DB apply.** No automated test (DB privilege).
+
+## BUG-011 — Folder delete with deleteMeetings=true deletes other users' meetings
+
+**Reported:** 2026-10-22 · **Severity:** S2 (data loss across users) · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-004 review.
+
+**Steps to reproduce**
+1. User A shares folder F with user B as **editor**.
+2. B creates a meeting in F (`POST /api/meetings` with `folder_id`) or moves their own meeting into F (`PATCH /api/meetings/:id`) — allowed by `canAssignToFolder` (`lib/access/index.ts`, editor+).
+3. A calls `DELETE /api/folders/F?deleteMeetings=true`.
+
+**Expected**
+Only A's own meetings are deleted; B's meetings are not destroyed by another user.
+
+**Actual**
+The route selects every meeting with `folder_id = F` (service role, no `user_id` filter) and deletes them all, including B's meeting, transcript, chat and audio, with no `meeting_deleted` activity or audit entry.
+
+**Root cause**
+Folder delete treats "meetings in my folder" as "my meetings".
+
+**Fix**
+Owner chose (a). `DELETE /api/folders/:id?deleteMeetings=true` now selects only `user_id = caller` meetings in the folder and re-filters them with the new pure `ownMeetingsOnly(rows, callerId)` (`lib/retention/policy.ts`). Other users' meetings are untouched and fall back to Uncategorized via `ON DELETE SET NULL` when the folder is deleted. Each deleted meeting now writes a `meeting_deleted` activity event (via the BUG-012 fix — before it, no `meeting_deleted` event was ever stored).
+Regression tests in `tests/retention.test.ts`, incl. "BUG-011: folder delete never selects another user's meeting". They failed first (`ownMeetingsOnly is not a function`), then 35/35.
+
+## BUG-012 — `meeting_deleted` activity events were never stored
+
+**Reported:** 2026-10-22 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-011 review.
+
+**Actual**
+`activity_log.meeting_id` is `REFERENCES meetings(id) ON DELETE SET NULL` (migration 016, not deferrable). `DELETE /api/meetings/:id` (and the new folder bulk delete) logged `meeting_deleted` with `meetingId` AFTER deleting the row, so every insert failed with an FK violation (23503), swallowed by fire-and-forget `logActivity`. The admin activity feed never showed a deletion.
+
+**Fix**
+New pure `meetingDeletedActivity(meetingId)` (`lib/activity/entries.ts`) → `{ eventType: 'meeting_deleted', meetingId: null, metadata: { meeting_id } }` (id is an identifier, not content — §9g). Used by both delete routes. Regression test "BUG-012: meeting_deleted never references the deleted row via the meeting_id FK" (`tests/activity-log.test.ts`) — failed first (module missing), then passed. Fixed in the same branch as BUG-011.
+
+## BUG-013 — Deleting a shared folder cascades away grantees' folder-scoped chat sessions
+
+**Reported:** 2026-10-22 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-011 review.
+
+**Actual**
+`chat_sessions.folder_id` is `REFERENCES folders(id) ON DELETE CASCADE` (migration 018). Any folder delete (with or without `deleteMeetings`) deletes every user's folder-scoped chat sessions and messages, including grantees', with no log.
+
+**Fix**
+<pending: e.g. ON DELETE SET NULL for other users' sessions, or delete only the owner's sessions in the route before deleting the folder>

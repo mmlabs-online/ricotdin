@@ -21,6 +21,7 @@ import { deleteObject } from '@/lib/storage'
 import { isOwnedAudioKey } from '@/lib/retention/policy'
 import { checkMeetingAccess, canAssignToFolder } from '@/lib/access'
 import { logActivity } from '@/lib/activity/logActivity'
+import { meetingDeletedActivity } from '@/lib/activity/entries'
 import { requestContext } from '@/lib/admin/audit'
 import { logger } from '@/lib/logger'
 
@@ -162,7 +163,7 @@ export async function DELETE(
   }
 
   const { ipAddress, userAgent } = requestContext(req)
-  logActivity({ userId: caller.id, eventType: 'meeting_deleted', meetingId, ip: ipAddress, userAgent })
+  logActivity({ userId: caller.id, ...meetingDeletedActivity(meetingId), ip: ipAddress, userAgent })
 
   return NextResponse.json({
     ok: true,

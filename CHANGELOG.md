@@ -12,6 +12,11 @@
 - Admin không còn đọc được ciphertext của API key, secret R2 (`admin_config`, `storage_config`) qua REST trực tiếp; migration 023 trước đây không có tác dụng. Trình duyệt mất mọi quyền trên 2 bảng này, UI admin vẫn dùng API phía server (migration 037) (BUG-006)
 - Người dùng không còn xoá thẳng được cuộc họp qua REST (trước đây làm vậy sẽ bỏ lại file audio trên storage mãi mãi, ngoài tầm của job purge); xoá luôn đi qua `DELETE /api/meetings/:id` để xoá audio trước (migration 038) (BUG-008)
 
+### Sửa lỗi
+- Xoá folder kèm cuộc họp giờ xoá cả file audio trên R2 (trước đây chỉ xoá trên bucket Supabase cũ nên audio R2 bị bỏ lại), và báo lỗi (500) thay vì âm thầm bỏ qua khi không lấy được hoặc không xoá được các cuộc họp (BUG-004)
+- Xoá folder chia sẻ kèm cuộc họp không còn xoá cuộc họp của người khác (editor đã bỏ cuộc họp của họ vào folder): chỉ xoá cuộc họp của chính chủ folder, cuộc họp của người khác chuyển về Uncategorized của họ; mỗi cuộc họp bị xoá có log `meeting_deleted` (BUG-011)
+- Sự kiện `meeting_deleted` trong activity log trước đây không bao giờ được lưu (vướng khoá ngoại tới cuộc họp vừa xoá); nay lưu với ID cuộc họp trong `metadata` (BUG-012)
+
 ### Checklist deploy
 - **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
 - **Migration mới `migrations/038_meetings_revoke_client_delete.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-008).
