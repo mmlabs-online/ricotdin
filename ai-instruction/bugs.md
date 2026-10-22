@@ -18,7 +18,7 @@
 | BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute, PR #9 |
 | BUG-006 | admin_config + storage_config ciphertext readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-006-revoke-ciphertext-tables, PR #17 |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-007-revoke-transcript-client-writes, PR #10 |
-| BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
+| BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-008-revoke-meetings-delete, PR #18 |
 | BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 | BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 
@@ -136,7 +136,7 @@ Their audio objects are removed from R2.
 `app/api/folders/[id]/route.ts` calls `storage.from('recordings').remove()` (legacy Supabase bucket only), so R2 audio is orphaned. The ownership guard (PRV-02) is applied; the provider handling is not.
 
 **Root cause**
-Predates the R2 move; does not use `lib/storage` `deleteObjects`.
+Predates the R2 move; does not use `lib/storage` `deleteObjects`. Also: the route ignores the result of the meetings row delete (`app/api/folders/[id]/route.ts` ~L114), so a failed delete is silent. (Re-confirmed in the BUG-008 review.)
 
 **Fix**
 <pending: use deleteObjects({ key, provider }) like DELETE /api/admin/users/:id>
@@ -199,7 +199,9 @@ Not covered: rows planted before the migration are not detected. Admin requeue r
 Owner-only RLS DELETE on `meetings` lets a user delete the row via PostgREST, skipping `DELETE /api/meetings/:id`, which removes the audio first (§6). The object is orphaned, and the retention purge never sees it because there is no row.
 
 **Fix**
-<pending: revoke client DELETE on meetings (the UI uses the route), or add an orphan sweep to the purge job>
+**Pending DB apply** (independent of app code; apply now).
+`migrations/038_meetings_revoke_client_delete.sql`: `REVOKE DELETE, TRUNCATE ON public.meetings FROM anon, authenticated`. The UI only deletes through service-role routes (`DELETE /api/meetings/:id`, folder delete with meetings, `/uploaded` reject, `POST /api/meetings` cleanup); no browser or user-scoped client deletes meetings. With 033 the browser is now SELECT-only on `meetings`.
+**No automated test:** this is a DB privilege, and tests must be pure (§10). Verified on a throwaway Postgres 16 with the real FK shapes: after 038, `authenticated` direct `DELETE FROM meetings` → `permission denied`; deleting a folder as `authenticated` still sets `meetings.folder_id` to NULL, and deleting a user still cascades to meetings + todos (referential actions don't need the caller's grant).
 
 ## BUG-009 — todos / calendar_suggestions are client-writable on every column
 

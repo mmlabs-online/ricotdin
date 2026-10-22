@@ -98,9 +98,9 @@ chat_messages).
 Rules:
 - RLS is ON. The browser uses the anon key (RLS-scoped to the logged-in user).
 - The **server pipeline uses the service role key** (bypasses RLS) for background writes.
-- `meetings`: the browser may only SELECT/DELETE (RLS-scoped). INSERT/UPDATE are revoked from
-  `anon`/`authenticated` (migration 033, BUG-003) — every write goes through a server route with the
-  service-role client. Never add a browser or user-scoped write to `meetings`.
+- `meetings`: the browser is SELECT-only (RLS-scoped). INSERT/UPDATE are revoked (migration 033, BUG-003) and
+  DELETE/TRUNCATE too (migration 038, BUG-008) — every write/delete goes through a server route with the
+  service-role client (delete must remove the audio first). Never add a browser or user-scoped write to `meetings`.
 - `transcript_segments` / `transcript_chunks`: browser is SELECT-only (INSERT/UPDATE/DELETE revoked,
   migration 035, BUG-007) — only the pipeline (service role) writes transcript/RAG content. Never add a
   browser or user-scoped write to these tables.
@@ -312,6 +312,10 @@ Supabase dashboard:
    - `migrations/037_revoke_ciphertext_tables.sql` — `REVOKE ALL ON admin_config, storage_config FROM anon, authenticated`.
      Independent of app code. Verify with the query in the file (all false).
 
+16. **Apply meetings client-delete revoke (BUG-008):**
+   - `migrations/038_meetings_revoke_client_delete.sql` — `REVOKE DELETE, TRUNCATE ON meetings FROM anon, authenticated`.
+     Independent of app code. Verify with the query in the file (all false).
+
 ## 9m. Audio retention purge (PRV-02)
 
 Policy for people: `docs/privacy/retention-policy.md`.
@@ -335,7 +339,7 @@ Policy for people: `docs/privacy/retention-policy.md`.
   `DELETE /api/folders/:id?deleteMeetings=true`, `POST /api/meetings/:id/uploaded`) MUST pass
   `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`); reads (`/api/audio-url`,
   pipeline download) use `ownedAudioPath`. Client INSERT/UPDATE on `meetings` is revoked (migration 033,
-  BUG-003). Avatar keys: `isOwnedAvatarKey` (BUG-002).
+  BUG-003), and DELETE/TRUNCATE too (migration 038, BUG-008). Avatar keys: `isOwnedAvatarKey` (BUG-002).
 
 ## 9n. Recording notice (COM-01)
 
