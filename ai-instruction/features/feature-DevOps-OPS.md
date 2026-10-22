@@ -68,29 +68,67 @@ As a developer, I want a staging environment separate from real data for safe te
 
 ---
 
-### OPS-03 — Periodic DB backup
-**Status:** ❌ Not started  
-**Mandatory:** Yes
+### OPS-03 — Periodic DB backup (Supabase Free)
+**Priority:** High | **Status:** ❌ Not started
 
 **User Story**  
-As an operator, I want periodic DB backups to recover from incidents.
+As the owner, I want an encrypted off-site copy of the database every day so that I can recover meetings and accounts after a mistake or an incident.
+
+**Context**
+The project is on Supabase Free, which has no automated backups, and meetings now hold sensitive
+data. Chosen: a GitHub Actions cron (off-site, independent of the home server and OPS-05, no app
+code) using `supabase db dump`, encrypted with an **age public key** so GitHub never holds a key
+that can decrypt. Retention 30 days (owner choice). Rejected: home-server cron (depends on OPS-05,
+backup sits next to what it protects); in-app scheduler (needs pg_dump in the image, stops when the
+app is down); an automated weekly restore check (Supabase auth schema/roles make restoring into
+vanilla Postgres brittle; a manual restore into a scratch Supabase project is the stronger proof).
 
 **Use Cases**
-1. Database is backed up automatically every day.
-2. Backups are retained for at least 7 days.
-3. In the event of data loss, an operator can restore the DB to a point-in-time within the retention window.
-4. Backup process is verified periodically (a backup that can't be restored is not a backup).
+1. Every day the workflow produces one encrypted backup in R2; the owner can also run it on demand.
+2. Backups older than 30 days are removed automatically.
+3. After an incident the owner downloads a backup, decrypts it with the offline private key and restores it following the runbook.
 
 **Frontend**
-- No user-facing UI.
-- Optional: backup status visible in the admin dashboard.
+- None.
 
 **Backend**
-- **Supabase paid tier** includes automatic daily backups with 7-day retention. This is the recommended path.
-- **Free tier:** no automated backups — workaround is a scheduled `pg_dump` script (e.g., a GitHub Actions cron or a small cron job on the host).
-- Backup script: `pg_dump $DATABASE_URL | gzip > backup-$(date +%Y%m%d).sql.gz` → upload to S3/R2/GCS.
-- Restore test: monthly restore to a scratch Supabase project to verify backup integrity.
-- Audio files in Supabase Storage: Storage is NOT backed up by Supabase free tier — consider R2/S3 with versioning for production.
+- `.github/workflows/backup.yml`: `schedule` (daily, 02:00 UTC) + `workflow_dispatch`; `ubuntu-latest`; `permissions: contents: read`.
+  1. Supabase CLI (pinned version): `supabase db dump --db-url "$SUPABASE_DB_URL"` three times → `roles.sql` (`--role-only`), `schema.sql`, `data.sql` (`--data-only --use-copy`). `SUPABASE_DB_URL` = the **Session pooler** connection string (IPv4; GitHub runners have no IPv6).
+  2. `tar czf` the three files → `age -r "$AGE_RECIPIENT"` → `ricotdin-db-<UTC yyyyMMddTHHmmZ>.tar.gz.age`. Plaintext stays on the runner's temp disk only; never uploaded or saved as an artifact.
+  3. Upload to the backup bucket under `db/` with `scripts/backup/r2.ts upload` (AWS SDK S3 client, already a dependency).
+  4. Only if the upload succeeded: `scripts/backup/r2.ts prune` deletes expired backups.
+- `lib/backup/retention.ts` (pure): object naming + expiry selection.
+- GitHub secrets (CI only, never app env vars): `SUPABASE_DB_URL`, `AGE_RECIPIENT`, `R2_BACKUP_ACCOUNT_ID`, `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET`. The R2 token is scoped to the backup bucket only (Object Read & Write), separate from the app's audio bucket (which stays DB-configured, §9a/7).
+- `docs/ops/backup-restore.md`: one-time setup (age key pair, R2 bucket + scoped token, secrets), restore runbook (download → `age -d -i key.txt` → `tar xzf` → `psql` roles, schema, data into a scratch Supabase project, per Supabase's restore guide), and a restore-test log.
+
+**Acceptance Criteria**
+- Given the schedule fires or the workflow is dispatched, when it succeeds, then exactly one new object `db/ricotdin-db-<UTC timestamp>.tar.gz.age` exists in the backup bucket and decrypts (with the private key) to `roles.sql`, `schema.sql`, `data.sql`.
+- The workflow only has the age **public** key: no secret or artifact in GitHub can decrypt a backup, and no plaintext dump is uploaded anywhere.
+- Given backups older than 30 days exist, when the workflow runs after a successful upload, then those are deleted; the newest backup is never deleted, and objects whose names don't match the backup pattern are never touched.
+- Given the dump or the upload fails, then the workflow fails (GitHub notifies the owner) and prune does not run.
+- Given the latest backup, when the owner follows the runbook into a scratch Supabase project, then the row counts of `meetings`, `transcript_segments` and `profiles` match production at dump time (recorded in the runbook's restore log).
+
+**Test Plan**
+- Pure logic: `lib/backup/retention.ts` → `backupObjectKey(date)`, `parseBackupTimestamp(key)` (null for non-matching keys), `selectExpiredBackups(keys, nowMs, retentionDays)` (never the newest; ignores non-matching keys; `retentionDays < 1` → nothing).
+- Tests: `tests/backup-retention.test.ts` — key format round-trip, UTC, malformed keys ignored, exact 30-day boundary, newest kept even when all are old, empty list.
+
+**Structural flags**
+- New GitHub Actions workflow + 6 new **GitHub secrets** (CI-only, not app env vars). New R2 bucket + scoped API token (dashboard). No migration, no app code path changes.
+
+**Done check**
+- `workflow_dispatch` run is green and the object appears in R2; `actionlint .github/workflows/backup.yml` clean; `npm test` passes; one restore into a scratch Supabase project done and logged in `docs/ops/backup-restore.md`.
+
+**Out of scope**
+- Audio/storage backup (R2 is the durable store; PRV-02 purges audio by policy).
+- Automated restore verification; admin backup-status page.
+- Point-in-time recovery (requires a paid tier).
+
+**Key files (expected)**
+- `.github/workflows/backup.yml`
+- `lib/backup/retention.ts`, `tests/backup-retention.test.ts`
+- `scripts/backup/r2.ts`
+- `docs/ops/backup-restore.md`, `docs/privacy/retention-policy.md` (backups keep deleted data up to 30 days)
+- `package.json` (test script)
 
 ---
 
