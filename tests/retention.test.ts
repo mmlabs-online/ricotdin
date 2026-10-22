@@ -11,6 +11,7 @@ import {
   audioState,
   isOwnedAudioKey,
   ownedAudioPath,
+  ownedAudioDeleteItems,
   RETENTION_SETTING_KEY,
   PURGE_INTERVAL_MS,
   PURGE_BATCH_LIMIT,
@@ -189,5 +190,38 @@ describe('ownedAudioPath', () => {
   it('null / empty audio_path → null', () => {
     assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: null }), null)
     assert.equal(ownedAudioPath({ id: m, user_id: u, audio_path: '' }), null)
+  })
+})
+
+// ── ownedAudioDeleteItems (BUG-004) ─────────────────────────────────────────
+// Folder delete used `storage.from('recordings').remove(paths)` (Supabase bucket only), so R2
+// audio was orphaned. Each item must carry its own storage provider.
+
+describe('ownedAudioDeleteItems', () => {
+  const u = '11111111-1111-1111-1111-111111111111'
+  const m1 = '22222222-2222-2222-2222-222222222222'
+  const m2 = '33333333-3333-3333-3333-333333333333'
+  const m3 = '44444444-4444-4444-4444-444444444444'
+
+  it("BUG-004: keeps each object's provider so R2 audio is deleted from R2", () => {
+    const items = ownedAudioDeleteItems([
+      { id: m1, user_id: u, audio_path: `${u}/${m1}.webm`, storage_provider: 'r2' },
+      { id: m2, user_id: u, audio_path: `${u}/${m2}.mp3`, storage_provider: 'supabase' },
+    ])
+    assert.deepEqual(items, [
+      { key: `${u}/${m1}.webm`, provider: 'r2' },
+      { key: `${u}/${m2}.mp3`, provider: 'supabase' },
+    ])
+  })
+  it('skips meetings without audio and forged (non-owned) paths', () => {
+    const items = ownedAudioDeleteItems([
+      { id: m1, user_id: u, audio_path: null, storage_provider: 'r2' },
+      { id: m2, user_id: u, audio_path: `99999999-9999-9999-9999-999999999999/${m2}.webm`, storage_provider: 'r2' },
+      { id: m3, user_id: u, audio_path: `${u}/${m3}.webm`, storage_provider: 'r2' },
+    ])
+    assert.deepEqual(items, [{ key: `${u}/${m3}.webm`, provider: 'r2' }])
+  })
+  it('empty input → empty list', () => {
+    assert.deepEqual(ownedAudioDeleteItems([]), [])
   })
 })

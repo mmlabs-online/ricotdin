@@ -85,3 +85,18 @@ export function ownedAudioPath(m: { id: string; user_id: string; audio_path: str
   if (!m.audio_path) return null
   return isOwnedAudioKey(m.audio_path, m.user_id, m.id) ? m.audio_path : null
 }
+
+/**
+ * Storage objects to delete for a set of meetings: only each meeting's own key, each with its
+ * own provider (BUG-004: a Supabase-only remove left R2 audio orphaned).
+ */
+export function ownedAudioDeleteItems(
+  rows: Array<{ id: string; user_id: string; audio_path: string | null; storage_provider: string }>,
+): Array<{ key: string; provider: string }> {
+  const items: Array<{ key: string; provider: string }> = []
+  for (const m of rows) {
+    const key = ownedAudioPath(m)
+    if (key) items.push({ key, provider: m.storage_provider })
+  }
+  return items
+}
