@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-22
+
 ### Tính năng
 - Release theo tag: push `vX.Y.Z` → build `mingming21400/ricotdin:vX.Y.Z` (+ `latest` nếu cao nhất) và mở PR `ricotdin vX.Y.Z` trên `mmlabs-online/deployment` ghim image theo digest; thêm `GET /api/health` và `GET /version.json` công khai, `HEALTHCHECK` trong image (OPS-04)
 - Tự động xoá audio theo thời hạn lưu: mỗi ngày xoá file audio của các cuộc họp `done` cũ hơn `storage.audio_retention_days` ngày (mặc định `null` = giữ mãi, tắt), giữ nguyên transcript/ghi chú/todos/chat, ghi audit `meeting.audio_purged`; trang cuộc họp hiện "Audio deleted (retention policy)"; `/process` và admin requeue trả 409 khi không còn audio (tránh mất transcript); chính sách nội bộ `docs/privacy/retention-policy.md` (PRV-02)
@@ -26,6 +28,8 @@
 - Dockerfile viết lại theo mẫu CaleChip: stage deps/build/runner, cache npm, `NODE_VERSION` arg; giá trị `NEXT_PUBLIC_*` lấy từ BuildKit secret (`--secret id=env,src=.env.local`, chỉ đọc các dòng `NEXT_PUBLIC_*`) hoặc `--build-arg`, build báo lỗi nếu thiếu URL/anon key Supabase; container chạy user non-root `node` trên **cổng 3000** (trước là 80), `HEALTHCHECK` `:3000/api/health`. Compose: `3333:3000`, ghim `PORT=3000`, không cần `--env-file` nữa. Xoá `start.sh` + `nginx.conf` không còn dùng (OPS-04, BUG-001)
 
 ### Checklist deploy
+**Thứ tự:** chạy migration 032 → 036 (và câu kiểm tra trong từng file) TRƯỚC khi khởi động image `v1.1.0`. v1.1.0 deploy theo cách hiện tại (OPS-05 chưa xong): dùng image `mingming21400/ricotdin:v1.1.0`, map cổng host → **3000**.
+- **Tag `v1.1.0` → `release.yml`:** image được build + push; bước "Open deployment PR" cần secret `DEPLOY_REPO_TOKEN` — chưa có thì bước đó fail (image vẫn dùng được). Thêm token trước khi tag nếu muốn PR `ricotdin v1.1.0` trên `mmlabs-online/deployment`.
 - **Backup DB (OPS-03):** tạo cặp khoá `age` (giữ khoá riêng offline), bucket R2 `ricotdin-db-backups` + token chỉ cho bucket đó, GitHub Environment `backup` (chỉ nhánh `main`) với 6 environment secret (`SUPABASE_DB_URL` = Session pooler, `AGE_RECIPIENT`, `R2_BACKUP_*`); workflow chỉ chạy sau khi lên `main` — chạy `db-backup` một lần và khôi phục thử — xem `docs/ops/backup-restore.md`.
 - **Migration mới `migrations/032_meetings_audio_purged.sql`** (thêm cột `meetings.audio_purged_at` + index) — chạy TRƯỚC khi khởi động image mới. Sau đó (tuỳ chọn) đặt `storage.audio_retention_days` ở `/admin/config` để bật purge (PRV-02).
 - **Migration mới `migrations/033_meetings_revoke_client_writes.sql`** — thu hồi INSERT/UPDATE trên `meetings` từ `anon`/`authenticated`; chạy trước khi khởi động image mới, rồi chạy câu `has_table_privilege` trong file để xác nhận (đều `false`) (BUG-003).
@@ -36,6 +40,16 @@
 - Secret GitHub mới `DEPLOY_REPO_TOKEN` (fine-grained PAT, chỉ `mmlabs-online/deployment`, Contents + Pull requests read/write).
 - Env runtime mới `RICOTDIN_VERSION` (không bí mật, do `release.env` của repo deployment đặt); build arg `BUILD_COMMIT`.
 - Thay đổi hợp đồng release: image cố định `mingming21400/ricotdin`, tag image có tiền tố `v`. Deploy = merge PR trên repo deployment (cần OPS-05).
+
+### Known issues
+- File ghi âm WebM từ trình duyệt không tua được đầy đủ (thiếu Duration/Cues); flag giảm nhẹ `user_hack_audio_render` (mặc định tắt). Xem `CLAUDE.md` §9j.
+- Rate-limit đăng nhập lưu trong bộ nhớ, reset khi restart process.
+- Gemini free tier có thể dùng dữ liệu đầu vào để huấn luyện — bật billing (PRV-01) trước khi xử lý cuộc họp thật của người khác.
+- Chưa có staging (OPS-02). Backup DB (OPS-03) chỉ chạy sau khi cài secret/bucket và workflow ở trên `main`.
+- Deploy tự động qua repo deployment (OPS-05) chưa xong — v1.1.0 deploy thủ công.
+- Lỗi bảo mật mức S3 còn mở: BUG-004 (xoá folder không xoá audio trên R2), BUG-006 (admin đọc được ciphertext key qua REST), BUG-008 (xoá cuộc họp qua REST bỏ lại audio).
+- CI (lint/typecheck/test) chỉ chạy cho PR vào `main`/`release/**`, không chạy cho PR vào `dev`.
+- Lint còn 39 cảnh báo (0 lỗi).
 
 ## [1.0.0] — 2026-09-19
 
@@ -155,4 +169,5 @@ nhưng nên đối chiếu trước).
 - Chưa có: staging environment, backup DB định kỳ.
 - Lint còn 39 cảnh báo (0 lỗi).
 
+[1.1.0]: https://github.com/mmlabs-online/ricotdin/releases/tag/v1.1.0
 [1.0.0]: https://github.com/didi-code0980/ricotdin/releases/tag/v1.0.0
