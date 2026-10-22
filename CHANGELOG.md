@@ -8,7 +8,11 @@
 ### Tính năng
 - Bản nháp cài ricotdin vào repo `mmlabs-online/deployment`: `apps/ricotdin/compose.yml` (image ghim theo digest, cổng 3000, secret chỉ từ file `/etc/mmlabs/ricotdin.env` trên server), workflow `deploy-ricotdin.yml` (healthcheck `/api/health`, tự khôi phục bản trước khi lỗi, comment kết quả lên PR) và README kèm prompt kiểm tra sau release — trong `docs/ops/deployment-repo/` (OPS-05)
 
+### Bảo mật
+- Admin không còn đọc được ciphertext của API key, secret R2 (`admin_config`, `storage_config`) qua REST trực tiếp; migration 023 trước đây không có tác dụng. Trình duyệt mất mọi quyền trên 2 bảng này, UI admin vẫn dùng API phía server (migration 037) (BUG-006)
+
 ### Checklist deploy
+- **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
 - **OPS-05:** tạo `/etc/mmlabs/ricotdin.env` (600, user của runner) với secret production; copy 2 bản nháp vào repo deployment; thêm hostname cloudflared → `http://ricotdin:3000`; cập nhật Supabase Site URL/redirect; dừng container ricotdin chạy tay; rồi merge PR `ricotdin v1.1.0` (đã mở) để deploy qua pipeline. Trước đó nên rotate token Cloudflare Tunnel đang bị commit trong `proxy/compose.yml` của repo deployment.
 
 ## [1.1.0] — 2026-10-22

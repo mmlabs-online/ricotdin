@@ -16,7 +16,7 @@
 | BUG-003 | meetings.audio_path (and other columns) user-editable under RLS: audio-url + pipeline read another user's audio | S1 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-003-meetings-audio-path-trust, PR #8 |
 | BUG-004 | Folder delete with deleteMeetings=true removes audio from the Supabase bucket only, ignoring R2 | S3 | open | v1.0.0 | — | — | — | — |
 | BUG-005 | SECURITY DEFINER RPCs quota_apply_movement / claim_next_job are callable by anon/authenticated (no REVOKE EXECUTE) | S1 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-005-revoke-definer-rpc-execute, PR #9 |
-| BUG-006 | admin_config ciphertext columns still readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | open | v1.0.0 | — | — | — | — |
+| BUG-006 | admin_config + storage_config ciphertext readable over REST (column REVOKE under a table-level GRANT is ineffective) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-006-revoke-ciphertext-tables, PR #17 |
 | BUG-007 | transcript_segments / transcript_chunks are client-writable: a shared-folder owner can plant RAG chunks for grantees | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-007-revoke-transcript-client-writes, PR #10 |
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | open | v1.0.0 | PRV-02 | — | — | — |
 | BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
@@ -166,7 +166,7 @@ SECURITY DEFINER functions created without `REVOKE EXECUTE … FROM PUBLIC, anon
 **No automated test:** this is a database privilege, and project tests must be pure with no I/O (§10). Repro/verify = the `has_function_privilege` query in the migration (before: true for anon/authenticated; after: false for anon/authenticated, true for service_role).
 Not changed: `can_access_meeting` still has PUBLIC EXECUTE (it returns a boolean for the caller, low impact). Revoking PUBLIC would also make anon RLS evaluation raise errors instead of returning empty, so it needs its own check. `prevent_role_escalation` is SECURITY DEFINER but returns `trigger`, which PostgREST cannot call; `custom_access_token_hook` was already revoked in migration 002.
 
-## BUG-006 — admin_config ciphertext readable over REST
+## BUG-006 — admin_config + storage_config ciphertext readable over REST
 
 **Reported:** 2026-10-21 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
 
@@ -174,7 +174,9 @@ Not changed: `can_access_meeting` still has PUBLIC EXECUTE (it returns a boolean
 `migrations/023_rls_admin_config_column_privilege.sql` revokes SELECT on `value_ciphertext, value_iv, value_auth_tag` at column level, which does not override the table-level SELECT grant. Admins can read the ciphertext via REST. This is useless without `KEY_ENCRYPTION_SECRET`, but it breaks the §9f "ciphertext never returned" invariant.
 
 **Fix**
-<pending: REVOKE SELECT ON admin_config FROM authenticated; GRANT SELECT (<safe columns>) ON admin_config TO authenticated>
+**Pending DB apply** (independent of app code; apply now).
+`migrations/037_revoke_ciphertext_tables.sql`: `REVOKE ALL ON admin_config, storage_config FROM anon, authenticated`. The scope was widened with the owner's OK to `storage_config` (R2 secret), which had the same admin-SELECT-without-column-restriction hole. (`provider_keys` is not included: it was dropped in migration 015.) Reproduced on a throwaway Postgres 16: with 023's column revoke in place, `authenticated` could still SELECT `value_ciphertext` (true); after 037, every anon/authenticated privilege on both tables is false and service_role still reads. No browser or user-scoped client touches these tables. Every reader and writer is a service-role API route or `lib` module (keys, storage, ai-usage, healthcheck, provider), so the admin UI is unchanged and the admin SELECT policies become inert. New rule in CLAUDE.md §9f.
+**No automated test:** this is a DB privilege, and tests must be pure (§10). Repro/verify = the query in the migration (before: `SELECT` true for authenticated; after: all false).
 
 ## BUG-007 — transcript_segments / transcript_chunks are client-writable
 

@@ -308,6 +308,10 @@ Supabase dashboard:
    - `migrations/036_content_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE/TRUNCATE on `todos`,
      `calendar_suggestions`, `chat_sessions`, `chat_messages`. Independent of app code. Verify with the query in the file.
 
+15. **Apply encrypted-secret table revoke (BUG-006):**
+   - `migrations/037_revoke_ciphertext_tables.sql` — `REVOKE ALL ON admin_config, storage_config FROM anon, authenticated`.
+     Independent of app code. Verify with the query in the file (all false).
+
 ## 9m. Audio retention purge (PRV-02)
 
 Policy for people: `docs/privacy/retention-policy.md`.
@@ -594,10 +598,14 @@ provider_keys: id, created_at, updated_at, provider ('gemini'|'speechmatics'),
                status ('active'|'disabled'), disabled_reason text null,
                last_used_at timestamptz null, created_by uuid null
 ```
-RLS: admin SELECT only (metadata, never ciphertext); all writes use service-role client.
+RLS: originally admin SELECT only (014; replaced by `admin_config` in 015). Today `admin_config` / `storage_config` give
+`anon`/`authenticated` no privileges at all (migration 037, BUG-006) — service-role only; the admin SELECT policies are inert.
 
 **SECURITY RULES (absolute):**
 - `key_ciphertext`, `key_iv`, `key_auth_tag` are NEVER returned in any API response, ever.
+- Tables holding ciphertext (`admin_config`, `storage_config`; `provider_keys` was dropped in 015) have NO privileges for `anon`/`authenticated`
+  (migration 037, BUG-006) — a column-level REVOKE under a table-level GRANT does nothing. Admin UI reads them only
+  through service-role API routes that return masked rows.
 - `KEY_ENCRYPTION_SECRET` (server env var, 32 bytes) is NEVER logged, never sent to client.
 - Decrypted keys exist ONLY in server-side memory at call time.
 - Losing `KEY_ENCRYPTION_SECRET` makes all stored DB keys unrecoverable.
