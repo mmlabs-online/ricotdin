@@ -209,7 +209,7 @@ deployment PR. Rejected: replacing with the bare template (loses verify/guards);
 ---
 
 ### OPS-05 — Deployment-repo setup + release verification
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Partial — drafts done; pending owner copy + first pipeline deploy + verification prompt
 
 **User Story**  
 As the owner, I want ricotdin set up in mmlabs-online/deployment and a repeatable check that a release really runs there so that merging a release PR is proven to deploy the right version.
