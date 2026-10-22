@@ -1,0 +1,28 @@
+-- Migration 037: encrypted-secret tables are service-role only (BUG-006)
+--
+-- admin_config (provider API keys) and storage_config (R2 secret) each have an admin-only SELECT
+-- RLS policy but no column restriction, so an admin calling PostgREST directly
+-- (GET /rest/v1/admin_config?select=*) received the AES-GCM ciphertext, IV and auth tag —
+-- breaking the rule "ciphertext is NEVER returned in any API response" (CLAUDE.md §9f).
+-- Migration 023 tried a column-level REVOKE on admin_config, but a column REVOKE does not override
+-- the table-level SELECT grant, so it had no effect. storage_config had no restriction at all.
+-- (The old provider_keys table from 014 was dropped by 015 and is not touched here.)
+--
+-- Safe: no browser or user-scoped client reads or writes these tables. Every reader/writer is
+-- server code using the service-role client (app/api/admin/keys/**, app/api/admin/storage/**,
+-- app/api/admin/ai-usage, lib/keys/provider.ts, lib/keys/healthcheck-runner.ts,
+-- lib/storage/config.ts). The admin UI only ever receives masked rows from those routes.
+-- service_role privileges are unchanged; the admin SELECT RLS policies become inert.
+-- If either table is ever dropped and re-created, Supabase's default privileges grant access
+-- again — re-run this revoke.
+--
+-- Verify after applying (expect all false):
+--   select r.role, t.tbl, p.priv, has_table_privilege(r.role, t.tbl, p.priv)
+--   from (values ('anon'), ('authenticated')) r(role),
+--        (values ('public.admin_config'), ('public.storage_config')) t(tbl),
+--        (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) p(priv);
+--
+-- Rollback (restores the previous, leaky behaviour):
+--   GRANT ALL ON public.admin_config, public.storage_config TO anon, authenticated;
+
+REVOKE ALL ON public.admin_config, public.storage_config FROM anon, authenticated;
