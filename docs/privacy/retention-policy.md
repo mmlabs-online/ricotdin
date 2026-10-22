@@ -10,6 +10,7 @@
 | Meeting **audio** (R2, or the legacy Supabase bucket) | `storage.audio_retention_days` days from the time the meeting was recorded (`meetings.created_at`) | Automatically, by the daily retention job, once the meeting is older than that and its processing is `done` |
 | Transcript, summary, notes, to-dos, calendar suggestions, chat | Until the meeting is deleted | The owner deletes the meeting (or an admin deletes the user) |
 | Audio of meetings that are `pending` / `processing` / `failed` | Until processing succeeds, or the meeting is deleted | Never purged by age, since the audio is still needed to (re)process it |
+| Database backups (OPS-03) | 30 days, encrypted, in a separate R2 bucket | Automatically by the daily backup workflow. Data deleted in the app stays in backups for up to 30 days |
 | Copies at the AI providers | Gemini Files API staging: about 48h. Speechmatics: per their data-use terms (see PRV-01) | By the provider |
 
 The setting is changed at **`/admin/config` → `storage.audio_retention_days`**:

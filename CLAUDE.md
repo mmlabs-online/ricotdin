@@ -147,6 +147,10 @@ KEY_ENCRYPTION_SECRET=            # 64 hex chars (32 bytes). Generate:
 ```
 Anything not prefixed `NEXT_PUBLIC_` is server-only. Never log secret values.
 
+CI-only GitHub secrets for the DB backup workflow (OPS-03, never app env vars): `SUPABASE_DB_URL`
+(Session pooler; environment secrets of the `backup` environment), `AGE_RECIPIENT` (age public key), `R2_BACKUP_ACCOUNT_ID`, `R2_BACKUP_ACCESS_KEY_ID`,
+`R2_BACKUP_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET`. See `docs/ops/backup-restore.md`.
+
 ## 9. Commands
 
 ```
@@ -342,6 +346,20 @@ Policy for people: `docs/privacy/retention-policy.md`.
 - Dialog a11y: portal into `<body>`, rest of page `inert`, focus on the heading (never the confirm button),
   Tab trapped, focus returned to the opener.
 - Not built: admin toggle (notice is always mandatory); notice before file upload (upload is not recording).
+
+## 9o. DB backup (OPS-03, Supabase Free)
+
+- `.github/workflows/backup.yml`: daily 02:00 UTC + manual. `supabase db dump` (roles, schema, data) →
+  tar.gz → `age` encrypt with the **public** key → `scripts/backup/r2.ts upload` → `prune` (only after a
+  successful upload). Dump + encrypt run BEFORE `npm ci --ignore-scripts`; secrets are step-scoped and live in
+  the GitHub Environment `backup` (main only); actions pinned by SHA, Supabase CLI by exact version.
+  `schedule` only runs from `main`, so backups start after the `dev` → `main` merge.
+- Separate R2 bucket + token scoped to it; the app's audio bucket stays DB-configured (§9a/7).
+- Naming/retention (pure, `lib/backup/retention.ts`, tested in `tests/backup-retention.test.ts`):
+  `db/ricotdin-db-<yyyyMMdd>T<HHmm>Z.tar.gz.age`; delete strictly older than 30 days, never the newest,
+  never non-matching keys. Upload uses `IfNoneMatch: '*'` (never overwrites).
+- The private key is offline with the owner; GitHub can never decrypt a backup. Runbook + restore-test
+  log: `docs/ops/backup-restore.md`. Not covered: audio/storage, project settings, PITR.
 
 ## 9i. API key health check design
 

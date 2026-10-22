@@ -9,6 +9,7 @@
 - Release theo tag: push `vX.Y.Z` → build `mingming21400/ricotdin:vX.Y.Z` (+ `latest` nếu cao nhất) và mở PR `ricotdin vX.Y.Z` trên `mmlabs-online/deployment` ghim image theo digest; thêm `GET /api/health` và `GET /version.json` công khai, `HEALTHCHECK` trong image (OPS-04)
 - Tự động xoá audio theo thời hạn lưu: mỗi ngày xoá file audio của các cuộc họp `done` cũ hơn `storage.audio_retention_days` ngày (mặc định `null` = giữ mãi, tắt), giữ nguyên transcript/ghi chú/todos/chat, ghi audit `meeting.audio_purged`; trang cuộc họp hiện "Audio deleted (retention policy)"; `/process` và admin requeue trả 409 khi không còn audio (tránh mất transcript); chính sách nội bộ `docs/privacy/retention-policy.md` (PRV-02)
 - Thông báo ghi âm: bấm "Start recording" sẽ hiện hộp thoại nhắc rằng mọi người tham gia cần biết và đồng ý (kèm câu mẫu để đọc), chỉ ghi âm sau khi bấm "I understand — start recording"; xác nhận được ghi vào activity log (`recording_notice_ack`, xem ở `/admin/activity`) và hỏi lại sau 12 giờ (COM-01)
+- Backup DB hằng ngày (Supabase Free): GitHub Actions dump DB, mã hoá bằng khoá công khai `age`, đẩy lên bucket R2 riêng và giữ 30 ngày; hướng dẫn khôi phục ở `docs/ops/backup-restore.md` (OPS-03)
 
 ### Bảo mật
 - Mọi lệnh xoá audio bằng service role (purge, xoá cuộc họp, admin xoá user) chỉ xoá đúng object `<user_id>/<meeting_id>.<ext>` của chính cuộc họp đó — trước đây `audio_path` do người dùng sửa được có thể trỏ sang file của người khác (PRV-02)
@@ -25,6 +26,7 @@
 - Dockerfile viết lại theo mẫu CaleChip: stage deps/build/runner, cache npm, `NODE_VERSION` arg; giá trị `NEXT_PUBLIC_*` lấy từ BuildKit secret (`--secret id=env,src=.env.local`, chỉ đọc các dòng `NEXT_PUBLIC_*`) hoặc `--build-arg`, build báo lỗi nếu thiếu URL/anon key Supabase; container chạy user non-root `node` trên **cổng 3000** (trước là 80), `HEALTHCHECK` `:3000/api/health`. Compose: `3333:3000`, ghim `PORT=3000`, không cần `--env-file` nữa. Xoá `start.sh` + `nginx.conf` không còn dùng (OPS-04, BUG-001)
 
 ### Checklist deploy
+- **Backup DB (OPS-03):** tạo cặp khoá `age` (giữ khoá riêng offline), bucket R2 `ricotdin-db-backups` + token chỉ cho bucket đó, GitHub Environment `backup` (chỉ nhánh `main`) với 6 environment secret (`SUPABASE_DB_URL` = Session pooler, `AGE_RECIPIENT`, `R2_BACKUP_*`); workflow chỉ chạy sau khi lên `main` — chạy `db-backup` một lần và khôi phục thử — xem `docs/ops/backup-restore.md`.
 - **Migration mới `migrations/032_meetings_audio_purged.sql`** (thêm cột `meetings.audio_purged_at` + index) — chạy TRƯỚC khi khởi động image mới. Sau đó (tuỳ chọn) đặt `storage.audio_retention_days` ở `/admin/config` để bật purge (PRV-02).
 - **Migration mới `migrations/033_meetings_revoke_client_writes.sql`** — thu hồi INSERT/UPDATE trên `meetings` từ `anon`/`authenticated`; chạy trước khi khởi động image mới, rồi chạy câu `has_table_privilege` trong file để xác nhận (đều `false`) (BUG-003).
 - **Migration mới `migrations/034_revoke_definer_rpc_execute.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu `has_function_privilege` trong file (BUG-005).

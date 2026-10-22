@@ -69,7 +69,7 @@ As a developer, I want a staging environment separate from real data for safe te
 ---
 
 ### OPS-03 — Periodic DB backup (Supabase Free)
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Partial — code done; pending owner setup, first green run from `main` and one test restore
 
 **User Story**  
 As the owner, I want an encrypted off-site copy of the database every day so that I can recover meetings and accounts after a mistake or an incident.
