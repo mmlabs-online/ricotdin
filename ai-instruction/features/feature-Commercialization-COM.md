@@ -15,7 +15,8 @@ The Commercialization module contains the legal, billing, consent, and multi-ten
 ## Features
 
 ### COM-01 — Recording notice / consent
-**Status:** ❌ Not started  
+**Status:** ✅ Done (minimal internal slice, 2026-10-21) — notice modal + `recording_notice_ack` activity event; no `consent_logs` table, no admin toggle  
+**Key files:** `components/RecordingNoticeModal.tsx`, `components/RecorderUI.tsx`, `lib/consent/recordingNotice.ts`, `lib/activity/types.ts`, `tests/recording-notice.test.ts`  
 **SaaS:** Legal requirement — not optional once serving external users
 
 **User Story**  

@@ -98,6 +98,22 @@ chat_messages).
 Rules:
 - RLS is ON. The browser uses the anon key (RLS-scoped to the logged-in user).
 - The **server pipeline uses the service role key** (bypasses RLS) for background writes.
+- `meetings`: the browser may only SELECT/DELETE (RLS-scoped). INSERT/UPDATE are revoked from
+  `anon`/`authenticated` (migration 033, BUG-003) — every write goes through a server route with the
+  service-role client. Never add a browser or user-scoped write to `meetings`.
+- `transcript_segments` / `transcript_chunks`: browser is SELECT-only (INSERT/UPDATE/DELETE revoked,
+  migration 035, BUG-007) — only the pipeline (service role) writes transcript/RAG content. Never add a
+  browser or user-scoped write to these tables.
+- `todos`, `calendar_suggestions`, `chat_sessions`, `chat_messages`: browser is SELECT-only too (migration 036,
+  BUG-009/010). Status/dismiss changes go through the PATCH routes; chat writes through `POST /api/chat`.
+  Never add a browser or user-scoped write to these tables.
+- Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
+  belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
+- Every `SECURITY DEFINER` function MUST `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` and grant
+  only the roles that need it. "No GRANT" does NOT mean "not callable": Postgres grants EXECUTE to
+  PUBLIC by default (BUG-005, migration 034). Exceptions: trigger functions (not callable via PostgREST)
+  and `can_access_meeting`, which RLS policies call as `authenticated` and which only answers for
+  `auth.uid()` (it keeps EXECUTE; see BUG-005).
 - Embedding dimension is **768** and must match the `output_dimensionality` we
   request from Gemini's embedding model. Do not change one without the other.
 
@@ -131,6 +147,10 @@ KEY_ENCRYPTION_SECRET=            # 64 hex chars (32 bytes). Generate:
 ```
 Anything not prefixed `NEXT_PUBLIC_` is server-only. Never log secret values.
 
+CI-only GitHub secrets for the DB backup workflow (OPS-03, never app env vars): `SUPABASE_DB_URL`
+(Session pooler; environment secrets of the `backup` environment), `AGE_RECIPIENT` (age public key), `R2_BACKUP_ACCOUNT_ID`, `R2_BACKUP_ACCESS_KEY_ID`,
+`R2_BACKUP_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET`. See `docs/ops/backup-restore.md`.
+
 ## 9. Commands
 
 ```
@@ -144,7 +164,8 @@ npm run test       # run tests (not yet configured)
 
 ## 9k. Release process
 
-**Branches:**
+**Branches** (GitHub default branch = `main`, so fresh clones land on `main` and a bare
+`gh pr create` targets `main` — always pass `--base` explicitly):
 - `dev` — day-to-day work; every push → Docker image `ricotdin:dev` (`release-dev.yml`).
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
@@ -159,10 +180,11 @@ npm run test       # run tests (not yet configured)
 1. On `dev`: `npm run lint && npm run typecheck && npm run test && npm run build`.
 2. `npm version X.Y.0 --no-git-tag-version`; add a `## [X.Y.0]` section to `CHANGELOG.md`
    (features + deploy checklist: new migrations, new env vars, dashboard steps + known issues).
-3. Commit `chore(release): vX.Y.0`, PR `dev` → `main`, merge (merge commit, not squash) after CI is green.
+3. Commit `chore(release): vX.Y.0`, PR `dev` → `main` (`gh pr create --base main --head dev`), merge (merge commit, not squash) after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
 5. Tag on it: `git tag -a vX.Y.0 -m "Release vX.Y.0" && git push origin vX.Y.0`
-   → `release.yml` pushes Docker images `ricotdin:X.Y.0` + `ricotdin:latest`.
+   → `release.yml` pushes `mingming21400/ricotdin:vX.Y.0` (+ `:latest` if highest) and opens
+   PR `ricotdin vX.Y.0` on `mmlabs-online/deployment` (OPS-04, see Deploy below).
 6. Create the GitHub Release from the `CHANGELOG.md` section.
 
 **Hotfix `X.Y.(Z+1)` for an existing line:**
@@ -172,10 +194,19 @@ npm run test       # run tests (not yet configured)
    `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
    an old line never drags `latest` backwards.
 
-**Deploy (manual):** production runs a pinned image `ricotdin:X.Y.Z` — choose the version by
-choosing the tag (available versions = `git tag -l 'v*'` / Docker Hub tags / GitHub Releases).
-Never deploy `dev` or `latest`. Apply that release's new migrations BEFORE starting the new
-image. Rollback = redeploy the previous tag (only safe if no destructive migration ran in between).
+**Deploy = merge the deployment PR (OPS-04):** image `mingming21400/ricotdin`, tags are
+v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the image, then
+(secret `DEPLOY_REPO_TOKEN` — fine-grained PAT on `mmlabs-online/deployment` only, Contents +
+Pull requests RW) opens PR `ricotdin vX.Y.Z` on `mmlabs-online/deployment` that writes ONLY
+`apps/ricotdin/release.env`:
+`RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@<digest>` (pinned by digest) + `RICOTDIN_VERSION=vX.Y.Z`.
+Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05).
+The tag is never baked into the image; runtime `RICOTDIN_VERSION` (non-secret) is served by
+public `GET /version.json` (fallback: baked `BUILD_COMMIT`, then `"unknown"` —
+`lib/release/version.ts`). Public `GET /api/health` → `{"status":"ok"}` (no DB/provider calls)
+backs the image `HEALTHCHECK`. Never deploy `dev` or `latest`. Apply that release's new
+migrations BEFORE merging the deployment PR. Rollback = a deployment PR pinning the previous
+release's digest (only safe if no destructive migration ran in between).
 
 ## 9l. Traceability (feature / bug ↔ branch ↔ commit ↔ PR)
 
@@ -252,6 +283,83 @@ Supabase dashboard:
 9. **Apply audio-render flag migration:**
    - `migrations/031_audio_render_hack_flag.sql` — seeds the `user_hack_audio_render` row in `app_config`
      (default `false`). Toggle it at `/admin/config`. See §9j.
+
+10. **Apply audio retention purge migration (PRV-02):**
+   - `migrations/032_meetings_audio_purged.sql` — adds `meetings.audio_purged_at` + partial index.
+     Apply BEFORE starting the image that contains PRV-02. Purging stays OFF until
+     `storage.audio_retention_days` is set at `/admin/config`. See §9m.
+
+11. **Apply meetings client-write revoke (BUG-003):**
+   - `migrations/033_meetings_revoke_client_writes.sql` — `REVOKE INSERT, UPDATE ON meetings FROM anon, authenticated`.
+     Verify with the `has_table_privilege` query in the file (all false).
+
+12. **Apply SECURITY DEFINER RPC revoke (BUG-005):**
+   - `migrations/034_revoke_definer_rpc_execute.sql` — `quota_apply_movement` and `claim_next_job` become
+     service-role only. Independent of app code, so it can be applied immediately. Verify with the
+     `has_function_privilege` query in the file (anon/authenticated false, service_role true).
+
+13. **Apply transcript client-write revoke (BUG-007):**
+   - `migrations/035_transcript_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE on
+     `transcript_segments` + `transcript_chunks` (plus TRUNCATE). Independent of app code. Verify with the query in the file.
+
+14. **Apply content-table client-write revoke (BUG-009, BUG-010):**
+   - `migrations/036_content_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE/TRUNCATE on `todos`,
+     `calendar_suggestions`, `chat_sessions`, `chat_messages`. Independent of app code. Verify with the query in the file.
+
+## 9m. Audio retention purge (PRV-02)
+
+Policy for people: `docs/privacy/retention-policy.md`.
+- **Setting:** `app_config.storage.audio_retention_days` (seeded `null` in migration 006). A whole number
+  1–3650 turns purging on; anything else = keep forever (fails closed, `parseRetentionDays`).
+- **Rule** (pure, `lib/retention/policy.ts`, tested in `tests/retention.test.ts`): `isPurgeEligible` —
+  `status = 'done'`, `audio_path` set, `created_at` strictly before `now − N days`.
+- **Runner** (`lib/retention/purge-runner.ts`, service role): oldest first, ≤ 500 per run. Per meeting:
+  re-read the row → `isOwnedAudioKey` → delete the object → compare-and-set update
+  (`status='done'` + same `audio_path`) to `audio_path = NULL, audio_purged_at = now()` → audit row
+  `meeting.audio_purged` (actor_id null, actor_email `system:retention`). Delete failure = row untouched,
+  retried next run. Transcript/notes/todos/chat are never touched.
+- **Scheduler:** `lib/retention/purgeScheduler.ts`, started from `instrumentation.ts`; first run 60s after
+  startup, then every 24h (idempotent, `unref()`ed, no overlapping runs).
+- **Reprocess guard:** `canReprocess` — `POST /api/meetings/:id/process` and admin requeue return **409**
+  when `audio_path` is null (requeue would otherwise wipe the transcript, then fail).
+- **UI:** meeting page shows "Audio deleted (retention policy)" when `audioState(meeting) === 'purged'`;
+  transcript timestamps render as plain text when there is no audio.
+- **Storage-key ownership rule (SEC):** `meetings.audio_path` is user-editable under RLS. Every
+  service-role audio read/delete (purge, `DELETE /api/meetings/:id`, `DELETE /api/admin/users/:id`,
+  `DELETE /api/folders/:id?deleteMeetings=true`, `POST /api/meetings/:id/uploaded`) MUST pass
+  `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`); reads (`/api/audio-url`,
+  pipeline download) use `ownedAudioPath`. Client INSERT/UPDATE on `meetings` is revoked (migration 033,
+  BUG-003). Avatar keys: `isOwnedAvatarKey` (BUG-002).
+
+## 9n. Recording notice (COM-01)
+
+- Clicking **Start recording** (`components/RecorderUI.tsx`) opens `components/RecordingNoticeModal.tsx`:
+  notice text + suggested verbal script; recording starts only on **"I understand — start recording"**
+  (Cancel / Escape / backdrop abort). `beginRecording()` runs synchronously inside that click so the
+  browser's capture prompts keep user activation.
+- Acknowledgement is kept per tab in `sessionStorage` for 12h (`lib/consent/recordingNotice.ts`:
+  `RECORDING_NOTICE_TTL_MS`, `isNoticeAckFresh`, `parseStoredAck`; tested in `tests/recording-notice.test.ts`),
+  then the notice shows again. Storage blocked / malformed / future value → notice shows.
+- Each acknowledgement is logged best-effort as activity event `recording_notice_ack` (`POST /api/activity`,
+  own user only, rate-limited) → visible at `/admin/activity`. It is a **self-reported trail**, not proof of
+  consent: it is not tied to a specific meeting and a failed log does not block recording.
+- Dialog a11y: portal into `<body>`, rest of page `inert`, focus on the heading (never the confirm button),
+  Tab trapped, focus returned to the opener.
+- Not built: admin toggle (notice is always mandatory); notice before file upload (upload is not recording).
+
+## 9o. DB backup (OPS-03, Supabase Free)
+
+- `.github/workflows/backup.yml`: daily 02:00 UTC + manual. `supabase db dump` (roles, schema, data) →
+  tar.gz → `age` encrypt with the **public** key → `scripts/backup/r2.ts upload` → `prune` (only after a
+  successful upload). Dump + encrypt run BEFORE `npm ci --ignore-scripts`; secrets are step-scoped and live in
+  the GitHub Environment `backup` (main only); actions pinned by SHA, Supabase CLI by exact version.
+  `schedule` only runs from `main`, so backups start after the `dev` → `main` merge.
+- Separate R2 bucket + token scoped to it; the app's audio bucket stays DB-configured (§9a/7).
+- Naming/retention (pure, `lib/backup/retention.ts`, tested in `tests/backup-retention.test.ts`):
+  `db/ricotdin-db-<yyyyMMdd>T<HHmm>Z.tar.gz.age`; delete strictly older than 30 days, never the newest,
+  never non-matching keys. Upload uses `IfNoneMatch: '*'` (never overwrites).
+- The private key is offline with the owner; GitHub can never decrypt a backup. Runbook + restore-test
+  log: `docs/ops/backup-restore.md`. Not covered: audio/storage, project settings, PITR.
 
 ## 9i. API key health check design
 
@@ -545,7 +653,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 
 **Allowed event types (ALLOWED_EVENT_TYPES in `lib/activity/types.ts`):**
 - Auth: `login`, `logout`
-- Recording (client best-effort): `record_start`, `record_stop`
+- Recording (client best-effort): `record_start`, `record_stop`, `recording_notice_ack` (COM-01)
 - Meeting lifecycle (server): `meeting_created`, `processing_done`, `processing_failed`, `chat_message`, `meeting_deleted`
 - Sharing (schema ready, instrumentation TODO): `meeting_shared`, `meeting_unshared`
 - `meeting_viewed` is **intentionally absent** — too noisy, low value. Enforced by test regression guard.
@@ -557,7 +665,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 - `lib/pipeline/processMeeting.ts` → `processing_done` / `processing_failed`
 - `app/api/chat/route.ts` (POST) → `chat_message` after user message persisted (no content in metadata)
 - `app/api/meetings/[id]/route.ts` (DELETE) → `meeting_deleted` after row delete
-- `app/api/activity` (POST) → browser hook: `record_start`, `record_stop` only
+- `app/api/activity` (POST) → browser hook: `record_start`, `record_stop`, `recording_notice_ack` only
 
 **Central helper (`lib/activity/logActivity.ts`):**
 - `logActivity(ActivityEntry): void` — fire-and-forget; uses service-role client; never throws; never blocks caller.
@@ -568,7 +676,7 @@ Indexes: (user_id, created_at DESC), (event_type, created_at DESC), (created_at 
 - `lib/activity/guards.ts` — `isCallerOwn(callerUserId, requestedUserId): boolean`
 
 **Endpoints:**
-- `POST /api/activity` — browser hook; accepts only CLIENT_EVENT_TYPES (`record_start`, `record_stop`); validates `isCallerOwn`; in-memory rate limit 10/user/minute. Returns 422 for non-client event types, 403 for cross-user logging.
+- `POST /api/activity` — browser hook; accepts only CLIENT_EVENT_TYPES (`record_start`, `record_stop`, `recording_notice_ack`); validates `isCallerOwn`; in-memory rate limit 10/user/minute. Returns 422 for non-client event types, 403 for cross-user logging.
 - `GET /api/admin/activity?userId=&eventType=&from=&to=&page=&perPage=` — admin-only paginated feed; joins `meetings(title)` (no content); returns `{ rows, total, page, perPage }`.
 
 **UI:**
@@ -696,7 +804,8 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 - **Feature delivery workflow:** to build a feature from `tracking.md`, use the
   `/ship-feature <CODE>` skill (`.claude/skills/ship-feature/SKILL.md`). It sequences
   spec → plan → TDD → implement → verify → specialist review gates (subagents in
-  `.claude/agents/`) → close-out, and applies the rules in this section.
+  `.claude/agents/`) → close-out → pushes `feat/<CODE>-<slug>` and opens a PR into `dev`
+  automatically (draft if checks are open; never merges). Applies the rules in this section.
 - **Bug workflow:** for any bug, regression or production incident, use the
   `/fix-bug "<description>"` skill (`.claude/skills/fix-bug/SKILL.md`). It logs `BUG-NNN` in
   `ai-instruction/bugs.md`, decides bugfix (`dev`) vs hotfix (`release/X.Y`, per §9k) with
@@ -704,6 +813,10 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
   and walks through the §9k hotfix steps.
 - **Traceability:** every branch, commit, PR title and CHANGELOG bullet carries its feature
   code or `BUG-NNN` (§9l).
+- **Owner copilot:** `/copilot` (status brief), `/copilot <question>`, `/copilot plan`
+  (`.claude/skills/copilot/SKILL.md`). Advises and plans only; uses the read-only
+  `Project Status Analyst` agent and `scripts/backlog-snapshot.ts` for facts. Strategy and
+  decisions persist in `ai-instruction/roadmap.md` (written only with owner approval).
 
 ## 11. Build order (current plan)
 

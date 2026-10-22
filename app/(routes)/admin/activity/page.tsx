@@ -29,6 +29,7 @@ const EVENT_BADGE_COLOR: Record<string, string> = {
   logout:             '#f1f5f9',
   record_start:       '#dbeafe',
   record_stop:        '#ede9fe',
+  recording_notice_ack: '#e0f2fe',
   meeting_created:    '#fef9c3',
   processing_done:    '#d1fae5',
   processing_failed:  '#fee2e2',
@@ -119,7 +120,7 @@ export default function ActivityFeedPage() {
         />
         <select style={S.select} value={filterEvent} onChange={(e) => setFilterEvent(e.target.value)}>
           <option value="">All event types</option>
-          {['login','logout','record_start','record_stop','meeting_created','processing_done','processing_failed','chat_message','meeting_deleted','meeting_shared','meeting_unshared'].map((t) => (
+          {['login','logout','record_start','record_stop','recording_notice_ack','meeting_created','processing_done','processing_failed','chat_message','meeting_deleted','meeting_shared','meeting_unshared'].map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>

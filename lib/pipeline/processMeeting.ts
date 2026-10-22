@@ -18,6 +18,7 @@ import { log, logger } from '@/lib/logger'
 import { logActivity } from '@/lib/activity/logActivity'
 import { createServerClient } from '@/lib/supabase/server'
 import { getObjectBytes } from '@/lib/storage'
+import { ownedAudioPath } from '@/lib/retention/policy'
 import { resolveGenerationModel } from '@/lib/ai/resolve'
 import { analyzeTranscript } from '@/lib/gemini/analyze'
 import { embedChunks } from '@/lib/gemini/embed'
@@ -61,9 +62,13 @@ export async function processMeeting(meetingId: string, speakerCount?: number, p
 
   try {
     // ── Download audio from Supabase Storage ──────────────────────────────
-    const audioPath = claimed.audio_path
-    if (!audioPath) {
+    if (!claimed.audio_path) {
       throw new Error('Meeting has no audio_path — cannot process')
+    }
+    // BUG-003: never download a forged audio_path (another user's recording).
+    const audioPath = ownedAudioPath(claimed)
+    if (!audioPath) {
+      throw new Error('Meeting audio_path does not belong to this meeting — refusing to process')
     }
 
     log(`[pipeline] ${meetingId}: downloading audio from storage`)

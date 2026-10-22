@@ -1,32 +1,30 @@
-# Run with:  docker compose --env-file .env.local up --build -d
+# Run with:  docker compose up --build -d      → http://localhost:3333
 #
-# The --env-file flag makes Compose read .env.local for ${VAR} substitution
-# in this file (used by build.args below).  Without it the NEXT_PUBLIC_*
-# warnings appear and the bundle is built with empty strings.
-#
-# .env.local also supplies server-only secrets to the container at runtime
-# via the service-level env_file below.
+# .env.local is used twice:
+#   - at BUILD time as a BuildKit secret (`build.secrets: [env]`): the Dockerfile reads only its
+#     NEXT_PUBLIC_* lines and inlines them into the browser bundle; nothing is written to a layer.
+#   - at RUN time via `env_file`: server-only secrets reach the container, never the image.
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        # NEXT_PUBLIC_* must be inlined at build time — read from .env.local
-        # via the --env-file flag on the docker compose command.
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      secrets:
+        - env
     ports:
-      - "3333:3333"
+      # Host 3333 -> container 3000 (the image sets PORT=3000 / EXPOSE 3000).
+      - "3333:3000"
     env_file:
       - .env.local    # server-only secrets injected at runtime, never baked in
     environment:
       NODE_ENV: production
+      # Pinned so a PORT in .env.local can't break the 3333:3000 mapping or the
+      # image HEALTHCHECK (which probes :3000). `environment` beats `env_file`.
+      PORT: "3000"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3333/"]
-      interval: 30s
-      timeout: 5s
-      start_period: 35s
-      retries: 3
+    # Health is checked by the image's own HEALTHCHECK (GET /api/health on :3000).
+
+secrets:
+  env:
+    file: .env.local

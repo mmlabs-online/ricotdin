@@ -1,6 +1,6 @@
 ---
 name: ship-feature
-description: Deliver one feature from ai-instruction/tracking.md end to end — spec → plan → TDD → implement → verify → specialist review gates → close-out (tracking, docs, commit). Use when asked to build, implement, or "ship" a feature code like REC-06 or ADM-08, or to pick the next unfinished feature.
+description: Deliver one feature from ai-instruction/tracking.md end to end — spec → plan → TDD → implement → verify → specialist review gates → close-out (tracking, docs, commit) → push the feat/ branch and open a PR into dev. Use when asked to build, implement, or "ship" a feature code like REC-06 or ADM-08, or to pick the next unfinished feature.
 argument-hint: <FEATURE-CODE> | next
 ---
 
@@ -20,8 +20,10 @@ the main session fixes.
 
 ## Phase 0 — Select & preflight
 
-1. Branch: work happens on `dev` (or `feat/<code>-<slug>` cut from `dev`), never on `main`
-   or `release/*`. If on the wrong branch, stop and ask.
+1. Branch: work always happens on `feat/<CODE>-<slug>` cut from an up-to-date `dev`
+   (`git checkout dev && git pull && git checkout -b feat/<CODE>-<slug>`) — the PR opened in
+   Phase 7 needs a branch other than `dev`. If already on that feature branch, keep it.
+   Never work on `main` or `release/*`; if on any other branch, stop and ask.
 2. Working tree must be clean, or the user confirms the existing changes belong to this work.
 3. If `$ARGUMENTS` is `next`: list `[ ]` rows from `ai-instruction/tracking.md` whose
    dependencies are all `[x]`, and let **Sprint Prioritizer** rank them (Blocker > Mandatory >
@@ -141,11 +143,21 @@ Handling findings:
    migrations / env vars / dashboard steps for the deploy checklist.
 6. Commit on the work branch (Conventional Commits with the code, e.g.
    `feat(rag): folder-scoped export (RAG-05)`), one commit per working increment.
-   **Do not push or open a PR without asking.**
-7. ✋ When the user approves: push the branch and, for a `feat/<code>-<slug>` branch, open a
-   PR into `dev` titled `[<CODE>] <summary>` with `.github/pull_request_template.md` filled
-   in. Then add `PR #N` to the Note cell of the feature's `tracking.md` row and commit that
-   (`docs(features): link <CODE> to PR #N`). Conventions: `CLAUDE.md` §9l.
+7. **Open the PR automatically (final step, no extra confirmation)** — invoking
+   `/ship-feature` authorizes pushing the `feat/` branch and opening a PR into `dev`.
+   It never authorizes merging, pushing to `dev`/`main`/`release/*`, or force-pushing.
+   1. `git push -u origin feat/<CODE>-<slug>`.
+   2. Write the body from `.github/pull_request_template.md` to a scratchpad file: feature
+      code(s), Type `feature`, what changed, the real Phase 5 results (tick only what actually
+      passed; name anything not run and why), deploy notes (migrations, env vars, dashboard
+      steps), the Phase 6 open findings + Reality Checker verdict, then the attribution line.
+   3. `gh pr create --base dev --head feat/<CODE>-<slug> --title "[<CODE>] <summary>" --body-file <file>`.
+      Add `--draft` when the Reality Checker said NEEDS WORK (user accepted the open items) or
+      any Phase 5 command could not be run; say so in the body.
+   4. Add `PR #N` to the Note cell of the feature's `tracking.md` row, commit
+      (`docs(features): link <CODE> to PR #N`) and push the branch again.
+   5. If push or `gh` fails (no auth, no network), stop and paste the exact error; the
+      commits stay local. Conventions: `CLAUDE.md` §9l.
 
 ## Final report to the user
 
@@ -154,4 +166,6 @@ Handling findings:
 - Review gate results: fixed findings, open findings, Reality Checker verdict.
 - Manual steps the user must do: migrations to apply, env vars, dashboard actions,
   `/admin/features` status update.
-- Next step: push `dev` → PR to `main` → release per `CLAUDE.md` §9k (not part of this skill).
+- The PR link (and whether it is a draft, and why).
+- Next step: review + merge the PR into `dev` → PR `dev` → `main` → release per `CLAUDE.md` §9k
+  (not part of this skill).

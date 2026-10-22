@@ -42,7 +42,8 @@ On the free tier, inputs (including meeting transcripts and audio) may be used b
 ---
 
 ### PRV-02 — Retention & deletion policy
-**Status:** ❌ Not started  
+**Status:** ✅ Done (minimal internal-use slice, 2026-10-21) — audio retention purge; account erasure + `/privacy` deferred to ADM-11 / COM  
+**Key files:** `lib/retention/{policy,purge-runner,purgeScheduler}.ts`, `migrations/032_meetings_audio_purged.sql`, `tests/retention.test.ts`, `docs/privacy/retention-policy.md`, `app/api/meetings/[id]/process/route.ts`, `app/api/admin/pipeline/[id]/requeue/route.ts`, `app/(routes)/meetings/[id]/page.tsx`  
 **Blocker:** Yes — required for any regulated use
 
 **User Story**  

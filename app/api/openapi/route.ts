@@ -33,6 +33,7 @@ const spec = {
           title: { type: 'string', nullable: true },
           status: { type: 'string', enum: ['pending', 'processing', 'done', 'failed'] },
           audio_path: { type: 'string', nullable: true },
+          audio_purged_at: { type: 'string', format: 'date-time', nullable: true },
           summary: { type: 'string', nullable: true },
           notes: { type: 'string', nullable: true },
           language: { type: 'string', nullable: true },

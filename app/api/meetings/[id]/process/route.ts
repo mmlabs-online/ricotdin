@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@/lib/supabase/server'
 import { enqueueJob } from '@/lib/jobs/enqueue'
+import { canReprocess } from '@/lib/retention/policy'
 import type { Database } from '@/types/database'
 
 async function requireUser(req: NextRequest): Promise<string> {
@@ -50,12 +51,19 @@ export async function POST(
   // Verify ownership (service role can see all rows; we check user_id explicitly)
   const { data: meeting } = await db
     .from('meetings')
-    .select('id, user_id, status')
+    .select('id, user_id, status, audio_path')
     .eq('id', meetingId)
     .maybeSingle()
 
   if (!meeting) return NextResponse.json({ error: 'Meeting not found.' }, { status: 404 })
   if (meeting.user_id !== userId) return NextResponse.json({ error: 'Forbidden.' }, { status: 403 })
+  // PRV-02: audio deleted by the retention policy (or never uploaded) — nothing to process.
+  if (!canReprocess(meeting)) {
+    return NextResponse.json(
+      { error: 'This meeting has no audio (it may have been deleted by the retention policy), so it cannot be processed.' },
+      { status: 409 },
+    )
+  }
 
   // Enqueue a durable job; the worker picks it up and runs it in the background.
   // Returns 202 immediately — callers poll meetings.status for progress.

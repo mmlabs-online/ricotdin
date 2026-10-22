@@ -18,6 +18,7 @@ import {
   type TranscriptFormat,
 } from '@/lib/transcript/export'
 import ChatPanel from '@/components/ChatPanel'
+import { audioState } from '@/lib/retention/policy'
 import type {
   Meeting,
   MeetingStatus,
@@ -881,6 +882,17 @@ function DoneView({
           )}
         </SectionCard>
       )}
+      {audioState(meeting) === 'purged' && (
+        <SectionCard label="Recording">
+          <p className="text-sm text-b-fg/60 font-sans">
+            Audio deleted (retention policy)
+            {meeting.audio_purged_at && (
+              <> on {new Date(meeting.audio_purged_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</>
+            )}.
+            The transcript, notes and to-dos are kept.
+          </p>
+        </SectionCard>
+      )}
 
       {/* Summary */}
       <SectionCard label="Summary">
@@ -1047,6 +1059,7 @@ function DoneView({
             segments={segments}
             highlightedSegIndex={highlightedSegIndex}
             onSeekTo={onSeekTo}
+            canSeek={audioState(meeting) === 'available'}
           />
         )}
       </SectionCard>
@@ -1059,11 +1072,13 @@ function DoneView({
 const SPEAKER_COLORS = ['#2D3A31', '#8C9A84', '#C27B66', '#DCCFC2', '#b45309', '#7c3aed']
 
 function TranscriptView({
-  segments, highlightedSegIndex, onSeekTo,
+  segments, highlightedSegIndex, onSeekTo, canSeek,
 }: {
   segments: TranscriptSegment[]
   highlightedSegIndex: number | null
   onSeekTo: (ms: number) => void
+  /** false when there is no audio (e.g. purged by retention) — timestamps render as plain text. */
+  canSeek: boolean
 }) {
   // ── Group consecutive same-speaker turns ──────────────────────────────────
   type Group = { speaker: string; segs: TranscriptSegment[] }
@@ -1108,13 +1123,19 @@ function TranscriptView({
                   ].join(' ')}
                 >
                   <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
-                    <button
-                      onClick={() => onSeekTo(seg.start_ms)}
-                      className="text-xs font-mono text-b-fg/40 bg-transparent border border-b-border rounded-lg px-1.5 py-0.5 cursor-pointer hover:text-b-primary hover:border-b-primary transition-colors whitespace-nowrap"
-                      title="Seek to this turn"
-                    >
-                      {formatMs(seg.start_ms)}–{formatMs(seg.end_ms)}
-                    </button>
+                    {canSeek ? (
+                      <button
+                        onClick={() => onSeekTo(seg.start_ms)}
+                        className="text-xs font-mono text-b-fg/40 bg-transparent border border-b-border rounded-lg px-1.5 py-0.5 cursor-pointer hover:text-b-primary hover:border-b-primary transition-colors whitespace-nowrap"
+                        title="Seek to this turn"
+                      >
+                        {formatMs(seg.start_ms)}–{formatMs(seg.end_ms)}
+                      </button>
+                    ) : (
+                      <span className="text-xs font-mono text-b-fg/40 border border-b-border rounded-lg px-1.5 py-0.5 whitespace-nowrap">
+                        {formatMs(seg.start_ms)}–{formatMs(seg.end_ms)}
+                      </span>
+                    )}
                     {seg.confidence != null && (
                       <span className="text-[10px] font-mono text-b-fg/25 leading-none">
                         {Math.round(seg.confidence * 100)}%

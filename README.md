@@ -3,13 +3,13 @@
 Record meetings in the browser → AI transcript + summary + to-dos + RAG chatbot.  
 Powered by Next.js 16, Supabase, Google Gemini, and Speechmatics.
 
-**Stack:** Next.js (App Router) · TypeScript · Supabase (Postgres + pgvector + Storage) · nginx · Docker
+**Stack:** Next.js (App Router) · TypeScript · Supabase (Postgres + pgvector + Storage) · Docker
 
 ---
 
 ## Running with Docker (recommended)
 
-The container runs nginx on **port 3333** as a reverse proxy in front of Next.js on port 3000.
+The container runs Next.js directly on **port 3000**; Compose publishes it on host port **3333**.
 
 ### Prerequisites
 
@@ -41,16 +41,17 @@ KEY_ENCRYPTION_SECRET=<64-hex-chars>
 
 ### 2 — Build and run with Compose
 
-The `--env-file .env.local` flag tells Compose to read your file for `${VAR}`
-substitution (needed for the build args). Without it you get "variable is not
-set" warnings and the bundle is built with empty Supabase values.
+Compose passes `.env.local` to the build as a BuildKit secret (only its
+`NEXT_PUBLIC_*` lines are read and inlined into the browser bundle) and to the
+container at runtime via `env_file`. The build fails fast if the Supabase
+values are empty.
 
 ```bash
 # Foreground (shows logs)
-docker compose --env-file .env.local up --build
+docker compose up --build
 
 # Background (detached)
-docker compose --env-file .env.local up --build -d
+docker compose up --build -d
 ```
 
 Open **http://localhost:3333**.
@@ -60,7 +61,7 @@ Open **http://localhost:3333**.
 docker compose logs -f
 
 # Rebuild after a code change
-docker compose --env-file .env.local up --build -d
+docker compose up --build -d
 
 # Stop and remove containers
 docker compose down
@@ -68,7 +69,19 @@ docker compose down
 
 ### 3 — Build and run with plain Docker
 
-`NEXT_PUBLIC_*` vars must be passed as `--build-arg` so Next.js inlines them at build time:
+`NEXT_PUBLIC_*` vars are inlined at build time. Pass `.env.local` as a BuildKit
+secret (only its `NEXT_PUBLIC_*` lines are read; nothing lands in a layer):
+
+```bash
+docker build --secret id=env,src=.env.local -t ricotdin .
+```
+
+> Changing only the `NEXT_PUBLIC_*` values in `.env.local` does not invalidate
+> Docker's build cache (secret contents aren't part of the cache key). After
+> changing them, rebuild with `--no-cache-filter build`
+> (Compose: `docker compose build --no-cache`).
+
+Or pass them as build args (CI does this):
 
 ```bash
 docker build \
@@ -81,7 +94,7 @@ Run, injecting server-only secrets at runtime (never at build time):
 
 ```bash
 docker run -d \
-  -p 3333:3333 \
+  -p 3333:3000 \
   --env-file .env.local \
   --name ricotdin \
   ricotdin
@@ -96,8 +109,8 @@ docker stop ricotdin && docker rm ricotdin
 
 | Port | Service |
 |------|---------|
-| **3333** | nginx (expose this one) |
-| 3000 | Next.js (internal — not exposed) |
+| **3333** | Host port (open http://localhost:3333) |
+| 3000 | Next.js inside the container (`PORT=3000`, runs as non-root `node`) |
 
 ---
 

@@ -1,10 +1,22 @@
 name: Release
 
 # Push tag dạng vX.Y.Z (tạo trên nhánh release/X.Y) -> kiểm tra lại code,
-# rồi build image và push lên Docker Hub với tag cố định X.Y.Z + latest.
+# build image mingming21400/ricotdin:vX.Y.Z (+ latest nếu là version cao nhất),
+# rồi mở PR "ricotdin vX.Y.Z" trên mmlabs-online/deployment (ghim image theo digest).
+# Deploy = review + merge PR đó (OPS-04).
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+env:
+  APP: ricotdin
+  IMAGE: mingming21400/ricotdin
+  VAR: RICOTDIN_IMAGE
+  VERSION_VAR: RICOTDIN_VERSION
+  DEPLOY_REPO: mmlabs-online/deployment
 
 jobs:
   verify:
@@ -63,7 +75,7 @@ jobs:
           GEMINI_API_KEY: "dummy-gemini-key"
 
   build:
-    name: build & push image
+    name: build & push image · open deployment PR
     needs: verify
     runs-on: ubuntu-latest
 
@@ -73,30 +85,33 @@ jobs:
         with:
           fetch-depth: 0   # cần danh sách tag để xác định version cao nhất
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Tag image: 'X.Y.Z' (cố định, dùng để deploy/rollback).
+      # Tag image: 'vX.Y.Z' (cố định). Deploy dùng digest, không dùng tag.
       # 'latest' chỉ gắn khi đây là version cao nhất — hotfix cho dòng cũ không kéo latest lùi lại.
+      # Chỉ xét tag thuần vX.Y.Z: tag prerelease (vd. v1.1.0-rc1) không bao giờ nhận latest.
       - name: Compute tags
         id: meta
         run: |
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/ricotdin"
-          HIGHEST="$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)"
+          HIGHEST="$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
           {
             echo "tags<<EOF"
-            echo "$IMAGE:${GITHUB_REF_NAME#v}"
+            echo "$IMAGE:$GITHUB_REF_NAME"
             if [ "$GITHUB_REF_NAME" = "$HIGHEST" ]; then echo "$IMAGE:latest"; fi
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Tag release KHÔNG được bake vào image (image được promote theo digest);
+      # runtime đọc RICOTDIN_VERSION từ release.env, BUILD_COMMIT là fallback.
       - name: Build & push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -105,5 +120,56 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            BUILD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Chỉ ghi apps/ricotdin/release.env (pr-scope.yml của repo deployment bắt buộc).
+      # DEPLOY_REPO_TOKEN: fine-grained PAT, chỉ mmlabs-online/deployment,
+      # Contents + Pull requests read/write.
+      - name: Open deployment PR
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          BRANCH="release/$APP-$TAG"
+          FILE="apps/$APP/release.env"
+          if [ -z "$DIGEST" ]; then
+            echo "::error::build-push-action không trả về digest"
+            exit 1
+          fi
+
+          gh auth setup-git
+          gh repo clone "$DEPLOY_REPO" deployment -- --depth 1
+          cd deployment
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          mkdir -p "apps/$APP"
+          {
+            echo "# Written by the $APP release workflow for $TAG (commit $GITHUB_SHA). Do not edit by hand."
+            echo "$VAR=$IMAGE:$TAG@$DIGEST"
+            echo "$VERSION_VAR=$TAG"
+          } > "$FILE"
+
+          # git add (không phải commit -am): file là mới ở lần release đầu tiên.
+          git add "$FILE"
+          # Chạy lại sau khi PR đã merge: release.env đã đúng, không có gì để commit.
+          if git diff --cached --quiet; then
+            echo "$FILE đã đúng cho $TAG trên nhánh mặc định — bỏ qua."
+            exit 0
+          fi
+          git commit -m "$APP $TAG"
+          # --force: chạy lại workflow cho cùng tag sẽ ghi đè nhánh cũ.
+          git push --force -u origin "$BRANCH"
+
+          # Chỉ tính PR đang mở (gh pr view cũng trả về PR đã đóng/merge).
+          OPEN_PR="$(gh pr list --head "$BRANCH" --state open --json url -q '.[0].url')"
+          if [ -n "$OPEN_PR" ]; then
+            echo "PR đang mở $OPEN_PR — đã cập nhật nhánh."
+          else
+            gh pr create --title "$APP $TAG" --head "$BRANCH" \
+              --body "Deploy \`$IMAGE:$TAG@$DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          fi

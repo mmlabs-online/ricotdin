@@ -8,6 +8,23 @@ import { useUpload } from '@/lib/upload/useUpload'
 import { getAccessToken } from '@/lib/supabase/auth'
 import FileUploadSection from '@/components/FileUploadSection'
 import FolderSelector from '@/components/FolderSelector'
+import RecordingNoticeModal from '@/components/RecordingNoticeModal'
+import { browserClient } from '@/lib/supabase/browser'
+import { RECORDING_NOTICE_STORAGE_KEY, isNoticeAckFresh, parseStoredAck } from '@/lib/consent/recordingNotice'
+
+// COM-01: the notice acknowledgement lives in sessionStorage (per tab). Kept outside the
+// component: these run only from click handlers, never during render.
+function isNoticeAcknowledged(): boolean {
+  try {
+    return isNoticeAckFresh(parseStoredAck(sessionStorage.getItem(RECORDING_NOTICE_STORAGE_KEY)), Date.now())
+  } catch {
+    return false // storage blocked → always show the notice
+  }
+}
+
+function storeNoticeAcknowledged(): void {
+  try { sessionStorage.setItem(RECORDING_NOTICE_STORAGE_KEY, String(Date.now())) } catch { /* storage blocked */ }
+}
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, '0')
@@ -30,6 +47,43 @@ export default function RecorderUI({ initialFolderId = null }: { initialFolderId
   const [folderId, setFolderId] = useState<string | null>(initialFolderId)
   const [moveBusy, setMoveBusy] = useState(false)
   const [moveError, setMoveError] = useState<string | null>(null)
+
+  // ── COM-01: recording notice ────────────────────────────────────────────────
+  const [showNotice, setShowNotice] = useState(false)
+
+  function beginRecording() {
+    startedAtRef.current = new Date().toISOString()
+    void start()
+  }
+
+  function handleStartClick() {
+    if (isNoticeAcknowledged()) beginRecording()
+    else setShowNotice(true)
+  }
+
+  function handleNoticeAcknowledge() {
+    setShowNotice(false)
+    storeNoticeAcknowledged()
+    // Start first, synchronously inside the click, so the browser's screen-share prompt keeps
+    // its user activation; the compliance log below is best-effort.
+    beginRecording()
+    void logNoticeAck()
+  }
+
+  async function logNoticeAck() {
+    try {
+      const { data: { session } } = await browserClient.auth.getSession()
+      if (!session) return
+      const res = await fetch('/api/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ eventType: 'recording_notice_ack', userId: session.user.id }),
+      })
+      if (!res.ok) console.warn(`[recording notice] acknowledgement was not logged (HTTP ${res.status})`)
+    } catch {
+      console.warn('[recording notice] acknowledgement was not logged (network error)')
+    }
+  }
 
   // ── AIP-06: optional model pick ─────────────────────────────────────────────
   const [modelPick, setModelPick] = useState<string>('') // "provider:model" or "" = auto
@@ -99,6 +153,10 @@ export default function RecorderUI({ initialFolderId = null }: { initialFolderId
 
   return (
     <div className="card-botanical flex flex-col gap-5">
+      {showNotice && (
+        <RecordingNoticeModal onAcknowledge={handleNoticeAcknowledge} onCancel={() => setShowNotice(false)} />
+      )}
+
       {/* Pre-start instructions */}
       {state === 'idle' && (
         <div className="bg-b-clay border border-b-border rounded-2xl px-4 py-4 text-sm text-b-fg/70 font-sans leading-relaxed">
@@ -123,10 +181,7 @@ export default function RecorderUI({ initialFolderId = null }: { initialFolderId
         {state === 'idle' && !showUpload && (
           <button
             className="btn-primary"
-            onClick={() => {
-              startedAtRef.current = new Date().toISOString()
-              void start()
-            }}
+            onClick={handleStartClick}
           >
             <span className="text-red-400">●</span> Start recording
           </button>
