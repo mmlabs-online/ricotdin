@@ -1,0 +1,45 @@
+# ricotdin on the home server. DRAFT, kept in ricotdin/docs/ops/deployment-repo/ (OPS-05); copied to
+# the deployment repository by the operator. See that folder's README before applying.
+#
+# The image comes only from release.env, which ricotdin's release workflow writes (OPS-04) as
+#   RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@sha256:<digest>
+#   RICOTDIN_VERSION=vX.Y.Z
+# Deploy with: docker compose -p ricotdin -f apps/ricotdin/compose.yml --env-file apps/ricotdin/release.env up -d --wait
+#
+# Next.js server on :3000 (non-root `node` user), no published ports: cloudflared reaches it by
+# service name on the `web` network. Runtime secrets (Supabase service role, KEY_ENCRYPTION_SECRET,
+# provider keys…) come ONLY from the server env file below — never from this repository.
+# RICOTDIN_VERSION (not a secret) is served by GET /version.json.
+
+name: ricotdin
+
+services:
+  ricotdin:
+    image: ${RICOTDIN_IMAGE:?RICOTDIN_IMAGE is unset - pass --env-file apps/ricotdin/release.env}
+    restart: unless-stopped
+    # Server-side secrets: chmod 600, outside every repository. Must match RICOTDIN_ENV_FILE in
+    # .github/workflows/deploy-ricotdin.yml. Variable names: ricotdin docs/ops/deployment-repo/README.md.
+    env_file:
+      - /etc/mmlabs/ricotdin.env
+    environment:
+      RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
+      NODE_ENV: production
+      # Pinned so the env file can't break the health check (it probes 127.0.0.1:3000).
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    # Next exits promptly on SIGTERM; interrupted pipeline jobs are re-claimed by the job sweeper
+    # (stale locked_at), not drained. The grace period is just headroom.
+    stop_grace_period: 60s
+    networks: [tunnel]
+
+networks:
+  tunnel:
+    external: true
+    # The network cloudflared is on — `web`, created by proxy/compose.yml.
+    name: web

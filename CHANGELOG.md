@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Tính năng
+- Bản nháp cài ricotdin vào repo `mmlabs-online/deployment`: `apps/ricotdin/compose.yml` (image ghim theo digest, cổng 3000, secret chỉ từ file `/etc/mmlabs/ricotdin.env` trên server), workflow `deploy-ricotdin.yml` (healthcheck `/api/health`, tự khôi phục bản trước khi lỗi, comment kết quả lên PR) và README kèm prompt kiểm tra sau release — trong `docs/ops/deployment-repo/` (OPS-05)
+
+### Checklist deploy
+- **OPS-05:** tạo `/etc/mmlabs/ricotdin.env` (600, user của runner) với secret production; copy 2 bản nháp vào repo deployment; thêm hostname cloudflared → `http://ricotdin:3000`; cập nhật Supabase Site URL/redirect; dừng container ricotdin chạy tay; rồi merge PR `ricotdin v1.1.0` (đã mở) để deploy qua pipeline. Trước đó nên rotate token Cloudflare Tunnel đang bị commit trong `proxy/compose.yml` của repo deployment.
+
 ## [1.1.0] — 2026-10-22
 
 ### Tính năng

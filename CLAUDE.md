@@ -200,7 +200,9 @@ v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the 
 Pull requests RW) opens PR `ricotdin vX.Y.Z` on `mmlabs-online/deployment` that writes ONLY
 `apps/ricotdin/release.env`:
 `RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@<digest>` (pinned by digest) + `RICOTDIN_VERSION=vX.Y.Z`.
-Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05).
+Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05: drafts in
+`docs/ops/deployment-repo/` — `apps/ricotdin/compose.yml`, `deploy-ricotdin.yml`, README with the
+verification prompt; runtime secrets ONLY in the server file `/etc/mmlabs/ricotdin.env`, never in a repo).
 The tag is never baked into the image; runtime `RICOTDIN_VERSION` (non-secret) is served by
 public `GET /version.json` (fallback: baked `BUILD_COMMIT`, then `"unknown"` —
 `lib/release/version.ts`). Public `GET /api/health` → `{"status":"ok"}` (no DB/provider calls)
