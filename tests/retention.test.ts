@@ -12,6 +12,7 @@ import {
   isOwnedAudioKey,
   ownedAudioPath,
   ownedAudioDeleteItems,
+  ownMeetingsOnly,
   RETENTION_SETTING_KEY,
   PURGE_INTERVAL_MS,
   PURGE_BATCH_LIMIT,
@@ -223,5 +224,29 @@ describe('ownedAudioDeleteItems', () => {
   })
   it('empty input → empty list', () => {
     assert.deepEqual(ownedAudioDeleteItems([]), [])
+  })
+})
+
+// ── ownMeetingsOnly (BUG-011) ───────────────────────────────────────────────
+// A shared-folder editor can put their own meeting into the owner's folder. Folder delete with
+// deleteMeetings=true must only delete the caller's meetings; others fall back to Uncategorized.
+
+describe('ownMeetingsOnly', () => {
+  const owner = '11111111-1111-1111-1111-111111111111'
+  const editor = '99999999-9999-9999-9999-999999999999'
+  const rows = [
+    { id: 'm1', user_id: owner },
+    { id: 'm2', user_id: editor },
+    { id: 'm3', user_id: owner },
+  ]
+
+  it("BUG-011: folder delete never selects another user's meeting", () => {
+    assert.deepEqual(ownMeetingsOnly(rows, owner).map((m) => m.id), ['m1', 'm3'])
+  })
+  it('the editor deleting the same folder would only get their own (route also requires folder ownership)', () => {
+    assert.deepEqual(ownMeetingsOnly(rows, editor).map((m) => m.id), ['m2'])
+  })
+  it('empty caller id → nothing', () => {
+    assert.deepEqual(ownMeetingsOnly(rows, ''), [])
   })
 })

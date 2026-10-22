@@ -6,7 +6,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
-import { ownedAudioDeleteItems } from '@/lib/retention/policy'
+import { ownedAudioDeleteItems, ownMeetingsOnly } from '@/lib/retention/policy'
+import { logActivity } from '@/lib/activity/logActivity'
+import { meetingDeletedActivity } from '@/lib/activity/entries'
+import { requestContext } from '@/lib/admin/audit'
 import { deleteObjects } from '@/lib/storage'
 import { logger } from '@/lib/logger'
 
@@ -95,18 +98,23 @@ export async function DELETE(
 
   if (deleteMeetings) {
     // Collect audio paths so we can clean up Storage before deleting rows
-    const { data: meetingRows, error: selectErr } = await serverClient
+    // Only the caller's own meetings (BUG-011): a shared-folder editor's meetings in this folder are
+    // not the owner's to delete — they fall back to Uncategorized when the folder is deleted below.
+    const { data: folderMeetings, error: selectErr } = await serverClient
       .from('meetings')
       .select('id, user_id, audio_path, storage_provider')
       .eq('folder_id', id)
+      .eq('user_id', userId)
     if (selectErr) {
       // Without the list we'd delete the folder and silently move its meetings to Uncategorized.
       logger.error('[folders] meetings lookup failed', { detail: selectErr.message })
       return NextResponse.json({ error: 'Failed to delete the meetings in this folder.' }, { status: 500 })
     }
 
+    const meetingRows = ownMeetingsOnly(folderMeetings ?? [], userId)
+
     // Only each meeting's own object, each from its own provider (R2 or legacy Supabase) — BUG-004.
-    const audioItems = ownedAudioDeleteItems(meetingRows ?? [])
+    const audioItems = ownedAudioDeleteItems(meetingRows)
     if (audioItems.length > 0) {
       // Storage failure is non-fatal — proceed with row deletion regardless
       const failed = await deleteObjects(audioItems)
@@ -116,12 +124,16 @@ export async function DELETE(
     }
 
     // Delete all meetings in the folder (transcript_segments, todos etc. cascade)
-    const meetingIds = (meetingRows ?? []).map((m) => m.id)
+    const meetingIds = meetingRows.map((m) => m.id)
     if (meetingIds.length > 0) {
       const { error: meetingsErr } = await serverClient.from('meetings').delete().in('id', meetingIds)
       if (meetingsErr) {
         logger.error('[folders] meetings delete failed', { detail: meetingsErr.message })
         return NextResponse.json({ error: 'Failed to delete the meetings in this folder.' }, { status: 500 })
+      }
+      const { ipAddress, userAgent } = requestContext(req)
+      for (const meetingId of meetingIds) {
+        logActivity({ userId, ...meetingDeletedActivity(meetingId), ip: ipAddress, userAgent })
       }
     }
   }

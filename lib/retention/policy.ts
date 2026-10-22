@@ -100,3 +100,13 @@ export function ownedAudioDeleteItems(
   }
   return items
 }
+
+/**
+ * Meetings a folder delete may remove: only the caller's own (BUG-011). Shared-folder editors can
+ * place their own meetings in someone else's folder; those must never be deleted by the folder
+ * owner — they fall back to Uncategorized via ON DELETE SET NULL when the folder goes.
+ */
+export function ownMeetingsOnly<T extends { user_id: string }>(rows: T[], callerId: string): T[] {
+  if (!callerId) return []
+  return rows.filter((m) => m.user_id === callerId)
+}

@@ -14,6 +14,8 @@
 
 ### Sửa lỗi
 - Xoá folder kèm cuộc họp giờ xoá cả file audio trên R2 (trước đây chỉ xoá trên bucket Supabase cũ nên audio R2 bị bỏ lại), và báo lỗi (500) thay vì âm thầm bỏ qua khi không lấy được hoặc không xoá được các cuộc họp (BUG-004)
+- Xoá folder chia sẻ kèm cuộc họp không còn xoá cuộc họp của người khác (editor đã bỏ cuộc họp của họ vào folder): chỉ xoá cuộc họp của chính chủ folder, cuộc họp của người khác chuyển về Uncategorized của họ; mỗi cuộc họp bị xoá có log `meeting_deleted` (BUG-011)
+- Sự kiện `meeting_deleted` trong activity log trước đây không bao giờ được lưu (vướng khoá ngoại tới cuộc họp vừa xoá); nay lưu với ID cuộc họp trong `metadata` (BUG-012)
 
 ### Checklist deploy
 - **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).

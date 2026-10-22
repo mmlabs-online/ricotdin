@@ -21,7 +21,9 @@
 | BUG-008 | Direct PostgREST DELETE of an own meeting skips storage cleanup (audio orphaned, outside retention purge) | S3 | fixed | v1.0.0 | PRV-02 | bugfix | dev | fix/BUG-008-revoke-meetings-delete, PR #18 |
 | BUG-009 | todos / calendar_suggestions are client-writable on every column: owner/editor can spoof action items and .ics events for grantees | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 | BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
-| BUG-011 | Folder delete with deleteMeetings=true also deletes OTHER users' meetings (shared-folder editors) and their audio | S2 | open | v1.0.0 | — | — | — | — |
+| BUG-011 | Folder delete with deleteMeetings=true also deletes OTHER users' meetings (shared-folder editors) and their audio | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings |
+| BUG-012 | `meeting_deleted` activity events were never stored (FK to the already-deleted meeting row) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings |
+| BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | open | v1.0.0 | — | — | — | — |
 
 ---
 
@@ -250,4 +252,29 @@ The route selects every meeting with `folder_id = F` (service role, no `user_id`
 Folder delete treats "meetings in my folder" as "my meetings".
 
 **Fix**
-<pending owner decision: (a) delete only the caller's meetings and let others' fall to Uncategorized via ON DELETE SET NULL (recommended), or (b) refuse with 409 when the folder holds other users' meetings>
+Owner chose (a). `DELETE /api/folders/:id?deleteMeetings=true` now selects only `user_id = caller` meetings in the folder and re-filters them with the new pure `ownMeetingsOnly(rows, callerId)` (`lib/retention/policy.ts`). Other users' meetings are untouched and fall back to Uncategorized via `ON DELETE SET NULL` when the folder is deleted. Each deleted meeting now writes a `meeting_deleted` activity event (via the BUG-012 fix — before it, no `meeting_deleted` event was ever stored).
+Regression tests in `tests/retention.test.ts`, incl. "BUG-011: folder delete never selects another user's meeting". They failed first (`ownMeetingsOnly is not a function`), then 35/35.
+
+## BUG-012 — `meeting_deleted` activity events were never stored
+
+**Reported:** 2026-10-22 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-011 review.
+
+**Actual**
+`activity_log.meeting_id` is `REFERENCES meetings(id) ON DELETE SET NULL` (migration 016, not deferrable). `DELETE /api/meetings/:id` (and the new folder bulk delete) logged `meeting_deleted` with `meetingId` AFTER deleting the row, so every insert failed with an FK violation (23503), swallowed by fire-and-forget `logActivity`. The admin activity feed never showed a deletion.
+
+**Fix**
+New pure `meetingDeletedActivity(meetingId)` (`lib/activity/entries.ts`) → `{ eventType: 'meeting_deleted', meetingId: null, metadata: { meeting_id } }` (id is an identifier, not content — §9g). Used by both delete routes. Regression test "BUG-012: meeting_deleted never references the deleted row via the meeting_id FK" (`tests/activity-log.test.ts`) — failed first (module missing), then passed. Fixed in the same branch as BUG-011.
+
+## BUG-013 — Deleting a shared folder cascades away grantees' folder-scoped chat sessions
+
+**Reported:** 2026-10-22 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** —
+
+Found in the BUG-011 review.
+
+**Actual**
+`chat_sessions.folder_id` is `REFERENCES folders(id) ON DELETE CASCADE` (migration 018). Any folder delete (with or without `deleteMeetings`) deletes every user's folder-scoped chat sessions and messages, including grantees', with no log.
+
+**Fix**
+<pending: e.g. ON DELETE SET NULL for other users' sessions, or delete only the owner's sessions in the route before deleting the folder>

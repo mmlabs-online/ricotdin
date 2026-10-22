@@ -156,3 +156,18 @@ describe('isCallerOwn', () => {
     assert.equal(isCallerOwn('user-aaa', ''), false)
   })
 })
+
+// ── meetingDeletedActivity (BUG-012) ────────────────────────────────────────
+// activity_log.meeting_id is an FK to meetings. `meeting_deleted` is logged after the row is
+// gone, so referencing it through meeting_id made every insert fail (23503) silently.
+
+import { meetingDeletedActivity } from '../lib/activity/entries.js'
+
+describe('meetingDeletedActivity', () => {
+  it('BUG-012: meeting_deleted never references the deleted row via the meeting_id FK', () => {
+    const e = meetingDeletedActivity('22222222-2222-2222-2222-222222222222')
+    assert.equal(e.eventType, 'meeting_deleted')
+    assert.equal(e.meetingId, null)
+    assert.deepEqual(e.metadata, { meeting_id: '22222222-2222-2222-2222-222222222222' })
+  })
+})
