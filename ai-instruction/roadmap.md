@@ -27,15 +27,19 @@ reversible merge.
 |---|---|---|---|
 | 1. Deploy v1.1.0 to production — owner, this week (current method) | — (§9k) | Released 2026-10-22 but prod is still v1.0.0: S1 holes BUG-002/003/005 are live | Migrations 032–036 applied + verify queries pass; `/version.json` = `v1.1.0` |
 | 2. First backup + restore test — owner, this week | OPS-03 | Secrets are set but `db-backup` has never run | `gh workflow run backup.yml --ref main` green; one restore logged in `docs/ops/backup-restore.md`; tracking `[x]` |
-| 3. Prove the deploy pipeline with v1.1.0 — owner, next week | OPS-05 | Server env + cloudflared done; drafts not yet in the deployment repo | Drafts copied to mmlabs-online/deployment; deployment PR #10 merged; verification prompt prints `DEPLOYED v1.1.0` |
-| 4. Release v1.1.1 through the pipeline | — (§9k) | BUG-004/006/008/011/012 + migrations 037–038 are on `dev` only | PR `dev → main`, `main → release/1.1`, tag `v1.1.1`; `DEPLOYED v1.1.1` |
-| 5. Agent work in parallel | BUG-013; docs drift; CI on dev PRs | Keep the agents busy on low-risk items while the owner does 1–3 | BUG-013 fixed via `/fix-bug`; CHANGELOG known issues + CLAUDE.md §9a/§11 + PRV-03 tracking corrected; CI runs on PRs into `dev` (via `/add-feature` then `/ship-feature`) |
+| 3. Prove the deploy pipeline with v1.1.0 — owner, this week | OPS-05 | Server env + cloudflared done; drafts not yet in the deployment repo | Drafts copied to mmlabs-online/deployment; deployment PR #10 merged; verification prompt prints `DEPLOYED v1.1.0` |
+| 4. Release v1.1.1 through the pipeline | — (§9k) | BUG-004/006/008/011/012/014–017, OPS-06 + migrations 037–038 are on `dev` only | Agent's draft PR `dev → main` merged, `main → release/1.1`, tag `v1.1.1`; `DEPLOYED v1.1.1` |
+| 5. Deploy support pack — agent, now | needs `/add-feature` (OPS-07) | Owner does deploy v1.1.0 / backup / OPS-05 by hand this week | Step-by-step runbook (v1.1.0 migrations + verify queries, OPS-05 copy/merge, tunnel-token rotation); `npm run verify:deploy <url>` reports version + health |
+| 6. PRF-08 tracking drift — agent | PRF-08 (`/fix-bug`, docs) | Already delivered by AIP-06 (profile default model within admin allow-list) | `tracking.md` `[x]`, spec marked done (via AIP-06) |
+| 7. Prepare v1.1.1 release PR — agent | — (§9k) | Shortens item 4 once the pipeline is proven | Branch with version 1.1.1 + CHANGELOG `[1.1.1]` (incl. 037–038 checklist); **draft** PR `dev → main` open, CI green |
+| 8. Re-spec staging — agent | OPS-02 (`/add-feature`) | Spec now, build after OPS-05 | Spec passes Definition of Ready; build stays in Next |
+| 9. Account activity log — agent | PRF-09 (`/add-feature` → `/ship-feature`; structural: user-scoped read of `activity_log`) | User value while ops completes | Users see their own events on `/profile`; owner approved the plan |
 
 ## Next
 
 | Item | Codes | Depends on |
 |---|---|---|
-| Staging as a second compose project on the home server + second Supabase project (re-spec) | OPS-02 (re-spec via `/add-feature`) | OPS-05 |
+| **Build** staging per the re-spec (second compose project on the home server + second Supabase project) | OPS-02 | OPS-05, Now 8 |
 | Confirm reverse proxy sets `x-forwarded-for` (login rate limit + audit IP rely on it) | — (check) | OPS-05 |
 | Read-only DB role for backups | — (follow-up in `docs/ops/backup-restore.md`) | OPS-03 |
 
@@ -95,3 +99,9 @@ supersedes it.
 - **Options considered:** A enable billing (no-train, paid per token); B stay on current keys (chosen).
 - **Why:** owner priority is cost and simplicity for internal use; privacy is handled by the retention purge (PRV-02) and recording notice (COM-01), not by provider terms. Free-tier rate limits are absorbed by retry/backoff and the key pool.
 - **Revisit if:** outside users or commercialisation, a customer/legal requirement, or free-tier rate limits make processing unreliable.
+
+### 2026-10-23 — Agent queue while the owner does the ops steps
+- **Decision:** Strategy A — agents first reduce the owner's manual work (OPS-07 runbook + verify script, PRF-08 drift, draft v1.1.1 release PR), then re-spec OPS-02 and build PRF-09. Goal and horizon unchanged; owner does deploy v1.1.0, backup and OPS-05 this week. Earlier agent queue (BUG-013/014/015/016/017, OPS-06) is done.
+- **Options considered:** A owner support first (chosen); B features first (PRF-09, OPS-02 spec) — agents busy elsewhere during the week the owner needs ops support.
+- **Why:** the owner's ops steps gate v1.1.1 and the S1 fixes on prod; a runbook + verify script make them faster and less error-prone, and a ready draft release PR shortens the last step.
+- **Revisit if:** the owner's ops steps slip past next week, or the draft release PR needs repeated rebasing.
