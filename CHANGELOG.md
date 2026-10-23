@@ -7,6 +7,7 @@
 
 ### Tính năng
 - Bản nháp cài ricotdin vào repo `mmlabs-online/deployment`: `apps/ricotdin/compose.yml` (image ghim theo digest, cổng 3000, secret chỉ từ file `/etc/mmlabs/ricotdin.env` trên server), workflow `deploy-ricotdin.yml` (healthcheck `/api/health`, tự khôi phục bản trước khi lỗi, comment kết quả lên PR) và README kèm prompt kiểm tra sau release — trong `docs/ops/deployment-repo/` (OPS-05)
+- CI (lint · typecheck · test) giờ chạy cả trên PR vào `dev` và khi push lên `dev`; chỉ hiển thị kết quả, không chặn merge; khắc phục known issue "CI không chạy cho PR vào `dev`" của 1.1.0 (OPS-06)
 
 ### Bảo mật
 - Admin không còn đọc được ciphertext của API key, secret R2 (`admin_config`, `storage_config`) qua REST trực tiếp; migration 023 trước đây không có tác dụng. Trình duyệt mất mọi quyền trên 2 bảng này, UI admin vẫn dùng API phía server (migration 037) (BUG-006)

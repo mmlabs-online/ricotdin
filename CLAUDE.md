@@ -170,7 +170,7 @@ npm run test       # run tests (not yet configured)
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
   only**, never new features. All `vX.Y.Z` tags live here (`v1.0.0`, `v1.0.1`… on `release/1.0`).
-- `ci.yml` runs on push/PR to `main` and `release/**`.
+- `ci.yml` runs on push/PR to `main`, `dev` and `release/**` (on `dev` informational only — not a required check; OPS-06).
 
 **Versioning:** SemVer. `package.json` `version` MUST equal the tag without the `v`.
 `release.yml` rejects a tag that does not match `package.json` or whose commit is not on

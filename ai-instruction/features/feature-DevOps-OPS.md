@@ -288,6 +288,52 @@ End with one line: DEPLOYED <TAG> or NOT DEPLOYED, plus the first failing check.
 
 ---
 
+### OPS-06 — CI on dev branch
+**Priority:** Medium | **Status:** ✅ Done
+
+**User Story**  
+As the owner, I want lint, typecheck and tests to run on every PR into dev and every push to dev so that agent-made changes show a red/green signal before and after they land.
+
+**Context**
+`ci.yml` (OPS-01) only triggers on push/PR to `main` and `release/**`, so the agent PRs into `dev` (#20, #21) merged with no checks; `release-dev.yml` only builds the image after a push. Chosen: B, add `dev` to both `push` and `pull_request`, informational only (owner decision: no required check, no build step). Rejected: A (PR only), cheaper, but there's no signal for direct pushes/merges to dev.
+
+**Use Cases**
+1. Agent opens a PR into `dev` → "lint · typecheck · test" runs and shows on the PR.
+2. PR is merged (or a commit is pushed to `dev`) → CI runs on `dev`.
+
+**Frontend**
+- None.
+
+**Backend**
+- `.github/workflows/ci.yml`: add `dev` to `on.push.branches` and `on.pull_request.branches`. Job steps unchanged.
+
+**Acceptance Criteria**
+- Given a PR into `dev`, when it is opened or updated, then the "lint · typecheck · test" check runs and its result is shown on the PR.
+- Given a push to `dev` (including a PR merge), then the CI workflow runs on `dev` (`gh run list --workflow ci.yml --branch dev --event push`).
+- Triggers for `main` and `release/**` are unchanged.
+- A red CI on a PR into `dev` does not block merging (no ruleset/branch-protection change).
+- No build step is added; the job's steps are identical to before.
+
+**Test Plan**
+- No pure logic: the change is workflow config only, so there is no unit test (`CLAUDE.md` §10 tests cover pure functions). Verified by observable runs (Done check).
+
+**Structural flags**
+- None (one workflow file; no migration, env var, provider or RLS change).
+
+**Done check**
+- The OPS-06 PR into `dev` shows the "lint · typecheck · test" check (the PR triggers its own workflow), and after merge `gh run list --workflow ci.yml --branch dev --event push --limit 1` shows a run.
+
+**Out of scope**
+- Making CI a required check on `dev` (owner decision: informational only).
+- `npm run build` in CI (owner decision; `release-dev.yml` still builds after push).
+- Having `/ship-feature` and `/fix-bug` wait for `gh pr checks` before asking to merge (workflow follow-up, not a product feature).
+
+**Key files (expected)**
+- `.github/workflows/ci.yml`
+- `CLAUDE.md` §9k ("ci.yml runs on push/PR to main and release/**"), `CHANGELOG.md` `[Unreleased]` (OPS-06 entry; the 1.1.0 Known issues line about CI only on main stays as history)
+
+---
+
 ## Implementation Order
 
 1. **OPS-01** (CI) — lowest effort, highest confidence gain. Set up GitHub Actions in one session.
@@ -301,6 +347,7 @@ End with one line: DEPLOYED <TAG> or NOT DEPLOYED, plus the first failing check.
 - **OPS-03 depends on:** nothing; can be set up anytime
 - **OPS-04 depends on:** OPS-01 (the release verify job reuses the CI checks)
 - **OPS-05 depends on:** OPS-04 (release PRs must exist before the deployment repo can consume them)
+- **OPS-06 depends on:** OPS-01 (extends its ci.yml triggers to `dev`)
 
 ## Current CI Coverage (for context)
 
