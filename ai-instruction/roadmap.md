@@ -8,29 +8,28 @@
 
 ## North star
 
-Ricotdin is a meeting assistant our own team trusts with sensitive meetings: every recording
-is processed under no-training terms, audio is purged on a schedule, and every release reaches
-the home server through one reviewed, health-checked, reversible merge.
+Ricotdin is a meeting assistant our own team trusts with sensitive meetings: audio is purged
+on a schedule, and every release reaches the home server through one reviewed, health-checked,
+reversible merge.
 
 ## Current goal
 
 | Field | Value |
 |---|---|
-| Goal | Stabilise for **internal use** with sensitive meetings — privacy first, then a reliable release/deploy path. No outside users. |
+| Goal | Stabilise for **internal use** with sensitive meetings — retention purge + recording notice, then a reliable release/deploy path. No outside users. |
 | Horizon | 1 month: 2026-10-21 → 2026-11-21 |
-| Success measures | (1) No meeting is processed on a free-tier Gemini key. (2) Audio older than the retention setting is purged automatically. (3) v1.1.0 is in production this week by the current method (S1 fixes live); the pipeline is then proven by redeploying v1.1.0 and shipping v1.1.1, and the OPS-05 verification prompt prints `DEPLOYED v1.1.1`. (4) A DB restore has been tested once. |
-| Constraints (people, time, budget) | All code by AI agents (`/fix-bug`, `/ship-feature`); owner approves and does dashboard/billing/Docker steps. Meetings contain **sensitive data**. **Low AI budget** — watch `/admin/usage` weekly; Speechmatics minutes are the main cost driver. |
+| Success measures | (1) Audio older than the retention setting is purged automatically. (2) v1.1.0 is in production this week by the current method (S1 fixes live); the pipeline is then proven by redeploying v1.1.0 and shipping v1.1.1, and the OPS-05 verification prompt prints `DEPLOYED v1.1.1`. (3) A DB restore has been tested once. |
+| Constraints (people, time, budget) | All code by AI agents (`/fix-bug`, `/ship-feature`); owner approves and does dashboard/Docker steps. Meetings contain **sensitive data**. **Current (free-tier) AI keys accepted for all models; provider data use accepted (owner, 2026-10-23).** **Low AI budget** — watch `/admin/usage` weekly; Speechmatics minutes are the main cost driver. |
 
 ## Now (in progress / next up)
 
 | Item | Codes | Why now | Done when |
 |---|---|---|---|
-| 1. Enable Gemini billing (no-train) — owner, this week. **Sensitive meetings paused until done** | PRV-01 | Sensitive meetings must not go to a free-tier key | Only billed-project keys active at `/admin/keys`; Speechmatics data-use terms confirmed; pause lifted |
-| 2. Deploy v1.1.0 to production — owner, this week (current method) | — (§9k) | Released 2026-10-22 but prod is still v1.0.0: S1 holes BUG-002/003/005 are live | Migrations 032–036 applied + verify queries pass; `/version.json` = `v1.1.0` |
-| 3. First backup + restore test — owner, this week | OPS-03 | Secrets are set but `db-backup` has never run | `gh workflow run backup.yml --ref main` green; one restore logged in `docs/ops/backup-restore.md`; tracking `[x]` |
-| 4. Prove the deploy pipeline with v1.1.0 — owner, next week | OPS-05 | Server env + cloudflared done; drafts not yet in the deployment repo | Drafts copied to mmlabs-online/deployment; deployment PR #10 merged; verification prompt prints `DEPLOYED v1.1.0` |
-| 5. Release v1.1.1 through the pipeline | — (§9k) | BUG-004/006/008/011/012 + migrations 037–038 are on `dev` only | PR `dev → main`, `main → release/1.1`, tag `v1.1.1`; `DEPLOYED v1.1.1` |
-| 6. Agent work in parallel | BUG-013; docs drift; CI on dev PRs | Keep the agents busy on low-risk items while the owner does 1–4 | BUG-013 fixed via `/fix-bug`; CHANGELOG known issues + CLAUDE.md §9a/§11 + PRV-03 tracking corrected; CI runs on PRs into `dev` (via `/add-feature` then `/ship-feature`) |
+| 1. Deploy v1.1.0 to production — owner, this week (current method) | — (§9k) | Released 2026-10-22 but prod is still v1.0.0: S1 holes BUG-002/003/005 are live | Migrations 032–036 applied + verify queries pass; `/version.json` = `v1.1.0` |
+| 2. First backup + restore test — owner, this week | OPS-03 | Secrets are set but `db-backup` has never run | `gh workflow run backup.yml --ref main` green; one restore logged in `docs/ops/backup-restore.md`; tracking `[x]` |
+| 3. Prove the deploy pipeline with v1.1.0 — owner, next week | OPS-05 | Server env + cloudflared done; drafts not yet in the deployment repo | Drafts copied to mmlabs-online/deployment; deployment PR #10 merged; verification prompt prints `DEPLOYED v1.1.0` |
+| 4. Release v1.1.1 through the pipeline | — (§9k) | BUG-004/006/008/011/012 + migrations 037–038 are on `dev` only | PR `dev → main`, `main → release/1.1`, tag `v1.1.1`; `DEPLOYED v1.1.1` |
+| 5. Agent work in parallel | BUG-013; docs drift; CI on dev PRs | Keep the agents busy on low-risk items while the owner does 1–3 | BUG-013 fixed via `/fix-bug`; CHANGELOG known issues + CLAUDE.md §9a/§11 + PRV-03 tracking corrected; CI runs on PRs into `dev` (via `/add-feature` then `/ship-feature`) |
 
 ## Next
 
@@ -53,6 +52,7 @@ the home server through one reviewed, health-checked, reversible merge.
 |---|---|---|
 | Commercialisation (COM-02, COM-03, COM-04), ADM-11, PRF-13 self-service | Internal use only; SaaS scope | Goal changes to opening up (Group A) or commercialising (Group B) |
 | PRV-03 (superseded) | Purge delivered by PRV-02 (2026-10-21); audio encryption not needed while purge is on | Audio must be kept long-term |
+| PRV-01 Enable Gemini billing (no-train) | Owner decision 2026-10-23: stay on current keys for all models; AI-provider data use accepted for internal use | Outside users, commercialisation (Group A/B), or a customer/legal requirement |
 | CST-02 as a separate item | Storage already on R2; purge covers the storage risk | Legacy Supabase bucket needs retiring |
 | PRO-02 Google Calendar sync, PRO-03 reminders | Out of MVP scope (CLAUDE.md §1) | Explicit owner go decision |
 | WebM remux, 39 lint warnings, in-memory login rate limit | Low impact for internal single-process use | Users complain / multi-instance deploy |
@@ -89,3 +89,9 @@ supersedes it.
 - **Options considered:** A close live risk first (chosen); B finish OPS-05 first and jump prod from v1.0.0 to v1.1.1 (S1 holes stay live longer; 7 migrations at once).
 - **Why:** As of 2026-10-23 the code is ahead of plan (v1.1.0 tagged, all S3 Now bugs fixed on dev) but prod is still v1.0.0 with three live S1 holes, meetings still use a free-tier key, and backups have never run. The two owner actions that close the worst risks take minutes; the pipeline can then be tested on an already-deployed version.
 - **Revisit if:** the manual v1.1.0 deploy or migrations 032–036 fail, the pipeline test with v1.1.0 fails, or billing cost exceeds the budget.
+
+### 2026-10-23 — No Gemini billing; current keys for all models
+- **Decision:** PRV-01 parked. All models keep using the current keys regardless of tier; possible data use by AI providers is accepted. The pause on sensitive meetings is lifted. Supersedes the PRV-01 parts of the 2026-10-21 and 2026-10-23 entries.
+- **Options considered:** A enable billing (no-train, paid per token); B stay on current keys (chosen).
+- **Why:** owner priority is cost and simplicity for internal use; privacy is handled by the retention purge (PRV-02) and recording notice (COM-01), not by provider terms. Free-tier rate limits are absorbed by retry/backoff and the key pool.
+- **Revisit if:** outside users or commercialisation, a customer/legal requirement, or free-tier rate limits make processing unreliable.
