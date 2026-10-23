@@ -5,7 +5,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { folderDeleteChatNotice, folderDeleteCounts } from '../lib/folders/deleteNotice.js'
+import { folderDeleteChatNotice, folderDeleteCounts, meetingsAfterFolderDelete } from '../lib/folders/deleteNotice.js'
 
 describe('folderDeleteChatNotice', () => {
   it('BUG-014: warns that folder chat history is deleted (unshared folder)', () => {
@@ -63,5 +63,37 @@ describe('folderDeleteCounts', () => {
 
   it('unknown caller (not loaded yet): claims nothing about ownership', () => {
     assert.deepEqual(folderDeleteCounts(meetings, 'f1', ''), { total: 3, deletable: 0, othersMoved: 0 })
+  })
+})
+
+// ── BUG-016: local meeting list after a folder delete ─────────────────────────
+
+describe('meetingsAfterFolderDelete', () => {
+  const me = 'owner-1'
+  const meetings = [
+    { id: 'a', user_id: me,       folder_id: 'f1' as string | null },
+    { id: 'b', user_id: 'editor', folder_id: 'f1' as string | null },
+    { id: 'c', user_id: me,       folder_id: 'f2' as string | null },
+    { id: 'd', user_id: 'editor', folder_id: null as string | null },
+  ]
+
+  it('BUG-016: keep path drops shared members\' meetings instead of showing them as ghost rows', () => {
+    const after = meetingsAfterFolderDelete(meetings, 'f1', me, false)
+    assert.deepEqual(after.map((m) => [m.id, m.folder_id]), [['a', null], ['c', 'f2'], ['d', null]])
+  })
+
+  it('delete path removes every meeting of the folder', () => {
+    const after = meetingsAfterFolderDelete(meetings, 'f1', me, true)
+    assert.deepEqual(after.map((m) => m.id), ['c', 'd'])
+  })
+
+  it('unknown caller: keep path falls back to moving every folder meeting to Uncategorized', () => {
+    const after = meetingsAfterFolderDelete(meetings, 'f1', '', false)
+    assert.deepEqual(after.map((m) => [m.id, m.folder_id]), [['a', null], ['b', null], ['c', 'f2'], ['d', null]])
+  })
+
+  it('does not mutate the input', () => {
+    meetingsAfterFolderDelete(meetings, 'f1', me, false)
+    assert.equal(meetings[0].folder_id, 'f1')
   })
 })

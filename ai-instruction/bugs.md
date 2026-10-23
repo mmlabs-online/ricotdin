@@ -26,7 +26,7 @@
 | BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | wontfix | v1.0.0 | — | — | — | by design, see details; UI warning split into BUG-014 |
 | BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning, PR #20 |
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | dev | fix/BUG-015-folder-delete-count, PR #21 |
-| BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | open | v1.0.0 | MMG-04 | — | — | — |
+| BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | dev | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
 
 ---
 
@@ -330,5 +330,9 @@ Found in the BUG-015 review.
 **Actual**
 `deleteFolder(id, false)` in `app/(routes)/meetings/page.tsx` maps every meeting of the folder to `folder_id: null` in local state, including other users' meetings. Once the folder is gone the owner loses RLS access to those, so they appear in the owner's Uncategorized until the next reload.
 
+**Root cause**
+The keep path updated local state as if every meeting in the folder stayed visible to the owner, but `can_access_meeting` only grants a non-owner access through a non-null `folder_id`; after `ON DELETE SET NULL` the owner can no longer read other users' meetings (admins neither, since migration 025).
+
 **Fix**
-<pending: in the keep path, set `folder_id: null` only for the caller's own meetings and drop the others from local state>
+New pure `meetingsAfterFolderDelete(meetings, folderId, callerId, deleteMeetings)` (`lib/folders/deleteNotice.ts`), used by `deleteFolder` in `app/(routes)/meetings/page.tsx`: delete path removes every folder meeting (unchanged); keep path moves the caller's meetings to Uncategorized and drops other users'; unknown caller (`''`) falls back to the old behaviour (unreachable in practice: the delete action is owner-gated on `currentUserId`). Regression test: `tests/folder-delete-notice.test.ts` — "BUG-016: keep path drops shared members' meetings instead of showing them as ghost rows" — failed first (`meetingsAfterFolderDelete is not a function`), then 12/12.
+Not verified: browser click-through with a real shared folder (owner + editor).

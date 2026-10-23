@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { browserClient } from '@/lib/supabase/browser'
 import { getAccessToken } from '@/lib/supabase/auth'
 import { getMeetingRole, canPin, canEdit, canDelete, canManageShares } from '@/lib/access/roles'
-import { folderDeleteChatNotice, folderDeleteCounts } from '@/lib/folders/deleteNotice'
+import { folderDeleteChatNotice, folderDeleteCounts, meetingsAfterFolderDelete } from '@/lib/folders/deleteNotice'
 import type { Meeting, MeetingStatus, FolderWithRole, FolderShareMember } from '@/types/database'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -371,11 +371,7 @@ export default function MeetingsPage() {
         setActionError(data.error ?? 'Failed to delete folder.')
       } else {
         setFolders((prev) => prev.filter((f) => f.id !== folderId))
-        if (deleteMeetings) {
-          setMeetings((prev) => prev.filter((m) => m.folder_id !== folderId))
-        } else {
-          setMeetings((prev) => prev.map((m) => m.folder_id === folderId ? { ...m, folder_id: null } : m))
-        }
+        setMeetings((prev) => meetingsAfterFolderDelete(prev, folderId, currentUserId ?? '', deleteMeetings))
       }
     } catch {
       setActionError('Network error — please try again.')
