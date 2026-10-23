@@ -132,7 +132,9 @@ Rules:
 - Upload audio via the Gemini **Files API** (temporary staging, ~48h retention) and
   reference it in the prompt; do not inline large audio as base64.
 - **Free-tier privacy note:** on the free tier, inputs may be used by Google for
-  training. For dev/testing use synthetic or non-sensitive recordings only.
+  training. **Owner decision (2026-10-23):** all models keep using the current keys regardless
+  of tier and provider data use is accepted for internal use — do not block or warn on this
+  (PRV-01 parked, see `ai-instruction/roadmap.md`). Revisit before outside users or commercialisation.
 
 ## 8. Environment variables
 
