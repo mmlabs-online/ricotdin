@@ -335,7 +335,7 @@ As the owner, I want lint, typecheck and tests to run on every PR into dev and e
 ---
 
 ### OPS-07 — Release runbook + deploy verify
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As the owner, I want one ordered runbook and a verify command for every release so that I can deploy by hand or through the pipeline without missing a migration or deploying the wrong version.
