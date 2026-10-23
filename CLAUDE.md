@@ -855,4 +855,6 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 
 **v1.0.0 released** (2026-09-19) — see `CHANGELOG.md`. Audit Log UI (Area 3 / ADM-07) is live at `/admin/audit`.
 
+**v1.1.0 released** (2026-10-22) — see `CHANGELOG.md` (PRV-02 retention purge, COM-01 recording notice, OPS-03 backup, OPS-04 release → deployment PR, S1 security fixes BUG-002/003/005 + client-write revokes BUG-007/009/010; migrations 032–036). Later work on `dev` is listed under `[Unreleased]`.
+
 Keep this section in sync with actual progress; mark phases done as we go.
