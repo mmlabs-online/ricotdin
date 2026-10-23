@@ -24,3 +24,20 @@ export function folderDeleteCounts(
   const deletable = inFolder.filter((m) => m.user_id === callerId).length
   return { total: inFolder.length, deletable, othersMoved: inFolder.length - deletable }
 }
+
+// Local meeting list after a successful folder delete (BUG-016).
+// Delete path: every meeting of the folder leaves the list (the caller's are deleted; the
+// caller loses access to the others). Keep path: the caller's meetings move to Uncategorized;
+// other users' meetings go to *their* Uncategorized, which the caller can no longer see.
+// Unknown caller: fall back to moving every folder meeting to Uncategorized.
+export function meetingsAfterFolderDelete<T extends { user_id: string; folder_id: string | null }>(
+  meetings: T[],
+  folderId: string,
+  callerId: string,
+  deleteMeetings: boolean,
+): T[] {
+  if (deleteMeetings) return meetings.filter((m) => m.folder_id !== folderId)
+  return meetings
+    .filter((m) => m.folder_id !== folderId || !callerId || m.user_id === callerId)
+    .map((m) => (m.folder_id === folderId ? { ...m, folder_id: null } : m))
+}
