@@ -289,7 +289,7 @@ End with one line: DEPLOYED <TAG> or NOT DEPLOYED, plus the first failing check.
 ---
 
 ### OPS-06 — CI on dev branch
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
 As the owner, I want lint, typecheck and tests to run on every PR into dev and every push to dev so that agent-made changes show a red/green signal before and after they land.
