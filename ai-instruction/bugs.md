@@ -27,6 +27,7 @@
 | BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning, PR #20 |
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | dev | fix/BUG-015-folder-delete-count, PR #21 |
 | BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | dev | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
+| BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | dev | fix/BUG-017-docs-drift, PR #24 |
 
 ---
 
@@ -336,3 +337,21 @@ The keep path updated local state as if every meeting in the folder stayed visib
 **Fix**
 New pure `meetingsAfterFolderDelete(meetings, folderId, callerId, deleteMeetings)` (`lib/folders/deleteNotice.ts`), used by `deleteFolder` in `app/(routes)/meetings/page.tsx`: delete path removes every folder meeting (unchanged); keep path moves the caller's meetings to Uncategorized and drops other users'; unknown caller (`''`) falls back to the old behaviour (unreachable in practice: the delete action is owner-gated on `currentUserId`). Regression test: `tests/folder-delete-notice.test.ts` — "BUG-016: keep path drops shared members' meetings instead of showing them as ghost rows" — failed first (`meetingsAfterFolderDelete is not a function`), then 12/12.
 Not verified: browser click-through with a real shared folder (owner + editor).
+
+## BUG-017 — Docs drift: §11 missing v1.1.0, PRV-03 spec status
+
+**Reported:** 2026-10-23 · **Severity:** S4 · **Found in:** v1.1.0 · **Feature:** PRV-03
+
+From the 2026-10-23 `/copilot plan` snapshot (roadmap Now 6).
+
+**Actual**
+- `CLAUDE.md` §11 ends with "v1.0.0 released"; v1.1.0 (2026-10-22) is not mentioned.
+- `ai-instruction/features/feature-PrivacyData-PRV.md` PRV-03 says `❌ Not started`, while `tracking.md` marks it `[x]` with "Superseded … purge delivered by PRV-02" (roadmap decision 2026-10-22).
+
+Two other reported items were checked and are **not** drift: CHANGELOG [1.1.0] Known issues listing BUG-004/006/008 as open is correct history (they were open at release; the fixes are under `[Unreleased]`), and `CLAUDE.md` §9a on `dev` already lists migrations 032–038 (items 10–16).
+
+**Root cause**
+Close-out steps for the v1.1.0 release and the PRV-03 supersede decision updated only one of the two documents.
+
+**Fix**
+§11: added a "v1.1.0 released (2026-10-22)" line. PRV-03 spec status → `✅ Done — superseded by PRV-02`. **No automated regression test** — documentation only, no logic; verified that the seeder parser still reads PRV-03 as `done` (`parseModuleFile` + `mergeWithTracking`).

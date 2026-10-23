@@ -69,7 +69,7 @@ As a user, I want a clear retention/deletion policy and the ability to erase all
 ---
 
 ### PRV-03 — Encrypt & purge audio after processing
-**Status:** ❌ Not started  
+**Status:** ✅ Done — superseded by PRV-02 (roadmap 2026-10-22): purge delivered there; audio encryption not needed while purge is on  
 **Risk reduction feature (not a hard blocker)**
 
 **User Story**  
