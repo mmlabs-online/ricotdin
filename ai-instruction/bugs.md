@@ -23,7 +23,9 @@
 | BUG-010 | chat_sessions / chat_messages are client-writable (incl. role=assistant, citations); self-injection into own RAG history only | S4 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-009-010-revoke-content-client-writes, PR #11 |
 | BUG-011 | Folder delete with deleteMeetings=true also deletes OTHER users' meetings (shared-folder editors) and their audio | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
 | BUG-012 | `meeting_deleted` activity events were never stored (FK to the already-deleted meeting row) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
-| BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | open | v1.0.0 | — | — | — | — |
+| BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | wontfix | v1.0.0 | — | — | — | by design, see details; UI warning split into BUG-014 |
+| BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning |
+| BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | open | v1.0.0 | MMG-04 | — | — | — |
 
 ---
 
@@ -276,5 +278,42 @@ Found in the BUG-011 review.
 **Actual**
 `chat_sessions.folder_id` is `REFERENCES folders(id) ON DELETE CASCADE` (migration 018). Any folder delete (with or without `deleteMeetings`) deletes every user's folder-scoped chat sessions and messages, including grantees', with no log.
 
+**Resolution: wontfix (by design), 2026-10-23**
+Folder chat history is gated by folder access: `GET`/`POST /api/chat` with `folderId` require viewer+ on the folder (`checkFolderAccess`), and no other UI lists `chat_sessions`. A grantee's access to the owner's meetings in the folder comes only from the share, so once the folder is deleted they cannot read those meetings any more (deleted, or moved to the owner's Uncategorized; an editor-grantee's own meetings stay theirs, BUG-011). Keeping their sessions (`ON DELETE SET NULL`) would leave rows nobody can open (global scope has no history view) that still quote content the grantee is no longer allowed to see — against the access model and the privacy-first goal. `CASCADE` is therefore correct.
+Remaining gap — the delete dialog doesn't say chat history goes too — is tracked as BUG-014.
+
+## BUG-014 — Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted
+
+**Reported:** 2026-10-23 · **Severity:** S4 · **Found in:** v1.0.0 · **Feature:** RAG-04
+
+Split from BUG-013.
+
+**Steps to reproduce**
+1. As a folder owner, share a folder and use its folder chat (yours and a member's).
+2. `/meetings` → folder menu → Delete.
+
+**Expected**
+The confirm panel says the folder's chat history — including shared members' chats — is deleted too.
+
+**Actual**
+Neither delete confirmation mentions chat history — the folder-card menu panel ("Delete “<name>”?" + what to do with the meetings) nor the Manage Folders modal panel ("…will move to Uncategorized"); chat history disappears for everyone without warning.
+
+**Root cause**
+`chat_sessions.folder_id` is `ON DELETE CASCADE` by design (BUG-013), but neither confirm panel in `app/(routes)/meetings/page.tsx` mentions it.
+
 **Fix**
-<pending: e.g. ON DELETE SET NULL for other users' sessions, or delete only the owner's sessions in the route before deleting the folder>
+New pure `folderDeleteChatNotice(memberCount)` (`lib/folders/deleteNotice.ts`) — "Folder chat history will be deleted." plus "for everyone, including any chats by its N shared member(s)" when the folder is shared; guards negative / fractional / non-finite counts. Rendered in both confirm panels in `app/(routes)/meetings/page.tsx` (folder-card menu and Manage Folders modal); both are owner-only, matching `memberCount` (owned folders only). Regression tests: `tests/folder-delete-notice.test.ts`, e.g. "BUG-014: says it is deleted for everyone, including shared members" — failed first (module missing), then 3/3.
+Not verified: manual click-through in a browser (layout/wrapping of the new line).
+Follow-ups (not fixed here): "Delete folder + all N meetings" doesn't mention that those meetings' chats go too (meeting-scoped cascade); wrong N logged as BUG-015.
+
+## BUG-015 — Folder delete confirm shows the wrong meeting count
+
+**Reported:** 2026-10-23 · **Severity:** S3 · **Found in:** v1.0.0 · **Feature:** MMG-04
+
+Found in the BUG-014 review.
+
+**Actual**
+In `app/(routes)/meetings/page.tsx` the folder-card delete panel uses `folderItems = nonPinnedMeetings.filter(m => m.folder_id === f.id)` for "This folder has N meetings" / "Delete folder + all N meetings". Pinned meetings in the folder are left out, and other users' meetings (editors' own meetings in a shared folder) are counted although `DELETE /api/folders/:id?deleteMeetings=true` only deletes the owner's meetings since BUG-011. The owner can be told the wrong number of meetings will be deleted.
+
+**Fix**
+<pending>
