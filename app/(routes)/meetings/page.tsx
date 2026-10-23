@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { browserClient } from '@/lib/supabase/browser'
 import { getAccessToken } from '@/lib/supabase/auth'
 import { getMeetingRole, canPin, canEdit, canDelete, canManageShares } from '@/lib/access/roles'
+import { folderDeleteChatNotice } from '@/lib/folders/deleteNotice'
 import type { Meeting, MeetingStatus, FolderWithRole, FolderShareMember } from '@/types/database'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -980,6 +981,7 @@ export default function MeetingsPage() {
                         {isConfirmingDelete && (
                           <div style={{ background: 'rgb(254 242 242)', border: '1.5px solid rgb(252 165 165)', borderRadius: 14, marginTop: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                             <p style={{ fontSize: 12, fontWeight: 700, color: 'rgb(185 28 28)', margin: 0 }}>Delete &ldquo;{f.name}&rdquo;?</p>
+                            <p style={{ fontSize: 12, color: '#c0202e', margin: 0, lineHeight: 1.5 }}>{folderDeleteChatNotice(f.memberCount)}</p>
                             {folderItems.length > 0 ? (
                               <>
                                 <p style={{ fontSize: 12, color: '#c0202e', margin: 0, lineHeight: 1.5 }}>
@@ -1316,6 +1318,7 @@ export default function MeetingsPage() {
                               {count > 0
                                 ? ` The ${count} meeting${count !== 1 ? 's' : ''} inside will move to Uncategorized — they won't be deleted.`
                                 : ' This folder is empty.'}
+                              {` ${folderDeleteChatNotice(f.memberCount)}`}
                             </p>
                             <div className="flex gap-2">
                               <button
