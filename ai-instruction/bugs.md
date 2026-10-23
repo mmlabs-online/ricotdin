@@ -25,7 +25,8 @@
 | BUG-012 | `meeting_deleted` activity events were never stored (FK to the already-deleted meeting row) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
 | BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | wontfix | v1.0.0 | — | — | — | by design, see details; UI warning split into BUG-014 |
 | BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning, PR #20 |
-| BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | open | v1.0.0 | MMG-04 | — | — | — |
+| BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | dev | fix/BUG-015-folder-delete-count |
+| BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | open | v1.0.0 | MMG-04 | — | — | — |
 
 ---
 
@@ -316,4 +317,18 @@ Found in the BUG-014 review.
 In `app/(routes)/meetings/page.tsx` the folder-card delete panel uses `folderItems = nonPinnedMeetings.filter(m => m.folder_id === f.id)` for "This folder has N meetings" / "Delete folder + all N meetings". Pinned meetings in the folder are left out, and other users' meetings (editors' own meetings in a shared folder) are counted although `DELETE /api/folders/:id?deleteMeetings=true` only deletes the owner's meetings since BUG-011. The owner can be told the wrong number of meetings will be deleted.
 
 **Fix**
-<pending>
+New pure `folderDeleteCounts(meetings, folderId, callerId)` → `{ total, deletable, othersMoved }` (`lib/folders/deleteNotice.ts`): `total` = every meeting in the folder incl. pinned; `deletable` = the caller's own (exactly what the route deletes); unknown caller (user not loaded yet) → no ownership claim (`deletable` and `othersMoved` 0). The folder-card panel in `app/(routes)/meetings/page.tsx` now offers "Delete folder + all|my N meetings" only when `deletable > 0` and says how many belong to shared members and move to their Uncategorized; when nothing is deletable it shows a sentence plus "Delete folder" / "Cancel". The card's meeting count also uses `total` (pinned included), matching the Manage Folders modal. Regression tests: `tests/folder-delete-notice.test.ts`, e.g. "BUG-015: counts pinned meetings in the folder", "BUG-015: only the caller's meetings are deletable (others move to their Uncategorized)" — failed first (`folderDeleteCounts is not a function`), then pass; review round 2 updated the unknown-caller test first (1 fail), then 8/8.
+Not verified: browser click-through of the panel states; a real shared folder with an editor's meetings.
+Follow-up: BUG-016 (ghost rows after a keep-delete).
+
+## BUG-016 — After "Delete folder" (keep meetings), shared members' meetings show as ghost rows
+
+**Reported:** 2026-10-23 · **Severity:** S4 · **Found in:** v1.0.0 · **Feature:** MMG-04
+
+Found in the BUG-015 review.
+
+**Actual**
+`deleteFolder(id, false)` in `app/(routes)/meetings/page.tsx` maps every meeting of the folder to `folder_id: null` in local state, including other users' meetings. Once the folder is gone the owner loses RLS access to those, so they appear in the owner's Uncategorized until the next reload.
+
+**Fix**
+<pending: in the keep path, set `folder_id: null` only for the caller's own meetings and drop the others from local state>

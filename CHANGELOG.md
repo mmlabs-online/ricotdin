@@ -17,6 +17,7 @@
 - Xoá folder chia sẻ kèm cuộc họp không còn xoá cuộc họp của người khác (editor đã bỏ cuộc họp của họ vào folder): chỉ xoá cuộc họp của chính chủ folder, cuộc họp của người khác chuyển về Uncategorized của họ; mỗi cuộc họp bị xoá có log `meeting_deleted` (BUG-011)
 - Sự kiện `meeting_deleted` trong activity log trước đây không bao giờ được lưu (vướng khoá ngoại tới cuộc họp vừa xoá); nay lưu với ID cuộc họp trong `metadata` (BUG-012)
 - Hộp thoại xoá folder (cả ở menu folder lẫn modal Manage Folders) giờ báo trước rằng lịch sử chat của folder sẽ bị xoá cho mọi người, kể cả các thành viên được chia sẻ (BUG-014)
+- Hộp thoại xoá folder hiển thị đúng số cuộc họp: tính cả cuộc họp đã ghim, và chỉ đếm cuộc họp của chính chủ folder là "sẽ bị xoá"; cuộc họp của thành viên được chia sẻ được báo là chuyển về Uncategorized của họ (BUG-015)
 
 ### Checklist deploy
 - **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
