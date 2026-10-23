@@ -24,7 +24,7 @@
 | BUG-011 | Folder delete with deleteMeetings=true also deletes OTHER users' meetings (shared-folder editors) and their audio | S2 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
 | BUG-012 | `meeting_deleted` activity events were never stored (FK to the already-deleted meeting row) | S3 | fixed | v1.0.0 | — | bugfix | dev | fix/BUG-011-folder-delete-own-meetings, PR #19 |
 | BUG-013 | Deleting a shared folder cascades away grantees' folder-scoped chat sessions | S3 | wontfix | v1.0.0 | — | — | — | by design, see details; UI warning split into BUG-014 |
-| BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning |
+| BUG-014 | Folder delete dialog does not warn that folder chat history (incl. shared members') is deleted | S4 | fixed | v1.0.0 | RAG-04 | bugfix | dev | fix/BUG-014-folder-delete-chat-warning, PR #20 |
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | open | v1.0.0 | MMG-04 | — | — | — |
 
 ---
