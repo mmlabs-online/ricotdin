@@ -58,14 +58,17 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   where a policy for that command exists. All meeting content is SELECT-only for the app, so
   **editor-level writes are enforced in the API** (`can_access_meeting(..., 'editor')`) and executed
   as `ricotdin_service`. PUBLIC has no TEMP on the database and no CREATE in `public`; functions
-  added by later migrations are not PUBLIC-executable by default. v1 policies without `TO`
+  later created by the migrating role are not PUBLIC-executable by default (tested). v1 policies without `TO`
   are scoped `TO ricotdin_app`. SECURITY DEFINER functions use `search_path = public, pg_temp`.
 - **RLS request context** replaces the Supabase JWT: `app_user_id()` / `app_user_role()` read
   `current_setting('app.user_id' | 'app.role')`. These are plain GUCs any session can set, so RLS
   stops API logic bugs, **not** SQL injection or a leaked app credential (same trust model as v1's
   `request.jwt.claims`). ARC-04 requirements (security review of PR #33):
-  R1 separate login credentials: the API login is a member of `ricotdin_app` only; worker/auth/
-  admin use a different credential for `ricotdin_service`; no login is a member of both.
+  R1 separate login credentials: the API login is a member of `ricotdin_app` only and runs
+  requests as `ricotdin_app` (`SET ROLE`, or a NOINHERIT login) — `prevent_role_escalation` checks
+  `current_user = 'ricotdin_app'`; worker/auth/admin use a different credential for
+  `ricotdin_service`; no login is a member of both. Splitting `ricotdin_service` (worker vs
+  auth/admin; append-only `audit_logs`/`quota_ledger`) is an ARC-04 acceptance criterion.
   R2 never serve requests as the table owner (owner bypasses RLS; no FORCE RLS) — assert at startup.
   R3 set the context per transaction only: `set_config('app.user_id', $1, true)` + `app.role` inside
   an explicit transaction (Neon pooler = PgBouncer transaction mode; session SET would leak).

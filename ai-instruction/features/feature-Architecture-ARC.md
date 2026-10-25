@@ -253,6 +253,9 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
   `ricotdin_app` and `ricotdin_service` (never members of both), never the table owner, request context only
   via `set_config(..., true)` with bind parameters inside a transaction, values from the verified token and
   `users.role`, connections reset on check-in (tested), statement/lock timeouts per role.
+- `ricotdin_service` is split before any worker code runs: the worker role cannot read `users` /
+  `refresh_tokens` / `email_tokens`, and no runtime role can UPDATE/DELETE/TRUNCATE `audit_logs`,
+  `activity_log` or `quota_ledger` (append-only). New Alembic revision + RLS tests.
 
 **Test Plan**
 - Pure: `app/api/app/core/version.py` → `resolve_version()`; `app/api/app/core/errors.py` → `to_http()`; `app/api/app/core/redact.py` → `redact()` — `tests/test_core_*.py`.

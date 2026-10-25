@@ -26,12 +26,11 @@ GRANT USAGE ON SCHEMA public TO ricotdin_app, ricotdin_service;
 -- Hardening (ARC-02 security review). v1 was only reachable through PostgREST; v2 runs SQL.
 --   * no temp objects: a temp table could shadow public tables inside SECURITY DEFINER code;
 --   * no CREATE in public for anyone but the owner (PG15+ default, made explicit);
---   * functions created by later migrations are not executable by PUBLIC by default (BUG-005).
+--   * (the default EXECUTE revoke for future functions is at the end of the epilogue).
 DO $$ BEGIN
   EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
 END $$;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 -- RLS request context. The API sets both per transaction (ARC-04):
 --   SET LOCAL app.user_id = '<uuid>'; SET LOCAL app.role = 'user' | 'admin';

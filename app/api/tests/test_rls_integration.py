@@ -30,7 +30,12 @@ def db() -> Iterator[str]:
     with scratch_database("rls") as url:
         alembic_upgrade(url)
         _seed(url)
-        yield url
+        try:
+            yield url
+        finally:
+            # Role membership is cluster-wide: do not leave the owner a member of both roles.
+            with psycopg.connect(url, autocommit=True) as conn:
+                conn.execute("REVOKE ricotdin_app, ricotdin_service FROM CURRENT_USER")
 
 
 def _seed(v2_db: str) -> None:

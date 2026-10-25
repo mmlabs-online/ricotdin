@@ -171,3 +171,17 @@ def test_downgrade_is_refused_outside_scratch_databases() -> None:
 
     with pytest.raises(DestructiveOperationRefused):
         check_destructive_allowed("neondb", {})
+
+
+@requires_db
+def test_functions_created_by_later_migrations_are_not_public_executable() -> None:
+    # Guards the BUG-005 class: a future SECURITY DEFINER migration that forgets its REVOKE.
+    with scratch_database("defacl") as url:
+        alembic_upgrade(url)
+        with psycopg.connect(url) as conn:
+            conn.execute("CREATE FUNCTION public.later_fn() RETURNS int LANGUAGE sql AS 'SELECT 1'")
+            row = conn.execute(
+                "SELECT has_function_privilege('public', 'public.later_fn()', 'EXECUTE')"
+            ).fetchone()
+            conn.rollback()
+    assert row == (False,)

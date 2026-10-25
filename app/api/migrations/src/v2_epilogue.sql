@@ -23,3 +23,9 @@ REVOKE ALL ON FUNCTION public.sync_profile_role() FROM PUBLIC;
 CREATE TRIGGER trg_users_sync_profile_role
   AFTER UPDATE OF role ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.sync_profile_role();
+
+-- Last statement on purpose: functions created by LATER migrations are not PUBLIC-executable by
+-- default (BUG-005 class), while the baseline's own functions keep v1's ACLs (RLS helpers such
+-- as app_user_id() and can_access_meeting() must stay callable). Global, not IN SCHEMA: a
+-- per-schema REVOKE cannot remove the built-in PUBLIC EXECUTE default.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;

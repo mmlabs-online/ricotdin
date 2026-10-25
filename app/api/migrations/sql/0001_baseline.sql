@@ -39,12 +39,11 @@ GRANT USAGE ON SCHEMA public TO ricotdin_app, ricotdin_service;
 -- Hardening (ARC-02 security review). v1 was only reachable through PostgREST; v2 runs SQL.
 --   * no temp objects: a temp table could shadow public tables inside SECURITY DEFINER code;
 --   * no CREATE in public for anyone but the owner (PG15+ default, made explicit);
---   * functions created by later migrations are not executable by PUBLIC by default (BUG-005).
+--   * (the default EXECUTE revoke for future functions is at the end of the epilogue).
 DO $$ BEGIN
   EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
 END $$;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 -- RLS request context. The API sets both per transaction (ARC-04):
 --   SET LOCAL app.user_id = '<uuid>'; SET LOCAL app.role = 'user' | 'admin';
@@ -1146,3 +1145,9 @@ REVOKE ALL ON FUNCTION public.sync_profile_role() FROM PUBLIC;
 CREATE TRIGGER trg_users_sync_profile_role
   AFTER UPDATE OF role ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.sync_profile_role();
+
+-- Last statement on purpose: functions created by LATER migrations are not PUBLIC-executable by
+-- default (BUG-005 class), while the baseline's own functions keep v1's ACLs (RLS helpers such
+-- as app_user_id() and can_access_meeting() must stay callable). Global, not IN SCHEMA: a
+-- per-schema REVOKE cannot remove the built-in PUBLIC EXECUTE default.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
