@@ -124,6 +124,7 @@ Do these in order. Afterwards, use **Every release** below.
    2. Only if the hand-started container is literally named `ricotdin` **and** is on the `web` network:
       `docker stop ricotdin` now. Otherwise both containers answer to the name `ricotdin` on `web`.
       In every other case, leave it running.
+      Stopping it means **downtime** from now until compose is healthy in 4.3: pick a quiet moment.
    3. Merge deployment PR #10 `ricotdin v1.1.0` and watch the `deploy-ricotdin` run.
       - On `no-previous` (the first run has nothing to restore): `docker compose -p ricotdin down`. If
         you stopped it in 4.2, `docker start ricotdin`. The route was never changed, so traffic is
@@ -135,7 +136,9 @@ Do these in order. Afterwards, use **Every release** below.
       change.
    5. **Verify:** `npm run verify:deploy -- https://<ricotdin host> --expect v1.1.0` → PASS + PASS.
       Then stop and remove the hand-started container (`docker rm -f <old name>`). If verify fails,
-      put the route back to step 1.3's value; the hand-started container is still there.
+      put the route back to step 1.3's value; the hand-started container is still there. If you
+      stopped it in 4.2, first `docker compose -p ricotdin down` (the names clash), then
+      `docker start ricotdin`.
       Keep the overlap short: while both containers run, two job workers poll the queue. That is safe
       (`claim_next_job` uses `FOR UPDATE SKIP LOCKED`, and both run v1.1.0), but there is no reason to
       keep it.
