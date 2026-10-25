@@ -36,6 +36,13 @@ def test_any_other_auth_reference_fails_loudly() -> None:
         rewrite_v1_sql("SELECT 1 FROM auth.sessions")
 
 
+def test_reading_supabase_request_jwt_settings_fails_even_inside_a_literal() -> None:
+    # prevent_role_escalation() reads the claims via current_setting(); without this check
+    # the v2 trigger would silently allow every role change.
+    with pytest.raises(UnsupportedV1Reference, match=r"request\.jwt"):
+        rewrite_v1_sql("jwt_claims := current_setting('request.jwt.claims', true);")
+
+
 def test_jwt_claims_other_than_user_role_are_unsupported() -> None:
     with pytest.raises(UnsupportedV1Reference):
         rewrite_v1_sql("auth.jwt() ->> 'email'")

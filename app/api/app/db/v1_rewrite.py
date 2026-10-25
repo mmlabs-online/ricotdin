@@ -22,6 +22,7 @@ _REWRITES: list[tuple[re.Pattern[str], str]] = [
 ]
 _STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
 _AUTH_REF = re.compile(r"\bauth\.[a-z_]+(?:\(\))?")
+_REQUEST_SETTING = re.compile(r"\brequest\.(?:jwt|headers|method|path)[a-z_.]*")
 
 
 def rewrite_v1_sql(sql: str) -> str:
@@ -29,6 +30,13 @@ def rewrite_v1_sql(sql: str) -> str:
     out = sql
     for pattern, repl in _REWRITES:
         out = pattern.sub(repl, out)
+    # PostgREST request settings (e.g. current_setting('request.jwt.claims')) live inside a
+    # string literal, so check them before literals are blanked out.
+    request_setting = _REQUEST_SETTING.search(out)
+    if request_setting:
+        raise UnsupportedV1Reference(
+            f"no v2 mapping for {request_setting.group(0)!r} in: {sql[:200]}"
+        )
     leftover = _AUTH_REF.search(_STRING_LITERAL.sub("''", out))
     if leftover:
         raise UnsupportedV1Reference(f"no v2 mapping for {leftover.group(0)!r} in: {sql[:200]}")
