@@ -21,7 +21,7 @@
 | REC-02 | Audio-only capture | ARC-12 | — (browser only) | n/a | Record | todo | — | video track dropped in capture |
 | REC-03 | Missing-audio warning | ARC-12 | — (browser only) | n/a | Record | todo | — | |
 | REC-04 | Browser support | ARC-12 | — (browser only) | n/a | Record | todo | — | `lib/audio/support.ts` |
-| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server |
+| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — port it (the tracking.md note "video rejected" is stale) |
 | PRP-01 | Audio upload | ARC-07 | `POST /meetings` (presigned R2 PUT), `POST /meetings/{id}/uploaded` | todo | Record | todo | storage-config | browser → R2 direct |
 | PRP-02 | Format transcoding | ARC-08 | — (worker) | todo | — | n/a | transcode | ffmpeg mono 16 kHz |
 | PRP-03 | Transcript generation | ARC-08 | — (worker) | todo | — | n/a | speechmatics, pipeline-parse | |
@@ -40,29 +40,29 @@
 | CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | todo | Meeting detail | todo | ics | |
 | CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | todo | Meeting detail | todo | ics | |
 | CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | todo | Meeting detail | todo | — | |
-| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | todo | Meetings list | todo | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`) |
+| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | todo | Meetings list | todo | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
 | MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | todo | Meetings list, Meeting detail | todo | — | |
 | MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | todo | Meetings list | todo | — | |
 | MMG-04 | Delete meeting | ARC-07 | `DELETE /meetings/{id}` | todo | Meetings list | todo | retention | audio deleted first, `warning` on failure |
 | AUT-01 | Sign up | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Register, Verify email | todo | auth-validate | |
-| AUT-02 | Log in | ARC-05 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` *(proposed)* | todo | Sign in | todo | auth-validate | email or username |
+| AUT-02 | Log in | ARC-05 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` *(proposed)* | todo | Sign in, Forgot password, Reset password | todo | auth-validate | email or username; reset screens replace Supabase's hosted recovery |
 | AUT-03 | Role authorization | ARC-05, ARC-11 | role claim in access JWT; JWKS `GET /.well-known/jwks.json` *(proposed)* | todo | Route guards | todo | admin-guards | |
 | AUT-04 | Data isolation | ARC-02, ARC-07 | every meeting-scoped endpoint (app-layer check + RLS backstop) | todo | — | n/a | folder-shares | `can_access_meeting` |
-| ADM-01 | User list | ARC-10 | `GET /admin/users` | todo | Admin › Users | todo | user-status, admin-guards | |
-| ADM-02 | Account management | ARC-10 | `PATCH /admin/users/{id}/role`, `PATCH /admin/users/{id}/status`, `POST /admin/users/{id}/reset-password`, `DELETE /admin/users/{id}` | todo | Admin › Users | todo | admin-guards | role sync `users.role` + `profiles.role` |
-| ADM-03 | Safety constraints | ARC-10 | same as ADM-02 + `POST /admin/users/bulk` | todo | Admin › Users | todo | admin-guards | **v2: apply last-admin guard to bulk too** (v1 bulk skips it) |
-| ADM-04 | Pipeline & job monitoring | ARC-10 | `GET /admin/pipeline/overview`, `GET /admin/pipeline/jobs`, `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline | |
-| ADM-05 | Cost & AI quota monitoring | ARC-10 | `GET /admin/ai-usage`, `GET /admin/usage` | todo | Admin › Usage | todo | usage-log, usage-by-user | never mix units |
-| ADM-06 | Storage management | ARC-10 | `GET/POST /admin/storage`, `PATCH/DELETE /admin/storage/{id}`, `GET /admin/storage/orphans`, `POST /admin/storage/cleanup` | todo | Admin › Storage | todo | storage-config | |
+| ADM-01 | User list | ARC-10 | `GET /admin/users` | todo | Admin › Users | todo | user-status, admin-guards, admin-adm, usage-by-user | per-user usage column |
+| ADM-02 | Account management | ARC-10 | `PATCH /admin/users/{id}/role`, `PATCH /admin/users/{id}/status`, `POST /admin/users/{id}/reset-password`, `DELETE /admin/users/{id}` | todo | Admin › Users | todo | admin-guards, admin-adm | role sync `users.role` + `profiles.role`; the reset email lands on the ARC-05 Reset password screen |
+| ADM-03 | Safety constraints | ARC-10 | same as ADM-02 + `POST /admin/users/bulk` | todo | Admin › Users | todo | admin-guards, admin-adm | v1 bulk skips the last-admin guard (only `excludeSelf` protects the caller; a race between two admins remains) — **v2: guard bulk too** (defense in depth) |
+| ADM-04 | Pipeline & job monitoring | ARC-10 | `GET /admin/pipeline/overview`, `GET /admin/pipeline/jobs`, `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline, admin-adm | |
+| ADM-05 | Cost & AI quota monitoring | ARC-10 | `GET /admin/ai-usage`, `GET /admin/usage` | todo | Admin › Usage | todo | usage-log, admin-ext | never mix units |
+| ADM-06 | Storage management | ARC-10 | `GET/POST /admin/storage`, `PATCH/DELETE /admin/storage/{id}`, `GET /admin/storage/orphans`, `POST /admin/storage/cleanup` | todo | Admin › Storage | todo | storage-config, admin-ext | |
 | ADM-07 | Audit log | ARC-10 | `GET /admin/audit-logs` | todo | Admin › Audit | todo | admin-adm | |
 | ADM-08 | System health | ARC-10 | `GET /admin/health` | todo | Admin › Health | todo | admin-ext | |
-| ADM-09 | Extended user management | ARC-10 | `GET /admin/users/{id}`, `POST /admin/users/bulk`, `GET /admin/activity` | todo | Admin › Users, User detail | todo | admin-ext, user-status | |
+| ADM-09 | Extended user management | ARC-10 | `GET /admin/users/{id}`, `POST /admin/users/bulk`, `GET /admin/activity` | todo | Admin › Users, User detail | todo | admin-ext, user-status, usage-by-user | |
 | ADM-10 | Config & feature flags | ARC-10 | `GET /admin/config`, `PATCH /admin/config/{key}`, `GET/PATCH /admin/generation-config` | todo | Admin › Config | todo | aip-control-plane | |
 | PRF-01 | Profile page & account info | ARC-07 | `GET /profile` | todo | Profile | todo | — | |
 | PRF-02 | Edit display name & username | ARC-07 | `PATCH /profile` | todo | Profile | todo | auth-validate | username unique |
 | PRF-03 | Change password | ARC-05 | `POST /profile/change-password` | todo | Profile | todo | auth-validate | current password required |
-| PRF-04 | Avatar upload | ARC-07 | `POST /profile/avatar` | todo | Profile | todo | avatar-key | `isOwnedAvatarKey` |
-| PRF-05 | Theme configuration | ARC-11 | `PATCH /profile/preferences` (or client-only) | todo | Profile, app shell | todo | — | v2: one design, light/dark only |
+| PRF-04 | Avatar upload | ARC-07, ARC-12 | `POST /profile/avatar` (presign) → browser PUT to R2 → `PATCH /profile` (`avatar_key`) | todo | Profile | todo | avatar-key | two steps as in v1; `isOwnedAvatarKey` |
+| PRF-05 | Theme configuration | ARC-07, ARC-11 | `PATCH /profile` (`theme_preference`) | todo | Profile, app shell | todo | — | v2: one design, light/dark only |
 | PRF-08 | Default AI model preference | ARC-07 | `GET/PATCH /profile/preferences` | todo | Profile | todo | aip-control-plane, model-label | within admin allow-list |
 | REL-01 | Durable job queue/worker | ARC-08 | — (worker, Postgres `SKIP LOCKED`) | todo | — | n/a | processMeeting-guard | |
 | REL-02 | Stuck-job recovery | ARC-08, ARC-10 | — (worker), `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline | |
@@ -71,7 +71,7 @@
 | PRV-03 | Encrypt & purge audio after processing | ARC-08 | — (superseded by PRV-02) | n/a | — | n/a | retention | carried by PRV-02 |
 | OBS-01 | Error tracking | ARC-04, ARC-11 | — (Sentry in api, body stripped) | todo | — (Sentry in web) | todo | — | |
 | OBS-02 | Structured logging | ARC-04 | — (core logging, secret redaction) | todo | — | n/a | — | |
-| OBS-03 | Uptime monitoring & alert | ARC-04 | `GET /health` | done | — | n/a | — | `GET /health` exists since ARC-00 skeleton |
+| OBS-03 | Uptime monitoring & alert | ARC-04, ARC-10, ARC-15 | `GET /health` (liveness), `GET /admin/health` (DB + provider checks, 200/503) | todo | Admin › Health | todo | admin-ext | ARC-00 `/health` is only a liveness stub; point the external uptime monitor at v2 at cutover (ARC-15) |
 | SEC-01 | Login rate-limiting | ARC-05 | `POST /auth/login` (rate limit) | todo | Sign in | todo | rate-limit | |
 | SEC-02 | Email verification | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Verify email | todo | auth-validate | SMTP |
 | SEC-03 | RLS review | ARC-02 | — (RLS on `app.user_id` / `app.role`) | todo | — | n/a | folder-shares | integration tests `test_rls*.py` |
@@ -80,15 +80,15 @@
 | OPS-04 | Tag-driven release to deployment repo | ARC-15 | `GET /version.json` | todo | — | n/a | app-version | two images in v2 |
 | OPS-06 | CI on dev branch | ARC-00 | — (CI triggers include `dev`) | done | — | done | — | delivered by ARC-00 |
 | OPS-07 | Release runbook + deploy verify | ARC-15 | `GET /version.json`, `GET /health` | todo | — | n/a | verify-deploy | runbook rewritten for v2 |
-| COM-01 | Recording notice/consent | ARC-12 | `POST /activity` (`recording_notice_ack`) | todo | Record (notice dialog) | todo | recording-notice, activity-log | 12 h ack per tab |
-| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup` | todo | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | |
-| QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /quota` *(proposed — balance for the caller)* | todo | Record, Profile | todo | quota | |
-| QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Record (out-of-balance message) | todo | quota | |
+| COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | todo | Record (notice dialog) | todo | recording-notice, activity-log | 12 h ack per tab |
+| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | todo | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | moving a meeting = `PATCH /meetings/{id}` |
+| QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | todo | Profile | todo | quota | balance stays in `GET /profile` for parity |
+| QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
 | QUO-03 | Ask-agent enforcement | ARC-09 | `POST /chat` (pre-check + deduct) | todo | Chat | todo | quota | |
 | QUO-04 | Idempotent deduction | ARC-08 | — (worker, same transaction as usage) | todo | — | n/a | quota, quota-integration | |
-| QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /quota` *(proposed)*, `GET/POST /admin/users/{id}/quota` | todo | Profile, Admin › User detail | todo | quota | |
+| QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /profile` (balance), `GET/POST /admin/users/{id}/quota` | todo | Profile, Admin › User detail | todo | quota | |
 | AIP-01 | Provider interface & registry | ARC-08 | — (AI service layer) | todo | — | n/a | ai-registry | |
-| AIP-02 | OpenAI adapter | ARC-08 | — (AI service layer) | todo | — | n/a | ai-openai-adapter, ai-gemini-adapter | |
+| AIP-02 | OpenAI adapter | ARC-08 | — (AI service layer) | todo | — | n/a | ai-openai-adapter, ai-gemini-adapter | also the Grok (xAI) adapter, `legacy/lib/grok` |
 | AIP-03 | Per-meeting model lock | ARC-08 | — (worker) | todo | Meeting detail (model label) | todo | aip-model-lock, model-label | |
 | AIP-04 | Cross-meeting RAG model rule | ARC-09 | `POST /chat` | todo | — | n/a | aip04-chat-model | |
 | AIP-05 | Provider-aware key pool | ARC-06 | — (key pool service) | todo | — | n/a | key-pool-base, key-pool-speechmatics, key-healthcheck | |
@@ -121,16 +121,16 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | admin/pipeline/reconcile-quota | POST | `POST /admin/pipeline/reconcile-quota` | ARC-10 | todo | idempotent |
 | admin/storage | GET, POST | `GET /admin/storage`, `POST /admin/storage` | ARC-06, ARC-10 | todo | secret write-only |
 | admin/storage/[id] | PATCH, DELETE | `PATCH /admin/storage/{id}`, `DELETE /admin/storage/{id}` | ARC-06, ARC-10 | todo | |
-| admin/storage/cleanup | POST | `POST /admin/storage/cleanup` | ARC-10 | todo | |
+| admin/storage/cleanup | POST | `POST /admin/storage/cleanup` | ARC-10 | todo | v1 also deletes from the Supabase bucket; v2 R2 only |
 | admin/storage/orphans | GET | `GET /admin/storage/orphans` | ARC-10 | todo | v1 lists the Supabase bucket; v2 lists R2 only |
 | admin/usage | GET | `GET /admin/usage` | ARC-10 | todo | v1 reads Supabase Storage sizes; v2 from R2 |
 | admin/users | GET | `GET /admin/users` | ARC-10 | todo | v1 uses Supabase Auth Admin API; v2 reads `users` |
 | admin/users/[id] | GET, DELETE | `GET /admin/users/{id}`, `DELETE /admin/users/{id}` | ARC-10 | todo | delete R2 audio first |
 | admin/users/[id]/quota | GET, POST | `GET /admin/users/{id}/quota`, `POST /admin/users/{id}/quota` | ARC-10 | todo | |
-| admin/users/[id]/reset-password | POST | `POST /admin/users/{id}/reset-password` | ARC-05, ARC-10 | todo | v2 sends the reset email via SMTP |
+| admin/users/[id]/reset-password | POST | `POST /admin/users/{id}/reset-password` | ARC-05, ARC-10 | todo | v2 sends the reset email via SMTP; the link opens the ARC-05 Reset password screen (`POST /auth/reset-password`) |
 | admin/users/[id]/role | PATCH | `PATCH /admin/users/{id}/role` | ARC-10 | todo | |
 | admin/users/[id]/status | PATCH | `PATCH /admin/users/{id}/status` | ARC-10 | todo | v2: `disabled_at` + revoke refresh tokens |
-| admin/users/bulk | POST | `POST /admin/users/bulk` | ARC-10 | todo | **v2 must apply the last-admin guard** (v1 skips it) |
+| admin/users/bulk | POST | `POST /admin/users/bulk` | ARC-10 | todo | v2 also applies the last-admin guard (defense in depth; v1 relies on `excludeSelf`) |
 | audio-url/[id] | GET | `GET /meetings/{id}/audio-url` | ARC-07 | todo | path moves under `/meetings` |
 | auth/login | POST | `POST /auth/login` | ARC-05 | todo | |
 | auth/logout | POST | `POST /auth/logout` | ARC-05 | todo | revokes refresh token |
@@ -148,15 +148,15 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | meetings/[id] | PATCH, DELETE | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | ARC-07 | todo | |
 | meetings/[id]/pin | PATCH | `PATCH /meetings/{id}/pin` | ARC-07 | todo | |
 | meetings/[id]/process | POST | `POST /meetings/{id}/process` | ARC-07, ARC-08 | todo | 409 without audio |
-| meetings/[id]/regenerate | POST | `POST /meetings/{id}/regenerate` | ARC-08 | todo | analysis only, no re-transcribe |
-| meetings/[id]/uploaded | POST | `POST /meetings/{id}/uploaded` | ARC-07 | todo | ownership + ffprobe, enqueues job |
+| meetings/[id]/regenerate | POST | `POST /meetings/{id}/regenerate` | ARC-07, ARC-08 | todo | route in the ARC-07 meetings router, analysis via ARC-08; owner only, 422 without segments |
+| meetings/[id]/uploaded | POST | `POST /meetings/{id}/uploaded` | ARC-07 | todo | ownership + ffprobe, enqueues job; `source='video'` → ffmpeg extracts audio, original deleted |
 | openapi | GET | `GET /openapi.json` (FastAPI) | ARC-04 | todo | generated, published as CI artifact |
 | profile | GET, PATCH | `GET /profile`, `PATCH /profile` | ARC-07 | todo | |
 | profile/avatar | POST | `POST /profile/avatar` | ARC-07 | todo | |
 | profile/change-password | POST | `POST /profile/change-password` | ARC-05 | todo | |
 | profile/preferences | GET, PATCH | `GET /profile/preferences`, `PATCH /profile/preferences` | ARC-07 | todo | |
 | todos/[id] | PATCH | `PATCH /todos/{id}` | ARC-07 | todo | editor+ |
-| users/lookup | POST | `POST /users/lookup` | ARC-07 | todo | never exposes email ↔ username mapping beyond the match |
+| users/lookup | POST | `POST /users/lookup` | ARC-07 | todo | returns the match (username for an email) but never echoes an email back; do **not** port v1's unpaged `auth.admin.listUsers()` (misses users past page 1) — query `users` directly |
 | version.json (non-API route) | GET | `GET /version.json` | ARC-04 | todo | `RICOTDIN_VERSION` → build commit → `"unknown"` |
 
 ---
@@ -176,10 +176,11 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | Transcript export | `legacy/lib/transcript/export.ts` | `app/web/src/lib/transcript/` | ARC-12 | todo | transcript-export |
 | Folder delete notice + local state after delete | `legacy/lib/folders/deleteNotice.ts` | `app/web/src/lib/folders/` | ARC-13 | todo | folder-delete-notice |
 | Client role helpers (canPin / canEdit / canDelete / canManageShares) | `legacy/lib/access/roles.ts` | `app/web/src/lib/access/` | ARC-13 | todo | folder-shares |
+| Avatar upload (presigned PUT to R2, then confirm) | `legacy/app/(routes)/profile/page.tsx` | Profile | ARC-12 | todo | avatar-key |
 | Model label | `legacy/lib/ai/modelLabel.ts` | `app/web/src/lib/` | ARC-13 | todo | model-label |
 | Audio state ("purged") display | `legacy/lib/retention/policy.ts` (`audioState`) | Meeting detail | ARC-13 | todo | retention |
 | Admin usage / health / config view helpers | `legacy/lib/admin/usage.ts`, `health.ts`, `config.ts` | `app/web/src/lib/admin/` | ARC-14 | todo | usage-by-user, admin-ext |
-| Session handling (getSession / onAuthStateChange / signOut) | `legacy/lib/supabase/auth.ts`, `browser.ts`, `legacy/components/AuthBootstrap.tsx` | `app/web/src/lib/auth/` (in-memory access token + silent refresh) | ARC-11 | todo | — |
+| Session handling (getSession / onAuthStateChange / signOut) | `legacy/lib/supabase/auth.ts`, `browser.ts` (`legacy/components/AuthBootstrap.tsx` is a dead stub — not ported) | `app/web/src/lib/auth/` (in-memory access token + silent refresh) | ARC-11 | todo | — |
 | Theme | `legacy/lib/theme`, `legacy/hooks/useTheme.ts`, `ThemeProvider.tsx`, `ThemeSwitcher.tsx` | light/dark only (3 legacy themes dropped) | ARC-11 | todo | — |
 
 ---
@@ -196,8 +197,17 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 | `from('transcript_segments')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/transcript` | ARC-07 | todo |
 | `from('todos')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/todos` | ARC-07 | todo |
 | `from('calendar_suggestions')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/calendar-suggestions` | ARC-07 | todo |
-| `auth.getSession` / `getUser` / `onAuthStateChange` / `setSession` / `signOut` | layout, login, register, profile, admin users, RecorderUI, `lib/supabase/auth.ts` | `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/logout` | ARC-05, ARC-11 | todo |
+| `auth.getSession` / `getUser` / `onAuthStateChange` / `setSession` / `signOut` | `(routes)/layout.tsx`, `(auth)/login`, `(auth)/register`, `profile`, `admin/users`, `admin/features`, `meetings`, `meetings/[id]`, `meetings/folder/[id]` (`getUser` → current user id for role helpers), `components/RecorderUI.tsx`, `lib/upload/upload.ts` (token), `lib/supabase/auth.ts` | `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/logout` | ARC-05, ARC-11 | todo |
 | Supabase email verification link (`detectSessionInUrl`) | login | `POST /auth/verify-email` (token from the email link) | ARC-05 | todo |
+
+---
+
+## (e) Screens without their own feature row
+
+| Screen | Legacy | v2 endpoints | ARC | FE |
+|---|---|---|---|---|
+| Admin › Features (feature registry, Phase 15) | `legacy/app/(routes)/admin/features` | `GET/POST /admin/features`, `GET/PATCH /admin/features/{id}` | ARC-10, ARC-14 | todo |
+| Admin › API docs | `legacy/app/(routes)/admin/docs` (reads `/api/openapi`) | `GET /openapi.json` | ARC-04, ARC-14 | todo |
 
 ---
 
@@ -210,3 +220,4 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 | Anonymous sign-in bootstrap (Phase 2) | already disabled since Phase 7 |
 | Supabase custom access token hook, `anon` / `authenticated` grants | replaced by own JWT + app DB roles (ARC-02, ARC-05) |
 | Legacy Supabase Storage reads (`storage_provider = 'supabase'`) | objects copied to R2 in ARC-03 |
+| `legacy/lib/paths/shared.ts` (+ `shared-path` test) | v1-only path helper for the `legacy/` layout (ARC-00) |

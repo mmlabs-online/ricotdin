@@ -485,7 +485,7 @@ Ports ADM-*, §9c, §9d, §9f, §9g, §9h, §9i. Guards: self-action, last-admin
 - n/a.
 
 **Backend**
-- Routers under `/admin/*` mirroring the 30 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
+- Routers under `/admin/*` mirroring the 29 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
 
 **Acceptance Criteria**
 - Non-admin → 403 on every `/admin/*` route.
