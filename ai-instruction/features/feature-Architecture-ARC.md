@@ -74,7 +74,7 @@ As a developer, I want v1 moved to `legacy/` and empty `app/api` + `app/web` ske
 ---
 
 ### ARC-01 — v2 tracking matrix
-**Priority:** High | **Status:** ✅ Done
+**Priority:** High | **Status:** ✅ Done (PR #32)
 
 **User Story**  
 As the owner, I want every shipped feature mapped to its v2 API endpoints and web screens with a status per side so that I can see exactly what is left before cutover.
