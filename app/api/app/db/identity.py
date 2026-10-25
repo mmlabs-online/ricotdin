@@ -21,6 +21,8 @@ class LoginFacts:
         default_factory=set
     )  # pg_has_role(login, r, 'USAGE'), r ≠ login
     privileged_roles: set[str] = field(default_factory=set)  # settable roles that are privileged
+    # roles whose privileges the *group* inherits (effective after SET ROLE <group>)
+    group_inherited_roles: set[str] = field(default_factory=set)
     is_superuser: bool = False
     bypasses_rls: bool = False
     can_create_roles: bool = False
@@ -46,6 +48,11 @@ def identity_problems(f: LoginFacts) -> list[str]:
         problems.append(
             f"{f.login} inherits privileges of: {', '.join(sorted(f.inherited_roles))} "
             "(grant must be WITH INHERIT FALSE)"
+        )
+    if f.group_inherited_roles:
+        problems.append(
+            f"{f.expected_group} (the group) inherits privileges of: "
+            f"{', '.join(sorted(f.group_inherited_roles))}"
         )
     if f.privileged_roles:
         problems.append(

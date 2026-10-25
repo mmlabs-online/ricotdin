@@ -47,7 +47,7 @@ def test_sdk_options_never_send_locals_bodies_or_pii() -> None:
     opts = sentry_options("https://k@o.ingest.sentry.io/1", "v2.0.0")
     assert opts["include_local_variables"] is False
     assert opts["max_request_body_size"] == "never"
-    assert opts["send_default_pii"] is False
+    assert not opts.get("send_default_pii") and "data_collection" not in opts  # SDK default: no PII
     assert opts["traces_sample_rate"] == 0.0
     assert opts["before_send"] is scrub_event
 

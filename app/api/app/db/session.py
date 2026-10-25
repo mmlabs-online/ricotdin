@@ -49,7 +49,10 @@ _FACTS = text(
            ARRAY(SELECT rolname FROM reach WHERE inherits) AS inherited,
            ARRAY(SELECT rolname FROM reach
                  WHERE can_set AND (rolsuper OR rolbypassrls OR rolcreaterole OR owns))
-             AS privileged
+             AS privileged,
+           ARRAY(SELECT g.rolname FROM pg_roles g
+                 WHERE g.rolname <> :group AND g.oid <> me.oid
+                   AND pg_has_role(:group, g.oid, 'USAGE')) AS group_inherited
     FROM me
     """
 )
@@ -60,13 +63,14 @@ class StartupRefused(RuntimeError):
 
 
 async def login_facts(conn: AsyncConnection, expected_group: str) -> LoginFacts:
-    row = (await conn.execute(_FACTS)).one()
+    row = (await conn.execute(_FACTS, {"group": expected_group})).one()
     return LoginFacts(
         login=row.rolname,
         expected_group=expected_group,
         settable_roles=set(row.settable),
         inherited_roles=set(row.inherited),
         privileged_roles=set(row.privileged),
+        group_inherited_roles=set(row.group_inherited),
         is_superuser=row.rolsuper,
         bypasses_rls=row.rolbypassrls,
         can_create_roles=row.rolcreaterole,

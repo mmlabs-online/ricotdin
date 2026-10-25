@@ -14,6 +14,7 @@ def _facts(**kw: object) -> LoginFacts:
         "settable_roles": {"ricotdin_app"},
         "inherited_roles": set(),
         "privileged_roles": set(),
+        "group_inherited_roles": set(),
         "is_superuser": False,
         "bypasses_rls": False,
         "can_create_roles": False,
@@ -52,6 +53,14 @@ def test_inherited_privileges_are_refused() -> None:
     # PG16+: a membership granted WITH INHERIT TRUE survives ALTER ROLE ... NOINHERIT.
     assert identity_problems(_facts(inherited_roles={"ricotdin_app"})) == [
         "ricotdin_api_login inherits privileges of: ricotdin_app (grant must be WITH INHERIT FALSE)"
+    ]
+
+
+def test_the_group_itself_must_not_inherit_other_roles() -> None:
+    # After SET ROLE ricotdin_app the effective privileges include everything the group
+    # inherits — e.g. a table owner role would switch RLS off (no FORCE RLS).
+    assert identity_problems(_facts(group_inherited_roles={"neondb_owner"})) == [
+        "ricotdin_app (the group) inherits privileges of: neondb_owner"
     ]
 
 

@@ -208,3 +208,14 @@ def test_startup_refuses_a_grant_with_inherit_true(env: dict[str, Any]) -> None:
             _run(_settings(_url(env, "app")), _noop)
     finally:
         _owner_exec(sql.SQL("GRANT ricotdin_app TO {} WITH INHERIT FALSE").format(name))
+
+
+def test_startup_refuses_when_the_group_itself_inherits_another_role(env: dict[str, Any]) -> None:
+    extra = sql.Identifier(f"ricotdin_test_extra_{env['suffix']}")
+    _owner_exec(sql.SQL("CREATE ROLE {} NOLOGIN").format(extra))
+    try:
+        _owner_exec(sql.SQL("GRANT {} TO ricotdin_app WITH INHERIT TRUE").format(extra))
+        with pytest.raises(StartupRefused, match=r"the group\) inherits privileges of"):
+            _run(_settings(_url(env, "app")), _noop)
+    finally:
+        _owner_exec(sql.SQL("DROP ROLE IF EXISTS {}").format(extra))

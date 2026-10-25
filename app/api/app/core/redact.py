@@ -22,15 +22,25 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
     # scheme://<key>@host (Sentry-style DSN keys)
     (re.compile(r"(\b[a-z][a-z0-9+.-]*://)[A-Za-z0-9]{16,}(@)", re.IGNORECASE), rf"\1{REDACTED}\2"),
-    (re.compile(r"(\b(?:Bearer|Basic)\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE), rf"\1{REDACTED}"),
+    (
+        re.compile(r"(\b(?:Bearer|Basic|Token)\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+        rf"\1{REDACTED}",
+    ),
+    # cookie / set-cookie headers in free text: everything up to the end of the line
+    (
+        re.compile(r"(\b(?:set-)?cookie\s*:\s*)(?!\[REDACTED\])[^\r\n]+", re.IGNORECASE),
+        rf"\1{REDACTED}",
+    ),
     (re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), REDACTED),  # JWT
     (re.compile(r"\bAIza[0-9A-Za-z_-]{20,}"), REDACTED),  # Google API keys
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"), REDACTED),  # OpenAI-style keys
     (re.compile(r"\bxai-[A-Za-z0-9_-]{12,}"), REDACTED),  # xAI keys
-    # key=value, key: value, 'key': 'value', "key": "value" in free text / reprs
+    # key=value, key: value, 'key': 'value', "key": "value", key%3Dvalue in free text / reprs.
+    # (?!\[REDACTED\]) keeps redaction idempotent (text is redacted again by the formatter).
     (
         re.compile(
-            rf"((?<![A-Za-z0-9_]){_KEY}['\"]?\s*[=:]\s*)('[^']*'|\"[^\"]*\"|[^\s,}}\]]+)",
+            rf"((?<![A-Za-z0-9_]){_KEY}(?:['\"]?\s*[=:]\s*|%3D))(?!\[REDACTED\])"
+            r"('[^']*'|\"[^\"]*\"|[^\s,}\]&]+)",
             re.IGNORECASE,
         ),
         rf"\1{REDACTED}",

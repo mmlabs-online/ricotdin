@@ -18,6 +18,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.core.errors import AppError, to_http
 from app.core.logging import get_logger
 from app.core.redact import redact
+from app.core.sentry import capture_unhandled
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -94,6 +95,7 @@ class CatchAllMiddleware:
                 redact(str(exc)),
                 exc_info=exc,
             )
+            capture_unhandled(exc)
             if started:
                 return  # headers already sent: nothing safe left to do
             status, body = to_http(exc)

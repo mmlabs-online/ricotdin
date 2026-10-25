@@ -47,6 +47,25 @@ def test_secret_looking_keys_are_masked(key: str) -> None:
     assert redact({key: "x"}) == {key: REDACTED}
 
 
+def test_redaction_is_idempotent() -> None:
+    once = redact("password=hunter2 Bearer abc.def postgresql://u:pw@h/db")
+    assert redact(once) == once
+    assert "]]" not in redact(once)
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        ("Authorization: Token abc123def", "abc123def"),
+        ("set-cookie: sid=abc; HttpOnly", "sid=abc"),
+        ("cookie: refresh=r1t0k3n", "r1t0k3n"),
+        ("GET /cb?access_token%3Dzz9secret", "zz9secret"),
+    ],
+)
+def test_more_free_text_secret_shapes(text: str, secret: str) -> None:
+    assert secret not in redact(text)
+
+
 def test_sets_and_tuples_are_redacted() -> None:
     out = redact({"s": {"Bearer abc.def"}, "t": ("postgresql://u:pw@h/db",)})
     assert "abc.def" not in str(out) and "pw@" not in str(out)

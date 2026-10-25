@@ -225,7 +225,7 @@ Owner chose to migrate everything. Supabase stores bcrypt password hashes (porta
 ---
 
 ### ARC-04 — FastAPI core
-**Priority:** High | **Status:** ✅ Done
+**Priority:** High | **Status:** ✅ Done (PR #34)
 
 **User Story**  
 As a developer, I want a FastAPI foundation (config, DB session, errors, logging, security headers, OpenAPI, Docker) so that every ported module follows the same rules.

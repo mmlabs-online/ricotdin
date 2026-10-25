@@ -112,7 +112,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **`app/db/session.py` `Database`:** one asyncpg engine per configured login (pool below the role's
   connection limit, `hide_parameters=True`, `RESET ROLE; RESET ALL` + commit on every return to the
   pool); startup refuses a login that is superuser/BYPASSRLS/CREATEROLE/owner, inherits any role, or
-  can `SET ROLE` (transitively, `pg_has_role`) to anything but its group (`StartupRefused`). Requests use
+  can `SET ROLE` (transitively, `pg_has_role`) to anything but its group, or whose group itself
+  inherits another role (`StartupRefused`). Unhandled errors are reported to Sentry by the catch-all. Requests use
   `db.app_transaction(RequestIdentity)`; service/worker code uses `db.role_transaction(group)`.
   `RequestIdentity` comes only from the verified token (ARC-05); `get_database(request)` is the
   FastAPI dependency. Never `commit()` inside `app_transaction` (a new transaction has no context).
