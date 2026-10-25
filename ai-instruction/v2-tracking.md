@@ -21,7 +21,7 @@
 | REC-02 | Audio-only capture | ARC-12 | — (browser only) | n/a | Record | todo | — | video track dropped in capture |
 | REC-03 | Missing-audio warning | ARC-12 | — (browser only) | n/a | Record | todo | — | |
 | REC-04 | Browser support | ARC-12 | — (browser only) | n/a | Record | todo | — | `lib/audio/support.ts` |
-| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — port it (the tracking.md note "video rejected" is stale) |
+| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — port it |
 | PRP-01 | Audio upload | ARC-07 | `POST /meetings` (presigned R2 PUT), `POST /meetings/{id}/uploaded` | todo | Record | todo | storage-config | browser → R2 direct |
 | PRP-02 | Format transcoding | ARC-08 | — (worker) | todo | — | n/a | transcode | ffmpeg mono 16 kHz |
 | PRP-03 | Transcript generation | ARC-08 | — (worker) | todo | — | n/a | speechmatics, pipeline-parse | |
@@ -204,10 +204,10 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 
 ## (e) Screens without their own feature row
 
-| Screen | Legacy | v2 endpoints | ARC | FE |
-|---|---|---|---|---|
-| Admin › Features (feature registry, Phase 15) | `legacy/app/(routes)/admin/features` | `GET/POST /admin/features`, `GET/PATCH /admin/features/{id}` | ARC-10, ARC-14 | todo |
-| Admin › API docs | `legacy/app/(routes)/admin/docs` (reads `/api/openapi`) | `GET /openapi.json` | ARC-04, ARC-14 | todo |
+| Screen | Legacy | v2 endpoints | ARC | FE | Tests |
+|---|---|---|---|---|---|
+| Admin › Features (feature registry, Phase 15) | `legacy/app/(routes)/admin/features` | `GET/POST /admin/features`, `GET/PATCH /admin/features/{id}` | ARC-10, ARC-14 | todo | features, features-seed-filter |
+| Admin › API docs | `legacy/app/(routes)/admin/docs` (reads `/api/openapi`) | `GET /openapi.json` | ARC-04, ARC-14 | todo | — |
 
 ---
 

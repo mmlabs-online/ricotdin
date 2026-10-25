@@ -74,7 +74,7 @@ As a developer, I want v1 moved to `legacy/` and empty `app/api` + `app/web` ske
 ---
 
 ### ARC-01 — v2 tracking matrix
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As the owner, I want every shipped feature mapped to its v2 API endpoints and web screens with a status per side so that I can see exactly what is left before cutover.
@@ -485,7 +485,7 @@ Ports ADM-*, §9c, §9d, §9f, §9g, §9h, §9i. Guards: self-action, last-admin
 - n/a.
 
 **Backend**
-- Routers under `/admin/*` mirroring the 29 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
+- Routers under `/admin/*` mirroring the 28 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
 
 **Acceptance Criteria**
 - Non-admin → 403 on every `/admin/*` route.
