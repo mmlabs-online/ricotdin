@@ -11,15 +11,17 @@
 # by design. Server-only secrets (SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, SPEECHMATICS_API_KEY,
 # KEY_ENCRYPTION_SECRET) are injected at runtime via an env file and are never part of the build.
 #
-# Build:  docker build --secret id=env,src=.env.local -t ricotdin:local .
-# Run:    docker run -d -p 3333:3000 --env-file .env.local ricotdin:local
+# ARC-00: the app lives in legacy/ but the build context is the REPO ROOT, because the runtime
+# prompt ai-instruction/ai-gen/ sits outside legacy/. Run both commands from the repo root:
+# Build:  docker build -f legacy/Dockerfile --secret id=env,src=legacy/.env.local -t ricotdin:local .
+# Run:    docker run -d -p 3333:3000 --env-file legacy/.env.local ricotdin:local
 
 ARG NODE_VERSION=20
 
 # --- deps: the full dependency tree, devDependencies included (the build needs them) ------------
 FROM node:${NODE_VERSION}-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY legacy/package.json legacy/package-lock.json ./
 RUN --mount=type=cache,id=npm-cache,target=/root/.npm \
     npm ci
 
@@ -29,7 +31,7 @@ WORKDIR /app
 
 # The `NEXT_PUBLIC_*` values come from a BuildKit secret — normally `.env.local` itself:
 #
-#     docker build --secret id=env,src=.env.local -t ricotdin:local .
+#     docker build -f legacy/Dockerfile --secret id=env,src=legacy/.env.local -t ricotdin:local .
 #
 # A secret is mounted for the one RUN below and is never written to a layer. ONLY the
 # `NEXT_PUBLIC_*` lines are read from it: .env.local also holds the service-role and provider keys,
@@ -47,7 +49,9 @@ ARG NEXT_PUBLIC_SUPABASE_URL=""
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=""
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY legacy/ .
+# Runtime system prompt (read by lib/gemini/analyze.ts); next.config traces it into dist/standalone.
+COPY ai-instruction/ai-gen ./ai-instruction/ai-gen
 
 # An empty NEXT_PUBLIC_SUPABASE_URL does not fail `next build` — it ships a bundle whose browser
 # client cannot reach Supabase, i.e. a broken release that looks healthy. Refuse it.

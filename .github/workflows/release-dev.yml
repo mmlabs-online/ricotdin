@@ -4,6 +4,12 @@ name: Build & Push (dev)
 on:
   push:
     branches: [dev]
+    # ARC-00: only when the v1 image content changes (legacy/ + the runtime prompt).
+    paths:
+      - 'legacy/**'
+      - 'ai-instruction/ai-gen/**'
+      - '.dockerignore'
+      - '.github/workflows/release-dev.yml'
 
 jobs:
   build:
@@ -34,6 +40,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: legacy/Dockerfile
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/ricotdin:dev

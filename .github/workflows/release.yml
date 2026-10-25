@@ -39,11 +39,11 @@ jobs:
             exit 1
           fi
 
-      # Tag phải khớp version trong package.json (vd. v1.0.0 <-> "1.0.0")
+      # Tag phải khớp version trong legacy/package.json (vd. v1.0.0 <-> "1.0.0"); v1 nằm trong legacy/ từ ARC-00
       - name: Check tag matches package.json
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION="$(node -p "require('./package.json').version")"
+          PKG_VERSION="$(node -p "require('./legacy/package.json').version")"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
             echo "::error::Tag $GITHUB_REF_NAME không khớp package.json version $PKG_VERSION"
             exit 1
@@ -54,17 +54,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: legacy/package-lock.json
 
       - name: Install dependencies
+        working-directory: legacy
         run: npm ci
 
       - name: Lint
+        working-directory: legacy
         run: npm run lint
 
       - name: Type-check
+        working-directory: legacy
         run: npm run typecheck
 
       - name: Test
+        working-directory: legacy
         run: npm run test
         env:
           # Giá trị giả, giống ci.yml — test là hàm thuần, không gọi mạng.
@@ -115,6 +120,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: legacy/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
