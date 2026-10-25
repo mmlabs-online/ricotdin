@@ -13,7 +13,7 @@ from app.db.v1_rewrite import map_role, rewrite_v1_sql
 
 # v1 functions with no v2 counterpart (Supabase-only).
 SKIPPED_V1_FUNCTIONS = {"custom_access_token_hook"}
-# v1 functions re-implemented by hand for v2 (alembic/src/overrides/<name>.sql).
+# v1 functions re-implemented by hand for v2 (migrations/src/overrides/<name>.sql).
 OVERRIDDEN_FUNCTIONS = {"prevent_role_escalation"}
 
 _V2_AUTH_TABLES = ("users", "refresh_tokens", "email_tokens")
