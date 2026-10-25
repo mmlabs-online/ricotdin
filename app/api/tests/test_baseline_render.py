@@ -68,8 +68,9 @@ def test_sections_are_in_dependency_order() -> None:
         "CREATE EXTENSION IF NOT EXISTS pgcrypto",
         "-- PRELUDE",
         "CREATE TYPE public.todo_status",
-        "CREATE OR REPLACE FUNCTION public.set_updated_at()",
         "CREATE TABLE public.meetings",
+        # after tables: v1 functions return table row types (e.g. SETOF jobs)
+        "CREATE OR REPLACE FUNCTION public.set_updated_at()",
         "ADD CONSTRAINT meetings_pkey",
         "ADD CONSTRAINT meetings_user_id_fkey",
         "CREATE INDEX idx_meetings_user_id",
@@ -120,6 +121,19 @@ def test_dropped_roles_produce_no_grants_and_empty_seeds_are_skipped() -> None:
     out = _render()
     assert " anon" not in out
     assert "INSERT INTO public.meetings" not in out
+
+
+def test_seed_rows_leave_now_defaults_to_the_database_so_output_is_deterministic() -> None:
+    s = _schema()
+    s.tables["app_config"] = [
+        Column("key", "text", True),
+        Column("updated_at", "timestamp with time zone", True, "now()"),
+    ]
+    s.seeds = {"app_config": '[{"key": "k", "updated_at": "2026-10-25 09:07:25+00"}]'}
+    s.functions = []
+    out = render_baseline(s, prelude="", epilogue="", overrides={}, skip_functions=set())
+    assert "INSERT INTO public.app_config (key) VALUES\n  ('k'::text);" in out
+    assert "2026-10-25" not in out
 
 
 def test_comments_on_table_and_column() -> None:

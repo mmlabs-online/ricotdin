@@ -4,6 +4,7 @@ The baseline generator reads the replayed v1 catalog and hands plain rows to the
 they return SQL text with Supabase references rewritten (``v1_rewrite``). No I/O here.
 """
 
+import json
 import re
 from dataclasses import dataclass
 
@@ -157,10 +158,25 @@ def emit_function_acl(signature: str, grantees: list[str] | None) -> list[str]:
     return out
 
 
-def emit_seed(table: str, rows_json: str) -> str:
-    """Insert rows (a JSON array of objects) into a table, keeping every column's type."""
-    if "$seed$" in rows_json:
-        raise ValueError("seed data contains the dollar-quote tag")
+def emit_seed(table: str, columns: list[Column], rows_json: str) -> str:
+    """INSERT for seed rows given as a JSON array of ``{column: text value or null}``.
+
+    Each value is the column's text form cast back to the column type, so a jsonb ``null``
+    (text ``'null'``) stays a JSON null instead of becoming SQL NULL. Empty array → ``""``.
+    """
+    rows: list[dict[str, str | None]] = json.loads(rows_json)
+    if not rows:
+        return ""
+    names = ", ".join(quote_ident(c.name) for c in columns)
+    values = []
+    for row in rows:
+        cells = [
+            f"NULL::{c.type}"
+            if row.get(c.name) is None
+            else f"{quote_literal(str(row[c.name]))}::{c.type}"
+            for c in columns
+        ]
+        values.append(f"  ({', '.join(cells)})")
     # Generator output written to a reviewed .sql file; inputs come from the catalog, not users.
-    head = f"INSERT INTO {_q(table)} SELECT * FROM jsonb_populate_recordset("  # noqa: S608
-    return f"{head}NULL::{_q(table)}, $seed${rows_json}$seed$::jsonb);"
+    head = f"INSERT INTO {_q(table)} ({names}) VALUES\n"  # noqa: S608
+    return head + ",\n".join(values) + ";"

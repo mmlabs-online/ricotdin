@@ -10,10 +10,10 @@ import os
 import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager
+from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 from psycopg import sql
-from psycopg.conninfo import make_conninfo
 
 PREFIX = "ricotdin_test_"
 
@@ -26,7 +26,9 @@ def admin_url() -> str:
 
 
 def url_for(dbname: str, base: str | None = None) -> str:
-    return make_conninfo(base or admin_url(), dbname=dbname)
+    """``base`` with its database swapped for ``dbname``, still a URL (SQLAlchemy needs one)."""
+    parts = urlsplit(base or admin_url())
+    return urlunsplit(parts._replace(path=f"/{dbname}"))
 
 
 def drop_stale(base: str | None = None) -> list[str]:

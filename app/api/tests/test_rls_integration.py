@@ -14,7 +14,8 @@ import psycopg
 import pytest
 from psycopg import sql
 
-from tests.conftest import requires_db
+from app.db.scratch import scratch_database
+from tests.conftest import alembic_upgrade, requires_db
 
 pytestmark = requires_db
 
@@ -23,7 +24,15 @@ FOLDER, MEETING_A, MEETING_B = (uuid.uuid4() for _ in range(3))
 
 
 @pytest.fixture(scope="module")
-def db(v2_db: str) -> str:
+def db() -> Iterator[str]:
+    # Own scratch database: the seeded rows must not leak into the shared v2_db (parity test).
+    with scratch_database("rls") as url:
+        alembic_upgrade(url)
+        _seed(url)
+        yield url
+
+
+def _seed(v2_db: str) -> None:
     with psycopg.connect(v2_db, autocommit=True) as conn:
         conn.execute("GRANT ricotdin_app, ricotdin_service TO CURRENT_USER")
         for uid, name, role in [
@@ -61,7 +70,6 @@ def db(v2_db: str) -> str:
             "VALUES (%s, 0, 'chunk b', %s::vector)",
             (MEETING_B, vec),
         )
-    return v2_db
 
 
 @contextmanager

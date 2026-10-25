@@ -78,6 +78,14 @@ CREATE INDEX idx_email_tokens_user_purpose ON public.email_tokens (user_id, purp
 ALTER TABLE public.users          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.refresh_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_tokens   ENABLE ROW LEVEL SECURITY;
+-- Only ricotdin_service touches these (auth endpoints, admin); same service_all pattern as the
+-- ported v1 tables.
+CREATE POLICY service_all ON public.users AS PERMISSIVE FOR ALL
+  TO ricotdin_service USING (true) WITH CHECK (true);
+CREATE POLICY service_all ON public.refresh_tokens AS PERMISSIVE FOR ALL
+  TO ricotdin_service USING (true) WITH CHECK (true);
+CREATE POLICY service_all ON public.email_tokens AS PERMISSIVE FOR ALL
+  TO ricotdin_service USING (true) WITH CHECK (true);
 REVOKE ALL ON public.users, public.refresh_tokens, public.email_tokens FROM PUBLIC;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.users, public.refresh_tokens, public.email_tokens
   TO ricotdin_service;

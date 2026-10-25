@@ -103,9 +103,19 @@ def test_emit_function_acl_public_kept() -> None:
     ]
 
 
-def test_emit_seed_uses_dollar_quoted_json_recordset() -> None:
-    sql = emit_seed("app_config", '[{"key": "a", "value": "it\'s"}]')
-    assert sql == (
-        "INSERT INTO public.app_config SELECT * FROM jsonb_populate_recordset("
-        'NULL::public.app_config, $seed$[{"key": "a", "value": "it\'s"}]$seed$::jsonb);'
+def test_emit_seed_casts_text_values_back_to_column_types() -> None:
+    cols = [
+        Column("key", "text", True),
+        Column("value", "jsonb", True),
+        Column("note", "text", False),
+    ]
+    rows = '[{"key": "it\'s", "value": "null", "note": null}, {"key": "b", "value": "{\\"x\\": 1}", "note": "n"}]'
+    assert emit_seed("app_config", cols, rows) == (
+        "INSERT INTO public.app_config (key, value, note) VALUES\n"
+        "  ('it''s'::text, 'null'::jsonb, NULL::text),\n"
+        "  ('b'::text, '{\"x\": 1}'::jsonb, 'n'::text);"
     )
+
+
+def test_emit_seed_without_rows_is_empty() -> None:
+    assert emit_seed("t", [Column("a", "int", True)], "[]") == ""

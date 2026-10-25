@@ -164,7 +164,8 @@ WHERE n.nspname = 'public' AND c.relkind = 'r'
 ORDER BY 1, d.objsubid"""
 
 _SEED: LiteralString = (
-    "SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY t::text), '[]'::jsonb)::text FROM {} t"
+    "SELECT coalesce(jsonb_agg(jsonb_build_object({}) ORDER BY t::text), '[]'::jsonb)::text"
+    " FROM {} t"
 )
 
 
@@ -208,8 +209,13 @@ def read_schema(url: str) -> Schema:
             s.table_grants.setdefault(table, []).append((grantee, privilege, column))
         s.comments = [(r[0], r[1], r[2]) for r in _rows(conn, _COMMENTS)]
 
-        for table in s.tables:
-            query = sql.SQL(_SEED).format(sql.Identifier("public", table))
+        for table, cols in s.tables.items():
+            # Every value as text (JSON null = SQL NULL); emit_seed casts back to the column type.
+            pairs = sql.SQL(", ").join(
+                sql.SQL("{}, {}::text").format(sql.Literal(c.name), sql.Identifier("t", c.name))
+                for c in cols
+            )
+            query = sql.SQL(_SEED).format(pairs, sql.Identifier("public", table))
             row = conn.execute(query).fetchone()
             rows_json = row[0] if row else "[]"
             if rows_json != "[]":

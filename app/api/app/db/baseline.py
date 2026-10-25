@@ -1,8 +1,9 @@
 """Assemble the v2 baseline SQL from a replayed v1 schema snapshot (ARC-02). Pure.
 
-Order follows dependencies: functions come before tables because v1 SQL functions reference
-tables and ``check_function_bodies`` is off; constraints are added after all tables exist
-(foreign keys last); policies, grants and seed rows come once everything they touch exists.
+Order follows dependencies: tables first (no column default calls a v1 function), then
+functions, because some return table row types (``SETOF jobs``) and Postgres checks those even
+with ``check_function_bodies`` off; constraints are added after all tables exist (foreign keys
+last); triggers, policies, grants and seed rows come once everything they touch exists.
 """
 
 from app.db.ddl import (
@@ -88,10 +89,10 @@ def render_baseline(
         ),
         prelude.rstrip() + "\n",
         _section("Enums (v1)", [emit_enum(n, labels) for n, labels in sorted(s.enums.items())]),
-        _section("Functions (v1, rewritten)", functions),
         _section(
             "Tables (v1)", [emit_table(n, cols) + "\n" for n, cols in sorted(s.tables.items())]
         ),
+        _section("Functions (v1, rewritten)", functions),
         _section(
             "Constraints (v1)",
             [
@@ -115,7 +116,13 @@ def render_baseline(
         _section("Grants (v1 roles mapped to ricotdin_app / ricotdin_service)", grants + acls),
         _section(
             "Seed rows (inserted by v1 migrations)",
-            [emit_seed(n, rows) for n, rows in sorted(s.seeds.items()) if rows != "[]"],
+            [
+                # now()-defaulted columns are left to the database: the generator stays
+                # deterministic and seeded rows get the timestamp of the actual migration.
+                emit_seed(n, [c for c in s.tables[n] if c.default != "now()"], rows)
+                for n, rows in sorted(s.seeds.items())
+                if rows != "[]"
+            ],
         ),
         epilogue.rstrip() + "\n",
     ]
