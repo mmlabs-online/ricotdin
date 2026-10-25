@@ -22,5 +22,14 @@ uv run --env-file .env alembic upgrade head               # migrate the dev data
 uv run --env-file .env python -m scripts.gen_baseline     # regenerate migrations/sql/0001_baseline.sql
 ```
 
+Runtime logins (one per role, `CLAUDE.md` §0.2) — creates/rotates them and writes
+`DATABASE_URL_APP` / `_SERVICE` / `_WORKER` into `.env`:
+
+```bash
+uv run --env-file .env python -m scripts.provision_db_roles
+uv run --env-file .env uvicorn app.main:app --reload    # refuses to start with an over-privileged login
+docker build -t ricotdin-api:local . && docker run -p 8000:8000 --env-file .env ricotdin-api:local
+```
+
 Never point `DATABASE_URL` at the `main` (production) branch: the integration tests create and drop
 `ricotdin_test_*` databases there.

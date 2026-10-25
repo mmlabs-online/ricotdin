@@ -85,6 +85,30 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Known v1 bug carried over unchanged:** policy `folders_select` compares `fs.folder_id = fs.id`, so
   share grantees never see the shared `folders` row (meetings in it are visible). Do not build on
   grantees reading `folders`; fix via `/fix-bug`.
+
+### 0.2 v2 API runtime (ARC-04)
+
+- **Factory** `app/main.py` `create_app(settings)`: JSON logs with redaction (`app/core/logging.py`,
+  `redact.py`), Sentry only if `SENTRY_DSN` (bodies/cookies/auth stripped), security headers, CORS
+  exact-origin allow-list `ALLOWED_ORIGINS`, typed errors (`app/core/errors.py`) → `{"error": {code,
+  message}}` with detail only in logs. `GET /health` (no DB) and `GET /version.json`
+  (`RICOTDIN_VERSION` → `BUILD_COMMIT` → `"unknown"`). Background hooks: `BACKGROUND_HOOKS` (ARC-08).
+- **DB roles after migration 0002:** `ricotdin_app` (requests), `ricotdin_service` (auth + admin),
+  `ricotdin_worker` (pipeline/schedulers; no access to `users`/`refresh_tokens`/`email_tokens`).
+  `audit_logs`, `activity_log`, `quota_ledger` are append-only for all three; service roles have no
+  TRUNCATE/TRIGGER/REFERENCES/MAINTAIN. Future migrations must GRANT to these roles explicitly.
+- **Logins** `ricotdin_api_login` / `ricotdin_service_login` / `ricotdin_worker_login` (NOINHERIT,
+  one group each, timeouts, connection limits) are created/rotated by
+  `uv run --env-file .env python -m scripts.provision_db_roles` (needs the owner `DATABASE_URL`), which
+  writes `DATABASE_URL_APP` / `_SERVICE` / `_WORKER` into `app/api/.env`. Never in a migration.
+- **`app/db/session.py` `Database`:** one asyncpg engine per configured login; startup refuses an
+  owner/superuser/BYPASSRLS/INHERIT login or one in two groups (`StartupRefused`). Requests use
+  `db.app_transaction(RequestIdentity)`; service/worker code uses `db.role_transaction(group)`.
+  `RequestIdentity` comes only from the verified token (ARC-05).
+- **Image** `app/api/Dockerfile` (python 3.12-slim + ffmpeg, uid 10001, HEALTHCHECK `/health`); CI builds
+  it and uploads `openapi.json` as an artifact (`python -m scripts.dump_openapi`). Behind a proxy set
+  `FORWARDED_ALLOW_IPS`. Local: `uv run --env-file .env uvicorn app.main:app --reload`.
+
 - **Integration tests** (`*_integration.py`) create and drop `ricotdin_test_*` databases on the
   `DATABASE_URL` branch (never point it at `main`); CI runs them against a `pgvector/pgvector:pg18` service.
 

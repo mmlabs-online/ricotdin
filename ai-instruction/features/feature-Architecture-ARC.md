@@ -225,7 +225,7 @@ Owner chose to migrate everything. Supabase stores bcrypt password hashes (porta
 ---
 
 ### ARC-04 — FastAPI core
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As a developer, I want a FastAPI foundation (config, DB session, errors, logging, security headers, OpenAPI, Docker) so that every ported module follows the same rules.
@@ -269,8 +269,11 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
 **Out of scope**
 - Business endpoints.
 
-**Key files (expected)**
-- `app/api/app/main.py`, `app/api/app/core/**`, `app/api/Dockerfile`
+**Key files**
+- `app/api/app/main.py`, `app/api/app/core/{settings,errors,redact,logging,http,sentry,version,ratelimit}.py`
+- `app/api/app/db/{session,context,identity,urls,provision}.py`, `app/api/scripts/{provision_db_roles,dump_openapi}.py`
+- `app/api/migrations/{versions/0002_runtime_roles.py,sql/0002_runtime_roles*.sql}`, `app/api/Dockerfile`
+- Env vars `JWT_*`, `SMTP_*` move to ARC-05 (first used there).
 
 ---
 

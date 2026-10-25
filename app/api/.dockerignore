@@ -1,0 +1,11 @@
+# Build context: app/api. Never ship secrets, local environments or caches.
+.env
+.env.*
+.venv
+**/__pycache__
+**/*.py[cod]
+.mypy_cache
+.ruff_cache
+.pytest_cache
+tests
+openapi.json
