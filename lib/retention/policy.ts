@@ -85,3 +85,28 @@ export function ownedAudioPath(m: { id: string; user_id: string; audio_path: str
   if (!m.audio_path) return null
   return isOwnedAudioKey(m.audio_path, m.user_id, m.id) ? m.audio_path : null
 }
+
+/**
+ * Storage objects to delete for a set of meetings: only each meeting's own key, each with its
+ * own provider (BUG-004: a Supabase-only remove left R2 audio orphaned).
+ */
+export function ownedAudioDeleteItems(
+  rows: Array<{ id: string; user_id: string; audio_path: string | null; storage_provider: string }>,
+): Array<{ key: string; provider: string }> {
+  const items: Array<{ key: string; provider: string }> = []
+  for (const m of rows) {
+    const key = ownedAudioPath(m)
+    if (key) items.push({ key, provider: m.storage_provider })
+  }
+  return items
+}
+
+/**
+ * Meetings a folder delete may remove: only the caller's own (BUG-011). Shared-folder editors can
+ * place their own meetings in someone else's folder; those must never be deleted by the folder
+ * owner — they fall back to Uncategorized via ON DELETE SET NULL when the folder goes.
+ */
+export function ownMeetingsOnly<T extends { user_id: string }>(rows: T[], callerId: string): T[] {
+  if (!callerId) return []
+  return rows.filter((m) => m.user_id === callerId)
+}

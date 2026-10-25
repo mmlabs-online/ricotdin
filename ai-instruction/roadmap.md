@@ -8,39 +8,40 @@
 
 ## North star
 
-Ricotdin is a meeting assistant our own team trusts with sensitive meetings: every recording
-is processed under no-training terms, audio is purged on a schedule, and every release reaches
-the home server through one reviewed, health-checked, reversible merge.
+Ricotdin is a meeting assistant our own team trusts with sensitive meetings: audio is purged
+on a schedule, and every release reaches the home server through one reviewed, health-checked,
+reversible merge.
 
 ## Current goal
 
 | Field | Value |
 |---|---|
-| Goal | Stabilise for **internal use** with sensitive meetings — privacy first, then a reliable release/deploy path. No outside users. |
+| Goal | Stabilise for **internal use** with sensitive meetings — retention purge + recording notice, then a reliable release/deploy path. No outside users. |
 | Horizon | 1 month: 2026-10-21 → 2026-11-21 |
-| Success measures | (1) No meeting is processed on a free-tier Gemini key. (2) Audio older than the retention setting is purged automatically. (3) v1.1.0 is in production this week (S1 fixes live); v1.1.x is then deployed via OPS-04/05 and the OPS-05 verification prompt prints `DEPLOYED v1.1.x`. (4) A DB restore has been tested once. |
-| Constraints (people, time, budget) | All code by AI agents (`/fix-bug`, `/ship-feature`); owner approves and does dashboard/billing/Docker steps. Meetings contain **sensitive data**. **Low AI budget** — watch `/admin/usage` weekly; Speechmatics minutes are the main cost driver. |
+| Success measures | (1) Audio older than the retention setting is purged automatically. (2) v1.1.0 is in production this week by the current method (S1 fixes live); the pipeline is then proven by redeploying v1.1.0 and shipping v1.1.1, and the OPS-05 verification prompt prints `DEPLOYED v1.1.1`. (3) A DB restore has been tested once. |
+| Constraints (people, time, budget) | All code by AI agents (`/fix-bug`, `/ship-feature`); owner approves and does dashboard/Docker steps. Meetings contain **sensitive data**. **Current (free-tier) AI keys accepted for all models; provider data use accepted (owner, 2026-10-23).** **Low AI budget** — watch `/admin/usage` weekly; Speechmatics minutes are the main cost driver. |
 
 ## Now (in progress / next up)
 
 | Item | Codes | Why now | Done when |
 |---|---|---|---|
-| 1. Enable Gemini billing (no-train) — owner, this week | PRV-01 | Sensitive meetings must not go to a free-tier key | Only billed-project keys active at `/admin/keys`; Speechmatics data-use terms confirmed |
-| 2. Release v1.1.0 this week | — (§9k) | 3 S1 fixes (BUG-002/003/005) + PRV-02, COM-01, OPS-03 are only on `dev`; backups can't run until `main` | CI green on PR `dev → main`; migrations 032–036 applied + verify queries pass; tag `v1.1.0`; deployed (current method); `/version.json` = `v1.1.0` |
-| 3. Start backups — owner, after item 2 | OPS-03 | Free tier has no backups | First green `db-backup` run from `main`; one test restore logged in `docs/ops/backup-restore.md`; tracking `[x]` |
-| 4. Deployment-repo setup + verification | OPS-05 | Releases should deploy through one reviewed merge | Drafts written and copied to mmlabs-online/deployment (port `:3000`); verification prompt passes |
-| 5. Release v1.1.1 through the new pipeline | — (§9k) | First real run of release.yml → deployment PR | `DEPLOYED v1.1.1` from the OPS-05 prompt |
-| 6. Security S3 bugs (in parallel) | BUG-006, BUG-008, then BUG-004 | Remaining client-write / storage holes from the review round | Each fixed via `/fix-bug`, shipped in v1.1.x |
+| 1. Deploy v1.1.0 to production — owner, this week (current method) | — (§9k) | Released 2026-10-22 but prod is still v1.0.0: S1 holes BUG-002/003/005 are live | Migrations 032–036 applied + verify queries pass; `/version.json` = `v1.1.0` |
+| 2. First backup + restore test — owner, this week | OPS-03 | Secrets are set but `db-backup` has never run | `gh workflow run backup.yml --ref main` green; one restore logged in `docs/ops/backup-restore.md`; tracking `[x]` |
+| 3. Prove the deploy pipeline with v1.1.0 — owner, this week | OPS-05 | Server env + cloudflared done; drafts not yet in the deployment repo | Drafts copied to mmlabs-online/deployment; deployment PR #10 merged; verification prompt prints `DEPLOYED v1.1.0` |
+| 4. Release v1.1.1 through the pipeline | — (§9k) | BUG-004/006/008/011/012/014–017, OPS-06 + migrations 037–038 are on `dev` only | Agent's draft PR `dev → main` merged, `main → release/1.1`, tag `v1.1.1`; `DEPLOYED v1.1.1` |
+| 5. Deploy support pack — agent, now | needs `/add-feature` (OPS-07) | Owner does deploy v1.1.0 / backup / OPS-05 by hand this week | Step-by-step runbook (v1.1.0 migrations + verify queries, OPS-05 copy/merge, tunnel-token rotation); `npm run verify:deploy <url>` reports version + health |
+| 6. PRF-08 tracking drift — agent | PRF-08 (`/fix-bug`, docs) | Already delivered by AIP-06 (profile default model within admin allow-list) | `tracking.md` `[x]`, spec marked done (via AIP-06) |
+| 7. Prepare v1.1.1 release PR — agent | — (§9k) | Shortens item 4 once the pipeline is proven | Branch with version 1.1.1 + CHANGELOG `[1.1.1]` (incl. 037–038 checklist); **draft** PR `dev → main` open, CI green |
+| 8. Re-spec staging — agent | OPS-02 (`/add-feature`) | Spec now, build after OPS-05 | Spec passes Definition of Ready; build stays in Next |
+| 9. Account activity log — agent | PRF-09 (`/add-feature` → `/ship-feature`; structural: user-scoped read of `activity_log`) | User value while ops completes | Users see their own events on `/profile`; owner approved the plan |
 
 ## Next
 
 | Item | Codes | Depends on |
 |---|---|---|
-| Staging as a second compose project on the home server + second Supabase project (re-spec) | OPS-02 (re-spec via `/add-feature`) | OPS-05 |
-| Point CLAUDE.md §9a at CHANGELOG's full migration checklist | needs `/fix-bug` (docs) | — |
+| **Build** staging per the re-spec (second compose project on the home server + second Supabase project) | OPS-02 | OPS-05, Now 8 |
 | Confirm reverse proxy sets `x-forwarded-for` (login rate limit + audit IP rely on it) | — (check) | OPS-05 |
 | Read-only DB role for backups | — (follow-up in `docs/ops/backup-restore.md`) | OPS-03 |
-| CI on dev PRs (lint/typecheck/test) — today only PRs into `main` are checked | needs `/add-feature` (OPS) | — |
 
 ## Later
 
@@ -55,6 +56,7 @@ the home server through one reviewed, health-checked, reversible merge.
 |---|---|---|
 | Commercialisation (COM-02, COM-03, COM-04), ADM-11, PRF-13 self-service | Internal use only; SaaS scope | Goal changes to opening up (Group A) or commercialising (Group B) |
 | PRV-03 (superseded) | Purge delivered by PRV-02 (2026-10-21); audio encryption not needed while purge is on | Audio must be kept long-term |
+| PRV-01 Enable Gemini billing (no-train) | Owner decision 2026-10-23: stay on current keys for all models; AI-provider data use accepted for internal use | Outside users, commercialisation (Group A/B), or a customer/legal requirement |
 | CST-02 as a separate item | Storage already on R2; purge covers the storage risk | Legacy Supabase bucket needs retiring |
 | PRO-02 Google Calendar sync, PRO-03 reminders | Out of MVP scope (CLAUDE.md §1) | Explicit owner go decision |
 | WebM remux, 39 lint warnings, in-memory login rate limit | Low impact for internal single-process use | Users complain / multi-instance deploy |
@@ -85,3 +87,21 @@ supersedes it.
 - **Options considered:** A release first, pipeline next (chosen); B fix S3 bugs first, then release (S1 holes stay live longer); original plan — wait for OPS-05 and release v1.1.0 through it (S1 holes live 1–2 more weeks).
 - **Why:** Three S1 holes are live on v1.0.0 and backups can only run from `main`; S3 bugs are lower risk. PRV-01 still first — owner commits to this week.
 - **Revisit if:** the first CI run on dev → main finds significant failures, or migrations 032–036 fail on the live DB.
+
+### 2026-10-23 — Deploy v1.1.0 by hand now; prove the pipeline with v1.1.0, then v1.1.1
+- **Decision:** Strategy A — owner closes live risk this week: PRV-01 billing, manual deploy of v1.1.0 (+ migrations 032–036), first backup run + restore test. Next week: copy OPS-05 drafts, merge deployment PR #10 (redeploys v1.1.0 = low-risk pipeline test), then ship v1.1.1 (dev fixes + migrations 037–038) through the pipeline. Sensitive meetings are paused until PRV-01 is done.
+- **Options considered:** A close live risk first (chosen); B finish OPS-05 first and jump prod from v1.0.0 to v1.1.1 (S1 holes stay live longer; 7 migrations at once).
+- **Why:** As of 2026-10-23 the code is ahead of plan (v1.1.0 tagged, all S3 Now bugs fixed on dev) but prod is still v1.0.0 with three live S1 holes, meetings still use a free-tier key, and backups have never run. The two owner actions that close the worst risks take minutes; the pipeline can then be tested on an already-deployed version.
+- **Revisit if:** the manual v1.1.0 deploy or migrations 032–036 fail, the pipeline test with v1.1.0 fails, or billing cost exceeds the budget.
+
+### 2026-10-23 — No Gemini billing; current keys for all models
+- **Decision:** PRV-01 parked. All models keep using the current keys regardless of tier; possible data use by AI providers is accepted. The pause on sensitive meetings is lifted. Supersedes the PRV-01 parts of the 2026-10-21 and 2026-10-23 entries.
+- **Options considered:** A enable billing (no-train, paid per token); B stay on current keys (chosen).
+- **Why:** owner priority is cost and simplicity for internal use; privacy is handled by the retention purge (PRV-02) and recording notice (COM-01), not by provider terms. Free-tier rate limits are absorbed by retry/backoff and the key pool.
+- **Revisit if:** outside users or commercialisation, a customer/legal requirement, or free-tier rate limits make processing unreliable.
+
+### 2026-10-23 — Agent queue while the owner does the ops steps
+- **Decision:** Strategy A — agents first reduce the owner's manual work (OPS-07 runbook + verify script, PRF-08 drift, draft v1.1.1 release PR), then re-spec OPS-02 and build PRF-09. Goal and horizon unchanged; owner does deploy v1.1.0, backup and OPS-05 this week. Earlier agent queue (BUG-013/014/015/016/017, OPS-06) is done.
+- **Options considered:** A owner support first (chosen); B features first (PRF-09, OPS-02 spec) — agents busy elsewhere during the week the owner needs ops support.
+- **Why:** the owner's ops steps gate v1.1.1 and the S1 fixes on prod; a runbook + verify script make them faster and less error-prone, and a ready draft release PR shortens the last step.
+- **Revisit if:** the owner's ops steps slip past next week, or the draft release PR needs repeated rebasing.

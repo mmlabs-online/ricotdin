@@ -15,8 +15,8 @@ The Privacy & Data module addresses the legal and ethical obligations around han
 ## Features
 
 ### PRV-01 — Enable Gemini billing (no-train tier)
-**Status:** ❌ Not started  
-**Blocker:** Yes — free tier OK for self-testing ONLY
+**Status:** ❌ Not started — **parked** (owner decision 2026-10-23, see `ai-instruction/roadmap.md`)  
+**Blocker:** No longer — owner accepts current (free-tier) keys and provider data use for internal use; revisit for outside users or commercialisation
 
 **User Story**  
 As the product owner, I want to enable Gemini billing so Google doesn't train on real users' meeting data.
@@ -69,7 +69,7 @@ As a user, I want a clear retention/deletion policy and the ability to erase all
 ---
 
 ### PRV-03 — Encrypt & purge audio after processing
-**Status:** ❌ Not started  
+**Status:** ✅ Done — superseded by PRV-02 (roadmap 2026-10-22): purge delivered there; audio encryption not needed while purge is on  
 **Risk reduction feature (not a hard blocker)**
 
 **User Story**  

@@ -1,0 +1,26 @@
+-- Migration 038: browser clients can no longer DELETE meetings directly (BUG-008)
+--
+-- The owner-only meetings_delete RLS policy let a user delete their own meeting row straight
+-- through PostgREST, skipping DELETE /api/meetings/:id — the route that removes the audio object
+-- from storage first (CLAUDE.md §6 delete rule). The row cascaded away, but the audio stayed in
+-- storage forever: the retention purge (PRV-02) only looks at rows, so it never finds it.
+--
+-- Safe: the UI deletes meetings only through server routes using the service-role client
+-- (DELETE /api/meetings/:id, DELETE /api/folders/:id?deleteMeetings=true, the /uploaded reject path,
+-- POST /api/meetings cleanup). No browser or user-scoped client deletes meetings.
+-- Cascades INTO meetings (auth.users → meetings, folders → meetings SET NULL) and FROM meetings to
+-- its child tables are referential actions run by the system, not by the caller's privileges.
+-- With migration 033 (no INSERT/UPDATE), the browser is now SELECT-only on meetings. The meetings_delete
+-- RLS policy (025) stays but is inert for browser clients (kept so the rollback is exact).
+--
+-- Verify after applying (expect all false):
+--   select r.role, p.priv, has_table_privilege(r.role, 'public.meetings', p.priv)
+--   from (values ('anon'), ('authenticated')) r(role),
+--        (values ('DELETE'), ('TRUNCATE')) p(priv);
+-- and (expect true — server routes still delete):
+--   select has_table_privilege('service_role', 'public.meetings', 'DELETE');
+--
+-- Rollback:
+--   GRANT DELETE, TRUNCATE ON public.meetings TO anon, authenticated;
+
+REVOKE DELETE, TRUNCATE ON public.meetings FROM anon, authenticated;

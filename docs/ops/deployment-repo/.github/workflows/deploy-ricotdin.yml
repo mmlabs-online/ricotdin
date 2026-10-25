@@ -1,0 +1,161 @@
+name: deploy-ricotdin
+
+# DRAFT for the deployment repository, kept in ricotdin/docs/ops/deployment-repo/ (OPS-05); copied
+# by the operator. Same flow as deploy-site.yml: a merge to main that touches apps/ricotdin/ deploys
+# ricotdin, and only ricotdin, on the home server's self-hosted runner: pull the image pinned in
+# release.env, start it, wait for /api/health. If it is not healthy, restore apps/ricotdin/ as it was
+# before the push, redeploy that, and push the revert. A restored deploy is still a red run.
+# workflow_dispatch redeploys what main pins, e.g. after a manual `docker rm`.
+#
+# Unlike site/calechip, ricotdin needs runtime secrets. They live ONLY in the server env file
+# RICOTDIN_ENV_FILE (never in any repository); the deploy refuses to start without it.
+# No migrate step: apply a release's migrations BEFORE merging its PR (ricotdin CLAUDE.md §9k).
+# A restore never touches the database, so every migration must stay compatible with the
+# previous release's image.
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/ricotdin/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write # the revert push after a restore
+  pull-requests: write # the outcome comment on the merged release PR
+
+concurrency:
+  group: deploy-ricotdin
+  cancel-in-progress: false
+
+env:
+  APP_DIR: apps/ricotdin
+  PROJECT: ricotdin
+  # Must match env_file in apps/ricotdin/compose.yml. chmod 600, owned by the runner user.
+  RICOTDIN_ENV_FILE: /etc/mmlabs/ricotdin.env
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, mmlabs-server]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: release
+        id: release
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if grep -n 'TODO-operator' "$APP_DIR/compose.yml"; then
+            echo "::error::$APP_DIR/compose.yml still holds a TODO-operator placeholder. Replace it before deploying. Nothing was started."
+            exit 1
+          fi
+          if [ ! -f "$APP_DIR/release.env" ]; then
+            echo "::notice::No $APP_DIR/release.env yet: nothing has been released. Nothing was deployed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pattern='^mingming21400/ricotdin:v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.-]+)?@sha256:[0-9a-f]{64}$'
+          image="$(sed -n 's/^RICOTDIN_IMAGE=//p' "$APP_DIR/release.env")"
+          if ! [[ "$image" =~ $pattern ]]; then
+            echo "::error::RICOTDIN_IMAGE in $APP_DIR/release.env is '$image', not one mingming21400/ricotdin:vX.Y[.Z]@sha256:<digest>. Nothing was started."
+            exit 1
+          fi
+          previous=""
+          # BEFORE is empty on workflow_dispatch: no previous release, so a failure is not restored.
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$BEFORE:$APP_DIR/release.env" 2>/dev/null; then
+            previous="$(git show "$BEFORE:$APP_DIR/release.env" | sed -n 's/^RICOTDIN_IMAGE=//p')"
+          fi
+          {
+            echo "skip=false"
+            echo "image=$image"
+            echo "previous=$previous"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: server env file
+        id: envfile
+        if: steps.release.outputs.skip != 'true'
+        run: |
+          # Only the path is ever printed; the file's contents never reach the log.
+          if [ ! -f "$RICOTDIN_ENV_FILE" ] || [ ! -r "$RICOTDIN_ENV_FILE" ]; then
+            echo "::error::Server env file $RICOTDIN_ENV_FILE is missing or not readable by the runner. Create it (see docs/ops/deployment-repo/README.md in ricotdin). Nothing was started."
+            exit 1
+          fi
+
+      - name: deploy
+        id: deploy
+        if: steps.release.outputs.skip != 'true'
+        run: |
+          compose=(docker compose -p "$PROJECT" -f "$APP_DIR/compose.yml" --env-file "$APP_DIR/release.env")
+          "${compose[@]}" config --quiet
+          "${compose[@]}" pull
+          "${compose[@]}" up -d --wait --wait-timeout 180
+
+      - name: rollback
+        id: rollback
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          BEFORE: ${{ github.event.before }}
+          FAILED: ${{ steps.release.outputs.image }}
+          PREVIOUS: ${{ steps.release.outputs.previous }}
+        run: |
+          if [ -z "$PREVIOUS" ]; then
+            echo "::error::$FAILED failed its health check and there is no previous release to restore. Nothing was pushed."
+            echo "result=no-previous" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git restore --source="$BEFORE" --staged --worktree -- "$APP_DIR"
+          compose=(docker compose -p "$PROJECT" -f "$APP_DIR/compose.yml" --env-file "$APP_DIR/release.env")
+          if ! "${compose[@]}" pull || ! "${compose[@]}" up -d --wait --wait-timeout 180; then
+            echo "::error::$FAILED failed its health check, and restoring $PREVIOUS failed too. Nothing was pushed."
+            echo "result=restore-failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          failed_version="${FAILED#*:}"; failed_version="${failed_version%%@*}"
+          previous_version="${PREVIOUS#*:}"; previous_version="${previous_version%%@*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Restore ricotdin ${previous_version}: ${failed_version} failed its health check"
+          if ! git push origin HEAD:main; then
+            echo "::error::Restored $PREVIOUS on the server, but the revert could not be pushed to main. The repository and the server disagree until it is."
+            echo "result=restore-unpushed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "result=restored" >> "$GITHUB_OUTPUT"
+          echo "::error::$FAILED failed its health check. Restored $PREVIOUS and pushed the revert."
+          exit 1
+
+      - name: notify
+        if: always() && steps.release.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVFILE: ${{ steps.envfile.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          RESULT: ${{ steps.rollback.outputs.result }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          PREVIOUS: ${{ steps.release.outputs.previous }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$ENVFILE" = "failure" ]; then
+            msg="env-missing: \`$RICOTDIN_ENV_FILE\` is missing or unreadable on the server; nothing was started (main still pins \`$IMAGE\`). Create it, then Actions → deploy-ricotdin → Run workflow."
+          else
+          case "$DEPLOY:$RESULT" in
+            success:)                  msg="deployed: \`$IMAGE\` is running and healthy." ;;
+            failure:restored)          msg="restored: \`$IMAGE\` failed its health check; \`$PREVIOUS\` is running again and the revert is on main." ;;
+            failure:restore-unpushed)  msg="restored, revert NOT pushed: \`$PREVIOUS\` is running, but main still pins \`$IMAGE\`." ;;
+            failure:no-previous)       msg="no-previous: \`$IMAGE\` failed its health check and there was no earlier release to restore." ;;
+            failure:restore-failed)    msg="restore-failed: \`$IMAGE\` failed its health check and so did \`$PREVIOUS\`. ricotdin needs a hand." ;;
+            *)                         msg="did-not-complete: the deploy did not run to the end (deploy: ${DEPLOY:-not run}, restore: ${RESULT:-not run})." ;;
+          esac
+          fi
+          {
+            echo "### deploy-ricotdin"
+            echo ""
+            echo "$msg"
+          } >> "$GITHUB_STEP_SUMMARY"
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number // empty' || true)"
+          if [ -n "$pr" ]; then
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "deploy-ricotdin — $msg Run: $RUN_URL"
+          fi

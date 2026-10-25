@@ -98,9 +98,9 @@ chat_messages).
 Rules:
 - RLS is ON. The browser uses the anon key (RLS-scoped to the logged-in user).
 - The **server pipeline uses the service role key** (bypasses RLS) for background writes.
-- `meetings`: the browser may only SELECT/DELETE (RLS-scoped). INSERT/UPDATE are revoked from
-  `anon`/`authenticated` (migration 033, BUG-003) — every write goes through a server route with the
-  service-role client. Never add a browser or user-scoped write to `meetings`.
+- `meetings`: the browser is SELECT-only (RLS-scoped). INSERT/UPDATE are revoked (migration 033, BUG-003) and
+  DELETE/TRUNCATE too (migration 038, BUG-008) — every write/delete goes through a server route with the
+  service-role client (delete must remove the audio first). Never add a browser or user-scoped write to `meetings`.
 - `transcript_segments` / `transcript_chunks`: browser is SELECT-only (INSERT/UPDATE/DELETE revoked,
   migration 035, BUG-007) — only the pipeline (service role) writes transcript/RAG content. Never add a
   browser or user-scoped write to these tables.
@@ -132,7 +132,9 @@ Rules:
 - Upload audio via the Gemini **Files API** (temporary staging, ~48h retention) and
   reference it in the prompt; do not inline large audio as base64.
 - **Free-tier privacy note:** on the free tier, inputs may be used by Google for
-  training. For dev/testing use synthetic or non-sensitive recordings only.
+  training. **Owner decision (2026-10-23):** all models keep using the current keys regardless
+  of tier and provider data use is accepted for internal use — do not block or warn on this
+  (PRV-01 parked, see `ai-instruction/roadmap.md`). Revisit before outside users or commercialisation.
 
 ## 8. Environment variables
 
@@ -159,6 +161,7 @@ npm run build      # production build
 npm run start      # run the production server (deployment target)
 npm run lint       # ESLint
 npm run check      # connectivity check: Gemini + Supabase (reads .env.local)
+npm run verify:deploy -- https://<host> --expect vX.Y.Z   # post-deploy check: /version.json + /api/health (OPS-07)
 npm run test       # run tests (not yet configured)
 ```
 
@@ -170,7 +173,7 @@ npm run test       # run tests (not yet configured)
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
   only**, never new features. All `vX.Y.Z` tags live here (`v1.0.0`, `v1.0.1`… on `release/1.0`).
-- `ci.yml` runs on push/PR to `main` and `release/**`.
+- `ci.yml` runs on push/PR to `main`, `dev` and `release/**` (on `dev` informational only — not a required check; OPS-06).
 
 **Versioning:** SemVer. `package.json` `version` MUST equal the tag without the `v`.
 `release.yml` rejects a tag that does not match `package.json` or whose commit is not on
@@ -194,13 +197,18 @@ npm run test       # run tests (not yet configured)
    `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
    an old line never drags `latest` backwards.
 
+**Step-by-step for the owner:** `docs/ops/release-runbook.md` (OPS-07) — one-time hand deploy +
+per-release order (migrations → deploy → `npm run verify:deploy`).
+
 **Deploy = merge the deployment PR (OPS-04):** image `mingming21400/ricotdin`, tags are
 v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the image, then
 (secret `DEPLOY_REPO_TOKEN` — fine-grained PAT on `mmlabs-online/deployment` only, Contents +
 Pull requests RW) opens PR `ricotdin vX.Y.Z` on `mmlabs-online/deployment` that writes ONLY
 `apps/ricotdin/release.env`:
 `RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@<digest>` (pinned by digest) + `RICOTDIN_VERSION=vX.Y.Z`.
-Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05).
+Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05: drafts in
+`docs/ops/deployment-repo/` — `apps/ricotdin/compose.yml`, `deploy-ricotdin.yml`, README with the
+verification prompt; runtime secrets ONLY in the server file `/etc/mmlabs/ricotdin.env`, never in a repo).
 The tag is never baked into the image; runtime `RICOTDIN_VERSION` (non-secret) is served by
 public `GET /version.json` (fallback: baked `BUILD_COMMIT`, then `"unknown"` —
 `lib/release/version.ts`). Public `GET /api/health` → `{"status":"ok"}` (no DB/provider calls)
@@ -306,6 +314,14 @@ Supabase dashboard:
    - `migrations/036_content_revoke_client_writes.sql` — browser loses INSERT/UPDATE/DELETE/TRUNCATE on `todos`,
      `calendar_suggestions`, `chat_sessions`, `chat_messages`. Independent of app code. Verify with the query in the file.
 
+15. **Apply encrypted-secret table revoke (BUG-006):**
+   - `migrations/037_revoke_ciphertext_tables.sql` — `REVOKE ALL ON admin_config, storage_config FROM anon, authenticated`.
+     Independent of app code. Verify with the query in the file (all false).
+
+16. **Apply meetings client-delete revoke (BUG-008):**
+   - `migrations/038_meetings_revoke_client_delete.sql` — `REVOKE DELETE, TRUNCATE ON meetings FROM anon, authenticated`.
+     Independent of app code. Verify with the query in the file (all false).
+
 ## 9m. Audio retention purge (PRV-02)
 
 Policy for people: `docs/privacy/retention-policy.md`.
@@ -329,7 +345,7 @@ Policy for people: `docs/privacy/retention-policy.md`.
   `DELETE /api/folders/:id?deleteMeetings=true`, `POST /api/meetings/:id/uploaded`) MUST pass
   `isOwnedAudioKey(key, user_id, meeting_id)` (`<user_id>/<meeting_id>[.ext]`); reads (`/api/audio-url`,
   pipeline download) use `ownedAudioPath`. Client INSERT/UPDATE on `meetings` is revoked (migration 033,
-  BUG-003). Avatar keys: `isOwnedAvatarKey` (BUG-002).
+  BUG-003), and DELETE/TRUNCATE too (migration 038, BUG-008). Avatar keys: `isOwnedAvatarKey` (BUG-002).
 
 ## 9n. Recording notice (COM-01)
 
@@ -592,10 +608,14 @@ provider_keys: id, created_at, updated_at, provider ('gemini'|'speechmatics'),
                status ('active'|'disabled'), disabled_reason text null,
                last_used_at timestamptz null, created_by uuid null
 ```
-RLS: admin SELECT only (metadata, never ciphertext); all writes use service-role client.
+RLS: originally admin SELECT only (014; replaced by `admin_config` in 015). Today `admin_config` / `storage_config` give
+`anon`/`authenticated` no privileges at all (migration 037, BUG-006) — service-role only; the admin SELECT policies are inert.
 
 **SECURITY RULES (absolute):**
 - `key_ciphertext`, `key_iv`, `key_auth_tag` are NEVER returned in any API response, ever.
+- Tables holding ciphertext (`admin_config`, `storage_config`; `provider_keys` was dropped in 015) have NO privileges for `anon`/`authenticated`
+  (migration 037, BUG-006) — a column-level REVOKE under a table-level GRANT does nothing. Admin UI reads them only
+  through service-role API routes that return masked rows.
 - `KEY_ENCRYPTION_SECRET` (server env var, 32 bytes) is NEVER logged, never sent to client.
 - Decrypted keys exist ONLY in server-side memory at call time.
 - Losing `KEY_ENCRYPTION_SECRET` makes all stored DB keys unrecoverable.
@@ -840,5 +860,7 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 14. ~~**Feature registry (Phase 15)**~~ **DONE** (Phase 15 complete — `migrations/017_features.sql` features table (UNIQUE key, module_prefix/name, title, user_story, description, content markdown, status/priority/note_tags/depends_on/blocks/key_files arrays, metadata jsonb, updated_by, change_note; admin SELECT RLS; auto-bump trigger); `lib/features/parser.ts` pure parsing functions (parseStatus, parseFeatureSection, parseModuleFile, parseTrackingMd, mergeWithTracking — no I/O, fully tested); `scripts/seed-features.ts` reads ai-instruction/features/*.md + tracking.md ONE TIME and UPSERTs 65 features by key (idempotent); `lib/features/index.ts` DB-access service (listFeatures, getFeature, updateFeature — service-role, no filesystem access); `GET/PATCH /api/admin/features` + `GET/PATCH /api/admin/features/:id` admin-enforced, PATCH writes audit log (action: feature.update); `/admin/features` split-pane UI: grouped filterable list + inline edit panel with all fields + markdown content textarea; "Features" (Layers icon) added to admin sidebar; 33 unit tests in `tests/features.test.ts`. Apply migration 017, then run `npx tsx scripts/seed-features.ts` once. See section 9h for design. After seeding, ai-instruction/features/ is a static reference only — DB is the source of truth.)
 
 **v1.0.0 released** (2026-09-19) — see `CHANGELOG.md`. Audit Log UI (Area 3 / ADM-07) is live at `/admin/audit`.
+
+**v1.1.0 released** (2026-10-22) — see `CHANGELOG.md` (PRV-02 retention purge, COM-01 recording notice, OPS-03 backup, OPS-04 release → deployment PR, S1 security fixes BUG-002/003/005 + client-write revokes BUG-007/009/010; migrations 032–036). Later work on `dev` is listed under `[Unreleased]`.
 
 Keep this section in sync with actual progress; mark phases done as we go.

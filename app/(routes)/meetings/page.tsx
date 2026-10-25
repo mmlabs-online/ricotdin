@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { browserClient } from '@/lib/supabase/browser'
 import { getAccessToken } from '@/lib/supabase/auth'
 import { getMeetingRole, canPin, canEdit, canDelete, canManageShares } from '@/lib/access/roles'
+import { folderDeleteChatNotice, folderDeleteCounts, meetingsAfterFolderDelete } from '@/lib/folders/deleteNotice'
 import type { Meeting, MeetingStatus, FolderWithRole, FolderShareMember } from '@/types/database'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -370,11 +371,7 @@ export default function MeetingsPage() {
         setActionError(data.error ?? 'Failed to delete folder.')
       } else {
         setFolders((prev) => prev.filter((f) => f.id !== folderId))
-        if (deleteMeetings) {
-          setMeetings((prev) => prev.filter((m) => m.folder_id !== folderId))
-        } else {
-          setMeetings((prev) => prev.map((m) => m.folder_id === folderId ? { ...m, folder_id: null } : m))
-        }
+        setMeetings((prev) => meetingsAfterFolderDelete(prev, folderId, currentUserId ?? '', deleteMeetings))
       }
     } catch {
       setActionError('Network error — please try again.')
@@ -870,7 +867,7 @@ export default function MeetingsPage() {
                     const isDropTarget   = dragOverIndex === idx && dragFromIndex !== null && dragFromIndex !== idx
                     const isRenaming     = renamingFolderId === f.id
                     const isConfirmingDelete = confirmDeleteFolderId === f.id
-                    const folderItems    = nonPinnedMeetings.filter((m) => m.folder_id === f.id)
+                    const deleteCounts   = folderDeleteCounts(meetings, f.id, currentUserId ?? '')
                     const isShared       = isOwned ? f.memberCount > 0 : true
 
                     const folderMenuItemBase: CSSProperties = {
@@ -933,7 +930,7 @@ export default function MeetingsPage() {
                                   <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
                                     <p style={{ fontSize: 14, fontWeight: 700, color: T.fg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: '0 0 3px' }}>{f.name}</p>
                                     <p style={{ fontSize: 11, fontWeight: 500, color: T.fgMuted, margin: 0 }}>
-                                      {folderItems.length} meeting{folderItems.length !== 1 ? 's' : ''}
+                                      {deleteCounts.total} meeting{deleteCounts.total !== 1 ? 's' : ''}
                                       {isOwned && f.memberCount > 0 && ` · ${f.memberCount} member${f.memberCount !== 1 ? 's' : ''}`}
                                       {!isOwned && ` · @${f.ownerUsername ?? '?'} · ${f.myRole}`}
                                     </p>
@@ -980,26 +977,37 @@ export default function MeetingsPage() {
                         {isConfirmingDelete && (
                           <div style={{ background: 'rgb(254 242 242)', border: '1.5px solid rgb(252 165 165)', borderRadius: 14, marginTop: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                             <p style={{ fontSize: 12, fontWeight: 700, color: 'rgb(185 28 28)', margin: 0 }}>Delete &ldquo;{f.name}&rdquo;?</p>
-                            {folderItems.length > 0 ? (
+                            <p style={{ fontSize: 12, color: '#c0202e', margin: 0, lineHeight: 1.5 }}>{folderDeleteChatNotice(f.memberCount)}</p>
+                            {deleteCounts.deletable > 0 ? (
                               <>
                                 <p style={{ fontSize: 12, color: '#c0202e', margin: 0, lineHeight: 1.5 }}>
-                                  This folder has {folderItems.length} meeting{folderItems.length !== 1 ? 's' : ''} inside. What should happen to them?
+                                  This folder has {deleteCounts.total} meeting{deleteCounts.total !== 1 ? 's' : ''} inside. What should happen to them?
+                                  {deleteCounts.othersMoved > 0 && ` ${deleteCounts.othersMoved} of them belong${deleteCounts.othersMoved === 1 ? 's' : ''} to shared members and will move to their Uncategorized either way.`}
                                 </p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                   <button disabled={folderBusy === f.id} onClick={() => void deleteFolder(f.id, false)} style={{ textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: '1.5px solid #f9c6cc', background: '#fff', color: '#c0202e', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                                     Keep meetings — move to Uncategorized
                                   </button>
                                   <button disabled={folderBusy === f.id} onClick={() => void deleteFolder(f.id, true)} style={{ textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: 'none', background: '#ef5a6f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                                    Delete folder + all {folderItems.length} meeting{folderItems.length !== 1 ? 's' : ''}
+                                    Delete folder + {deleteCounts.othersMoved > 0 ? 'my' : 'all'} {deleteCounts.deletable} meeting{deleteCounts.deletable !== 1 ? 's' : ''}
                                   </button>
                                   <button onClick={() => setConfirmDeleteFolderId(null)} style={{ textAlign: 'left', padding: '7px 12px', borderRadius: 10, border: '1px solid #f9c6cc', background: 'transparent', color: '#ef5a6f', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                                 </div>
                               </>
                             ) : (
+                              <>
+                              {deleteCounts.total > 0 && (
+                                <p style={{ fontSize: 12, color: '#c0202e', margin: 0, lineHeight: 1.5 }}>
+                                  The {deleteCounts.total} meeting{deleteCounts.total !== 1 ? 's' : ''} inside {deleteCounts.othersMoved === deleteCounts.total
+                                    ? `${deleteCounts.total !== 1 ? 'belong' : 'belongs'} to shared members and will move to their Uncategorized.`
+                                    : 'will move to Uncategorized.'}
+                                </p>
+                              )}
                               <div style={{ display: 'flex', gap: 8 }}>
                                 <button disabled={folderBusy === f.id} onClick={() => void deleteFolder(f.id, false)} style={{ padding: '6px 14px', borderRadius: 999, border: 'none', background: '#ef5a6f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Delete folder</button>
                                 <button onClick={() => setConfirmDeleteFolderId(null)} style={{ padding: '6px 14px', borderRadius: 999, border: '1.5px solid #f9c6cc', background: 'transparent', color: '#ef5a6f', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                               </div>
+                              </>
                             )}
                           </div>
                         )}
@@ -1316,6 +1324,7 @@ export default function MeetingsPage() {
                               {count > 0
                                 ? ` The ${count} meeting${count !== 1 ? 's' : ''} inside will move to Uncategorized — they won't be deleted.`
                                 : ' This folder is empty.'}
+                              {` ${folderDeleteChatNotice(f.memberCount)}`}
                             </p>
                             <div className="flex gap-2">
                               <button

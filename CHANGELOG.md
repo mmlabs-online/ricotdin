@@ -5,6 +5,33 @@
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-10-25
+
+> Bản cuối của dòng v1 có thay đổi mới. Từ đây v1 đóng băng, chỉ nhận hotfix trên `release/1.1`;
+> phát triển chuyển sang v2 (module ARC trong `ai-instruction/tracking.md`).
+
+### Tính năng
+- Bản nháp cài ricotdin vào repo `mmlabs-online/deployment`: `apps/ricotdin/compose.yml` (image ghim theo digest, cổng 3000, secret chỉ từ file `/etc/mmlabs/ricotdin.env` trên server), workflow `deploy-ricotdin.yml` (healthcheck `/api/health`, tự khôi phục bản trước khi lỗi, comment kết quả lên PR) và README kèm prompt kiểm tra sau release — trong `docs/ops/deployment-repo/` (OPS-05)
+- CI (lint · typecheck · test) giờ chạy cả trên PR vào `dev` và khi push lên `dev`; chỉ hiển thị kết quả, không chặn merge; khắc phục known issue "CI không chạy cho PR vào `dev`" của 1.1.0 (OPS-06)
+- Runbook phát hành `docs/ops/release-runbook.md` (deploy tay v1.1.0 một lần, backup lần đầu, cài pipeline OPS-05, rồi thứ tự cho mọi release) và lệnh `npm run verify:deploy -- <url> --expect vX.Y.Z` kiểm tra `/version.json` + `/api/health` sau deploy (OPS-07)
+
+### Bảo mật
+- Admin không còn đọc được ciphertext của API key, secret R2 (`admin_config`, `storage_config`) qua REST trực tiếp; migration 023 trước đây không có tác dụng. Trình duyệt mất mọi quyền trên 2 bảng này, UI admin vẫn dùng API phía server (migration 037) (BUG-006)
+- Người dùng không còn xoá thẳng được cuộc họp qua REST (trước đây làm vậy sẽ bỏ lại file audio trên storage mãi mãi, ngoài tầm của job purge); xoá luôn đi qua `DELETE /api/meetings/:id` để xoá audio trước (migration 038) (BUG-008)
+
+### Sửa lỗi
+- Xoá folder kèm cuộc họp giờ xoá cả file audio trên R2 (trước đây chỉ xoá trên bucket Supabase cũ nên audio R2 bị bỏ lại), và báo lỗi (500) thay vì âm thầm bỏ qua khi không lấy được hoặc không xoá được các cuộc họp (BUG-004)
+- Xoá folder chia sẻ kèm cuộc họp không còn xoá cuộc họp của người khác (editor đã bỏ cuộc họp của họ vào folder): chỉ xoá cuộc họp của chính chủ folder, cuộc họp của người khác chuyển về Uncategorized của họ; mỗi cuộc họp bị xoá có log `meeting_deleted` (BUG-011)
+- Sự kiện `meeting_deleted` trong activity log trước đây không bao giờ được lưu (vướng khoá ngoại tới cuộc họp vừa xoá); nay lưu với ID cuộc họp trong `metadata` (BUG-012)
+- Hộp thoại xoá folder (cả ở menu folder lẫn modal Manage Folders) giờ báo trước rằng lịch sử chat của folder sẽ bị xoá cho mọi người, kể cả các thành viên được chia sẻ (BUG-014)
+- Hộp thoại xoá folder hiển thị đúng số cuộc họp: tính cả cuộc họp đã ghim, và chỉ đếm cuộc họp của chính chủ folder là "sẽ bị xoá"; cuộc họp của thành viên được chia sẻ được báo là chuyển về Uncategorized của họ (BUG-015)
+- Sau khi xoá folder (giữ cuộc họp), cuộc họp của thành viên được chia sẻ không còn hiện "ma" trong Uncategorized của chủ folder cho đến khi tải lại trang (BUG-016)
+
+### Checklist deploy
+- **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
+- **Migration mới `migrations/038_meetings_revoke_client_delete.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-008).
+- **OPS-05:** tạo `/etc/mmlabs/ricotdin.env` (600, user của runner) với secret production; copy 2 bản nháp vào repo deployment; thêm hostname cloudflared → `http://ricotdin:3000`; cập nhật Supabase Site URL/redirect; dừng container ricotdin chạy tay; rồi merge PR `ricotdin v1.1.0` (đã mở) để deploy qua pipeline. Trước đó nên rotate token Cloudflare Tunnel đang bị commit trong `proxy/compose.yml` của repo deployment.
+
 ## [1.1.0] — 2026-10-22
 
 ### Tính năng
