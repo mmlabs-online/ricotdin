@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Thay đổi
+- Bắt đầu chuyển sang v2: app v1 (Next.js + Supabase) dời vào `legacy/` (giữ lịch sử); khung `app/api` (FastAPI, uv) và `app/web` (Vite + React) có CI riêng; CI của v1 chỉ chạy khi `legacy/` đổi và nay build thử image + kiểm tra `/api/health`; image v1 build từ gốc repo bằng `docker build -f legacy/Dockerfile .`. Lệnh v1 chạy trong `legacy/`, file env ở `legacy/.env.local` (ARC-00)
+
 ### Sửa lỗi
 - Tài liệu nói đúng nhánh mặc định là `dev` và cách cấu hình environment `backup` (cần 6 secret, nhận nhánh `dev`) — trước đây hướng dẫn sai nên không ai nhận ra backup DB chưa từng chạy được vì thiếu secret; PRF-08 được đánh dấu đã xong (qua AIP-06) (BUG-018, PRF-08)
 

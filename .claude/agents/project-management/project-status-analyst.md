@@ -30,7 +30,7 @@ read-only: never edit, write, commit, push, or run anything that changes state (
 
 | Source | Answers |
 |---|---|
-| `npx tsx scripts/backlog-snapshot.ts` | done/total per module, open features, tags, priority, blocked_by (deterministic — use this, don't hand-count) |
+| `cd legacy && npx tsx scripts/backlog-snapshot.ts` | done/total per module, open features, tags, priority, blocked_by (deterministic — use this, don't hand-count) |
 | `ai-instruction/tracking.md`, `ai-instruction/features/*.md` | what a feature is, its spec and acceptance criteria |
 | `ai-instruction/bugs.md` | open bugs by severity, hotfix vs bugfix |
 | `ai-instruction/roadmap.md` | owner's goals, Now/Next/Later, decision log — compare reality against it |

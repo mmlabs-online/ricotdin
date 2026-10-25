@@ -3,6 +3,35 @@
 Project memory for Claude Code. Read this fully at the start of every session.
 Keep it updated as the project evolves — this file is the source of truth.
 
+## 0. v2 re-platform (module ARC) — read first
+
+The repo is mid-migration (roadmap 2026-10-25; specs in `ai-instruction/features/feature-Architecture-ARC.md`,
+progress in `ai-instruction/tracking.md` ARC rows). Since **ARC-00**:
+
+```
+legacy/          v1 — the Next.js + Supabase app described in §1–§11 (frozen: hotfixes only, release/1.1)
+app/api/         v2 backend — FastAPI, Python 3.12, uv (ARC-02..ARC-10)
+app/web/         v2 frontend — Vite + React SPA (Figma Make import in ARC-11)
+ai-instruction/  shared: tracking, features, bugs, roadmap, ai-gen/ (runtime pipeline prompt)
+docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
+```
+
+- **Every v1 path in §1–§11 is relative to `legacy/`** (`lib/gemini` = `legacy/lib/gemini`,
+  `migrations/` = `legacy/migrations/`, `tests/` = `legacy/tests/`). v1 rules still apply to v1 code.
+- **v1 commands run inside `legacy/`** (`cd legacy && npm run dev|test|…`, `npx tsx scripts/…`).
+  `legacy/.env.local` holds the v1 env. `ai-instruction/` is resolved from `legacy/` or the image root by
+  `legacy/lib/paths/shared.ts`. v1 image: `docker build -f legacy/Dockerfile .` **from the repo root**
+  (context must include `ai-instruction/ai-gen/`).
+- **v2 commands:**
+  - api: `cd app/api && uv sync && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`
+  - web: `cd app/web && npm ci && npm run typecheck && npm test && npm run build`
+- **TDD for v2 (same rule as §10, different place):** pure logic first, tests before implementation.
+  api → `app/api/tests/test_<topic>.py` (pytest, no network/DB unless it is an explicit integration test
+  named `test_*_integration.py`); web → `app/web/src/**/<name>.test.ts(x)` (vitest). v1 tests stay in
+  `legacy/tests/*.test.ts` + `legacy/package.json` `test` script.
+- **CI is path-filtered:** `ci.yml` (legacy + v1 image build/health), `ci-api.yml`, `ci-web.yml`.
+- v2 security rules are the v1 rules (§5–§7, §9b, §9f, §9m) re-stated per ARC spec; secrets stay server-only.
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the
@@ -154,6 +183,8 @@ CI-only GitHub secrets for the DB backup workflow (OPS-03, never app env vars): 
 `R2_BACKUP_SECRET_ACCESS_KEY`, `R2_BACKUP_BUCKET`. See `docs/ops/backup-restore.md`.
 
 ## 9. Commands
+
+v1 — run inside `legacy/` (ARC-00). v2 commands: §0.
 
 ```
 npm run dev        # local development
@@ -808,7 +839,7 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 - **TDD is mandatory for all new logic:**
   - Write unit tests for every new pure function **before** writing the implementation.
   - Tests go in `tests/` with the `.test.ts` extension and must be added to the
-    `npm test` script in `package.json`.
+    `npm test` script in `package.json` (v1: `legacy/tests/`, `legacy/package.json`; v2 locations: §0).
   - When **any existing logic changes**, update the corresponding tests first, then
     change the implementation.
   - Tests must be pure (no I/O, no mocks) — test pure functions extracted into `/lib`.

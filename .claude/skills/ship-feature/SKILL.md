@@ -77,6 +77,10 @@ auth/RLS/keys, or more than ~10 files. For a structural change, present the plan
 4. Run `node --import tsx --test tests/<topic>.test.ts` and confirm it **fails** for the
    right reason.
 
+   **Where (CLAUDE.md §0):** v1 code in `legacy/` → the paths below are under `legacy/`, run from `legacy/`.
+   v2 api → `app/api/tests/test_<topic>.py` (pytest; run `cd app/api && uv run pytest -q tests/test_<topic>.py`).
+   v2 web → `app/web/src/**/<name>.test.ts(x)` (vitest; `cd app/web && npx vitest run <file>`).
+
 Note: **Test Automation Engineer** targets Playwright/Cypress e2e. This repo has no e2e
 suite, so do not use it for this phase.
 
@@ -98,10 +102,13 @@ Hard rules regardless of who writes the code:
 
 ## Phase 5 — Verify
 
-Run them all and paste the exact output of any failure (do not summarize it away):
+Run them all and paste the exact output of any failure (do not summarize it away).
+Run the set for every area the change touches (CLAUDE.md §0):
 
 ```
-npm run lint && npm run typecheck && npm run test && npm run build
+cd legacy  && npm run lint && npm run typecheck && npm run test && npm run build   # v1
+cd app/api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q   # v2 api
+cd app/web && npm run typecheck && npm test && npm run build   # v2 web
 ```
 
 Everything green before Phase 6. If the feature has UI or an API route, also exercise it in
@@ -115,9 +122,9 @@ diff (`git diff dev...HEAD` or the uncommitted diff) and the acceptance criteria
 | Gate | Agent | When |
 |---|---|---|
 | Correctness & maintainability | **Code Reviewer** | always |
-| RLS, secrets, injection, authz | **AI-Generated Code Security Auditor** | touches `app/api/**`, `migrations/**`, `lib/access`, `lib/keys`, `lib/crypto`, auth |
+| RLS, secrets, injection, authz | **AI-Generated Code Security Auditor** | touches `legacy/app/api/**`, `legacy/migrations/**`, `legacy/lib/{access,keys,crypto}`, `app/api/**` (v2: routers, auth, DB/Alembic, crypto, keys), auth |
 | Credential handling | **Secrets & Credential Hygiene Engineer** | new/changed env vars or key storage |
-| UI quality | **UI Finish-Gate Reviewer** | touches `components/**` or `app/(routes)/**` |
+| UI quality | **UI Finish-Gate Reviewer** | touches `legacy/components/**`, `legacy/app/(routes)/**` or `app/web/src/**` |
 | Accessibility | **Accessibility Auditor** | new interactive UI |
 | Ship / no-ship verdict | **Reality Checker** | always, **last**, given the Phase 5 output + the other reviewers' findings |
 

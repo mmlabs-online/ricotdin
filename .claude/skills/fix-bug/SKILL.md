@@ -70,6 +70,9 @@ Never commit directly to `main` or `release/*`.
    `CLAUDE.md` §10). Name it after the symptom, e.g. `"BUG-007: does not double-charge on retry"`.
    If the faulty logic isn't in a pure function yet, extract the smallest pure function that
    contains it, then test that. New test file → add it to the `test` script in `package.json`.
+   **Where (CLAUDE.md §0):** v1 code in `legacy/` → the paths below are under `legacy/`, run from `legacy/`.
+   v2 api → `app/api/tests/test_<topic>.py` (pytest; run `cd app/api && uv run pytest -q tests/test_<topic>.py`).
+   v2 web → `app/web/src/**/<name>.test.ts(x)` (vitest; `cd app/web && npx vitest run <file>`).
 3. Run it and confirm it **fails for the bug's reason** (paste the failure).
 4. Only if the bug truly can't be expressed as a pure test (pure CSS/layout, browser API,
    provider behaviour): write the manual repro steps in the bug's details, capture evidence
@@ -89,8 +92,12 @@ Hotfix extra rules:
 
 ## Step 7 — Verify
 
+Run the set for every area the change touches (CLAUDE.md §0):
+
 ```
-npm run lint && npm run typecheck && npm run test && npm run build
+cd legacy  && npm run lint && npm run typecheck && npm run test && npm run build   # v1
+cd app/api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q   # v2 api
+cd app/web && npm run typecheck && npm test && npm run build   # v2 web
 ```
 
 Paste the exact output of any failure. Re-run the original repro (manual or test) and
@@ -101,7 +108,7 @@ confirm it now passes.
 | Gate | Agent | When |
 |---|---|---|
 | Correctness, regressions | **Code Reviewer** | always |
-| RLS, secrets, authz | **AI-Generated Code Security Auditor** | touches `app/api/**`, `migrations/**`, `lib/access`, `lib/keys`, `lib/crypto`, auth |
+| RLS, secrets, authz | **AI-Generated Code Security Auditor** | touches `legacy/app/api/**`, `legacy/migrations/**`, `legacy/lib/{access,keys,crypto}`, `app/api/**` (v2: routers, auth, DB/Alembic, crypto, keys), auth |
 | Verdict | **Reality Checker** | always, last — give it the failing-then-passing test output |
 
 Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still open.
