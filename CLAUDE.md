@@ -167,8 +167,8 @@ npm run test       # run tests (not yet configured)
 
 ## 9k. Release process
 
-**Branches** (GitHub default branch = `main`, so fresh clones land on `main` and a bare
-`gh pr create` targets `main` — always pass `--base` explicitly):
+**Branches** (GitHub default branch = `dev`, so fresh clones land on `dev`, a bare
+`gh pr create` targets `dev`, and `schedule` workflows run from `dev` — always pass `--base` explicitly):
 - `dev` — day-to-day work; every push → Docker image `ricotdin:dev` (`release-dev.yml`).
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
@@ -368,8 +368,11 @@ Policy for people: `docs/privacy/retention-policy.md`.
 - `.github/workflows/backup.yml`: daily 02:00 UTC + manual. `supabase db dump` (roles, schema, data) →
   tar.gz → `age` encrypt with the **public** key → `scripts/backup/r2.ts upload` → `prune` (only after a
   successful upload). Dump + encrypt run BEFORE `npm ci --ignore-scripts`; secrets are step-scoped and live in
-  the GitHub Environment `backup` (main only); actions pinned by SHA, Supabase CLI by exact version.
-  `schedule` only runs from `main`, so backups start after the `dev` → `main` merge.
+  the GitHub Environment `backup`; actions pinned by SHA, Supabase CLI by exact version.
+  `schedule` runs from the default branch (`dev`), so the `backup` environment must release its secrets to
+  `dev` (recommended deployment branches: `main` + `dev`; as of 2026-10-25 it has no branch policy and **no
+  secrets yet**, so every run fails at "Check secrets are set" — BUG-018). Trade-off accepted in the roadmap
+  (2026-10-25): workflows on `dev` can read the backup secrets.
 - Separate R2 bucket + token scoped to it; the app's audio bucket stays DB-configured (§9a/7).
 - Naming/retention (pure, `lib/backup/retention.ts`, tested in `tests/backup-retention.test.ts`):
   `db/ricotdin-db-<yyyyMMdd>T<HHmm>Z.tar.gz.age`; delete strictly older than 30 days, never the newest,
@@ -862,5 +865,7 @@ Kept as a static reference for human reading. NOT read at runtime. No runtime co
 **v1.0.0 released** (2026-09-19) — see `CHANGELOG.md`. Audit Log UI (Area 3 / ADM-07) is live at `/admin/audit`.
 
 **v1.1.0 released** (2026-10-22) — see `CHANGELOG.md` (PRV-02 retention purge, COM-01 recording notice, OPS-03 backup, OPS-04 release → deployment PR, S1 security fixes BUG-002/003/005 + client-write revokes BUG-007/009/010; migrations 032–036). Later work on `dev` is listed under `[Unreleased]`.
+
+**v1.1.1 released** (2026-10-25) — see `CHANGELOG.md` (OPS-05 deployment-repo drafts, OPS-06 CI on dev, OPS-07 release runbook + `verify:deploy`, BUG-004/006/008/011/012/014–016, docs fix BUG-017; migrations 037–038). Last v1 release with new changes: v1 is frozen to hotfixes on `release/1.1`; work moves to the v2 re-platform (module ARC, `ai-instruction/roadmap.md` 2026-10-25). v1.1.1 is not deployed (v1 ops paused).
 
 Keep this section in sync with actual progress; mark phases done as we go.

@@ -28,6 +28,7 @@
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-015-folder-delete-count, PR #21 |
 | BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
 | BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | v1.1.1 | fix/BUG-017-docs-drift, PR #24 |
+| BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
 
 ---
 
@@ -355,3 +356,21 @@ Close-out steps for the v1.1.0 release and the PRV-03 supersede decision updated
 
 **Fix**
 §11: added a "v1.1.0 released (2026-10-22)" line. PRV-03 spec status → `✅ Done — superseded by PRV-02`. **No automated regression test** — documentation only, no logic; verified that the seeder parser still reads PRV-03 as `done` (`parseModuleFile` + `mergeWithTracking`).
+
+## BUG-018 — Docs drift: default branch, backup environment, §11 v1.1.1, PRF-08
+
+**Reported:** 2026-10-25 · **Severity:** S4 · **Found in:** v1.1.1 · **Feature:** OPS-03 (also PRF-08)
+
+From the 2026-10-25 `/copilot plan` snapshot (roadmap Now 4) and the first manual `db-backup` run on `dev` (run 40164320128).
+
+**Actual**
+- `CLAUDE.md` §9k says the GitHub default branch is `main`; it is `dev` (`gh repo view --json defaultBranchRef`). The `/fix-bug` skill repeats it.
+- `CLAUDE.md` §9o, `docs/ops/backup-restore.md` and comments in `.github/workflows/backup.yml` say the `backup` environment releases secrets to `main` only and that `schedule` runs from `main`. In fact `schedule` runs from the default branch `dev`; the environment has no branch policy and **no secrets** (`gh secret list --env backup` is empty). Every scheduled and manual run failed at "Check secrets are set" (`missing secret SUPABASE_DB_URL` …).
+- `CLAUDE.md` §11 has no line for v1.1.1 (released 2026-10-25).
+- `tracking.md` PRF-08 is `[ ]` and its spec says `❌ Not started`, although AIP-06 delivered it (migration 027 `profiles.default_provider/default_model`, `/api/profile/preferences` rejects models outside the allow-list).
+
+**Root cause**
+The docs assumed the default branch was `main` (true at some point or never set); nobody re-checked after OPS-03 shipped. The backup secrets were never created, which the docs hid by blaming the branch. AIP-06 close-out did not tick PRF-08.
+
+**Fix**
+Docs and comments now state the real setup: default branch `dev`; `backup` environment must release secrets to `dev` (recommended branches `main` + `dev`) and needs the six environment secrets; manual run `gh workflow run backup.yml --ref dev`. §11 gained the v1.1.1 line. PRF-08 `[x]` + spec `✅ Done — delivered by AIP-06`. Workflow behaviour unchanged (comments only). **No automated regression test** — documentation only, no logic; verified the seeder still parses PRF-08 as `done`. Owner action still open: create the six `backup` environment secrets and restrict its branches to `main` + `dev`.

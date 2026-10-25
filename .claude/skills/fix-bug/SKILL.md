@@ -123,8 +123,8 @@ Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still ope
 **Bugfix**
 1. Push `fix/BUG-NNN-<slug>` and open a PR into `dev`, or merge into `dev` locally if the
    user prefers. PR title: `[BUG-NNN] <summary>`; fill `.github/pull_request_template.md`.
-   Always pass the base explicitly — the repo default branch is `main`, so a bare
-   `gh pr create` would target the wrong branch:
+   Always pass the base explicitly — never rely on the repo default branch (`dev` today, see
+   CLAUDE.md §9k), so a bare `gh pr create` can never target the wrong branch:
    `gh pr create --base dev --head fix/BUG-NNN-<slug> --title "[BUG-NNN] <summary>" --body-file <file>`.
 2. Record `PR #N` in the `Link` cell of `bugs.md`. It ships with the next normal release.
 

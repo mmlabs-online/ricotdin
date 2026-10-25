@@ -14,9 +14,11 @@ Every day at **02:00 UTC** (and on demand via *Actions → db-backup → Run wor
 A failed run fails the workflow → GitHub notifies the user who last edited the `schedule` line. Prune never
 runs after a failed upload.
 
-**The workflow only runs from `main`:** GitHub runs `schedule` (and shows *Run workflow*) only for workflow
-files on the default branch, and the `backup` environment only releases secrets to `main`. Backups start
-after the `dev` → `main` merge (§9k).
+**Which branch runs it:** GitHub runs `schedule` only for workflow files on the **default branch, which is
+`dev`** (CLAUDE.md §9k). The `backup` environment must therefore release its secrets to `dev`; set its
+deployment branches to `main` + `dev` (Settings → Environments → `backup`). Manual runs:
+`gh workflow run backup.yml --ref dev`. The six secrets listed in *One-time setup* step 4 must exist as **environment** secrets of
+`backup` — until they do, every run fails at "Check secrets are set" (BUG-018).
 
 What is **not** in the backup: audio files (they live in R2 and are purged by policy, PRV-02),
 Storage buckets, Supabase project settings (auth providers, SMTP, hooks — re-apply from CLAUDE.md §9a).
@@ -40,7 +42,8 @@ Privacy: data deleted in the app (meetings, transcripts) remains in backups for 
    mode), never the transaction pooler on 6543. **URL-encode** the password if it has special characters.
    The app never uses this password (it uses the service-role key), so rotating it touches only this secret.
 4. **GitHub Environment + secrets:** repo → Settings → Environments → **New environment `backup`** →
-   *Deployment branches and tags*: **Selected branches → `main`**. Add these as **environment secrets**
+   *Deployment branches and tags*: **Selected branches → `main` and `dev`** (`schedule` runs from the
+   default branch `dev`, CLAUDE.md §9k). Add these as **environment secrets**
    (not repository secrets), so workflows on other branches can't read them:
 
    | Secret | Value |
@@ -52,7 +55,7 @@ Privacy: data deleted in the app (meetings, transcripts) remains in backups for 
    | `R2_BACKUP_BUCKET` | `ricotdin-db-backups` |
 5. Recommended: branch protection on `main` (PR + review required) and CODEOWNERS on `.github/workflows/**`,
    so nobody can change what runs with these secrets without review.
-6. After `backup.yml` is on `main`: *Actions → db-backup → Run workflow*; check the object appears in the
+6. Run it once: `gh workflow run backup.yml --ref dev` (or *Actions → db-backup → Run workflow* on `dev`); check the object appears in the
    bucket. Optionally add an R2 lifecycle/bucket-lock rule on `db/` (~30 days) as a second line of defence.
 
 ## Restore
