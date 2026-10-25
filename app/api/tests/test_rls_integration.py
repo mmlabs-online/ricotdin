@@ -35,12 +35,14 @@ def db() -> Iterator[str]:
         finally:
             # Role membership is cluster-wide: do not leave the owner a member of both roles.
             with psycopg.connect(url, autocommit=True) as conn:
-                conn.execute("REVOKE ricotdin_app, ricotdin_service FROM CURRENT_USER")
+                conn.execute(
+                    "REVOKE ricotdin_app, ricotdin_service, ricotdin_worker FROM CURRENT_USER"
+                )
 
 
 def _seed(v2_db: str) -> None:
     with psycopg.connect(v2_db, autocommit=True) as conn:
-        conn.execute("GRANT ricotdin_app, ricotdin_service TO CURRENT_USER")
+        conn.execute("GRANT ricotdin_app, ricotdin_service, ricotdin_worker TO CURRENT_USER")
         for uid, name, role in [
             (A, "user_a", "user"),
             (B, "user_b", "user"),
@@ -266,3 +268,49 @@ def test_app_role_cannot_change_roles_without_admin_context(db: str) -> None:
         with pytest.raises(psycopg.errors.RaiseException, match="Only admins"):
             conn.execute("UPDATE profiles SET role = 'admin' WHERE id = %s", (A,))
         conn.rollback()
+
+
+@pytest.mark.parametrize("table", ["users", "refresh_tokens", "email_tokens"])
+def test_worker_cannot_read_auth_tables(db: str, table: str) -> None:
+    # ARC-04: the pipeline handles untrusted input; it never sits next to password hashes.
+    with (
+        as_role(db, "ricotdin_worker") as conn,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        conn.execute(sql.SQL("SELECT 1 FROM {}").format(sql.Identifier(table)))
+
+
+def test_worker_sees_content_and_can_claim_jobs(db: str) -> None:
+    with as_role(db, "ricotdin_worker") as conn:
+        assert _ids(conn, "SELECT id FROM meetings") == {MEETING_A, MEETING_B, MEETING_B_PRIVATE}
+        row = conn.execute(
+            "SELECT has_function_privilege('ricotdin_worker', oid, 'EXECUTE') FROM pg_proc "
+            "WHERE proname = 'claim_next_job'"
+        ).fetchone()
+        assert row == (True,)
+
+
+@pytest.mark.parametrize("role", ["ricotdin_app", "ricotdin_service", "ricotdin_worker"])
+@pytest.mark.parametrize("table", ["audit_logs", "activity_log", "quota_ledger"])
+@pytest.mark.parametrize(
+    "verb", ["UPDATE {} SET created_at = now()", "DELETE FROM {}", "TRUNCATE {}"]
+)
+def test_logs_are_append_only_for_every_runtime_role(
+    db: str, role: str, table: str, verb: str
+) -> None:
+    with (
+        as_role(db, role, ADMIN, "admin") as conn,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        conn.execute(sql.SQL(verb).format(sql.Identifier(table)))
+
+
+@pytest.mark.parametrize("role", ["ricotdin_service", "ricotdin_worker"])
+def test_service_roles_have_no_privileges_outside_rls(db: str, role: str) -> None:
+    with as_role(db, role) as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute("TRUNCATE jobs")
+
+
+def test_service_can_still_append_to_logs(db: str) -> None:
+    with as_role(db, "ricotdin_service") as conn:
+        conn.execute("INSERT INTO activity_log (user_id, event_type) VALUES (%s, 'login')", (A,))

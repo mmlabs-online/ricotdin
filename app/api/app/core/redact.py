@@ -20,6 +20,14 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bAIza[0-9A-Za-z_-]{20,}"), REDACTED),  # Google API keys
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"), REDACTED),  # OpenAI-style keys
     (re.compile(r"\bxai-[A-Za-z0-9_-]{12,}"), REDACTED),  # xAI keys
+    # key=value / key: value in free text (exception messages, driver errors)
+    (
+        re.compile(
+            r"(\b(?:password|passwd|pwd|secret|token|api[_-]?key)\b\s*[=:]\s*)('[^']*'|\"[^\"]*\"|\S+)",
+            re.IGNORECASE,
+        ),
+        rf"\1{REDACTED}",
+    ),
 ]
 _SECRET_KEY = re.compile(
     r"pass(word)?|secret|token|api[_-]?key|_key$|^key$|authorization|cookie|dsn", re.I

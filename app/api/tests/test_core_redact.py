@@ -42,6 +42,13 @@ def test_mapping_values_under_secret_looking_keys_are_masked_recursively() -> No
     }
 
 
+def test_key_value_secrets_inside_free_text_are_masked() -> None:
+    out = redact("connect failed: password=hunter2 user=bob api_key: abc123 secret='s3' token=t0k")
+    for secret in ("hunter2", "abc123", "s3'", "t0k"):
+        assert secret not in out
+    assert "user=bob" in out
+
+
 def test_harmless_values_are_untouched() -> None:
     data = {"meeting_id": "123", "status": "done", "count": 3, "ok": True, "none": None}
     assert redact(data) == data
