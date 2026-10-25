@@ -64,6 +64,8 @@ _REWRITES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\(auth\.jwt\(\)\s*->>\s*'user_role'(?:::text)?\)"), "app_user_role()"),
     (re.compile(r"auth\.jwt\(\)\s*->>\s*'user_role'(?:::text)?"), "app_user_role()"),
     (re.compile(r"auth\.uid\(\)"), "app_user_id()"),
+    # Postgres may or may not print the schema; compare unqualified.
+    (re.compile(r"\bpublic\."), ""),
 ]
 _WS = re.compile(r"\s+")
 

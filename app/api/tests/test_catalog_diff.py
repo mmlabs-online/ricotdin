@@ -46,5 +46,11 @@ def test_normalize_sql_rewrites_supabase_auth_and_collapses_whitespace() -> None
     assert normalize_sql(v1) == normalize_sql(v2)
 
 
+def test_normalize_sql_ignores_public_schema_qualification() -> None:
+    a = "REFERENCES public.users(id) WHERE public.app_user_id() = x"
+    b = "REFERENCES users(id) WHERE app_user_id() = x"
+    assert normalize_sql(a) == normalize_sql(b)
+
+
 def test_normalize_sql_keeps_unrelated_text() -> None:
     assert normalize_sql("  SELECT   1  ") == "SELECT 1"
