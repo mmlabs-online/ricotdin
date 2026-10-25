@@ -4,6 +4,7 @@ Shared by the baseline generator (rows → DDL via ``ddl``) and the parity test 
 ``catalog.Catalog``). Extension-owned objects (pgvector, pgcrypto) are excluded.
 """
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, LiteralString
 
@@ -169,6 +170,38 @@ _SEED: LiteralString = (
 )
 
 
+def canonical_order(s: Schema) -> None:
+    """Sort every section by codepoint, in place.
+
+    SQL ``ORDER BY`` follows the database collation, which differs between Neon and the CI
+    container (e.g. ``meeting_id uuid`` vs ``meeting_ids uuid[]``), so the generated baseline
+    would not be reproducible. Order is decided here instead.
+    """
+    s.extensions.sort()
+    s.enums = dict(sorted(s.enums.items()))
+    s.tables = dict(sorted(s.tables.items()))
+    s.constraints.sort(key=lambda c: (c[0], c[1]))
+    s.indexes.sort(key=lambda i: (i[0], i[1]))
+    s.functions.sort(key=lambda f: (f.name, f.identity_args))
+    for f in s.functions:
+        if f.grantees is not None:
+            f.grantees.sort()
+    for p in s.policies:
+        p.roles.sort()  # pg_policies lists roles in OID order, which differs per database
+    s.triggers.sort(key=lambda t: (t[0], t[1]))
+    s.rls = dict(sorted(s.rls.items()))
+    s.policies.sort(key=lambda p: (p.table, p.name))
+    s.table_grants = {
+        t: sorted(g, key=lambda x: (x[0], x[1], x[2] or ""))
+        for t, g in sorted(s.table_grants.items())
+    }
+    s.comments.sort(key=lambda c: (c[0], c[1] is not None, c[1] or ""))
+    s.seeds = {
+        t: json.dumps(sorted(json.loads(rows), key=lambda r: json.dumps(r, sort_keys=True)))
+        for t, rows in sorted(s.seeds.items())
+    }
+
+
 def _rows(conn: psycopg.Connection[Any], query: LiteralString) -> list[tuple[Any, ...]]:
     return list(conn.execute(query))
 
@@ -220,4 +253,5 @@ def read_schema(url: str) -> Schema:
             rows_json = row[0] if row else "[]"
             if rows_json != "[]":
                 s.seeds[table] = rows_json
+    canonical_order(s)
     return s

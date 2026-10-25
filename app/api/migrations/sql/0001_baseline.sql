@@ -1098,13 +1098,13 @@ GRANT EXECUTE ON FUNCTION public.update_storage_config_updated_at() TO ricotdin_
 -- Seed rows (inserted by v1 migrations)
 -- ---------------------------------------------------------------------------------------------
 INSERT INTO public.app_config (key, value, description, updated_by) VALUES
-  ('auth.require_email_verification'::text, 'false'::jsonb, 'Require email verification on registration'::text, NULL::uuid),
   ('pipeline.chunk_minutes'::text, '25'::jsonb, 'Audio chunk size in minutes for long recordings'::text, NULL::uuid),
-  ('pipeline.max_retries'::text, '3'::jsonb, 'Max retry attempts on Gemini 429 errors'::text, NULL::uuid),
-  ('pipeline.model'::text, '"gemini-2.5-flash"'::jsonb, 'Gemini model used for the processing pipeline'::text, NULL::uuid),
-  ('rag.top_k'::text, '5'::jsonb, 'Number of transcript chunks retrieved per RAG query'::text, NULL::uuid),
   ('storage.audio_retention_days'::text, 'null'::jsonb, 'Days to keep audio after processing (null = keep forever)'::text, NULL::uuid),
-  ('user_hack_audio_render'::text, 'false'::jsonb, 'Force the meeting audio player to recover a seekable duration for browser-recorded WebM (downloads the full file up front). Default off.'::text, NULL::uuid);
+  ('user_hack_audio_render'::text, 'false'::jsonb, 'Force the meeting audio player to recover a seekable duration for browser-recorded WebM (downloads the full file up front). Default off.'::text, NULL::uuid),
+  ('pipeline.model'::text, '"gemini-2.5-flash"'::jsonb, 'Gemini model used for the processing pipeline'::text, NULL::uuid),
+  ('pipeline.max_retries'::text, '3'::jsonb, 'Max retry attempts on Gemini 429 errors'::text, NULL::uuid),
+  ('rag.top_k'::text, '5'::jsonb, 'Number of transcript chunks retrieved per RAG query'::text, NULL::uuid),
+  ('auth.require_email_verification'::text, 'false'::jsonb, 'Require email verification on registration'::text, NULL::uuid);
 INSERT INTO public.app_settings (key, value, updated_by) VALUES
   ('generation.allowed_models'::text, '[{"model": "gemini-2.5-flash", "provider": "gemini"}, {"model": "gpt-4o", "provider": "openai"}, {"model": "gpt-4o-mini", "provider": "openai"}]'::jsonb, NULL::uuid),
   ('generation.system_default'::text, '{"model": "gemini-2.5-flash", "provider": "gemini"}'::jsonb, NULL::uuid);
