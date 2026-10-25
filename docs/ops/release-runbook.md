@@ -94,7 +94,7 @@ Do these in order. Afterwards, use **Every release** below.
 
 1. Check the one-time setup in `docs/ops/backup-restore.md` → *One-time setup* is done: age key pair
    (private key offline), R2 bucket + scoped token, GitHub Environment `backup` with its secrets.
-2. Run it: `gh workflow run backup.yml --ref main`, then `gh run watch`.
+2. Run it: `gh workflow run backup.yml --ref dev`, then `gh run watch`.
    **Verify:** the `db-backup` run is green and a new object is in the backup bucket.
 3. Restore into a **scratch** Supabase project, following `docs/ops/backup-restore.md` → *Restore*.
    **Verify:** row counts match. Add a line to that file's *Restore-test log*, then tick OPS-03 in

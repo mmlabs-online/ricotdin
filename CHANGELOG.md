@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Sửa lỗi
+- Tài liệu nói đúng nhánh mặc định là `dev` và cách cấu hình environment `backup` (cần 6 secret, nhận nhánh `dev`) — trước đây hướng dẫn sai nên không ai nhận ra backup DB chưa từng chạy được vì thiếu secret; PRF-08 được đánh dấu đã xong (qua AIP-06) (BUG-018, PRF-08)
+
 ## [1.1.1] — 2026-10-25
 
 > Bản cuối của dòng v1 có thay đổi mới. Từ đây v1 đóng băng, chỉ nhận hotfix trên `release/1.1`;

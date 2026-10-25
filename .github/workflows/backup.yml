@@ -4,8 +4,9 @@
 # The workflow never holds a key that can decrypt a backup, and no plaintext dump leaves
 # the runner. Restore runbook + one-time setup: docs/ops/backup-restore.md.
 #
-# Secrets live in the GitHub Environment `backup` (deployment branches: main only), so a
-# workflow on any other branch cannot read them:
+# Secrets live in the GitHub Environment `backup`. Its deployment branches must be main + dev
+# (`schedule` runs from the default branch `dev`) so a workflow on any other branch cannot read
+# them — not yet configured as of 2026-10-25 (BUG-018):
 #   SUPABASE_DB_URL               Session pooler connection string (IPv4; runners have no IPv6)
 #   AGE_RECIPIENT                 age public key (age1…); the private key stays offline
 #   R2_BACKUP_ACCOUNT_ID, R2_BACKUP_ACCESS_KEY_ID, R2_BACKUP_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET
@@ -14,7 +15,7 @@
 # Supply-chain ordering: the DB dump + encryption run BEFORE any npm code is installed, and
 # `npm ci --ignore-scripts` runs no install scripts. npm code only ever sees the R2 token.
 # Third-party actions are pinned by commit SHA; the Supabase CLI by exact version.
-# Note: `schedule` only runs from the default branch (main).
+# Note: `schedule` only runs from the default branch (dev).
 
 name: db-backup
 
