@@ -28,7 +28,7 @@
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-015-folder-delete-count, PR #21 |
 | BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
 | BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | v1.1.1 | fix/BUG-017-docs-drift, PR #24 |
-| BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch |
+| BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
 
 ---
 
