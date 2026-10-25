@@ -4,10 +4,11 @@ name: CI (api)
 on:
   push:
     branches: [main, dev, 'release/**']
-    paths: ['app/api/**', '.github/workflows/ci-api.yml']
+    # legacy schema/migrations feed the v1↔v2 parity test (ARC-02).
+    paths: ['app/api/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
   pull_request:
     branches: [main, dev, 'release/**']
-    paths: ['app/api/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
 
 permissions:
   contents: read
@@ -19,6 +20,18 @@ jobs:
     defaults:
       run:
         working-directory: app/api
+
+    # Disposable Postgres + pgvector for the *_integration tests (no secrets involved).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18  # same major as Neon (baseline generated on PG 18)
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/postgres
 
     steps:
       - name: Checkout
