@@ -185,3 +185,15 @@ def test_functions_created_by_later_migrations_are_not_public_executable() -> No
             ).fetchone()
             conn.rollback()
     assert row == (False,)
+
+
+@requires_db
+def test_0002_downgrade_restores_the_0001_privileges(v2_baseline_db: str) -> None:
+    from app.db.introspect import read_schema
+    from app.db.parity import to_catalog
+
+    expected = to_catalog(read_schema(v2_baseline_db), v1=False)
+    with scratch_database("mig2") as url:
+        alembic_upgrade(url)  # head
+        alembic_downgrade(url, "0001_baseline")
+        assert to_catalog(read_schema(url), v1=False) == expected

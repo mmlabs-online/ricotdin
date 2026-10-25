@@ -50,3 +50,5 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+app/api/openapi.json
+*.env

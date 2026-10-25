@@ -57,3 +57,43 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -q
+
+      - name: OpenAPI document
+        run: uv run python -m scripts.dump_openapi openapi.json
+
+      - name: Upload openapi.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: app/api/openapi.json
+          if-no-files-found: error
+
+  image:
+    # The API image builds, starts as a non-root user and answers /health + /version.json.
+    name: docker build · health
+    needs: api
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image (no push)
+        run: docker build --build-arg BUILD_COMMIT=${{ github.sha }} -t ricotdin-api:ci app/api
+
+      - name: Container is healthy and reports its version
+        run: |
+          docker run -d --name api -p 8000:8000 ricotdin-api:ci
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' api)"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          echo "health status: $status"
+          [ "$status" = "healthy" ] || { docker logs api; exit 1; }
+          curl -fsS http://127.0.0.1:8000/health
+          version="$(curl -fsS http://127.0.0.1:8000/version.json)"
+          echo "$version"
+          echo "$version" | grep -q "${{ github.sha }}"
+          [ "$(docker exec api id -u)" = "10001" ]
+          docker exec api ffmpeg -version | head -1

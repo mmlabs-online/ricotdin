@@ -54,6 +54,17 @@ def v2_db() -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
+def v2_baseline_db() -> Iterator[str]:
+    """A scratch database at revision 0001 only: the v1-parity point (later revisions are
+    intended v2-only changes)."""
+    from app.db.scratch import scratch_database
+
+    with scratch_database("v2base") as url:
+        alembic_upgrade(url, "0001_baseline")
+        yield url
+
+
+@pytest.fixture(scope="session")
 def v1_replay_db() -> Iterator[str]:
     from app.db.replay import replay_v1
     from app.db.scratch import scratch_database
