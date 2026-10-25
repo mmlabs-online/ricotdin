@@ -1,0 +1,43 @@
+name: CI (api)
+
+# v2 backend (FastAPI) in app/api — ARC-00 onward.
+on:
+  push:
+    branches: [main, dev, 'release/**']
+    paths: ['app/api/**', '.github/workflows/ci-api.yml']
+  pull_request:
+    branches: [main, dev, 'release/**']
+    paths: ['app/api/**', '.github/workflows/ci-api.yml']
+
+jobs:
+  api:
+    name: ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: app/api/uv.lock
+
+      - name: Install (locked)
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Mypy (strict)
+        run: uv run mypy
+
+      - name: Pytest
+        run: uv run pytest -q
