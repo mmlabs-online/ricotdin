@@ -44,7 +44,16 @@ def drop_stale(base: str | None = None) -> list[str]:
             conn.execute(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
             )
-    return names
+        # Temporary login roles of interrupted test runs (cluster-wide, own no objects).
+        roles = [
+            r[0]
+            for r in conn.execute(
+                "SELECT rolname FROM pg_roles WHERE starts_with(rolname, %s)", (PREFIX,)
+            )
+        ]
+        for role in roles:
+            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+    return names + roles
 
 
 @contextmanager

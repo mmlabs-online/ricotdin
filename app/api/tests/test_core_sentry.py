@@ -31,6 +31,27 @@ def test_exception_messages_are_redacted() -> None:
     assert "pw@" not in out["exception"]["values"][0]["value"]
 
 
+def test_query_strings_are_dropped() -> None:
+    event: dict[str, Any] = {
+        "request": {"url": "https://api.test/auth/verify?token=abc", "query_string": "token=abc"}
+    }
+    out = scrub_event(event)
+    assert out is not None
+    assert "abc" not in str(out)
+    assert out["request"]["url"] == "https://api.test/auth/verify"
+
+
+def test_sdk_options_never_send_locals_bodies_or_pii() -> None:
+    from app.core.sentry import sentry_options
+
+    opts = sentry_options("https://k@o.ingest.sentry.io/1", "v2.0.0")
+    assert opts["include_local_variables"] is False
+    assert opts["max_request_body_size"] == "never"
+    assert opts["send_default_pii"] is False
+    assert opts["traces_sample_rate"] == 0.0
+    assert opts["before_send"] is scrub_event
+
+
 def test_breadcrumbs_and_extra_are_redacted() -> None:
     event: dict[str, Any] = {
         "extra": {"api_key": "AIzaSyA1234567890abcdefghijklmnopqrstu"},

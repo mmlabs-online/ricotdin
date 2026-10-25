@@ -1,18 +1,22 @@
 """ARC-04: the runtime database layer against a real database (CLAUDE.md §0.1 R1–R8).
 
-Temporary login roles (random names) are created with ``ensure_login`` exactly like the
-provisioning script, used through ``app.db.session.Database`` and dropped afterwards.
+Temporary login roles (``ricotdin_test_*``, dropped afterwards and by ``drop_stale``) are created
+with ``ensure_login`` exactly like the provisioning script and used through ``Database``.
 """
 
 import secrets
 import uuid
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
+from typing import Any
 
 import anyio
+import psycopg
 import pytest
+from psycopg import sql
 from pydantic import SecretStr
 from sqlalchemy import text
 
+from app.core.errors import ServiceUnavailable
 from app.core.settings import Settings
 from app.db.context import RequestIdentity
 from app.db.provision import Login, drop_login, ensure_login
@@ -26,130 +30,181 @@ USER = uuid.uuid4()
 
 
 @pytest.fixture(scope="module")
-def env() -> Iterator[dict[str, Login | str]]:
+def env() -> Iterator[dict[str, Any]]:
     suffix = secrets.token_hex(3)
     owner = admin_url()
     with scratch_database("sess") as url:
         alembic_upgrade(url)
         logins = {
-            "app": ensure_login(owner, "ricotdin_app", f"t_api_{suffix}", connection_limit=5),
+            "app": ensure_login(
+                owner, "ricotdin_app", f"ricotdin_test_api_{suffix}", connection_limit=5
+            ),
             "service": ensure_login(
-                owner, "ricotdin_service", f"t_svc_{suffix}", connection_limit=5
+                owner, "ricotdin_service", f"ricotdin_test_svc_{suffix}", connection_limit=5
             ),
         }
         try:
-            yield {"db": url, **logins}
+            yield {"db": url, "suffix": suffix, **logins}
         finally:
             for login in logins.values():
                 drop_login(owner, login.name)
 
 
-def _settings(app_url: str | None = None, service_url: str | None = None) -> Settings:
+def _url(env: dict[str, Any], key: str) -> str:
+    login: Login = env[key]
+    return login.url(env["db"])
+
+
+def _settings(
+    app: str | None = None, service: str | None = None, pool: tuple[int, int] = (5, 0)
+) -> Settings:
     s = Settings()
-    s.database_url_app = SecretStr(app_url) if app_url else None
-    s.database_url_service = SecretStr(service_url) if service_url else None
+    s.database_url_app = SecretStr(app) if app else None
+    s.database_url_service = SecretStr(service) if service else None
     s.database_url_worker = None
+    s.db_pool_app = pool
     return s
 
 
-def _url(env: dict[str, Login | str], key: str) -> str:
-    login = env[key]
-    assert isinstance(login, Login)
-    db = env["db"]
-    assert isinstance(db, str)
-    return login.url(db)
-
-
-def test_app_transaction_runs_as_app_role_with_the_identity(env: dict[str, Login | str]) -> None:
-    async def run() -> tuple[str, str, str, str]:
-        db = await Database.start(_settings(_url(env, "app")))
+def _run[T](settings: Settings, body: Callable[[Database], Awaitable[T]]) -> T:
+    async def go() -> T:
+        db = await Database.start(settings)
         try:
-            async with db.app_transaction(RequestIdentity(USER, "user")) as conn:
-                row = (
+            return await body(db)
+        finally:
+            await db.close()
+
+    return anyio.run(go)
+
+
+async def _noop(db: Database) -> None:
+    return None
+
+
+def _owner_exec(statement: sql.Composed | sql.SQL) -> None:
+    with psycopg.connect(admin_url(), autocommit=True) as conn:
+        conn.execute(statement)
+
+
+def test_app_transaction_runs_as_app_role_with_the_identity(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> tuple[Any, ...]:
+        async with db.app_transaction(RequestIdentity(USER, "user")) as conn:
+            q = "SELECT current_user, app_user_id()::text, app_user_role(), current_setting('statement_timeout')"
+            return tuple((await conn.execute(text(q))).one())
+
+    assert _run(_settings(_url(env, "app")), body) == ("ricotdin_app", str(USER), "user", "15s")
+
+
+def test_same_pooled_connection_keeps_no_context_after_a_request(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> tuple[int, int, Any, Any]:
+        async with db.app_transaction(RequestIdentity(USER, "admin")) as conn:
+            pid1 = (await conn.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        async with db.raw_connection("ricotdin_app") as conn:
+            row = (
+                await conn.execute(text("SELECT pg_backend_pid(), app_user_id(), current_user"))
+            ).one()
+        return pid1, row[0], row[1], row[2]
+
+    pid1, pid2, user, role = _run(_settings(_url(env, "app"), pool=(1, 0)), body)
+    assert pid1 == pid2  # really the same connection
+    assert user is None and role.startswith("ricotdin_test_api_")
+
+
+def test_session_level_role_and_settings_are_reset_on_return(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> tuple[Any, Any, Any]:
+        async with db.raw_connection("ricotdin_app") as conn:
+            await conn.execute(text("SET ROLE ricotdin_app"))
+            await conn.execute(
+                text("SELECT set_config('app.user_id', :u, false)"), {"u": str(USER)}
+            )
+            await conn.commit()
+        async with db.raw_connection("ricotdin_app") as conn:
+            return tuple(
+                (
                     await conn.execute(
                         text(
-                            "SELECT current_user, app_user_id()::text, app_user_role(), "
-                            "current_setting('statement_timeout')"
+                            "SELECT current_user, app_user_id(), current_setting('app.role', true)"
                         )
                     )
                 ).one()
-                return row[0], row[1], row[2], row[3]
-        finally:
-            await db.close()
+            )
 
-    assert anyio.run(run) == ("ricotdin_app", str(USER), "user", "15s")
-
-
-def test_context_does_not_survive_on_a_reused_connection(env: dict[str, Login | str]) -> None:
-    # R6: one pooled connection, two transactions — the second sees no user and no role switch.
-    async def run() -> tuple[str | None, str]:
-        db = await Database.start(_settings(_url(env, "app")))
-        try:
-            async with db.app_transaction(RequestIdentity(USER, "admin")):
-                pass
-            engine = db.engines["ricotdin_app"]
-            async with engine.connect() as conn:
-                row = (await conn.execute(text("SELECT app_user_id()::text, current_user"))).one()
-                return row[0], row[1]
-        finally:
-            await db.close()
-
-    user, role = anyio.run(run)
-    assert user is None
-    assert role.startswith("t_api_")
+    role, user, app_role = _run(_settings(_url(env, "app"), pool=(1, 0)), body)
+    assert role.startswith("ricotdin_test_api_")
+    assert user is None and not app_role
 
 
-def test_app_login_without_set_role_has_no_privileges(env: dict[str, Login | str]) -> None:
-    # NOINHERIT: an injected statement before SET ROLE reaches nothing.
-    async def run() -> None:
-        db = await Database.start(_settings(_url(env, "app")))
-        try:
-            async with db.engines["ricotdin_app"].connect() as conn:
-                await conn.execute(text("SELECT 1 FROM meetings"))
-        finally:
-            await db.close()
+def test_an_error_inside_a_request_transaction_leaves_nothing_behind(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> Any:
+        with pytest.raises(ZeroDivisionError):
+            async with db.app_transaction(RequestIdentity(USER, "user")):
+                _ = 1 / 0
+        async with db.raw_connection("ricotdin_app") as conn:
+            return (await conn.execute(text("SELECT app_user_id()"))).scalar_one()
+
+    assert _run(_settings(_url(env, "app"), pool=(1, 0)), body) is None
+
+
+def test_app_login_without_set_role_has_no_privileges(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> None:
+        async with db.raw_connection("ricotdin_app") as conn:
+            await conn.execute(text("SELECT 1 FROM meetings"))
 
     with pytest.raises(Exception, match="permission denied"):
-        anyio.run(run)
+        _run(_settings(_url(env, "app")), body)
 
 
-def test_service_transaction_runs_as_service(env: dict[str, Login | str]) -> None:
-    async def run() -> str:
-        db = await Database.start(_settings(service_url=_url(env, "service")))
-        try:
-            async with db.role_transaction("ricotdin_service") as conn:
-                return str((await conn.execute(text("SELECT current_user"))).scalar_one())
-        finally:
-            await db.close()
+def test_service_transaction_runs_as_service(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> Any:
+        async with db.role_transaction("ricotdin_service") as conn:
+            return (await conn.execute(text("SELECT current_user"))).scalar_one()
 
-    assert anyio.run(run) == "ricotdin_service"
+    assert _run(_settings(service=_url(env, "service")), body) == "ricotdin_service"
 
 
-def test_startup_refuses_the_owner_login(env: dict[str, Login | str]) -> None:
-    db_url = env["db"]
-    assert isinstance(db_url, str)
+def test_unconfigured_group_is_a_typed_503(env: dict[str, Any]) -> None:
+    async def body(db: Database) -> None:
+        async with db.role_transaction("ricotdin_worker"):
+            pass
 
-    async def run() -> None:
-        await Database.start(_settings(db_url))
-
-    with pytest.raises(StartupRefused, match="owns tables|not a member"):
-        anyio.run(run)
+    with pytest.raises(ServiceUnavailable):
+        _run(_settings(service=_url(env, "service")), body)
 
 
-def test_startup_refuses_a_login_in_two_groups(env: dict[str, Login | str]) -> None:
-    import psycopg
+def test_startup_refuses_the_owner_login(env: dict[str, Any]) -> None:
+    with pytest.raises(StartupRefused, match="owns tables|cannot SET ROLE"):
+        _run(_settings(env["db"]), _noop)
 
-    login = env["app"]
-    assert isinstance(login, Login)
-    with psycopg.connect(admin_url(), autocommit=True) as conn:
-        conn.execute(f'GRANT ricotdin_service TO "{login.name}"')  # noqa: S608 - test-only name
+
+def test_startup_refuses_a_login_in_two_groups(env: dict[str, Any]) -> None:
+    name = sql.Identifier(env["app"].name)
+    _owner_exec(sql.SQL("GRANT ricotdin_service TO {} WITH INHERIT FALSE").format(name))
     try:
-
-        async def run() -> None:
-            await Database.start(_settings(_url(env, "app")))
-
-        with pytest.raises(StartupRefused, match="also a member of ricotdin_service"):
-            anyio.run(run)
+        with pytest.raises(StartupRefused, match="also SET ROLE to: ricotdin_service"):
+            _run(_settings(_url(env, "app")), _noop)
     finally:
-        with psycopg.connect(admin_url(), autocommit=True) as conn:
-            conn.execute(f'REVOKE ricotdin_service FROM "{login.name}"')  # noqa: S608
+        _owner_exec(sql.SQL("REVOKE ricotdin_service FROM {}").format(name))
+
+
+def test_startup_refuses_an_indirect_membership_chain(env: dict[str, Any]) -> None:
+    mid = sql.Identifier(f"ricotdin_test_mid_{env['suffix']}")
+    name = sql.Identifier(env["app"].name)
+    _owner_exec(sql.SQL("CREATE ROLE {} NOLOGIN").format(mid))
+    try:
+        _owner_exec(sql.SQL("GRANT ricotdin_service TO {}").format(mid))
+        _owner_exec(sql.SQL("GRANT {} TO {} WITH INHERIT FALSE").format(mid, name))
+        with pytest.raises(StartupRefused, match="also SET ROLE to: .*ricotdin_service"):
+            _run(_settings(_url(env, "app")), _noop)
+    finally:
+        _owner_exec(sql.SQL("DROP ROLE IF EXISTS {}").format(mid))
+
+
+def test_startup_refuses_a_grant_with_inherit_true(env: dict[str, Any]) -> None:
+    # PG16+: per-grant INHERIT survives the login's NOINHERIT; re-provisioning must fix it.
+    name = sql.Identifier(env["app"].name)
+    _owner_exec(sql.SQL("GRANT ricotdin_app TO {} WITH INHERIT TRUE").format(name))
+    try:
+        with pytest.raises(StartupRefused, match="inherits privileges of: ricotdin_app"):
+            _run(_settings(_url(env, "app")), _noop)
+    finally:
+        _owner_exec(sql.SQL("GRANT ricotdin_app TO {} WITH INHERIT FALSE").format(name))

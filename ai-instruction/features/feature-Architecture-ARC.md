@@ -250,7 +250,7 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
 - A raised domain error returns its mapped status + friendly message; the log has the detail, never a secret.
 - `/openapi.json` is generated and checked into CI as an artifact.
 - DB access follows CLAUDE.md §0.1 R1–R8 (from the ARC-02 security review): separate login credentials for
-  `ricotdin_app` and `ricotdin_service` (never members of both), never the table owner, request context only
+  `ricotdin_app`, `ricotdin_service` and `ricotdin_worker` (each reaches only its group), never the table owner, request context only
   via `set_config(..., true)` with bind parameters inside a transaction, values from the verified token and
   `users.role`, connections reset on check-in (tested), statement/lock timeouts per role.
 - `ricotdin_service` is split before any worker code runs: the worker role cannot read `users` /
@@ -258,10 +258,17 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
   `activity_log` or `quota_ledger` (append-only). New Alembic revision + RLS tests.
 
 **Test Plan**
-- Pure: `app/api/app/core/version.py` → `resolve_version()`; `app/api/app/core/errors.py` → `to_http()`; `app/api/app/core/redact.py` → `redact()` — `tests/test_core_*.py`.
+- Pure: `tests/test_core_{version,errors,redact,redact_more,logging,ratelimit,ratelimit_more,settings,sentry}.py`,
+  `tests/test_db_{context,identity,url,provision}.py`, `tests/test_app.py`, `tests/test_app_more.py`.
+- Integration: `tests/test_session_integration.py` (R1–R8 with real logins), `tests/test_rls_integration.py`
+  (worker / append-only), `tests/test_migrations_integration.py` (0002 down = 0001).
 
 **Structural flags**
-- New runtime, new image, env vars `DATABASE_URL`, `ALLOWED_ORIGINS`, `JWT_PRIVATE_KEY`, `SMTP_*`.
+- New runtime, new image, migration 0002; env vars `DATABASE_URL_APP` / `_SERVICE` / `_WORKER`, `ALLOWED_ORIGINS`,
+  `SENTRY_DSN`, `LOG_LEVEL`, `API_DOCS`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, `RICOTDIN_VERSION`
+  (`DATABASE_URL` = owner, migrations/tests only). `JWT_*`, `SMTP_*` move to ARC-05.
+- The per-request identity dependency ("session per request", use case 1) is completed by ARC-05:
+  ARC-04 ships `Database.app_transaction(identity)` + `get_database`.
 
 **Done check**
 - `docker run` the API image → healthcheck healthy; `pytest` green.
@@ -440,6 +447,10 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 
 **Structural flags**
 - New process type (worker), ffmpeg in image, provider keys, >10 files.
+- From the ARC-04 security review: run the worker as its **own container with only
+  `DATABASE_URL_WORKER`** (an RCE via ffmpeg/untrusted audio must not reach the service credential),
+  and replace "service minus auth tables" with an explicit per-table allow-list for `ricotdin_worker`
+  (new Alembic revision + RLS tests).
 
 **Done check**
 - Process the same 3 sample recordings in v1 and v2 staging; outputs equivalent; pytest green.
@@ -728,6 +739,9 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
 
 **Structural flags**
 - Production data move, DNS, new env vars, new images, deployment repo change.
+- From the ARC-04 review: `FORWARDED_ALLOW_IPS` = proxy subnet with port 8000 internal only; pin base images
+  and CI actions by digest/SHA; `API_DOCS` off in production; provision production logins with
+  `scripts.provision_db_roles` against the `main` branch.
 
 **Done check**
 - v2.0.0 live; first nightly Neon backup uploaded.

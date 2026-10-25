@@ -43,4 +43,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # Behind a reverse proxy set FORWARDED_ALLOW_IPS to the proxy address (uvicorn reads it) so
 # client IPs (rate limits, audit) come from X-Forwarded-For only when the proxy sent them.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

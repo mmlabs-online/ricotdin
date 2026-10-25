@@ -67,7 +67,7 @@ def test_preflight_from_other_origin_is_refused() -> None:
 
 
 def test_domain_error_is_mapped_and_detail_only_in_logs(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.WARNING, logger="ricotdin"):
+    with caplog.at_level(logging.INFO, logger="ricotdin"):
         r = _client().get("/boom/domain")
     assert r.status_code == 404
     assert r.json() == {"error": {"code": "not_found", "message": "Meeting not found."}}
@@ -96,5 +96,5 @@ def test_security_headers_on_every_response() -> None:
 
 
 def test_openapi_lists_the_core_routes() -> None:
-    paths = _client().get("/openapi.json").json()["paths"]
+    paths = _client(API_DOCS="1").get("/openapi.json").json()["paths"]
     assert "/health" in paths and "/version.json" in paths

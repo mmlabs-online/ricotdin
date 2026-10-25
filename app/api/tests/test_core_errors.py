@@ -54,6 +54,15 @@ def test_custom_app_error_subclass_keeps_its_own_code() -> None:
     )
 
 
+def test_service_unavailable_is_a_friendly_503() -> None:
+    from app.core.errors import ServiceUnavailable
+
+    status, body = to_http(ServiceUnavailable(detail="ricotdin_worker login not configured"))
+    assert status == 503
+    assert body["error"]["code"] == "unavailable"
+    assert "ricotdin_worker" not in str(body)
+
+
 def test_retry_after_is_exposed_for_rate_limits() -> None:
     _, body = to_http(RateLimited(retry_after_seconds=30))
     assert body["error"]["retry_after_seconds"] == 30

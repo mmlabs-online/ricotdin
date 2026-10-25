@@ -72,6 +72,12 @@ class RateLimited(AppError):
         return {"retry_after_seconds": self.retry_after_seconds}
 
 
+class ServiceUnavailable(AppError):
+    status = 503
+    code = "unavailable"
+    message = "This service is temporarily unavailable. Please try again later."
+
+
 _INTERNAL = {"code": "internal", "message": "Something went wrong. Please try again."}
 
 
