@@ -87,7 +87,8 @@ class Policy:
 def _map_roles(roles: list[str]) -> list[str]:
     out: list[str] = []
     for r in roles:
-        mapped = "PUBLIC" if r == "public" else map_role(r)
+        # v1 policies without TO (= public) only ever served the API; v2 scopes them to it.
+        mapped = "ricotdin_app" if r == "public" else map_role(r)
         if mapped is not None and mapped not in out:
             out.append(mapped)
     return out

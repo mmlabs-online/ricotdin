@@ -8,6 +8,7 @@ import json
 from collections.abc import Callable
 
 from app.db.catalog import Allowed, Catalog, normalize_sql
+from app.db.grants import restrict_app_grants
 from app.db.introspect import Schema
 from app.db.v1_rewrite import map_role, rewrite_v1_sql
 
@@ -110,7 +111,7 @@ def to_catalog(schema: Schema, *, v1: bool) -> Catalog:
     for p in s.policies:
         mapped_roles: set[str] = set()
         for r in p.roles:
-            policy_role = "PUBLIC" if r == "public" else role_of(r)
+            policy_role = "ricotdin_app" if v1 and r == "public" else role_of(r)
             if policy_role is not None:
                 mapped_roles.add(policy_role)
         roles = sorted(mapped_roles)
@@ -121,6 +122,8 @@ def to_catalog(schema: Schema, *, v1: bool) -> Catalog:
         )
 
     for t, grants in s.table_grants.items():
+        if v1:
+            grants = restrict_app_grants(t, grants, s.policies)
         for grantee, privilege, column in grants:
             role = role_of(grantee)
             if role is not None:

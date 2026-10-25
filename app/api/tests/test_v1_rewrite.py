@@ -26,6 +26,15 @@ def test_function_body_source_text() -> None:
     )
 
 
+def test_definer_search_path_gets_pg_temp_last() -> None:
+    # Otherwise a caller with TEMP could shadow public tables with temp tables (CWE-426).
+    v1 = " SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$"
+    assert (
+        rewrite_v1_sql(v1)
+        == " SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$"
+    )
+
+
 def test_auth_inside_a_string_literal_is_data_not_a_reference() -> None:
     v1 = "INSERT INTO app_config (key) VALUES ('auth.require_email_verification')"
     assert rewrite_v1_sql(v1) == v1

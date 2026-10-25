@@ -87,8 +87,22 @@ def test_sections_are_in_dependency_order() -> None:
     assert positions == sorted(positions)
 
 
-def test_check_function_bodies_is_off_so_functions_can_precede_tables() -> None:
-    assert "SET check_function_bodies = false;" in _render()
+def test_check_function_bodies_is_off_for_this_migration_only() -> None:
+    assert "SET LOCAL check_function_bodies = false;" in _render()
+
+
+def test_app_role_never_gets_privileges_rls_does_not_govern() -> None:
+    s = _schema()
+    s.functions = []
+    s.table_grants = {
+        "meetings": [
+            ("authenticated", p, None) for p in ["SELECT", "TRUNCATE", "TRIGGER", "UPDATE"]
+        ]
+    }
+    out = render_baseline(s, prelude="", epilogue="", overrides={}, skip_functions=set())
+    # policy "own" is FOR ALL TO authenticated → UPDATE stays; TRUNCATE/TRIGGER never do
+    assert "GRANT SELECT, UPDATE ON TABLE public.meetings TO ricotdin_app;" in out
+    assert "TRUNCATE" not in out and "TRIGGER ON" not in out
 
 
 def test_supabase_references_are_rewritten() -> None:

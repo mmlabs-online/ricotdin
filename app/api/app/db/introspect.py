@@ -213,6 +213,9 @@ def read_schema(url: str) -> Schema:
         s.enums = {name: list(labels) for name, labels in _rows(conn, _ENUMS)}
 
         for table, col, typ, not_null, default, identity, generated in _rows(conn, _COLUMNS):
+            if generated not in ("", "s"):
+                # PG18 virtual generated columns: v1 has none; refuse instead of mis-rendering.
+                raise ValueError(f"unsupported generated column kind {generated!r}: {table}.{col}")
             is_generated = generated == "s"
             s.tables.setdefault(table, []).append(
                 Column(

@@ -37,7 +37,7 @@ def drop_stale(base: str | None = None) -> list[str]:
         names = [
             r[0]
             for r in conn.execute(
-                "SELECT datname FROM pg_database WHERE datname LIKE %s", (PREFIX + "%",)
+                "SELECT datname FROM pg_database WHERE starts_with(datname, %s)", (PREFIX,)
             )
         ]
         for name in names:

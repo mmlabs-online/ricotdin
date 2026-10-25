@@ -63,7 +63,6 @@ def test_a_changed_policy_expression_is_reported() -> None:
 
 def test_skipped_v1_functions_are_not_expected_in_v2() -> None:
     assert "custom_access_token_hook" in SKIPPED_V1_FUNCTIONS
-    assert "functions" not in to_catalog(_v1(), v1=True) or not any(
-        k.startswith("public.custom_access_token_hook")
-        for k in to_catalog(_v1(), v1=True)["functions"]
-    )
+    functions = to_catalog(_v1(), v1=True)["functions"]
+    assert not any(k.startswith("public.custom_access_token_hook") for k in functions)
+    assert "public.claim_next_job(text)" in functions

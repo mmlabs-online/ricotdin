@@ -8,9 +8,12 @@ The SQL is generated (scripts/gen_baseline.py) and committed as migrations/sql/0
 It is executed on the raw psycopg connection so it runs as a script (no bind-parameter parsing).
 """
 
+import os
 from pathlib import Path
 
 from alembic import op
+
+from app.db.safety import check_destructive_allowed
 
 revision = "0001_baseline"
 down_revision = None
@@ -33,7 +36,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drops every v2 object (and the extensions installed in public). Roles are cluster-wide
-    # and shared with other databases, so they are kept.
+    # and shared with other databases, so they are kept. Refused outside scratch databases
+    # unless RICOTDIN_ALLOW_DESTRUCTIVE_DOWNGRADE=1 (app/db/safety.py).
+    dbname = op.get_bind().exec_driver_sql("SELECT current_database()").scalar_one()
+    check_destructive_allowed(str(dbname), os.environ)
     _run(
         "DROP SCHEMA public CASCADE;\n"
         "CREATE SCHEMA public AUTHORIZATION pg_database_owner;\n"

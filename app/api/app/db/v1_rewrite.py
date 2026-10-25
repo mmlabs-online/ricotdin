@@ -19,6 +19,8 @@ _REWRITES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\(auth\.jwt\(\)\s*->>\s*'user_role'::text\)"), "public.app_user_role()"),
     (re.compile(r"auth\.jwt\(\)\s*->>\s*'user_role'(?:::text)?"), "public.app_user_role()"),
     (re.compile(r"\bauth\.uid\(\)"), "public.app_user_id()"),
+    # SECURITY DEFINER functions: search pg_temp last so temp tables cannot shadow public ones.
+    (re.compile(r"SET search_path TO 'public'(?!,)"), "SET search_path TO 'public', 'pg_temp'"),
 ]
 _STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
 _AUTH_REF = re.compile(r"\bauth\.[a-z_]+(?:\(\))?")

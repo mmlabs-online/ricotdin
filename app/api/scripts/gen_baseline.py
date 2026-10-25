@@ -22,7 +22,6 @@ OUT = API_ROOT / "migrations" / "sql" / "0001_baseline.sql"
 
 
 def generate() -> str:
-    drop_stale()
     with scratch_database("v1gen") as url:
         replay_v1(url)
         schema = read_schema(url)
@@ -43,6 +42,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if the committed file is stale")
     args = parser.parse_args()
+    drop_stale()  # leftovers of interrupted runs; never inside generate() (tests call it)
     sql = generate()
     if args.check:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""

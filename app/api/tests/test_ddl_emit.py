@@ -54,10 +54,12 @@ def test_emit_policy_maps_roles_and_rewrites_auth() -> None:
     )
 
 
-def test_emit_policy_public_role_and_with_check() -> None:
+def test_emit_policy_public_role_becomes_the_app_role_and_with_check() -> None:
+    # v1 policies without TO applied to every role; in v2 only the app needs them
+    # (ricotdin_service has service_all), so a future role is not covered by accident.
     p = Policy("todos", "w", False, "ALL", ["public"], None, "(auth.uid() IS NOT NULL)")
     assert emit_policy(p) == (
-        "CREATE POLICY w ON public.todos AS RESTRICTIVE FOR ALL TO PUBLIC "
+        "CREATE POLICY w ON public.todos AS RESTRICTIVE FOR ALL TO ricotdin_app "
         "WITH CHECK ((public.app_user_id() IS NOT NULL));"
     )
 

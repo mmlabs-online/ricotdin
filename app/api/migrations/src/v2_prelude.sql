@@ -17,8 +17,21 @@ BEGIN
     CREATE ROLE ricotdin_service NOLOGIN;
   END IF;
 END $$;
+-- A pre-existing role must not keep LOGIN / BYPASSRLS from somewhere else.
+ALTER ROLE ricotdin_app NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+ALTER ROLE ricotdin_service NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 
 GRANT USAGE ON SCHEMA public TO ricotdin_app, ricotdin_service;
+
+-- Hardening (ARC-02 security review). v1 was only reachable through PostgREST; v2 runs SQL.
+--   * no temp objects: a temp table could shadow public tables inside SECURITY DEFINER code;
+--   * no CREATE in public for anyone but the owner (PG15+ default, made explicit);
+--   * functions created by later migrations are not executable by PUBLIC by default (BUG-005).
+DO $$ BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END $$;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 -- RLS request context. The API sets both per transaction (ARC-04):
 --   SET LOCAL app.user_id = '<uuid>'; SET LOCAL app.role = 'user' | 'admin';
@@ -62,6 +75,7 @@ CREATE TABLE public.refresh_tokens (
 );
 CREATE INDEX idx_refresh_tokens_user   ON public.refresh_tokens (user_id);
 CREATE INDEX idx_refresh_tokens_family ON public.refresh_tokens (family_id);
+CREATE INDEX idx_refresh_tokens_expires ON public.refresh_tokens (expires_at);
 
 CREATE TABLE public.email_tokens (
   id         uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -74,6 +88,7 @@ CREATE TABLE public.email_tokens (
   CONSTRAINT email_tokens_purpose_values CHECK (purpose IN ('verify_email', 'reset_password'))
 );
 CREATE INDEX idx_email_tokens_user_purpose ON public.email_tokens (user_id, purpose);
+CREATE INDEX idx_email_tokens_expires ON public.email_tokens (expires_at);
 
 ALTER TABLE public.users          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.refresh_tokens ENABLE ROW LEVEL SECURITY;

@@ -11,7 +11,7 @@ CREATE TRIGGER trg_users_updated_at
 CREATE FUNCTION public.sync_profile_role() RETURNS trigger
   LANGUAGE plpgsql
   SECURITY DEFINER
-  SET search_path TO 'public'
+  SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   update public.profiles set role = new.role where id = new.id and role is distinct from new.role;

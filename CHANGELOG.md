@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Thay đổi
+- Schema Postgres cho v2 trên Neon (Alembic): sinh tự động từ schema + 38 migration của v1 (thay `auth.*` của Supabase bằng bảng `users`/`refresh_tokens`/`email_tokens` riêng và ngữ cảnh `app.user_id`/`app.role` cho RLS), có test đối chiếu v1↔v2 và test RLS; siết quyền so với v1 (role app không còn TRUNCATE/TRIGGER/TEMP, chỉ được ghi nơi có policy) (ARC-02)
 - Ma trận theo dõi v2 `ai-instruction/v2-tracking.md`: 76 feature đã xong ↔ endpoint v2 ↔ màn hình, 55 route cũ (+ `version.json`) ↔ endpoint mới, logic chạy trong trình duyệt và các lệnh gọi Supabase trực tiếp từ trình duyệt cần thay bằng API (ARC-01)
 - Bắt đầu chuyển sang v2: app v1 (Next.js + Supabase) dời vào `legacy/` (giữ lịch sử); khung `app/api` (FastAPI, uv) và `app/web` (Vite + React) có CI riêng; CI của v1 chỉ chạy khi `legacy/` đổi và nay build thử image + kiểm tra `/api/health`; image v1 build từ gốc repo bằng `docker build -f legacy/Dockerfile .`. Lệnh v1 chạy trong `legacy/`, file env ở `legacy/.env.local` (ARC-00)
 

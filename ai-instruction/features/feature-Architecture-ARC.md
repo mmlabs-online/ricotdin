@@ -117,7 +117,7 @@ The migration ports 76 done features, 55 route handlers (+ `version.json`), the 
 ---
 
 ### ARC-02 — Postgres (Neon) target schema
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (PR #33)
 
 **User Story**  
 As the system, I want the full schema on a plain Postgres (Neon) managed by Alembic, with no Supabase dependency, so that v2 runs without Supabase.
@@ -133,9 +133,17 @@ Today the schema relies on `auth.users`, `auth.uid()`, `auth.jwt()`, the custom 
 - n/a.
 
 **Backend**
-- Alembic baseline equal to `schema.sql` + migrations 001–038 minus Supabase-only objects.
-- New tables: `users` (id, email, username, password_hash, role, email_verified_at, disabled_at, created_at, last_sign_in_at), `refresh_tokens`, `email_tokens` (verify / reset). `profiles` stays a separate table (FK → `users.id`, ON DELETE CASCADE).
-- RLS + functions use `current_setting('app.user_id')` / `current_setting('app.role')` instead of `auth.uid()` / `auth.jwt()`; app DB role `ricotdin_app` (RLS enforced) and `ricotdin_service` (BYPASSRLS, worker/admin ops).
+- Alembic baseline equal to `schema.sql` + migrations 001–038 minus Supabase-only objects. **As built:** the
+  baseline is *generated* (`scripts/gen_baseline.py`: replay v1 with a Supabase shim → introspect → render with
+  rewrites) and committed as `migrations/sql/0001_baseline.sql`; hand-written parts in `migrations/src/`.
+- New tables: `users` (id, email, password_hash, role, email_verified_at, disabled_at, last_sign_in_at, created_at,
+  updated_at — `username` stays in `profiles`), `refresh_tokens`, `email_tokens` (verify / reset). `profiles`
+  stays a separate table (FK → `users.id`, ON DELETE CASCADE); `profiles.role` mirrors `users.role` by trigger.
+- RLS + functions use `app_user_id()` / `app_user_role()` (`current_setting('app.user_id' | 'app.role')`)
+  instead of `auth.uid()` / `auth.jwt()`; roles `ricotdin_app` (RLS enforced) and `ricotdin_service` (a
+  permissive `service_all` policy on every RLS table instead of BYPASSRLS, which Neon may not grant).
+- Security review hardening: app privileges without TRUNCATE/TRIGGER/REFERENCES/MAINTAIN and DML only where a
+  policy exists; no TEMP/CREATE for PUBLIC; definer `search_path = public, pg_temp`; downgrade guard.
 - pgvector extension + HNSW cosine index on `transcript_chunks` (768 dims).
 
 **Acceptance Criteria**
@@ -146,20 +154,27 @@ Today the schema relies on `auth.users`, `auth.uid()`, `auth.jwt()`, the custom 
 - Every SECURITY DEFINER function has EXECUTE revoked from PUBLIC (except documented exceptions).
 
 **Test Plan**
-- `app/api/tests/test_rls.py` — integration tests against a disposable Postgres (owner, admin, viewer, editor, stranger).
-- Pure: none.
+- Pure: `tests/test_catalog_diff.py`, `test_v1_rewrite.py`, `test_ddl_emit.py`, `test_baseline_render.py`,
+  `test_parity.py`, `test_app_grants.py`, `test_schema_order.py`, `test_scratch_url.py`, `test_safety.py`.
+- Integration (disposable `ricotdin_test_*` databases): `test_migrations_integration.py`,
+  `test_schema_parity_integration.py` (v1 ↔ v2 catalog + stale-file check), `test_rls_integration.py`
+  (owner, admin, viewer, editor, stranger, service; revoked writes; RAG RPC; no TRUNCATE/LOCK/TEMP/TRIGGER).
 
 **Structural flags**
 - New DB (Neon), new auth tables, RLS rewrite (SEC review required), new env var `DATABASE_URL`.
 
 **Done check**
-- `alembic upgrade head` on Neon staging + `pytest app/api/tests/test_rls.py` green.
+- `uv run --env-file .env alembic upgrade head` on the Neon `dev` branch + `uv run --env-file .env pytest` green
+  (done 2026-10-25: 109 passed on Neon PG 18.6; CI green on a `pgvector/pgvector:pg18` service).
 
 **Out of scope**
 - Moving data (ARC-03).
 
-**Key files (expected)**
-- `app/api/alembic/**`, `app/api/app/db/models/**`, `app/api/tests/test_rls.py`
+**Key files**
+- `app/api/migrations/{env.py,versions/0001_baseline.py,sql/0001_baseline.sql,src/**}`, `app/api/alembic.ini`
+- `app/api/app/db/{replay,introspect,ddl,baseline,v1_rewrite,grants,parity,catalog,scratch,safety}.py`
+- `app/api/scripts/gen_baseline.py`, `app/api/tests/fixtures/supabase_shim.sql`, `app/api/tests/*_integration.py`
+- ORM models are not part of ARC-02; they arrive with the code that uses them (ARC-04/07).
 
 ---
 
@@ -234,6 +249,10 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
 - A request from an origin not in `ALLOWED_ORIGINS` gets no CORS headers.
 - A raised domain error returns its mapped status + friendly message; the log has the detail, never a secret.
 - `/openapi.json` is generated and checked into CI as an artifact.
+- DB access follows CLAUDE.md §0.1 R1–R8 (from the ARC-02 security review): separate login credentials for
+  `ricotdin_app` and `ricotdin_service` (never members of both), never the table owner, request context only
+  via `set_config(..., true)` with bind parameters inside a transaction, values from the verified token and
+  `users.role`, connections reset on check-in (tested), statement/lock timeouts per role.
 
 **Test Plan**
 - Pure: `app/api/app/core/version.py` → `resolve_version()`; `app/api/app/core/errors.py` → `to_http()`; `app/api/app/core/redact.py` → `redact()` — `tests/test_core_*.py`.

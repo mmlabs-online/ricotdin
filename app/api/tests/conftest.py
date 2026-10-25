@@ -32,12 +32,22 @@ def alembic_downgrade(url: str, target: str = "base") -> None:
     command.downgrade(cfg, target)
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Drop leftovers of interrupted runs once, before any scratch database of this session exists.
+
+    Never inside fixtures or generate(): that would drop databases this session still uses.
+    """
+    if os.environ.get("DATABASE_URL"):
+        from app.db.scratch import drop_stale
+
+        drop_stale()
+
+
 @pytest.fixture(scope="session")
 def v2_db() -> Iterator[str]:
     """A scratch database migrated to head, shared by the read-only integration tests."""
-    from app.db.scratch import drop_stale, scratch_database
+    from app.db.scratch import scratch_database
 
-    drop_stale()
     with scratch_database("v2") as url:
         alembic_upgrade(url)
         yield url

@@ -16,6 +16,7 @@ from app.db.ddl import (
     quote_ident,
     quote_literal,
 )
+from app.db.grants import restrict_app_grants
 from app.db.introspect import Schema
 from app.db.v1_rewrite import rewrite_v1_sql
 
@@ -71,7 +72,9 @@ def render_baseline(
     grants = [
         g
         for table in sorted(s.table_grants)
-        for g in emit_table_grants(table, s.table_grants[table])
+        for g in emit_table_grants(
+            table, restrict_app_grants(table, s.table_grants[table], s.policies)
+        )
     ]
 
     parts = [
@@ -79,7 +82,7 @@ def render_baseline(
         "-- legacy/schema.sql + legacy/migrations 001–038 (replayed with a Supabase shim)\n"
         "-- plus migrations/src/*.sql.\n"
         "-- Do not edit by hand: change the sources and regenerate.\n",
-        "SET check_function_bodies = false;\n",
+        "SET LOCAL check_function_bodies = false;\n",
         _section(
             "Extensions",
             [
@@ -121,7 +124,6 @@ def render_baseline(
                 # deterministic and seeded rows get the timestamp of the actual migration.
                 emit_seed(n, [c for c in s.tables[n] if c.default != "now()"], rows)
                 for n, rows in sorted(s.seeds.items())
-                if rows != "[]"
             ],
         ),
         epilogue.rstrip() + "\n",

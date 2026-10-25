@@ -3,7 +3,7 @@
 -- plus migrations/src/*.sql.
 -- Do not edit by hand: change the sources and regenerate.
 
-SET check_function_bodies = false;
+SET LOCAL check_function_bodies = false;
 
 -- ---------------------------------------------------------------------------------------------
 -- Extensions
@@ -30,8 +30,21 @@ BEGIN
     CREATE ROLE ricotdin_service NOLOGIN;
   END IF;
 END $$;
+-- A pre-existing role must not keep LOGIN / BYPASSRLS from somewhere else.
+ALTER ROLE ricotdin_app NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+ALTER ROLE ricotdin_service NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 
 GRANT USAGE ON SCHEMA public TO ricotdin_app, ricotdin_service;
+
+-- Hardening (ARC-02 security review). v1 was only reachable through PostgREST; v2 runs SQL.
+--   * no temp objects: a temp table could shadow public tables inside SECURITY DEFINER code;
+--   * no CREATE in public for anyone but the owner (PG15+ default, made explicit);
+--   * functions created by later migrations are not executable by PUBLIC by default (BUG-005).
+DO $$ BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END $$;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 
 -- RLS request context. The API sets both per transaction (ARC-04):
 --   SET LOCAL app.user_id = '<uuid>'; SET LOCAL app.role = 'user' | 'admin';
@@ -75,6 +88,7 @@ CREATE TABLE public.refresh_tokens (
 );
 CREATE INDEX idx_refresh_tokens_user   ON public.refresh_tokens (user_id);
 CREATE INDEX idx_refresh_tokens_family ON public.refresh_tokens (family_id);
+CREATE INDEX idx_refresh_tokens_expires ON public.refresh_tokens (expires_at);
 
 CREATE TABLE public.email_tokens (
   id         uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -87,6 +101,7 @@ CREATE TABLE public.email_tokens (
   CONSTRAINT email_tokens_purpose_values CHECK (purpose IN ('verify_email', 'reset_password'))
 );
 CREATE INDEX idx_email_tokens_user_purpose ON public.email_tokens (user_id, purpose);
+CREATE INDEX idx_email_tokens_expires ON public.email_tokens (expires_at);
 
 ALTER TABLE public.users          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.refresh_tokens ENABLE ROW LEVEL SECURITY;
@@ -396,7 +411,7 @@ CREATE OR REPLACE FUNCTION public.can_access_meeting(p_meeting_id uuid, p_min_ro
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   SELECT EXISTS (
     SELECT 1 FROM meetings m
@@ -430,7 +445,7 @@ CREATE OR REPLACE FUNCTION public.claim_next_job(p_worker_id text)
  RETURNS SETOF jobs
  LANGUAGE sql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   UPDATE public.jobs
   SET    status     = 'running',
@@ -503,25 +518,22 @@ END;
 $function$;
 
 -- v2 version of v1 migration 001's trigger function (ARC-02). v1 read the PostgREST setting
--- request.jwt.claims; v2 reads the RLS request context. Same rule: no user context
--- (service/worker) may change roles, a user context must be an admin.
+-- request.jwt.claims and allowed any call without claims. v2 decides by the *invoking role*
+-- (SECURITY INVOKER, so current_user is the caller): the API role ricotdin_app may change a role
+-- only with an admin request context; ricotdin_service, the owner and SECURITY DEFINER callers
+-- such as sync_profile_role may. A forgotten request context therefore fails closed.
 CREATE FUNCTION public.prevent_role_escalation()
  RETURNS trigger
  LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
-  if old.role is distinct from new.role then
-    -- No request context = service-role or superuser call → allow role changes.
-    if public.app_user_id() is null then
-      return new;
-    end if;
-    if coalesce(public.app_user_role(), 'user') <> 'admin' then
-      raise exception 'Only admins can change user roles'
-        using errcode = 'P0001',
-              hint    = 'Use the /admin/users route to change roles.';
-    end if;
+  if old.role is distinct from new.role
+     and current_user = 'ricotdin_app'
+     and coalesce(public.app_user_role(), '') <> 'admin' then
+    raise exception 'Only admins can change user roles'
+      using errcode = 'P0001',
+            hint    = 'Use the /admin/users route to change roles.';
   end if;
   return new;
 end;
@@ -531,7 +543,7 @@ CREATE OR REPLACE FUNCTION public.quota_apply_movement(p_user_id uuid, p_delta_a
  RETURNS TABLE(status text, audio_remaining bigint, agent_remaining integer)
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_audio  bigint;
@@ -879,107 +891,107 @@ ALTER TABLE public.usage_log ENABLE ROW LEVEL SECURITY;
 -- Policies (v1, rewritten) + service_all
 -- ---------------------------------------------------------------------------------------------
 CREATE POLICY admin_read_activity_log ON public.activity_log AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
-CREATE POLICY admin_read_admin_config ON public.admin_config AS PERMISSIVE FOR SELECT TO PUBLIC USING ((public.app_user_role() = 'admin'::text));
+CREATE POLICY admin_read_admin_config ON public.admin_config AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY "admin read app_config" ON public.app_config AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY app_settings_admin_select ON public.app_settings AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
-CREATE POLICY admin_read_audit_logs ON public.audit_logs AS PERMISSIVE FOR SELECT TO PUBLIC USING ((public.app_user_role() = 'admin'::text));
-CREATE POLICY calendar_suggestions_delete ON public.calendar_suggestions AS PERMISSIVE FOR DELETE TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY admin_read_audit_logs ON public.audit_logs AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
+CREATE POLICY calendar_suggestions_delete ON public.calendar_suggestions AS PERMISSIVE FOR DELETE TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = calendar_suggestions.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text)));
-CREATE POLICY calendar_suggestions_insert ON public.calendar_suggestions AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((EXISTS ( SELECT 1
+CREATE POLICY calendar_suggestions_insert ON public.calendar_suggestions AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = calendar_suggestions.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY calendar_suggestions_select ON public.calendar_suggestions AS PERMISSIVE FOR SELECT TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY calendar_suggestions_select ON public.calendar_suggestions AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = calendar_suggestions.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'viewer'::text)));
-CREATE POLICY calendar_suggestions_update ON public.calendar_suggestions AS PERMISSIVE FOR UPDATE TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY calendar_suggestions_update ON public.calendar_suggestions AS PERMISSIVE FOR UPDATE TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = calendar_suggestions.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text))) WITH CHECK (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = calendar_suggestions.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text)));
-CREATE POLICY chat_messages_delete ON public.chat_messages AS PERMISSIVE FOR DELETE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY chat_messages_delete ON public.chat_messages AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM chat_sessions s
   WHERE ((s.id = chat_messages.session_id) AND (s.user_id = public.app_user_id())))));
-CREATE POLICY chat_messages_insert ON public.chat_messages AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((EXISTS ( SELECT 1
+CREATE POLICY chat_messages_insert ON public.chat_messages AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((EXISTS ( SELECT 1
    FROM chat_sessions s
   WHERE ((s.id = chat_messages.session_id) AND (s.user_id = public.app_user_id())))));
-CREATE POLICY chat_messages_select ON public.chat_messages AS PERMISSIVE FOR SELECT TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY chat_messages_select ON public.chat_messages AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM chat_sessions s
   WHERE ((s.id = chat_messages.session_id) AND (s.user_id = public.app_user_id())))));
-CREATE POLICY chat_messages_update ON public.chat_messages AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY chat_messages_update ON public.chat_messages AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM chat_sessions s
   WHERE ((s.id = chat_messages.session_id) AND (s.user_id = public.app_user_id())))));
-CREATE POLICY chat_sessions_delete ON public.chat_sessions AS PERMISSIVE FOR DELETE TO PUBLIC USING ((user_id = public.app_user_id()));
-CREATE POLICY chat_sessions_insert ON public.chat_sessions AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK (((user_id = public.app_user_id()) AND ((meeting_id IS NULL) OR can_access_meeting(meeting_id, 'viewer'::text))));
-CREATE POLICY chat_sessions_select ON public.chat_sessions AS PERMISSIVE FOR SELECT TO PUBLIC USING ((user_id = public.app_user_id()));
-CREATE POLICY chat_sessions_update ON public.chat_sessions AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((user_id = public.app_user_id()));
-CREATE POLICY admin_read_features ON public.features AS PERMISSIVE FOR SELECT TO PUBLIC USING ((public.app_user_role() = 'admin'::text));
-CREATE POLICY folder_owner_manage_shares ON public.folder_shares AS PERMISSIVE FOR ALL TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY chat_sessions_delete ON public.chat_sessions AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((user_id = public.app_user_id()));
+CREATE POLICY chat_sessions_insert ON public.chat_sessions AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK (((user_id = public.app_user_id()) AND ((meeting_id IS NULL) OR can_access_meeting(meeting_id, 'viewer'::text))));
+CREATE POLICY chat_sessions_select ON public.chat_sessions AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((user_id = public.app_user_id()));
+CREATE POLICY chat_sessions_update ON public.chat_sessions AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((user_id = public.app_user_id()));
+CREATE POLICY admin_read_features ON public.features AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
+CREATE POLICY folder_owner_manage_shares ON public.folder_shares AS PERMISSIVE FOR ALL TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM folders f
   WHERE ((f.id = folder_shares.folder_id) AND (f.user_id = public.app_user_id()))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM folders f
   WHERE ((f.id = folder_shares.folder_id) AND (f.user_id = public.app_user_id())))));
-CREATE POLICY grantee_read_own_share ON public.folder_shares AS PERMISSIVE FOR SELECT TO PUBLIC USING ((user_id = public.app_user_id()));
-CREATE POLICY folders_delete ON public.folders AS PERMISSIVE FOR DELETE TO PUBLIC USING ((public.app_user_id() = user_id));
-CREATE POLICY folders_insert ON public.folders AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((public.app_user_id() = user_id));
-CREATE POLICY folders_select ON public.folders AS PERMISSIVE FOR SELECT TO PUBLIC USING (((public.app_user_id() = user_id) OR (EXISTS ( SELECT 1
+CREATE POLICY grantee_read_own_share ON public.folder_shares AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((user_id = public.app_user_id()));
+CREATE POLICY folders_delete ON public.folders AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((public.app_user_id() = user_id));
+CREATE POLICY folders_insert ON public.folders AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((public.app_user_id() = user_id));
+CREATE POLICY folders_select ON public.folders AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((public.app_user_id() = user_id) OR (EXISTS ( SELECT 1
    FROM folder_shares fs
   WHERE ((fs.folder_id = fs.id) AND (fs.user_id = public.app_user_id()))))));
-CREATE POLICY folders_update ON public.folders AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((public.app_user_id() = user_id)) WITH CHECK ((public.app_user_id() = user_id));
+CREATE POLICY folders_update ON public.folders AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((public.app_user_id() = user_id)) WITH CHECK ((public.app_user_id() = user_id));
 CREATE POLICY admin_read_all_jobs ON public.jobs AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY users_read_own_jobs ON public.jobs AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = jobs.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY meetings_delete ON public.meetings AS PERMISSIVE FOR DELETE TO PUBLIC USING ((public.app_user_id() = user_id));
-CREATE POLICY meetings_insert ON public.meetings AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((public.app_user_id() = user_id));
-CREATE POLICY meetings_select ON public.meetings AS PERMISSIVE FOR SELECT TO PUBLIC USING (((public.app_user_id() = user_id) OR can_access_meeting(id, 'viewer'::text)));
-CREATE POLICY meetings_update ON public.meetings AS PERMISSIVE FOR UPDATE TO PUBLIC USING (((public.app_user_id() = user_id) OR can_access_meeting(id, 'editor'::text))) WITH CHECK (((public.app_user_id() = user_id) OR can_access_meeting(id, 'editor'::text)));
-CREATE POLICY profiles_select ON public.profiles AS PERMISSIVE FOR SELECT TO PUBLIC USING (((public.app_user_id() = id) OR (public.app_user_role() = 'admin'::text)));
-CREATE POLICY profiles_update ON public.profiles AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((public.app_user_id() = id)) WITH CHECK ((public.app_user_id() = id));
+CREATE POLICY meetings_delete ON public.meetings AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((public.app_user_id() = user_id));
+CREATE POLICY meetings_insert ON public.meetings AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((public.app_user_id() = user_id));
+CREATE POLICY meetings_select ON public.meetings AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((public.app_user_id() = user_id) OR can_access_meeting(id, 'viewer'::text)));
+CREATE POLICY meetings_update ON public.meetings AS PERMISSIVE FOR UPDATE TO ricotdin_app USING (((public.app_user_id() = user_id) OR can_access_meeting(id, 'editor'::text))) WITH CHECK (((public.app_user_id() = user_id) OR can_access_meeting(id, 'editor'::text)));
+CREATE POLICY profiles_select ON public.profiles AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((public.app_user_id() = id) OR (public.app_user_role() = 'admin'::text)));
+CREATE POLICY profiles_update ON public.profiles AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((public.app_user_id() = id)) WITH CHECK ((public.app_user_id() = id));
 CREATE POLICY admin_read_all_ledger ON public.quota_ledger AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY users_read_own_ledger ON public.quota_ledger AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_id() = user_id));
 CREATE POLICY admin_read_all_wallets ON public.quota_wallets AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY users_read_own_wallet ON public.quota_wallets AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_id() = user_id));
-CREATE POLICY admin_read_storage_config ON public.storage_config AS PERMISSIVE FOR SELECT TO PUBLIC USING ((public.app_user_role() = 'admin'::text));
-CREATE POLICY todos_delete ON public.todos AS PERMISSIVE FOR DELETE TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY admin_read_storage_config ON public.storage_config AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
+CREATE POLICY todos_delete ON public.todos AS PERMISSIVE FOR DELETE TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = todos.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text)));
-CREATE POLICY todos_insert ON public.todos AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((EXISTS ( SELECT 1
+CREATE POLICY todos_insert ON public.todos AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = todos.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY todos_select ON public.todos AS PERMISSIVE FOR SELECT TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY todos_select ON public.todos AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = todos.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'viewer'::text)));
-CREATE POLICY todos_update ON public.todos AS PERMISSIVE FOR UPDATE TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY todos_update ON public.todos AS PERMISSIVE FOR UPDATE TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = todos.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text))) WITH CHECK (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = todos.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'editor'::text)));
-CREATE POLICY transcript_chunks_delete ON public.transcript_chunks AS PERMISSIVE FOR DELETE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY transcript_chunks_delete ON public.transcript_chunks AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_chunks.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY transcript_chunks_insert ON public.transcript_chunks AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((EXISTS ( SELECT 1
+CREATE POLICY transcript_chunks_insert ON public.transcript_chunks AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_chunks.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY transcript_chunks_select ON public.transcript_chunks AS PERMISSIVE FOR SELECT TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY transcript_chunks_select ON public.transcript_chunks AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_chunks.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'viewer'::text)));
-CREATE POLICY transcript_chunks_update ON public.transcript_chunks AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY transcript_chunks_update ON public.transcript_chunks AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_chunks.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY transcript_segments_delete ON public.transcript_segments AS PERMISSIVE FOR DELETE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY transcript_segments_delete ON public.transcript_segments AS PERMISSIVE FOR DELETE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_segments.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY transcript_segments_insert ON public.transcript_segments AS PERMISSIVE FOR INSERT TO PUBLIC WITH CHECK ((EXISTS ( SELECT 1
+CREATE POLICY transcript_segments_insert ON public.transcript_segments AS PERMISSIVE FOR INSERT TO ricotdin_app WITH CHECK ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_segments.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY transcript_segments_select ON public.transcript_segments AS PERMISSIVE FOR SELECT TO PUBLIC USING (((EXISTS ( SELECT 1
+CREATE POLICY transcript_segments_select ON public.transcript_segments AS PERMISSIVE FOR SELECT TO ricotdin_app USING (((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_segments.meeting_id) AND (m.user_id = public.app_user_id())))) OR can_access_meeting(meeting_id, 'viewer'::text)));
-CREATE POLICY transcript_segments_update ON public.transcript_segments AS PERMISSIVE FOR UPDATE TO PUBLIC USING ((EXISTS ( SELECT 1
+CREATE POLICY transcript_segments_update ON public.transcript_segments AS PERMISSIVE FOR UPDATE TO ricotdin_app USING ((EXISTS ( SELECT 1
    FROM meetings m
   WHERE ((m.id = transcript_segments.meeting_id) AND (m.user_id = public.app_user_id())))));
-CREATE POLICY admin_read_usage_log ON public.usage_log AS PERMISSIVE FOR SELECT TO PUBLIC USING ((public.app_user_role() = 'admin'::text));
+CREATE POLICY admin_read_usage_log ON public.usage_log AS PERMISSIVE FOR SELECT TO ricotdin_app USING ((public.app_user_role() = 'admin'::text));
 CREATE POLICY service_all ON public.activity_log AS PERMISSIVE FOR ALL TO ricotdin_service USING (true) WITH CHECK (true);
 CREATE POLICY service_all ON public.admin_config AS PERMISSIVE FOR ALL TO ricotdin_service USING (true) WITH CHECK (true);
 CREATE POLICY service_all ON public.app_config AS PERMISSIVE FOR ALL TO ricotdin_service USING (true) WITH CHECK (true);
@@ -1005,46 +1017,46 @@ CREATE POLICY service_all ON public.usage_log AS PERMISSIVE FOR ALL TO ricotdin_
 -- ---------------------------------------------------------------------------------------------
 -- Grants (v1 roles mapped to ricotdin_app / ricotdin_service)
 -- ---------------------------------------------------------------------------------------------
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.activity_log TO ricotdin_app;
+GRANT SELECT ON TABLE public.activity_log TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.activity_log TO ricotdin_service;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.admin_config TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.app_config TO ricotdin_app;
+GRANT SELECT ON TABLE public.app_config TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.app_config TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.app_settings TO ricotdin_app;
+GRANT SELECT ON TABLE public.app_settings TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.app_settings TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.audit_logs TO ricotdin_app;
+GRANT SELECT ON TABLE public.audit_logs TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.audit_logs TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.calendar_suggestions TO ricotdin_app;
+GRANT SELECT ON TABLE public.calendar_suggestions TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.calendar_suggestions TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.chat_messages TO ricotdin_app;
+GRANT SELECT ON TABLE public.chat_messages TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.chat_messages TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.chat_sessions TO ricotdin_app;
+GRANT SELECT ON TABLE public.chat_sessions TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.chat_sessions TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.features TO ricotdin_app;
+GRANT SELECT ON TABLE public.features TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.features TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.folder_shares TO ricotdin_app;
+GRANT DELETE, INSERT, SELECT, UPDATE ON TABLE public.folder_shares TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.folder_shares TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.folders TO ricotdin_app;
+GRANT DELETE, INSERT, SELECT, UPDATE ON TABLE public.folders TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.folders TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.jobs TO ricotdin_app;
+GRANT SELECT ON TABLE public.jobs TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.jobs TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.meetings TO ricotdin_app;
+GRANT SELECT ON TABLE public.meetings TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.meetings TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE ON TABLE public.profiles TO ricotdin_app;
+GRANT SELECT ON TABLE public.profiles TO ricotdin_app;
 GRANT UPDATE (avatar_key, default_model, default_provider, display_name, theme_preference, username) ON TABLE public.profiles TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.profiles TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.quota_ledger TO ricotdin_app;
+GRANT SELECT ON TABLE public.quota_ledger TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.quota_ledger TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.quota_wallets TO ricotdin_app;
+GRANT SELECT ON TABLE public.quota_wallets TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.quota_wallets TO ricotdin_service;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.storage_config TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.todos TO ricotdin_app;
+GRANT SELECT ON TABLE public.todos TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.todos TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.transcript_chunks TO ricotdin_app;
+GRANT SELECT ON TABLE public.transcript_chunks TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.transcript_chunks TO ricotdin_service;
-GRANT MAINTAIN, REFERENCES, SELECT, TRIGGER ON TABLE public.transcript_segments TO ricotdin_app;
+GRANT SELECT ON TABLE public.transcript_segments TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.transcript_segments TO ricotdin_service;
-GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.usage_log TO ricotdin_app;
+GRANT SELECT ON TABLE public.usage_log TO ricotdin_app;
 GRANT DELETE, INSERT, MAINTAIN, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.usage_log TO ricotdin_service;
 REVOKE ALL ON FUNCTION public.can_access_meeting(p_meeting_id uuid, p_min_role text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.can_access_meeting(p_meeting_id uuid, p_min_role text) TO PUBLIC;
@@ -1122,7 +1134,7 @@ CREATE TRIGGER trg_users_updated_at
 CREATE FUNCTION public.sync_profile_role() RETURNS trigger
   LANGUAGE plpgsql
   SECURITY DEFINER
-  SET search_path TO 'public'
+  SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   update public.profiles set role = new.role where id = new.id and role is distinct from new.role;

@@ -20,7 +20,8 @@ from tests.conftest import alembic_upgrade, requires_db
 pytestmark = requires_db
 
 A, B, ADMIN, VIEWER, EDITOR = (uuid.uuid4() for _ in range(5))
-FOLDER, MEETING_A, MEETING_B = (uuid.uuid4() for _ in range(3))
+FOLDER, MEETING_A, MEETING_B, MEETING_B_PRIVATE = (uuid.uuid4() for _ in range(4))
+VEC = "[" + ",".join(["0.1"] * 768) + "]"
 
 
 @pytest.fixture(scope="module")
@@ -59,16 +60,19 @@ def _seed(v2_db: str) -> None:
             "INSERT INTO meetings (id, user_id, title, folder_id) VALUES (%s, %s, 'b', %s)",
             (MEETING_B, B, FOLDER),
         )
+        conn.execute(  # B's meeting outside the shared folder: nobody else may see it
+            "INSERT INTO meetings (id, user_id, title) VALUES (%s, %s, 'b private')",
+            (MEETING_B_PRIVATE, B),
+        )
         conn.execute(
             "INSERT INTO folder_shares (folder_id, user_id, role) VALUES (%s, %s, 'viewer'), (%s, %s, 'editor')",
             (FOLDER, VIEWER, FOLDER, EDITOR),
         )
         conn.execute("INSERT INTO todos (meeting_id, content) VALUES (%s, 'todo b')", (MEETING_B,))
-        vec = "[" + ",".join(["0.1"] * 768) + "]"
         conn.execute(
             "INSERT INTO transcript_chunks (meeting_id, chunk_index, content, embedding) "
             "VALUES (%s, 0, 'chunk b', %s::vector)",
-            (MEETING_B, vec),
+            (MEETING_B, VEC),
         )
 
 
@@ -173,21 +177,87 @@ def test_definer_rpcs_are_service_only(db: str, function: str) -> None:
 
 def test_service_role_sees_everything_without_context(db: str) -> None:
     with as_role(db, "ricotdin_service") as conn:
-        assert _ids(conn, "SELECT id FROM meetings") == {MEETING_A, MEETING_B}
+        assert _ids(conn, "SELECT id FROM meetings") == {MEETING_A, MEETING_B, MEETING_B_PRIVATE}
         assert len(_ids(conn, "SELECT id FROM users")) == 5
 
 
-def test_role_change_needs_admin_context_and_syncs_to_profiles(db: str) -> None:
-    # prevent_role_escalation (v2 override): a non-admin request context cannot change roles.
+def test_service_role_changes_users_role_and_profiles_follow(db: str) -> None:
+    # Role changes go through ricotdin_service (admin API); users.role → profiles.role is
+    # mirrored by sync_profile_role, and prevent_role_escalation lets non-app roles through
+    # even with a user request context set (it decides by invoking role, not by context).
     with psycopg.connect(db) as conn:
-        conn.execute("SELECT set_config('app.user_id', %s, true)", (str(A),))
+        conn.execute("SET LOCAL ROLE ricotdin_service")
+        conn.execute("SELECT set_config('app.user_id', %s, true)", (str(ADMIN),))
         conn.execute("SELECT set_config('app.role', 'user', true)")
-        with pytest.raises(psycopg.errors.RaiseException, match="Only admins"):
-            conn.execute("UPDATE profiles SET role = 'admin' WHERE id = %s", (A,))
-        conn.rollback()
-    # No request context (service) may; users.role → profiles.role is mirrored by trigger.
-    with psycopg.connect(db) as conn:
         conn.execute("UPDATE users SET role = 'admin' WHERE id = %s", (B,))
         row = conn.execute("SELECT role FROM profiles WHERE id = %s", (B,)).fetchone()
         assert row == ("admin",)
+        conn.rollback()
+
+
+def test_unshared_meeting_is_visible_to_its_owner_only(db: str) -> None:
+    with as_role(db, "ricotdin_app", B) as conn:
+        assert _ids(conn, "SELECT id FROM meetings") == {MEETING_B, MEETING_B_PRIVATE}
+    for user in (A, VIEWER, EDITOR):
+        with as_role(db, "ricotdin_app", user) as conn:
+            assert MEETING_B_PRIVATE not in _ids(conn, "SELECT id FROM meetings")
+
+
+@pytest.mark.parametrize("user", [VIEWER, EDITOR])
+@pytest.mark.parametrize(
+    "statement", ["UPDATE meetings SET title = 'x'", "UPDATE todos SET content = 'x'"]
+)
+def test_shared_folder_members_cannot_write_content(
+    db: str, user: uuid.UUID, statement: str
+) -> None:
+    # Criterion "viewer can SELECT but not UPDATE". In v2 even editors cannot write meeting
+    # content from the app role (v1 revokes 033/036): editor-level writes go through the
+    # service role after an API-side can_access_meeting(..., 'editor') check.
+    with (
+        as_role(db, "ricotdin_app", user) as conn,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        conn.execute(statement)
+
+
+@pytest.mark.parametrize(("user", "expected"), [(B, 1), (VIEWER, 1), (EDITOR, 1), (A, 0)])
+def test_rag_rpc_returns_only_accessible_chunks(db: str, user: uuid.UUID, expected: int) -> None:
+    with as_role(db, "ricotdin_app", user) as conn:
+        row = conn.execute(
+            "SELECT count(*) FROM match_transcript_chunks(%s::vector, 10, NULL::uuid)", (VEC,)
+        ).fetchone()
+    assert row == (expected,)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "TRUNCATE audit_logs",
+        "TRUNCATE quota_ledger",
+        "TRUNCATE profiles",
+        "LOCK TABLE meetings IN ACCESS EXCLUSIVE MODE",
+        "CREATE TRIGGER t BEFORE UPDATE ON meetings FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+        "CREATE TEMP TABLE folder_shares (folder_id uuid, user_id uuid, role text)",
+        "CREATE TABLE public.x (id int)",
+    ],
+)
+def test_app_role_has_no_privileges_outside_rls(db: str, statement: str) -> None:
+    # Security review: v1 Supabase GRANT ALL leftovers RLS does not govern are gone in v2.
+    with (
+        as_role(db, "ricotdin_app", B) as conn,
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+    ):
+        conn.execute(statement)
+
+
+def test_app_role_cannot_change_roles_without_admin_context(db: str) -> None:
+    # prevent_role_escalation decides by invoking role, so a forgotten context fails closed.
+    with psycopg.connect(db) as conn:
+        conn.execute(
+            "GRANT UPDATE (role) ON profiles TO ricotdin_app"
+        )  # simulate a grant regression
+        conn.execute("SET LOCAL ROLE ricotdin_app")
+        conn.execute("SELECT set_config('app.user_id', %s, true)", (str(A),))
+        with pytest.raises(psycopg.errors.RaiseException, match="Only admins"):
+            conn.execute("UPDATE profiles SET role = 'admin' WHERE id = %s", (A,))
         conn.rollback()
