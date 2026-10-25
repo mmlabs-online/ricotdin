@@ -25,7 +25,7 @@ queue kept · R2 kept · migrate ALL existing data · `profiles` stays a separat
 Query + Tailwind + shadcn/ui · one new design with light/dark (3 legacy themes dropped) · bilingual
 EN + VI from day one · keep `docs/`.
 
-Only the 73 `[x]` features are ported. The 26 `[ ]` features keep their status and are built after v2.
+Only the `[x]` features are ported (76 on 2026-10-25, ARC excluded). The `[ ]` features (25) keep their status and are built after v2.
 
 ---
 
@@ -74,17 +74,17 @@ As a developer, I want v1 moved to `legacy/` and empty `app/api` + `app/web` ske
 ---
 
 ### ARC-01 — v2 tracking matrix
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (PR #32)
 
 **User Story**  
 As the owner, I want every shipped feature mapped to its v2 API endpoints and web screens with a status per side so that I can see exactly what is left before cutover.
 
 **Context**
-The migration ports 73 done features, 56 route handlers and a set of browser-only logic. Without one matrix it is impossible to know when v2 is complete.
+The migration ports 76 done features, 55 route handlers (+ `version.json`), the browser's direct Supabase reads and a set of browser-only logic. Without one matrix it is impossible to know when v2 is complete.
 
 **Use Cases**
 1. Owner opens `v2-tracking.md` and sees API/FE/test status per feature code.
-2. `/copilot` reports "N of 73 features ported".
+2. `/copilot` reports "N of 76 features ported".
 
 **Frontend**
 - n/a (docs).
@@ -94,7 +94,8 @@ The migration ports 73 done features, 56 route handlers and a set of browser-onl
 
 **Acceptance Criteria**
 - Table (a): one row per `[x]` feature in `tracking.md` with columns Feature · API endpoints (v2) · API · FE screen · FE · Tests · Note; status values `todo | in_progress | done | n/a`.
-- Table (b): all 56 legacy route handlers mapped to a v2 endpoint or marked `dropped` with a reason.
+- Table (b): all 55 legacy route handlers (+ `version.json`) mapped to a v2 endpoint or marked `dropped` with a reason.
+- Table (d): every direct Supabase read/auth call from the browser mapped to a v2 endpoint.
 - Table (c): browser-only logic to port (recorder, recording notice, upload, audio duration fix, transcript seek, .ics download, chat citations) with legacy source file.
 - `tracking.md` header lists `ARC=Architecture re-platform (v2)`.
 
@@ -484,7 +485,7 @@ Ports ADM-*, §9c, §9d, §9f, §9g, §9h, §9i. Guards: self-action, last-admin
 - n/a.
 
 **Backend**
-- Routers under `/admin/*` mirroring the 30 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
+- Routers under `/admin/*` mirroring the 28 legacy admin routes; role change updates `users.role` and `profiles.role` together; user delete removes R2 audio first.
 
 **Acceptance Criteria**
 - Non-admin → 403 on every `/admin/*` route.

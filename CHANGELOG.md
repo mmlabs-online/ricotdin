@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Thay đổi
+- Ma trận theo dõi v2 `ai-instruction/v2-tracking.md`: 76 feature đã xong ↔ endpoint v2 ↔ màn hình, 55 route cũ (+ `version.json`) ↔ endpoint mới, logic chạy trong trình duyệt và các lệnh gọi Supabase trực tiếp từ trình duyệt cần thay bằng API (ARC-01)
 - Bắt đầu chuyển sang v2: app v1 (Next.js + Supabase) dời vào `legacy/` (giữ lịch sử); khung `app/api` (FastAPI, uv) và `app/web` (Vite + React) có CI riêng; CI của v1 chỉ chạy khi `legacy/` đổi và nay build thử image + kiểm tra `/api/health`; image v1 build từ gốc repo bằng `docker build -f legacy/Dockerfile .`. Lệnh v1 chạy trong `legacy/`, file env ở `legacy/.env.local` (ARC-00)
 
 ### Sửa lỗi
