@@ -11,8 +11,10 @@ legacy/dist
 legacy/out
 
 # Secrets — must NEVER be baked into the image
-legacy/.env
-legacy/.env.*
+legacy/**/.env
+legacy/**/.env.*
+**/*.pem
+**/*.key
 !legacy/.env.example
 
 # Dev/CI files not needed in the image
@@ -22,5 +24,7 @@ legacy/migrations
 legacy/**/*.test.ts
 
 # Editor / OS noise
+legacy/.vscode
+legacy/.idea
 **/.DS_Store
 **/*.log

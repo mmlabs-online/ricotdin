@@ -18,6 +18,9 @@ on:
       - '.dockerignore'
       - '.github/workflows/ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     name: lint · typecheck · test

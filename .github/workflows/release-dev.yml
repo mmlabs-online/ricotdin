@@ -11,6 +11,9 @@ on:
       - '.dockerignore'
       - '.github/workflows/release-dev.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: build & push image

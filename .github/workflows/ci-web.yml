@@ -9,6 +9,9 @@ on:
     branches: [main, dev, 'release/**']
     paths: ['app/web/**', '.github/workflows/ci-web.yml']
 
+permissions:
+  contents: read
+
 jobs:
   web:
     name: typecheck · test · build
@@ -21,10 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # vitest 5 / vite 8 need Node >= 22.12
           cache: 'npm'
           cache-dependency-path: app/web/package-lock.json
 

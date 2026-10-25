@@ -1,7 +1,7 @@
 # DB backup & restore (OPS-03)
 
 **Applies to:** Ricotdin on Supabase **Free** (no built-in backups). **Owner:** project owner.
-Workflow: `.github/workflows/backup.yml` · Retention logic: `lib/backup/retention.ts` · Upload/prune: `scripts/backup/r2.ts`.
+Workflow: `.github/workflows/backup.yml` · Retention logic: `legacy/lib/backup/retention.ts` · Upload/prune: `legacy/scripts/backup/r2.ts` (v1 code moved to `legacy/` in ARC-00; run its commands from `legacy/`).
 
 ## What runs
 

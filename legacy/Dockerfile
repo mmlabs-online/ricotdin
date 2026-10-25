@@ -63,7 +63,7 @@ RUN --mount=type=secret,id=env,required=false \
       set -a; eval "$(sed 's/\r$//' /run/secrets/env | grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=')"; set +a; \
     fi; \
     if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then \
-      echo "NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are empty: pass --secret id=env,src=.env.local (or --build-arg NEXT_PUBLIC_SUPABASE_URL=... and NEXT_PUBLIC_SUPABASE_ANON_KEY=...)." >&2; \
+      echo "NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are empty: pass --secret id=env,src=legacy/.env.local from the repo root (or --build-arg NEXT_PUBLIC_SUPABASE_URL=... and NEXT_PUBLIC_SUPABASE_ANON_KEY=...)." >&2; \
       exit 1; \
     fi; \
     npm run build

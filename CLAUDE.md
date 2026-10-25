@@ -19,7 +19,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Every v1 path in §1–§11 is relative to `legacy/`** (`lib/gemini` = `legacy/lib/gemini`,
   `migrations/` = `legacy/migrations/`, `tests/` = `legacy/tests/`). v1 rules still apply to v1 code.
 - **v1 commands run inside `legacy/`** (`cd legacy && npm run dev|test|…`, `npx tsx scripts/…`).
-  `legacy/.env.local` holds the v1 env. `ai-instruction/` is resolved from `legacy/` or the image root by
+  `legacy/.env.local` holds the v1 env; an optional corporate CA goes in `legacy/certs/`
+  (`legacy/instrumentation-node.ts` reads `<cwd>/certs/`). `ai-instruction/` is resolved from `legacy/` or the image root by
   `legacy/lib/paths/shared.ts`. v1 image: `docker build -f legacy/Dockerfile .` **from the repo root**
   (context must include `ai-instruction/ai-gen/`).
 - **v2 commands:**
@@ -206,8 +207,9 @@ npm run test       # run tests (not yet configured)
   only**, never new features. All `vX.Y.Z` tags live here (`v1.0.0`, `v1.0.1`… on `release/1.0`).
 - `ci.yml` runs on push/PR to `main`, `dev` and `release/**` (on `dev` informational only — not a required check; OPS-06).
 
-**Versioning:** SemVer. `package.json` `version` MUST equal the tag without the `v`.
-`release.yml` rejects a tag that does not match `package.json` or whose commit is not on
+**Versioning:** SemVer. `package.json` `version` MUST equal the tag without the `v` — since ARC-00 that
+file is **`legacy/package.json`** (run `npm version` inside `legacy/`).
+`release.yml` rejects a tag that does not match `legacy/package.json` or whose commit is not on
 `release/X.Y` (the branch matching the tag's major.minor).
 
 **New minor/major release `X.Y.0`:**
@@ -227,6 +229,11 @@ npm run test       # run tests (not yet configured)
 3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release.
    `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
    an old line never drags `latest` backwards.
+   **After ARC-00:** `release/1.1` (and tags ≤ v1.1.1) still has v1 at the repo root, while `dev`/`main`
+   have it in `legacy/`. Merging back relies on git rename detection: edits to moved files follow them,
+   but a file **added** on `release/1.1` (new test, new migration) may land at the root or raise a
+   directory-rename conflict — after the merge, check every new file sits under `legacy/` and that
+   `legacy/package.json` has the hotfix version.
 
 **Step-by-step for the owner:** `docs/ops/release-runbook.md` (OPS-07) — one-time hand deploy +
 per-release order (migrations → deploy → `npm run verify:deploy`).
