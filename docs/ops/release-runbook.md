@@ -12,7 +12,9 @@ It links to the detailed docs instead of copying them:
 Every step ends with a **Verify** line. Don't move on until it passes.
 
 `verify:deploy` runs from a ricotdin checkout on any machine with Node 20 (read-only, no secrets).
-Run `npm ci` once first (`tsx` is a dev dependency):
+Since ARC-00 the v1 app is in `legacy/`: every `npm` command and every `migrations/…` / `scripts/…`
+path in this runbook is **inside `legacy/`** (`cd legacy` first). Run `npm ci` once first (`tsx` is a
+dev dependency):
 
 ```bash
 npm run verify:deploy -- https://<ricotdin host> --expect vX.Y.Z

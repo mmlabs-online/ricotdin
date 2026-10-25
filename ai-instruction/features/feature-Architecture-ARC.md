@@ -32,7 +32,7 @@ Only the 73 `[x]` features are ported. The 26 `[ ]` features keep their status a
 ## Features
 
 ### ARC-00 — Repo preparation & legacy move
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (PR #31)
 
 **User Story**  
 As a developer, I want v1 moved to `legacy/` and empty `app/api` + `app/web` skeletons with their own CI so that v2 can be built next to a still-shippable v1.
@@ -68,8 +68,8 @@ As a developer, I want v1 moved to `legacy/` and empty `app/api` + `app/web` ske
 **Out of scope**
 - Any v2 logic.
 
-**Key files (expected)**
-- `legacy/**`, `app/api/pyproject.toml`, `app/web/package.json`, `.github/workflows/*.yml`, `Dockerfile`, `CLAUDE.md`, `.claude/skills/ship-feature/SKILL.md`, `.claude/skills/fix-bug/SKILL.md`
+**Key files**
+- `legacy/**` (v1, moved with history), `legacy/lib/paths/shared.ts` + `legacy/tests/shared-path.test.ts` (resolve `ai-instruction/` from `legacy/` or the image root), `legacy/Dockerfile` + root `.dockerignore` (build context = repo root), `app/api/` (FastAPI skeleton, uv), `app/web/` (Vite skeleton), `.github/workflows/{ci,ci-api,ci-web,release,release-dev,backup}.yml`, `CLAUDE.md` §0, `.claude/skills/*`, `.github/pull_request_template.md`
 
 ---
 

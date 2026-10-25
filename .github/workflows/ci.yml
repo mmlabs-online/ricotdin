@@ -1,15 +1,33 @@
 name: CI
 
+# v1 (Next.js) lives in legacy/ since ARC-00. This workflow only runs when v1 or the runtime
+# prompt it ships changes; app/api and app/web have their own workflows (ci-api.yml, ci-web.yml).
 on:
   push:
     branches: [main, dev, 'release/**']
+    paths:
+      - 'legacy/**'
+      - 'ai-instruction/ai-gen/**'
+      - '.dockerignore'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, dev, 'release/**']
+    paths:
+      - 'legacy/**'
+      - 'ai-instruction/ai-gen/**'
+      - '.dockerignore'
+      - '.github/workflows/ci.yml'
+
+permissions:
+  contents: read
 
 jobs:
   ci:
     name: lint · typecheck · test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: legacy
 
     steps:
       - name: Checkout
@@ -20,6 +38,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: legacy/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -49,3 +68,53 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy-anon-key"
           SUPABASE_SERVICE_ROLE_KEY: "dummy-service-role-key"
           GEMINI_API_KEY: "dummy-gemini-key"
+
+  image:
+    # Proves the v1 image still builds from the repo-root context (legacy/Dockerfile) and serves
+    # /api/health with the runtime prompt inside. Nothing is pushed; dummy public values only.
+    name: docker build · health
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: legacy/Dockerfile
+          load: true
+          push: false
+          tags: ricotdin:ci
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon-key
+            BUILD_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Runtime prompt is in the image
+        run: docker run --rm ricotdin:ci ls -l /app/ai-instruction/ai-gen/generate-meeting.md
+
+      - name: Container answers /api/health
+        run: |
+          docker run -d --name ricotdin-ci -p 3000:3000 \
+            -e KEY_ENCRYPTION_SECRET=0000000000000000000000000000000000000000000000000000000000000000 \
+            -e SUPABASE_SERVICE_ROLE_KEY=dummy-service-role-key \
+            -e GEMINI_API_KEY=dummy-gemini-key \
+            ricotdin:ci
+          for i in $(seq 1 30); do
+            if body="$(curl -fsS http://127.0.0.1:3000/api/health)"; then
+              echo "health: $body"
+              echo "$body" | grep -q '"status":"ok"' && exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::/api/health did not answer ok within 60s"
+          docker logs ricotdin-ci
+          exit 1

@@ -26,7 +26,7 @@ risks and say "I don't know — here's how to find out" when the repo can't tell
 
 | Need | Where |
 |---|---|
-| Features, backlog, readiness | `npx tsx scripts/backlog-snapshot.ts` (deterministic), `ai-instruction/tracking.md`, `ai-instruction/features/*.md` |
+| Features, backlog, readiness | `cd legacy && npx tsx scripts/backlog-snapshot.ts` (deterministic), `ai-instruction/tracking.md`, `ai-instruction/features/*.md` |
 | Bugs | `ai-instruction/bugs.md` |
 | Owner's goals, roadmap, past decisions | `ai-instruction/roadmap.md` — **read it first in every mode** |
 | Product intent, users, roadmap groups A–D, limits | `docs/product-brief.md`, `docs/product-features.md` |

@@ -1,0 +1,44 @@
+name: CI (web)
+
+# v2 frontend (Vite + React SPA) in app/web — ARC-00 onward.
+on:
+  push:
+    branches: [main, dev, 'release/**']
+    paths: ['app/web/**', '.github/workflows/ci-web.yml']
+  pull_request:
+    branches: [main, dev, 'release/**']
+    paths: ['app/web/**', '.github/workflows/ci-web.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: typecheck · test · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'   # vitest 5 / vite 8 need Node >= 22.12
+          cache: 'npm'
+          cache-dependency-path: app/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

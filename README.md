@@ -5,6 +5,12 @@ Powered by Next.js 16, Supabase, Google Gemini, and Speechmatics.
 
 **Stack:** Next.js (App Router) · TypeScript · Supabase (Postgres + pgvector + Storage) · Docker
 
+> **Repo layout (since ARC-00, v2 re-platform in progress):** the v1 app described below lives in
+> [`legacy/`](legacy/) — run its `npm` and `docker compose` commands **inside `legacy/`** and keep
+> `.env.local` at `legacy/.env.local`. Plain `docker build` runs **from the repo root** with
+> `-f legacy/Dockerfile` (the image needs `ai-instruction/ai-gen/`). v2 is being built in
+> [`app/api/`](app/api/) (FastAPI) and [`app/web/`](app/web/) (Vite SPA) — see `CLAUDE.md` §0.
+
 ---
 
 ## Running with Docker (recommended)
@@ -73,7 +79,8 @@ docker compose down
 secret (only its `NEXT_PUBLIC_*` lines are read; nothing lands in a layer):
 
 ```bash
-docker build --secret id=env,src=.env.local -t ricotdin .
+# from the repo root
+docker build -f legacy/Dockerfile --secret id=env,src=legacy/.env.local -t ricotdin .
 ```
 
 > Changing only the `NEXT_PUBLIC_*` values in `.env.local` does not invalidate
@@ -84,7 +91,7 @@ docker build --secret id=env,src=.env.local -t ricotdin .
 Or pass them as build args (CI does this):
 
 ```bash
-docker build \
+docker build -f legacy/Dockerfile \
   --build-arg NEXT_PUBLIC_SUPABASE_URL="https://<ref>.supabase.co" \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="<anon-key>" \
   -t ricotdin .
@@ -95,7 +102,7 @@ Run, injecting server-only secrets at runtime (never at build time):
 ```bash
 docker run -d \
   -p 3333:3000 \
-  --env-file .env.local \
+  --env-file legacy/.env.local \
   --name ricotdin \
   ricotdin
 ```

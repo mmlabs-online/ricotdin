@@ -99,8 +99,10 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: legacy/package-lock.json
 
       - name: Install dependencies (no install scripts)
+        working-directory: legacy
         run: npm ci --ignore-scripts
 
       - name: Upload to R2
@@ -109,6 +111,7 @@ jobs:
           R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
           R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        working-directory: legacy
         run: npx tsx scripts/backup/r2.ts upload "$RUNNER_TEMP/backup.tar.gz.age"
 
       # Runs only when every step above succeeded (default `if: success()`).
@@ -119,6 +122,7 @@ jobs:
           R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
           BACKUP_RETENTION_DAYS: '30'
+        working-directory: legacy
         run: npx tsx scripts/backup/r2.ts prune
 
       - name: Remove local files

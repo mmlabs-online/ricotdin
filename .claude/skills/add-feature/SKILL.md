@@ -88,7 +88,8 @@ Turn the chosen option into a concrete spec and check it against the
 - [ ] **3–6 acceptance criteria**, each testable and phrased "Given … when … then …" or as
       an observable check. No "should be fast/nice".
 - [ ] **Test plan:** the pure function(s) to extract into `/lib` and the test file name
-      (`tests/<topic>.test.ts`) — this is what `/ship-feature` Phase 3 writes first.
+      (`tests/<topic>.test.ts` for v1 in `legacy/`; v2: `app/api/tests/test_<topic>.py` or
+      `app/web/src/**/<name>.test.ts` — CLAUDE.md §0) — this is what `/ship-feature` Phase 3 writes first.
 - [ ] **Touch list:** expected files/routes/components, from the Step 1 code scan.
 - [ ] **Structural flags called out:** new migration, env var, provider, auth/RLS change,
       or >~10 files. Allowed, but stated, so `/ship-feature` knows to stop for plan approval.
@@ -192,7 +193,7 @@ Format rules (the seeder depends on them):
 ## Step 8 — Sync the DB registry
 
 ```
-npx tsx scripts/seed-features.ts --only <CODE>[,<CODE>]
+cd legacy && npx tsx scripts/seed-features.ts --only <CODE>[,<CODE>]
 ```
 
 - **Never run the seeder without `--only`** — a full run overwrites every edit made at
