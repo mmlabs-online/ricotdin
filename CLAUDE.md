@@ -161,6 +161,7 @@ npm run build      # production build
 npm run start      # run the production server (deployment target)
 npm run lint       # ESLint
 npm run check      # connectivity check: Gemini + Supabase (reads .env.local)
+npm run verify:deploy -- https://<host> --expect vX.Y.Z   # post-deploy check: /version.json + /api/health (OPS-07)
 npm run test       # run tests (not yet configured)
 ```
 
@@ -195,6 +196,9 @@ npm run test       # run tests (not yet configured)
 3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release.
    `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
    an old line never drags `latest` backwards.
+
+**Step-by-step for the owner:** `docs/ops/release-runbook.md` (OPS-07) — one-time hand deploy +
+per-release order (migrations → deploy → `npm run verify:deploy`).
 
 **Deploy = merge the deployment PR (OPS-04):** image `mingming21400/ricotdin`, tags are
 v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the image, then
