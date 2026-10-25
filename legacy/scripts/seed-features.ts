@@ -14,11 +14,14 @@ import { createClient } from '@supabase/supabase-js'
 import * as dotenv from 'dotenv'
 import { parseModuleFile, parseTrackingMd, mergeWithTracking } from '../lib/features/parser.js'
 import { parseOnlyKeys, selectFeatures, SeedArgsError } from '../lib/features/seedFilter.js'
+import { resolveSharedPath, sharedSourcePath } from '../lib/paths/shared.js'
 
 dotenv.config({ path: '.env.local' })
 
-const FEATURES_DIR = path.join(process.cwd(), 'ai-instruction', 'features')
-const TRACKING_FILE = path.join(process.cwd(), 'ai-instruction', 'tracking.md')
+// Run from legacy/ (ARC-00): ai-instruction/ is found in the repo root.
+const SHARED_DIR = resolveSharedPath(['ai-instruction'], process.cwd(), fs.existsSync)
+const FEATURES_DIR = path.join(SHARED_DIR, 'features')
+const TRACKING_FILE = path.join(SHARED_DIR, 'tracking.md')
 
 async function main() {
   let onlyKeys: string[] | null
@@ -62,7 +65,7 @@ async function main() {
   for (const file of files) {
     const filePath = path.join(FEATURES_DIR, file)
     const raw = fs.readFileSync(filePath, 'utf-8')
-    const sourcePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/')
+    const sourcePath = sharedSourcePath(filePath, SHARED_DIR)
     const parsed = parseModuleFile(raw, sourcePath)
 
     for (const feature of parsed) {

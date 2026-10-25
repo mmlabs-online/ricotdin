@@ -6,9 +6,10 @@
 // to the transcript_segments rows inserted in Step A.
 
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { Type, type Schema } from '@google/genai'
 import { log } from '@/lib/logger'
+import { resolveSharedPath } from '@/lib/paths/shared'
 import { PipelineError } from './errors'
 import { resolveModel, getDefaultGenerationModel } from '@/lib/ai/registry'
 import type { ModelCtx } from '@/lib/ai/types'
@@ -96,7 +97,12 @@ const ANALYSIS_RESPONSE_SCHEMA: Schema = {
 // long-lived `next start` server with the repo present, not serverless) and
 // cached for the process lifetime after first successful load.
 
-const SYSTEM_PROMPT_PATH = join(process.cwd(), 'ai-instruction', 'ai-gen', 'generate-meeting.md')
+// ai-instruction/ is at the repo root (cwd = legacy/ locally) or copied next to the app (/app in Docker).
+const SYSTEM_PROMPT_PATH = resolveSharedPath(
+  ['ai-instruction', 'ai-gen', 'generate-meeting.md'],
+  process.cwd(),
+  existsSync,
+)
 
 let cachedSystemPrompt: string | null = null
 

@@ -6,10 +6,11 @@
 //   npx tsx scripts/backlog-snapshot.ts
 
 import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { parseTrackingMd } from '../lib/features/parser.js'
+import { resolveSharedPath } from '../lib/paths/shared.js'
 
-const TRACKING_FILE = path.join(process.cwd(), 'ai-instruction', 'tracking.md')
+// Run from legacy/ (ARC-00): ai-instruction/ is found in the repo root.
+const TRACKING_FILE = resolveSharedPath(['ai-instruction', 'tracking.md'], process.cwd(), fs.existsSync)
 
 const rows = [...parseTrackingMd(fs.readFileSync(TRACKING_FILE, 'utf-8')).values()]
 const done = new Set(rows.filter((r) => r.is_done).map((r) => r.feature_code))
