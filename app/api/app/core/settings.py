@@ -56,9 +56,30 @@ class Settings(BaseSettings):
     db_pool_service: tuple[int, int] = (5, 3)
     db_pool_worker: tuple[int, int] = (2, 2)
 
+    # Auth (ARC-05). Without JWT_PRIVATE_KEY the auth routes answer 503; without SMTP_HOST no
+    # email is sent (register reports email_sent=false).
+    jwt_private_key: SecretStr | None = Field(default=None, alias="JWT_PRIVATE_KEY")
+    web_origin_raw: str = Field(default="", alias="WEB_ORIGIN")  # SPA origin: links + CORS
+    refresh_ttl_days: int = Field(default=30, ge=1, le=365, alias="REFRESH_TTL_DAYS")
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=465, alias="SMTP_PORT")
+    smtp_user: str | None = Field(default=None, alias="SMTP_USER")
+    smtp_password: SecretStr | None = Field(default=None, alias="SMTP_PASSWORD")
+    mail_from: str | None = Field(default=None, alias="MAIL_FROM")
+
+    @property
+    def web_origin(self) -> str | None:
+        origins = parse_origins(self.web_origin_raw)
+        if len(origins) > 1:
+            raise ValueError("WEB_ORIGIN: exactly one origin")
+        return origins[0] if origins else None
+
     @property
     def allowed_origins(self) -> list[str]:
-        return parse_origins(self.allowed_origins_raw)
+        """CORS + the Origin check of cookie endpoints: ALLOWED_ORIGINS plus WEB_ORIGIN."""
+        origins = parse_origins(self.allowed_origins_raw)
+        web = self.web_origin
+        return origins + [web] if web and web not in origins else origins
 
 
 @lru_cache(maxsize=1)

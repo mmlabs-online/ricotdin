@@ -12,11 +12,14 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 
+from app.auth.runtime import AuthRuntime
 from app.core.http import install_error_handlers, install_middleware
 from app.core.logging import get_logger, setup_logging
 from app.core.sentry import init_sentry
 from app.core.settings import Settings, get_settings
 from app.core.version import resolve_version
+from app.routers import auth as auth_router
+from app.routers import profile as profile_router
 
 log = get_logger("app")
 
@@ -74,5 +77,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     install_middleware(app, s.allowed_origins)
     install_error_handlers(app)
+    app.state.auth = AuthRuntime.from_settings(s)  # bad JWT_PRIVATE_KEY / SMTP config fails here
     app.include_router(core)
+    app.include_router(auth_router.router)
+    app.include_router(auth_router.wellknown)
+    app.include_router(profile_router.router)
     return app
