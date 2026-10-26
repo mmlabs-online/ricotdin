@@ -266,7 +266,7 @@ async def rotate_refresh(
         await conn.execute(
             text(
                 "SELECT t.id, t.user_id, t.family_id, t.revoked_at, t.expires_at, "
-                "t.replaced_by, u.disabled_at "
+                "t.replaced_by, u.disabled_at, now() AS db_now "
                 "FROM refresh_tokens t JOIN users u ON u.id = t.user_id "
                 "WHERE t.token_hash = :h FOR UPDATE OF t"
             ),
@@ -283,7 +283,8 @@ async def rotate_refresh(
             rotated=row.replaced_by is not None,
         )
     )
-    outcome = refresh_outcome(state, now)
+    # revoked_at / expires_at were written with the DB clock: compare with the DB clock too.
+    outcome = refresh_outcome(state, row.db_now if row is not None else now)
     if row is None or outcome == "unknown":
         return RotateResult("unknown")
     if outcome == "reuse":
