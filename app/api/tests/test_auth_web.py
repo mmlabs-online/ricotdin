@@ -57,3 +57,21 @@ def test_reset_email_is_bilingual_and_contains_the_link() -> None:
 def test_html_escapes_the_link() -> None:
     msg = verification_email('https://a.test/x#token=a"><script>')
     assert "<script>" not in msg.html
+
+
+def test_signing_keys_without_web_origin_refuse_to_start() -> None:
+    import pytest as _pytest
+
+    from app.auth.jwt import generate_private_pem
+    from app.auth.runtime import AuthRuntime
+    from app.core.settings import Settings
+
+    settings = Settings.model_validate(
+        {"JWT_PRIVATE_KEY": generate_private_pem(), "WEB_ORIGIN": ""}
+    )
+    with _pytest.raises(ValueError, match="WEB_ORIGIN"):
+        AuthRuntime.from_settings(settings)
+    ok = Settings.model_validate(
+        {"JWT_PRIVATE_KEY": generate_private_pem(), "WEB_ORIGIN": "https://app.ricotdin.test"}
+    )
+    assert AuthRuntime.from_settings(ok).web_origin == "https://app.ricotdin.test"

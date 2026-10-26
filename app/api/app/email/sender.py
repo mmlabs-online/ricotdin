@@ -68,6 +68,7 @@ class SmtpMailer:
         try:
             await aiosmtplib.send(
                 mime,
+                recipients=[to],  # never derived from headers
                 hostname=self.host,
                 port=self.port,
                 username=self.username,

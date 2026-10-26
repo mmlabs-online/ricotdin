@@ -76,3 +76,15 @@ def test_cycles_do_not_recurse_forever() -> None:
     a["self"] = a
     out = redact(a)
     assert out["password"] == REDACTED
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIabc\n-----END PRIVATE KEY-----"',
+        "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIabc\n-----END PRIVATE KEY-----",
+        "private_key=MC4CAQAwBQYDK2VwBCIEIabc",
+    ],
+)
+def test_private_keys_are_masked(text: str) -> None:
+    assert "MC4CAQAwBQYDK2VwBCIEIabc" not in redact(text)

@@ -10,7 +10,6 @@ import time
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-import anyio
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -18,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import service
 from app.auth.cookies import REFRESH_COOKIE, REFRESH_COOKIE_PATH, origin_allowed, refresh_cookie
-from app.auth.deps import auth_runtime, client_ip, current_identity, signing_keys
+from app.auth.deps import auth_runtime, client_ip, current_identity, ip_key, signing_keys
 from app.auth.identifier import classify_identifier
 from app.auth.jwt import ACCESS_TTL, JwtKeys, issue_access_token
 from app.auth.passwords import hash_password, verify_dummy, verify_password
@@ -177,8 +176,8 @@ async def send_mail(runtime: AuthRuntime, to: str, message: EmailMessage) -> boo
 
 
 def link(runtime: AuthRuntime, path: str, token: str) -> str:
-    if runtime.web_origin is None:
-        raise RuntimeError("WEB_ORIGIN is not set")
+    # AuthRuntime refuses to start with signing keys but no WEB_ORIGIN; every caller has keys.
+    assert runtime.web_origin is not None  # noqa: S101
     return action_link(runtime.web_origin, path, token)
 
 
@@ -194,7 +193,7 @@ Db = Annotated[Database, Depends(get_database)]
 async def register(
     body: RegisterIn, request: Request, runtime: Runtime, db: Db, _: Keys
 ) -> RegisterOut:
-    enforce(runtime.limiters.register_ip, client_ip(request) or "?")
+    enforce(runtime.limiters.register_ip, ip_key(client_ip(request)))
     email = normalize_email(body.email)
     username = normalize_username(body.username)
     for error in (
@@ -204,7 +203,7 @@ async def register(
     ):
         if error:
             raise UnprocessableEntity(error)
-    password_hash = await anyio.to_thread.run_sync(hash_password, body.password)
+    password_hash = await runtime.run_hash(hash_password, body.password)
     try:
         async with db.role_transaction(SERVICE) as conn:
             if await service.username_taken(conn, username):
@@ -225,34 +224,41 @@ async def register(
 async def login(
     body: LoginIn, request: Request, response: Response, runtime: Runtime, keys: Keys, db: Db
 ) -> TokenOut:
+    require_origin(request, runtime)  # sets the session cookie: no login CSRF from siblings
     ip = client_ip(request)
-    enforce(runtime.limiters.login_ip, ip or "?")
+    client = ip_key(ip)
+    enforce(runtime.limiters.login_ip, client)
     ident = classify_identifier(body.identifier)
     if ident is None or not body.password:
         raise InvalidCredentials()
-    enforce(runtime.limiters.login_account, f"{ident.kind}:{ident.value}")
     async with db.role_transaction(SERVICE) as conn:
         if ident.kind == "email":
             user = await service.find_user_by_email(conn, ident.value)
         else:
             user = await service.find_user_by_username(conn, ident.value)
+    # Email and username of one account share a bucket; unknown identifiers get their own.
+    account = str(user.id) if user else f"{ident.kind}:{ident.value}"
+    enforce(runtime.limiters.login_account_ip, f"{account}|{client}")
+    enforce(runtime.limiters.login_account, account)
     if user is None:
-        await anyio.to_thread.run_sync(verify_dummy, body.password)
+        await runtime.run_hash(verify_dummy, body.password)
         raise InvalidCredentials()
-    result = await anyio.to_thread.run_sync(verify_password, body.password, user.password_hash)
+    result = await runtime.run_hash(verify_password, body.password, user.password_hash)
     if not result.ok:
         raise InvalidCredentials()
     if user.disabled_at is not None:
         raise AccountDisabled()
     if user.email_verified_at is None:
         raise EmailNotVerified()
-    new_hash = (
-        await anyio.to_thread.run_sync(hash_password, body.password)
-        if result.needs_rehash
-        else None
-    )
+    new_hash = await runtime.run_hash(hash_password, body.password) if result.needs_rehash else None
     ua = request.headers.get("user-agent")
     async with db.role_transaction(SERVICE) as conn:
+        locked = await service.lock_credentials(conn, user.id)
+        # A reset / password change / disable committed since we read the row: that wins.
+        if locked is None or locked[0] != user.password_hash:
+            raise InvalidCredentials()
+        if locked[1] is not None:
+            raise AccountDisabled()
         if new_hash:
             await service.set_password_hash(conn, user.id, new_hash)
         await service.mark_signed_in(conn, user.id)
@@ -312,7 +318,10 @@ async def logout(request: Request, runtime: Runtime, db: Db) -> Response:
 
 
 @router.post("/verify-email")
-async def verify_email(body: TokenIn, db: Db) -> dict[str, bool]:
+async def verify_email(
+    body: TokenIn, request: Request, runtime: Runtime, db: Db
+) -> dict[str, bool]:
+    enforce(runtime.limiters.token_ip, ip_key(client_ip(request)))
     async with db.role_transaction(SERVICE) as conn:
         user_id = await service.consume_email_token(conn, body.token, "verify_email", now=_now())
         if user_id is not None:
@@ -331,7 +340,7 @@ async def _email_flow(
     purpose: service.EmailPurpose,
 ) -> None:
     """Same answer whether or not the address has an account; mail goes out after the response."""
-    enforce(runtime.limiters.email_ip, client_ip(request) or "?")
+    enforce(runtime.limiters.email_ip, ip_key(client_ip(request)))
     email = normalize_email(raw_email)
     if validate_email(email):
         return
@@ -368,14 +377,19 @@ async def forgot_password(
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetIn, db: Db) -> dict[str, bool]:
+async def reset_password(
+    body: ResetIn, request: Request, runtime: Runtime, db: Db
+) -> dict[str, bool]:
+    enforce(runtime.limiters.token_ip, ip_key(client_ip(request)))
     error = validate_password(body.password)
     if error:
         raise UnprocessableEntity(error)
-    password_hash = await anyio.to_thread.run_sync(hash_password, body.password)
     async with db.role_transaction(SERVICE) as conn:
-        user_id = await service.consume_email_token(conn, body.token, "reset_password", now=_now())
+        # Check the token before spending a hash on it (a junk token costs one indexed lookup).
+        user_id = await service.find_email_token(conn, body.token, "reset_password", now=_now())
         if user_id is not None:
+            password_hash = await runtime.run_hash(hash_password, body.password)
+            await service.consume_email_token(conn, body.token, "reset_password", now=_now())
             await service.set_password_hash(conn, user_id, password_hash)
             await service.mark_email_verified(conn, user_id)  # the inbox owner proved it
             await service.revoke_user_tokens(conn, user_id)  # every existing session ends

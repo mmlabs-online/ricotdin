@@ -109,8 +109,13 @@ def _verified_user(client: TestClient, mailer: MemoryMailer) -> str:
     return name
 
 
-def _login(client: TestClient, identifier: str, password: str = PASSWORD) -> Any:
-    return client.post("/auth/login", json={"identifier": identifier, "password": password})
+def _login(
+    client: TestClient, identifier: str, password: str = PASSWORD, origin: str | None = WEB
+) -> Any:
+    headers = {"Origin": origin} if origin else {}
+    return client.post(
+        "/auth/login", headers=headers, json={"identifier": identifier, "password": password}
+    )
 
 
 def _refresh(client: TestClient, origin: str | None = WEB) -> Any:
@@ -343,10 +348,22 @@ def test_refresh_rotates_and_reuse_revokes_the_family(api: Any, env: Any) -> Non
     assert r.json()["access_token"]
     second = client.cookies.get(REFRESH_COOKIE)
     assert second and second != first
-    # The old token is presented again (stolen copy): the whole family dies.
+    # Right after rotation the old token is a race (second tab / retry): 401, family intact.
     client.cookies.set(REFRESH_COOKIE, first, domain="api.ricotdin.test", path="/auth")
     assert _refresh(client).status_code == 401
     client.cookies.set(REFRESH_COOKIE, second, domain="api.ricotdin.test", path="/auth")
+    r = _refresh(client)
+    assert r.status_code == 200
+    third = client.cookies.get(REFRESH_COOKIE)
+    # Later, the old token presented again is a stolen copy: the whole family dies.
+    _sql(
+        env,
+        "UPDATE refresh_tokens SET revoked_at = now() - interval '1 minute' "
+        "WHERE replaced_by IS NOT NULL",
+    )
+    client.cookies.set(REFRESH_COOKIE, first, domain="api.ricotdin.test", path="/auth")
+    assert _refresh(client).status_code == 401
+    client.cookies.set(REFRESH_COOKIE, third, domain="api.ricotdin.test", path="/auth")
     assert _refresh(client).status_code == 401
     live = _sql(
         env,
@@ -355,6 +372,50 @@ def test_refresh_rotates_and_reuse_revokes_the_family(api: Any, env: Any) -> Non
         name,
     )
     assert live == [(0,)]
+
+
+def test_expired_refresh_token_is_refused_and_revoked(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    _login(client, name)
+    _sql(
+        env,
+        "UPDATE refresh_tokens SET expires_at = now() - interval '1 second' "
+        "WHERE user_id = (SELECT id FROM profiles WHERE username = %s)",
+        name,
+    )
+    assert _refresh(client).status_code == 401
+    assert _sql(
+        env,
+        "SELECT count(*) FROM refresh_tokens WHERE revoked_at IS NULL "
+        "AND user_id = (SELECT id FROM profiles WHERE username = %s)",
+        name,
+    ) == [(0,)]
+
+
+def test_login_and_logout_require_an_allowed_origin(api: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    assert _login(client, name, origin=None).status_code == 403
+    assert _login(client, name, origin="https://evil.test").status_code == 403
+    assert _login(client, name).status_code == 200
+    assert client.post("/auth/logout").status_code == 403
+    assert client.post("/auth/logout", headers={"Origin": "https://evil.test"}).status_code == 403
+
+
+def test_expired_reset_link_is_refused(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    client.post("/auth/forgot-password", json={"email": f"{name}@example.test"})
+    token = _token_from(mailer, f"{name}@example.test")
+    _sql(
+        env,
+        "UPDATE email_tokens SET expires_at = now() - interval '1 second' "
+        "WHERE purpose = 'reset_password' AND used_at IS NULL",
+    )
+    r = client.post("/auth/reset-password", json={"token": token, "password": "brand new password"})
+    assert r.status_code == 400
+    assert _login(client, name).status_code == 200  # password unchanged
 
 
 def test_refresh_requires_an_allowed_origin(api: Any) -> None:

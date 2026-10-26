@@ -145,6 +145,20 @@ async def set_password_hash(conn: AsyncConnection, user_id: uuid.UUID, password_
     )
 
 
+async def lock_credentials(
+    conn: AsyncConnection, user_id: uuid.UUID
+) -> tuple[str, datetime | None] | None:
+    """(password_hash, disabled_at) with the user row locked until commit: a password change,
+    reset or disable that commits first is seen here (no lost update, no stale session)."""
+    row = (
+        await conn.execute(
+            text("SELECT password_hash, disabled_at FROM users WHERE id = :id FOR UPDATE"),
+            {"id": user_id},
+        )
+    ).first()
+    return None if row is None else (row.password_hash, row.disabled_at)
+
+
 async def mark_signed_in(conn: AsyncConnection, user_id: uuid.UUID) -> None:
     await conn.execute(
         text("UPDATE users SET last_sign_in_at = now() WHERE id = :id"), {"id": user_id}
@@ -251,7 +265,8 @@ async def rotate_refresh(
     row = (
         await conn.execute(
             text(
-                "SELECT t.id, t.user_id, t.family_id, t.revoked_at, t.expires_at, u.disabled_at "
+                "SELECT t.id, t.user_id, t.family_id, t.revoked_at, t.expires_at, "
+                "t.replaced_by, u.disabled_at "
                 "FROM refresh_tokens t JOIN users u ON u.id = t.user_id "
                 "WHERE t.token_hash = :h FOR UPDATE OF t"
             ),
@@ -261,7 +276,12 @@ async def rotate_refresh(
     state = (
         None
         if row is None
-        else RefreshRow(row.revoked_at, row.expires_at, user_disabled=row.disabled_at is not None)
+        else RefreshRow(
+            row.revoked_at,
+            row.expires_at,
+            user_disabled=row.disabled_at is not None,
+            rotated=row.replaced_by is not None,
+        )
     )
     outcome = refresh_outcome(state, now)
     if row is None or outcome == "unknown":
@@ -271,6 +291,8 @@ async def rotate_refresh(
             "refresh reuse detected, session family revoked", extra={"user_id": str(row.user_id)}
         )
         await revoke_family(conn, row.family_id)
+        return RotateResult(outcome)
+    if outcome in ("raced", "revoked"):  # 401 without side effects
         return RotateResult(outcome)
     if outcome == "disabled":
         await revoke_user_tokens(conn, row.user_id)
@@ -316,7 +338,9 @@ async def issue_email_token(
     ttl: timedelta,
     now: datetime,
 ) -> str:
-    """A new single-use token; earlier unused tokens of the same purpose stop working."""
+    """A new single-use token; earlier unused tokens of the same purpose stop working.
+    The user row lock serialises concurrent requests, so at most one token stays valid."""
+    await conn.execute(text("SELECT 1 FROM users WHERE id = :u FOR UPDATE"), {"u": user_id})
     await conn.execute(
         text(
             "UPDATE email_tokens SET used_at = now() "
@@ -333,6 +357,22 @@ async def issue_email_token(
         {"u": user_id, "p": purpose, "h": hash_token(token), "exp": now + ttl},
     )
     return token
+
+
+async def find_email_token(
+    conn: AsyncConnection, token: str, purpose: EmailPurpose, *, now: datetime
+) -> uuid.UUID | None:
+    """The user of a valid (unused, unexpired) token, row locked until commit; not consumed."""
+    r = await conn.execute(
+        text(
+            "SELECT user_id FROM email_tokens "
+            "WHERE token_hash = :h AND purpose = :p AND used_at IS NULL AND expires_at > :now "
+            "FOR UPDATE"
+        ),
+        {"h": hash_token(token), "p": purpose, "now": now},
+    )
+    user_id: uuid.UUID | None = r.scalar_one_or_none()
+    return user_id
 
 
 async def consume_email_token(

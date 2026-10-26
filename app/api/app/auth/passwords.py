@@ -52,6 +52,7 @@ def verify_password(password: str, stored: str) -> VerifyResult:
         except ValueError:
             return VerifyResult(False)
         return VerifyResult(ok, needs_rehash=ok)
+    verify_dummy(password)  # same cost as a real check
     return VerifyResult(False)
 
 

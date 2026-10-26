@@ -152,3 +152,27 @@ def test_kid_is_stable_for_a_key() -> None:
         .decode()
     )
     assert JwtKeys.from_private_pem(pem).kid == JwtKeys.from_private_pem(pem).kid
+
+
+def test_previous_key_still_verifies_during_rotation_and_is_published() -> None:
+    old = JwtKeys.from_private_pem(generate_private_pem())
+    token = issue_access_token(old, USER, "user")
+    new = JwtKeys.from_private_pem(generate_private_pem()).with_previous(old.public_pem.decode())
+    assert verify_access_token(new, token).user_id == USER
+    kids = [k["kid"] for k in new.jwks()["keys"]]
+    assert kids == [new.kid, old.kid]
+    assert (
+        issue_access_token(new, USER, "user")
+        and pyjwt.get_unverified_header(issue_access_token(new, USER, "user"))["kid"] == new.kid
+    )  # always signs with the current key
+
+
+def test_unknown_kid_is_rejected(keys: JwtKeys) -> None:
+    other = JwtKeys.from_private_pem(generate_private_pem())
+    with pytest.raises(InvalidAccessToken):
+        verify_access_token(keys, issue_access_token(other, USER, "user"))
+
+
+def test_previous_key_must_be_an_ed25519_public_key(keys: JwtKeys) -> None:
+    with pytest.raises(ValueError, match="Ed25519"):
+        keys.with_previous("not a pem")

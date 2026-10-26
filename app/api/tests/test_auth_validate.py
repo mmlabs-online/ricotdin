@@ -37,8 +37,8 @@ def test_invalid_usernames(name: str, fragment: str) -> None:
     assert err is not None and fragment in err
 
 
-def test_email_needs_an_at_sign_and_three_chars() -> None:
-    assert validate_email("a@b") is None
+def test_email_needs_an_at_sign_and_a_domain() -> None:
+    assert validate_email("a@b.co") is None
     assert validate_email("ab") is not None
     assert validate_email("a@") is not None
     assert validate_email("noatsign.com") is not None
@@ -75,3 +75,25 @@ def test_other_identifiers_are_usernames() -> None:
 @pytest.mark.parametrize("raw", ["", "   "])
 def test_empty_identifier_is_none(raw: str) -> None:
     assert classify_identifier(raw) is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "victim@corp.test,attacker@evil.test",
+        "victim@corp.test;x@evil.test",
+        "Name <a@b.test>",
+        '"a"@b.test',
+        "a@b",
+        "a@@b.test",
+        "a@b..test",
+        "a@-b.test",
+    ],
+)
+def test_only_a_single_plain_address_is_accepted(bad: str) -> None:
+    assert validate_email(bad) is not None
+
+
+@pytest.mark.parametrize("ok", ["a@b.test", "first.last+tag@sub.example.co", "x_y-z%1@a-b.vn"])
+def test_plain_addresses_are_accepted(ok: str) -> None:
+    assert validate_email(ok) is None

@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     # Auth (ARC-05). Without JWT_PRIVATE_KEY the auth routes answer 503; without SMTP_HOST no
     # email is sent (register reports email_sent=false).
     jwt_private_key: SecretStr | None = Field(default=None, alias="JWT_PRIVATE_KEY")
+    # Public key of the key replaced by `gen_jwt_key --rotate`; keep >= 16 min, then remove.
+    jwt_previous_public_key: str | None = Field(default=None, alias="JWT_PREVIOUS_PUBLIC_KEY")
     web_origin_raw: str = Field(default="", alias="WEB_ORIGIN")  # SPA origin: links + CORS
     refresh_ttl_days: int = Field(default=30, ge=1, le=365, alias="REFRESH_TTL_DAYS")
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")

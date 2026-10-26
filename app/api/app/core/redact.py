@@ -13,8 +13,19 @@ from typing import Any
 REDACTED = "[REDACTED]"
 _MAX_DEPTH = 20
 
-_KEY = r"(?:[A-Za-z0-9_]*(?:password(?:_hash)?|passwd|pwd|secret|token|api_?key|dsn)|input_value)"
+_KEY = (
+    r"(?:[A-Za-z0-9_]*(?:password(?:_hash)?|passwd|pwd|secret|token|api_?key|private_?key|dsn)"
+    r"|input_value)"
+)
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    # PEM private keys, with real or escaped (\n) newlines; first, so the key=value rule below
+    # cannot stop at the first space inside the block
+    (
+        re.compile(
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL
+        ),
+        REDACTED,
+    ),
     # scheme://user:password@host → keep user and host
     (
         re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s@/]+(@)", re.IGNORECASE),

@@ -285,7 +285,7 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
 ---
 
 ### ARC-05 — Self-managed auth
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want to register, verify my email, sign in with email or username, reset my password and stay signed in so that I can use v2 without Supabase.
@@ -328,6 +328,18 @@ Replaces Supabase Auth and the JWT hook (AUT-*, §9b). Same rules: role never cl
 
 **Key files (expected)**
 - `app/api/app/auth/**`, `app/api/app/routers/auth.py`, `app/api/app/email/**`
+
+**As built (ARC-05)**
+- `app/api/app/auth/{validate,identifier,passwords,tokens,jwt,cookies,runtime,service,deps}.py`,
+  `app/api/app/routers/{auth,profile}.py`, `app/api/app/email/{sender,templates}.py`,
+  `app/api/scripts/gen_jwt_key.py`; tests `app/api/tests/test_auth_*.py` (pure) +
+  `test_auth_integration.py`. Design summary: CLAUDE.md §0.3.
+- Added beyond the spec: `GET /auth/me`, `POST /auth/resend-verification`, login Origin check,
+  `JWT_PREVIOUS_PUBLIC_KEY` rotation overlap, 10 s refresh race window (not treated as theft).
+- Owner decisions 2026-10-26: role/disable effective within 15 min (token), web + API on sibling
+  subdomains (SameSite=Lax), duplicate email -> 409.
+- Open: pre-registration of an unverified email (CLAUDE.md §0.3), absolute session lifetime,
+  secret scanning (gitleaks) in CI.
 
 ---
 
@@ -560,6 +572,10 @@ Figma Make output is a prototype: mock data, state-based navigation, hard-coded 
 2. User switches VI ↔ EN; choice persists.
 
 **Frontend**
+- Auth contract from ARC-05 (CLAUDE.md §0.3): access token in memory only; call `/auth/refresh`
+  with `credentials: 'include'` on start and on a 401 (retry the request once); serialise
+  refreshes across tabs (single-flight + BroadcastChannel) - a second refresh within 10 s gets
+  401 without logging out; email links carry `#token=` in the fragment.
 - Audit + cleanup (TS strict, remove unused deps), React Router routes, design tokens as CSS variables with light/dark, i18n (EN/VI resource files), `config.json` read at runtime (`apiUrl`, `authUrl`), API client generated from `/openapi.json` (openapi-typescript), TanStack Query, auth provider (in-memory access token, silent refresh), route guards (user/admin), error boundary.
 
 **Backend**
@@ -742,6 +758,9 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
 - From the ARC-04 review: `FORWARDED_ALLOW_IPS` = proxy subnet with port 8000 internal only; pin base images
   and CI actions by digest/SHA; `API_DOCS` off in production; provision production logins with
   `scripts.provision_db_roles` against the `main` branch.
+- From the ARC-05 review: production `JWT_PRIVATE_KEY` generated on the server
+  (`scripts.gen_jwt_key --env-file`), `WEB_ORIGIN` = production SPA origin, web and API on sibling
+  subdomains served at `/`, SMTP app password of a dedicated account; add gitleaks (pre-commit + CI).
 
 **Done check**
 - v2.0.0 live; first nightly Neon backup uploaded.

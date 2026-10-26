@@ -31,6 +31,14 @@ def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
+def _thumbprint(raw: bytes) -> str:
+    """RFC 7638 thumbprint of the OKP JWK: the key id."""
+    canonical = json.dumps(
+        {"crv": "Ed25519", "kty": "OKP", "x": _b64url(raw)}, separators=(",", ":")
+    )
+    return _b64url(hashlib.sha256(canonical.encode()).digest())
+
+
 def generate_private_pem() -> str:
     return (
         Ed25519PrivateKey.generate()
@@ -49,9 +57,35 @@ class JwtKeys:
     public_key: Ed25519PublicKey
     public_raw: bytes
     kid: str
+    # Public keys of earlier signing keys (kid -> key), accepted until their tokens expire.
+    previous: tuple[tuple[str, Ed25519PublicKey, bytes], ...] = ()
 
     def __repr__(self) -> str:
         return f"JwtKeys(kid={self.kid!r})"
+
+    def with_previous(self, public_pem: str) -> "JwtKeys":
+        """Also accept tokens of an earlier key (rotation overlap, JWT_PREVIOUS_PUBLIC_KEY)."""
+        text = public_pem.strip().replace("\\n", "\n")  # single-line env values
+        try:
+            key = serialization.load_pem_public_key(text.encode())
+        except ValueError:
+            raise ValueError(
+                "JWT_PREVIOUS_PUBLIC_KEY must be an Ed25519 public key (PEM)"
+            ) from None
+        if not isinstance(key, Ed25519PublicKey):
+            raise ValueError("JWT_PREVIOUS_PUBLIC_KEY must be an Ed25519 public key (PEM)")
+        raw = key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+        kid = _thumbprint(raw)
+        if kid == self.kid:
+            return self
+        return JwtKeys(
+            self.private_key, self.public_key, self.public_raw, self.kid, ((kid, key, raw),)
+        )
+
+    def verify_key(self, kid: str | None) -> Ed25519PublicKey | None:
+        if kid is None or kid == self.kid:
+            return self.public_key
+        return next((key for k, key, _ in self.previous if k == kid), None)
 
     @classmethod
     def from_private_pem(cls, pem: str) -> "JwtKeys":
@@ -61,12 +95,7 @@ class JwtKeys:
             raise ValueError("JWT_PRIVATE_KEY must be an Ed25519 private key (PEM, PKCS#8)")
         public = key.public_key()
         raw = public.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-        # RFC 7638 thumbprint of the OKP JWK
-        canonical = json.dumps(
-            {"crv": "Ed25519", "kty": "OKP", "x": _b64url(raw)}, separators=(",", ":")
-        )
-        kid = _b64url(hashlib.sha256(canonical.encode()).digest())
-        return cls(key, public, raw, kid)
+        return cls(key, public, raw, _thumbprint(raw))
 
     @property
     def public_pem(self) -> bytes:
@@ -75,16 +104,18 @@ class JwtKeys:
         )
 
     def jwks(self) -> dict[str, Any]:
+        published = [(self.kid, self.public_raw)] + [(k, raw) for k, _, raw in self.previous]
         return {
             "keys": [
                 {
                     "kty": "OKP",
                     "crv": "Ed25519",
-                    "x": _b64url(self.public_raw),
-                    "kid": self.kid,
+                    "x": _b64url(raw),
+                    "kid": kid,
                     "alg": "EdDSA",
                     "use": "sig",
                 }
+                for kid, raw in published
             ]
         }
 
@@ -115,9 +146,16 @@ def issue_access_token(
 
 def verify_access_token(keys: JwtKeys, token: str) -> AccessClaims:
     try:
+        kid = pyjwt.get_unverified_header(token).get("kid")
+    except pyjwt.PyJWTError as exc:
+        raise InvalidAccessToken(type(exc).__name__) from None
+    key = keys.verify_key(kid if isinstance(kid, str) else None)
+    if key is None:
+        raise InvalidAccessToken("unknown kid")
+    try:
         payload = pyjwt.decode(
             token,
-            keys.public_key,
+            key,
             algorithms=["EdDSA"],
             audience=AUDIENCE,
             issuer=ISSUER,

@@ -45,3 +45,12 @@ def test_unknown_or_corrupt_hashes_never_verify(bad: str) -> None:
 
 def test_dummy_verify_runs_without_error() -> None:
     verify_dummy("whatever")  # equal work for unknown users (no user-enumeration by timing)
+
+
+def test_client_ip_key_groups_ipv6_by_64_prefix() -> None:
+    from app.auth.deps import ip_key
+
+    assert ip_key("2001:db8:1:2:aaaa::1") == ip_key("2001:db8:1:2:bbbb::9") == "2001:db8:1:2::/64"
+    assert ip_key("2001:db8:1:3::1") != ip_key("2001:db8:1:2::1")
+    assert ip_key("203.0.113.7") == "203.0.113.7"
+    assert ip_key(None) == "?" and ip_key("testclient") == "testclient"

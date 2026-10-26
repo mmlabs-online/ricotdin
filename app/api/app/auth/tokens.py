@@ -7,10 +7,13 @@ already rotated (revoked) means it was copied, so its whole family is revoked.
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
-RefreshOutcome = Literal["ok", "unknown", "reuse", "expired", "disabled"]
+RefreshOutcome = Literal["ok", "unknown", "reuse", "raced", "revoked", "expired", "disabled"]
+# Two tabs (or a retried request) may present the same token right after it was rotated: that is
+# a race, not theft. Answer 401 without revoking; the browser already holds the successor cookie.
+REUSE_GRACE = timedelta(seconds=10)
 
 
 def new_opaque_token() -> str:
@@ -25,8 +28,10 @@ def is_expired(expires_at: datetime, now: datetime) -> bool:
     return expires_at <= now
 
 
-def should_revoke_family(revoked_at: datetime | None) -> bool:
-    return revoked_at is not None
+def should_revoke_family(revoked_at: datetime | None, *, rotated: bool, now: datetime) -> bool:
+    """A token that was rotated (has a successor) presented again after the grace window was
+    copied. Tokens revoked by logout / reset / expiry have no successor: just refuse them."""
+    return rotated and revoked_at is not None and revoked_at <= now - REUSE_GRACE
 
 
 @dataclass(frozen=True)
@@ -34,13 +39,16 @@ class RefreshRow:
     revoked_at: datetime | None
     expires_at: datetime
     user_disabled: bool
+    rotated: bool = False  # replaced_by is set
 
 
 def refresh_outcome(row: RefreshRow | None, now: datetime) -> RefreshOutcome:
     if row is None:
         return "unknown"
-    if should_revoke_family(row.revoked_at):
-        return "reuse"
+    if row.revoked_at is not None:
+        if should_revoke_family(row.revoked_at, rotated=row.rotated, now=now):
+            return "reuse"
+        return "raced" if row.rotated else "revoked"
     if row.user_disabled:
         return "disabled"
     if is_expired(row.expires_at, now):

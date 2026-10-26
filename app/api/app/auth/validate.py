@@ -6,7 +6,10 @@ Each validator returns ``None`` when valid, or a user-facing message.
 import re
 
 _USERNAME = re.compile(r"^[a-z0-9_-]+$")
-_FORBIDDEN_EMAIL_CHARS = re.compile(r"[\s\x00-\x1f\x7f]")
+# One plain address: no display names, quotes, comments or lists (recipient injection, ARC-05).
+_EMAIL = re.compile(
+    r"^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$"
+)
 MIN_PASSWORD = 8
 MAX_PASSWORD = 256  # bounds hashing work per request
 
@@ -30,11 +33,8 @@ def validate_username(username: str) -> str | None:
 
 
 def validate_email(email: str) -> str | None:
-    """Basic shape only (v1 parity); the verification email proves ownership."""
-    local, at, domain = email.rpartition("@")
-    if not at or not local or not domain or len(email) > 254:
-        return "Enter a valid email address."
-    if _FORBIDDEN_EMAIL_CHARS.search(email):
+    """Shape only; the verification email proves ownership."""
+    if len(email) > 254 or not _EMAIL.match(email) or ".." in email:
         return "Enter a valid email address."
     return None
 

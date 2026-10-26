@@ -6,6 +6,7 @@ token was read from ``users.role`` when it was issued; a change applies on the n
 (≤ 15 minutes, owner decision 2026-10-26).
 """
 
+import ipaddress
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -55,3 +56,16 @@ def client_ip(request: Request) -> str | None:
     """Peer address; behind a proxy uvicorn rewrites it from X-Forwarded-For only for
     FORWARDED_ALLOW_IPS (CLAUDE.md §0.2)."""
     return request.client.host if request.client else None
+
+
+def ip_key(host: str | None) -> str:
+    """Rate-limit key for a client address: IPv6 by /64 (one host usually owns a whole /64)."""
+    if not host:
+        return "?"
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if addr.version == 6:
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return str(addr)
