@@ -285,7 +285,7 @@ Replaces the Next.js runtime, `instrumentation.ts` and shared helpers. Must keep
 ---
 
 ### ARC-05 — Self-managed auth
-**Priority:** High | **Status:** ✅ Done
+**Priority:** High | **Status:** ✅ Done (PR #35)
 
 **User Story**  
 As a user, I want to register, verify my email, sign in with email or username, reset my password and stay signed in so that I can use v2 without Supabase.
