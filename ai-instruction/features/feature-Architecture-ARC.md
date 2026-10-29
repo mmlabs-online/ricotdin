@@ -344,7 +344,7 @@ Replaces Supabase Auth and the JWT hook (AUT-*, §9b). Same rules: role never cl
 ---
 
 ### ARC-06 — Platform services: crypto, key pool, config, storage
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As the system, I want encryption, the provider key pool, app config and R2 storage ported to Python so that pipeline, chat and admin can be built on them.
@@ -380,8 +380,20 @@ As the system, I want encryption, the provider key pool, app config and R2 stora
 **Out of scope**
 - Admin UI for keys/storage (ARC-14).
 
-**Key files (expected)**
-- `app/api/app/services/crypto.py`, `keys/**`, `config.py`, `storage/**`
+**Key files**
+- `app/api/app/services/crypto.py`, `cache.py`, `config.py`, `platform.py`
+- `app/api/app/services/keys/{pool,source,guards}.py`, `storage/{config,r2,ownership}.py`
+- Tests: `app/api/tests/test_crypto.py`, `test_key_pool.py`, `test_key_source_failure.py`,
+  `test_platform_pure.py`, `test_platform_review.py`, `test_platform_integration.py`;
+  fixture `app/api/tests/fixtures/v1/crypto_v1.json` (synthetic key). The planned
+  `test_storage_keys.py` / `test_config.py` live in `test_platform_pure.py`.
+
+**Delivered**
+- All four acceptance criteria covered by tests; CLAUDE.md §0.4 describes the runtime.
+- Open follow-ups: `KEY_ENCRYPTION_SECRET` rotation (no key id / previous-key decrypt, same as
+  v1); ownership is the caller's duty (R2Storage accepts any key); ARC-07 must always pass
+  `content_length` on upload presign; ARC-08 owns one pool per provider; optional startup
+  refusal when `KEY_ENCRYPTION_SECRET` is unset.
 
 ---
 

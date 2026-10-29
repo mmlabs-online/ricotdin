@@ -6,6 +6,12 @@
 ## [Unreleased]
 
 ### Thay đổi
+- Dịch vụ nền của API v2:
+  - Mã hoá AES-256-GCM đọc được ciphertext của v1 (cùng `KEY_ENCRYPTION_SECRET`).
+  - Kho API key của nhà cung cấp lấy từ `admin_config`, dự phòng bằng biến môi trường, cache 30 giây; xoay vòng key khi bị giới hạn tần suất, tạm khoá key khi bị từ chối.
+  - Đọc `app_config` an toàn: giá trị sai không bao giờ bật cờ.
+  - Lưu trữ R2 theo cấu hình admin: URL ký sẵn, giới hạn dung lượng khi tải, kiểm tra quyền sở hữu key file.
+  - Không có migration, không có env mới (ARC-06)
 - Đăng nhập tự quản trên API v2 (thay Supabase Auth): đăng ký + xác minh email (mail song ngữ Anh/Việt qua SMTP), đăng nhập bằng email hoặc username, giữ phiên bằng cookie refresh đổi sau mỗi lần dùng (dùng lại token cũ sau 10 giây → huỷ cả phiên), đăng xuất, quên/đặt lại mật khẩu, đổi mật khẩu; mật khẩu argon2id (tài khoản chuyển từ Supabase tự băm lại khi đăng nhập); access token EdDSA 15 phút + JWKS; giới hạn tần suất. Env mới: `JWT_PRIVATE_KEY` (sinh bằng `scripts.gen_jwt_key`), `WEB_ORIGIN`, `SMTP_*`, `MAIL_FROM`; không có migration (ARC-05)
 - Lõi API v2 (FastAPI): log JSON có che secret, Sentry không nhận nội dung, CORS theo danh sách, lỗi có kiểu, `/health` + `/version.json`, image Docker (non-root, ffmpeg) và artifact `openapi.json` trong CI; mỗi role DB một login riêng (NOINHERIT, timeout), API từ chối khởi động nếu login có quyền quá mức; role `ricotdin_worker` tách khỏi service, bảng log chỉ được ghi thêm (migration 0002) (ARC-04)
 - Schema Postgres cho v2 trên Neon (Alembic): sinh tự động từ schema + 38 migration của v1 (thay `auth.*` của Supabase bằng bảng `users`/`refresh_tokens`/`email_tokens` riêng và ngữ cảnh `app.user_id`/`app.role` cho RLS), có test đối chiếu v1↔v2 và test RLS; siết quyền so với v1 (role app không còn TRUNCATE/TRIGGER/TEMP, chỉ được ghi nơi có policy) (ARC-02)

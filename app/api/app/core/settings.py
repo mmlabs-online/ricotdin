@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     smtp_user: str | None = Field(default=None, alias="SMTP_USER")
     smtp_password: SecretStr | None = Field(default=None, alias="SMTP_PASSWORD")
     mail_from: str | None = Field(default=None, alias="MAIL_FROM")
+    # Platform services (ARC-06): AES-256-GCM master key for admin_config / storage_config secrets.
+    # MUST be the v1 value, otherwise every stored provider key and the R2 secret are lost.
+    key_encryption_secret: SecretStr | None = Field(default=None, alias="KEY_ENCRYPTION_SECRET")
 
     @property
     def web_origin(self) -> str | None:

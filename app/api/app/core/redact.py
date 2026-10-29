@@ -14,7 +14,7 @@ REDACTED = "[REDACTED]"
 _MAX_DEPTH = 20
 
 _KEY = (
-    r"(?:[A-Za-z0-9_]*(?:password(?:_hash)?|passwd|pwd|secret|token|api_?key|private_?key|dsn)"
+    r"(?:[A-Za-z0-9_]*(?:password(?:_hash)?|passwd|pwd|secret|token|api_?key|private_?key|dsn|signature|x-amz-credential)"
     r"|input_value)"
 )
 _PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -58,7 +58,16 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     ),
 ]
 
-_ALWAYS_SECRET_PARTS = {"password", "passwd", "pwd", "secret", "cookie", "authorization", "dsn"}
+_ALWAYS_SECRET_PARTS = {
+    "password",
+    "passwd",
+    "pwd",
+    "secret",
+    "cookie",
+    "authorization",
+    "dsn",
+    "signature",
+}
 _KEY_QUALIFIERS = {"api", "private", "access", "secret", "encryption", "service", "role", "signing"}
 
 

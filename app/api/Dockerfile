@@ -3,8 +3,10 @@
 #   docker build -t ricotdin-api:local app/api
 #   docker run -p 8000:8000 --env-file runtime.env ricotdin-api:local
 # runtime.env holds ONLY runtime values (DATABASE_URL_APP/_SERVICE/_WORKER, JWT_PRIVATE_KEY,
-# SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN) — never the owner DATABASE_URL, so
-# never app/api/.env. Secrets are injected at runtime only, never at build time.
+# KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN, optional
+# provider key fallbacks GEMINI_API_KEYS / GEMINI_API_KEY_1..20 / GEMINI_API_KEY,
+# SPEECHMATICS_API_KEY, OPENAI_API_KEY, XAI_API_KEY / GROK_API_KEY) — never the owner
+# DATABASE_URL, so never app/api/.env. Secrets are injected at runtime only, never at build time.
 # Migrations are not run on start: `alembic upgrade head` is a separate, owner-credential step.
 
 FROM python:3.12-slim
