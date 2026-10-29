@@ -21,6 +21,12 @@ class AppError(Exception):
         return {}
 
 
+class BadRequest(AppError):
+    status = 400
+    code = "bad_request"
+    message = "The request could not be processed."
+
+
 class Unauthorized(AppError):
     status = 401
     code = "unauthorized"

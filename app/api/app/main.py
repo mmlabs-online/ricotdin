@@ -18,7 +18,11 @@ from app.core.logging import get_logger, setup_logging
 from app.core.sentry import init_sentry
 from app.core.settings import Settings, get_settings
 from app.core.version import resolve_version
+from app.routers import activity as activity_router
 from app.routers import auth as auth_router
+from app.routers import content as content_router
+from app.routers import folders as folders_router
+from app.routers import meetings as meetings_router
 from app.routers import profile as profile_router
 from app.services.platform import Platform
 
@@ -84,4 +88,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router.router)
     app.include_router(auth_router.wellknown)
     app.include_router(profile_router.router)
+    app.state.activity_limiter = activity_router.activity_limiter()
+    app.state.lookup_limiter = folders_router.lookup_limiter()
+    for module in (meetings_router, content_router, folders_router, activity_router):
+        app.include_router(module.router)
     return app
