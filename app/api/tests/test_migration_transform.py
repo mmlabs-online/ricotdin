@@ -340,3 +340,33 @@ def test_supabase_download_refuses_redirects() -> None:
     assert handlers[0].redirect_request(None, None, 302, "", {}, "https://x") is None  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         SupabaseStorage("http://ref.supabase.co", "k")
+
+
+def test_bug019_report_prints_on_a_cp1252_console() -> None:
+    """BUG-019: printing the report must not raise on a Windows console (cp1252, strict)."""
+    import io
+
+    from scripts.migrate_from_supabase import emit_report
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    text = Report(started_at="t", source_host="a", target_host="b").render()
+    assert "→" in text
+    emit_report(text, console)
+    console.flush()
+    out = raw.getvalue().decode("cp1252")
+    assert "Result:" in out
+    assert "- Source: `a` ? target: `b`" in out  # → replaced, the rest intact
+    emit_report(text, None)  # no console at all: silently nothing
+
+
+def test_bug019_report_keeps_unicode_on_a_utf8_console() -> None:
+    import io
+
+    from scripts.migrate_from_supabase import emit_report
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="utf-8", errors="strict", newline="\n")
+    emit_report("source → target ✅", console)
+    console.flush()
+    assert raw.getvalue().decode("utf-8") == "source → target ✅\n"

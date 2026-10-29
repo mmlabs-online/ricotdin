@@ -29,6 +29,7 @@
 | BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
 | BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | v1.1.1 | fix/BUG-017-docs-drift, PR #24 |
 | BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
+| BUG-019 | migrate_from_supabase crashes printing the report on a Windows console (cp1252) and exits 1 even on PASS | S3 | fixed | dev | ARC-03 | bugfix | dev | fix/BUG-019-migrate-console-encoding, PR #39 |
 
 ---
 
@@ -374,3 +375,31 @@ The docs assumed the default branch was `main` (true at some point or never set)
 
 **Fix**
 Docs and comments now state the real setup: default branch `dev`; `backup` environment must release secrets to `dev` (recommended branches `main` + `dev`) and needs the six environment secrets; manual run `gh workflow run backup.yml --ref dev`. §11 gained the v1.1.1 line. PRF-08 `[x]` + spec `✅ Done — delivered by AIP-06`. Workflow behaviour unchanged (comments only). **No automated regression test** — documentation only, no logic; verified the seeder still parses PRF-08 as `done`. Owner action still open: create the six `backup` environment secrets and restrict its branches to `main` + `dev`.
+
+## BUG-019 — migrate_from_supabase crashes printing the report on a Windows console (cp1252)
+
+**Reported:** 2026-10-29 · **Severity:** S3 · **Found in:** dev (ARC-03 rehearsal 1) · **Feature:** ARC-03
+
+**Steps to reproduce**
+1. Windows, PowerShell or Git Bash, no `PYTHONIOENCODING`.
+2. `uv run --env-file .env.migrate python -m scripts.migrate_from_supabase --confirm-target <host> --skip-storage --dry-run`
+
+**Expected**
+The report is printed and the exit code is 0 (PASS or dry run), 1 (FAIL) or 2 (blocked).
+
+**Actual**
+`UnicodeEncodeError: 'charmap' codec can't encode character '→' in position 134: character maps to <undefined>`
+from `print(text)` in `main()`. The report file is complete, but the exit code is always 1.
+
+**Root cause**
+`main()` prints the Markdown report (it contains `→`, `✅`, `❌`) with `print()`. On Windows stdout uses the console
+code page (cp1252) with the `strict` error handler, so the first non-cp1252 character raises before `main()` returns
+its exit code. stderr uses `backslashreplace`, which is why the `source → target` line did not crash.
+
+**Fix**
+`emit_report(text, stream)` in `scripts/migrate_from_supabase.py` writes the report re-encoded with the stream's own
+encoding and `errors="replace"` (characters the console lacks become `?`; a missing stdout is a no-op); `main()` uses it
+instead of `print()`. The report file is unchanged (UTF-8, full text). Regression tests:
+`app/api/tests/test_migration_transform.py` — `test_bug019_report_prints_on_a_cp1252_console` (strict cp1252 stream; asserts
+the `→` became `?`) and `test_bug019_report_keeps_unicode_on_a_utf8_console`. Verified: the original dry run on Windows
+without `PYTHONIOENCODING`, stdout piped, now prints and exits 0.

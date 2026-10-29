@@ -33,7 +33,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TextIO
 from urllib.parse import quote, urlsplit
 
 import psycopg
@@ -569,6 +569,18 @@ def run(
         return report
 
 
+def emit_report(text: str, stream: TextIO | None) -> None:
+    """Print the report without crashing on a console that cannot encode it (BUG-019).
+
+    A Windows console is cp1252 with the strict error handler; characters it lacks (→, ✅)
+    become ``?``. The report file always keeps the full text.
+    """
+    if stream is None:  # pythonw / no console: print() would have done nothing either
+        return
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    stream.write(text.encode(encoding, errors="replace").decode(encoding) + "\n")
+
+
 def _env(name: str) -> str:
     value = os.environ.get(name, "")
     if not value:
@@ -619,7 +631,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     text = report.render()
     Path(args.report).write_text(text, encoding="utf-8")
-    print(text)
+    emit_report(text, sys.stdout)
     if report.blocked:
         return 2
     return 0 if report.passed or report.dry_run else 1
