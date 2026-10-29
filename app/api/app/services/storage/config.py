@@ -5,6 +5,7 @@ The newest active ``provider='r2'`` row, its secret decrypted with KEY_ENCRYPTIO
 or undecryptable configuration resolves to None; callers raise ``StorageNotConfigured``.
 """
 
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -17,7 +18,11 @@ from app.services.cache import TtlCache
 from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key
 
 log = get_logger("storage")
+FAILURE_TTL_S = 5.0  # after a failed lookup, retry the database soon
 CACHE_TTL_S = 30.0
+
+_ACCOUNT_ID = re.compile(r"[0-9a-f]{32}")
+_BUCKET = re.compile(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]")
 
 STORAGE_SAFE_FIELDS = (
     "id",
@@ -42,6 +47,14 @@ class R2Config:
     secret_access_key: str = field(repr=False)
     bucket: str
 
+    def __post_init__(self) -> None:
+        # The endpoint host is built from account_id: anything else could point signed requests
+        # (and audio) at another host (SSRF).
+        if not _ACCOUNT_ID.fullmatch(self.account_id):
+            raise ValueError("R2 account id must be 32 lowercase hex characters")
+        if not _BUCKET.fullmatch(self.bucket) or ".." in self.bucket:
+            raise ValueError("R2 bucket name must be 3-63 lowercase letters, digits, '-' or '.'")
+
     @property
     def endpoint(self) -> str:
         return f"https://{self.account_id}.r2.cloudflarestorage.com"
@@ -59,18 +72,30 @@ class StorageConfigSource:
         self._cache: TtlCache[str, R2Config | None] = (
             TtlCache(CACHE_TTL_S, clock) if clock else TtlCache(CACHE_TTL_S)
         )
+        self._failed: TtlCache[str, bool] = (
+            TtlCache(FAILURE_TTL_S, clock) if clock else TtlCache(FAILURE_TTL_S)
+        )
 
     def __repr__(self) -> str:
         return "StorageConfigSource()"
 
     def invalidate(self) -> None:
         self._cache.invalidate()
+        self._failed.invalidate()
 
     async def r2(self, conn: AsyncConnection) -> R2Config | None:
         hit, cached = self._cache.get("r2")
         if hit:
             return cached
-        resolved = await self._load(conn)
+        if self._failed.get("r2")[0]:
+            return None
+        try:
+            async with conn.begin_nested():  # a failed read must not abort the caller's tx
+                resolved = await self._load(conn)
+        except Exception as exc:  # noqa: BLE001 - v1: unreadable config resolves to null
+            log.error("storage_config lookup failed (%s)", type(exc).__name__)
+            self._failed.put("r2", True)
+            return None
         self._cache.put("r2", resolved)
         return resolved
 
@@ -98,4 +123,8 @@ class StorageConfigSource:
         except DecryptError:
             log.error("storage_config row %s does not decrypt", row.id)
             return None
-        return R2Config(row.account_id, row.access_key_id, secret, row.bucket)
+        try:
+            return R2Config(row.account_id, row.access_key_id, secret, row.bucket)
+        except ValueError as exc:
+            log.error("storage_config row %s is invalid: %s", row.id, exc)
+            return None

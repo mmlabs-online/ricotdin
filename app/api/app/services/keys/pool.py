@@ -24,6 +24,7 @@ from typing import Literal
 
 import anyio
 
+from app.core.errors import ServiceUnavailable
 from app.core.logging import get_logger
 
 log = get_logger("keys")
@@ -49,16 +50,37 @@ class PoolConfig:
     max_cooldown_wait_s: float
 
 
-class AllKeysExhausted(Exception):
-    """No key could serve the call. ``__cause__`` is the last provider error."""
+class NoUsableKeys(ServiceUnavailable):
+    """No key configured, or every key was rejected with 401."""
 
-    def __init__(self, pool_name: str, key_count: int, attempts: int) -> None:
-        super().__init__(
-            f"all {key_count} {pool_name} key(s) exhausted after {attempts} attempt(s); "
-            "check key validity and quota"
-        )
+    code = "no_provider_keys"
+    message = "The AI service is not available right now. Please try again later."
+
+
+class AllKeysExhausted(Exception):
+    """No key could serve the call.
+
+    The provider exception is NOT chained (its message may contain a key, e.g. a URL with
+    ``?key=``); only its type and HTTP status are kept for logs and error mapping.
+    """
+
+    def __init__(
+        self,
+        pool_name: str,
+        key_count: int,
+        attempts: int,
+        last: BaseException | None = None,
+    ) -> None:
         self.key_count = key_count
         self.attempts = attempts
+        self.last_error_type = type(last).__name__ if last is not None else None
+        self.last_status = _status(last) if last is not None else None
+        detail = f" (last error {self.last_error_type}"
+        detail += f" {self.last_status})" if self.last_status else ")"
+        super().__init__(
+            f"all {key_count} {pool_name} key(s) exhausted after {attempts} attempt(s); "
+            "check key validity and quota" + (detail if last is not None else "")
+        )
 
 
 def _status(err: BaseException) -> int | None:
@@ -69,11 +91,23 @@ def _status(err: BaseException) -> int | None:
     return None
 
 
+_RATE_LIMIT_MSG = re.compile(r"RESOURCE_EXHAUSTED|quota", re.I)
+_INVALID_KEY_MSG = re.compile(r"API_KEY_INVALID|invalid.api.key|API key not valid", re.I)
+MAX_RETRY_AFTER_S = 3600.0
+
+
 def classify_error(
     err: BaseException, is_non_retryable: Callable[[BaseException], bool]
 ) -> ErrorClass:
     if is_non_retryable(err):
         return "bad-request"
+    msg = str(err)
+    # Messages first for the two cases providers report with other statuses: Gemini answers a
+    # revoked key with 400 API_KEY_INVALID, and quota errors with 429 or 400 RESOURCE_EXHAUSTED.
+    if _INVALID_KEY_MSG.search(msg):
+        return "invalid-key"
+    if _RATE_LIMIT_MSG.search(msg):
+        return "rate-limit"
     status = _status(err)
     if status is not None:
         if status == 429:
@@ -88,10 +122,9 @@ def classify_error(
             return "transient"
     if isinstance(err, TimeoutError | ConnectionError):
         return "transient"
-    msg = str(err)
-    if re.search(r"\b429\b", msg) or re.search(r"RESOURCE_EXHAUSTED|quota", msg, re.I):
+    if re.search(r"\b429\b", msg):
         return "rate-limit"
-    if re.search(r"\b401\b", msg) or re.search(r"API_KEY_INVALID|invalid.api.key", msg, re.I):
+    if re.search(r"\b401\b", msg):
         return "invalid-key"
     if re.search(r"\b403\b", msg) or re.search(r"permission.denied", msg, re.I):
         return "forbidden"
@@ -104,13 +137,32 @@ def classify_error(
     return "unknown"
 
 
+def _header(err: BaseException, name: str) -> str | None:
+    headers = getattr(getattr(err, "response", None), "headers", None)
+    if headers is None:
+        return None
+    try:
+        items = dict(headers).items()
+    except (TypeError, ValueError):
+        return None
+    for key, value in items:
+        if isinstance(key, str) and key.lower() == name:
+            return str(value)
+    return None
+
+
 def retry_after_seconds(err: BaseException) -> float | None:
-    value = getattr(err, "retry_after", None)
-    if isinstance(value, int | float) and not isinstance(value, bool) and value > 0:
-        return float(value)
-    m = re.search(r"retry[_\-\s]?(?:after|delay)[\"':\s=]+(\d+)", str(err), re.I)
-    if m and int(m.group(1)) > 0:
-        return float(m.group(1))
+    """Seconds to wait from a ``retry_after`` attribute, a Retry-After header (OpenAI/xAI SDKs)
+    or the message (Gemini ``retryDelay``); capped at an hour."""
+    value: object = getattr(err, "retry_after", None)
+    if not (isinstance(value, int | float) and not isinstance(value, bool)):
+        header = _header(err, "retry-after")
+        value = float(header) if header and header.strip().isdigit() else None
+    if value is None:
+        m = re.search(r"retry[_\-\s]?(?:after|delay)[\"':\s=]+(\d+)", str(err), re.I)
+        value = float(m.group(1)) if m else None
+    if isinstance(value, int | float) and value > 0:
+        return min(float(value), MAX_RETRY_AFTER_S)
     return None
 
 
@@ -137,11 +189,12 @@ class KeyPool[C]:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = anyio.sleep,
         jitter: Callable[[], float] = lambda: 0.75 + random.random() * 0.5,  # noqa: S311
+        on_invalid_key: Callable[[KeyWithMeta], None] | None = None,
     ) -> None:
         if not keys:
-            raise ValueError(
-                f"No {name} API keys configured: set the environment variable or add a key "
-                "in the admin UI"
+            raise NoUsableKeys(
+                detail=f"No usable {name} API keys: none configured (env or admin UI) or all "
+                "rejected with 401"
             )
         self._keys = [_KeyState(k.key, k.id, i + 1) for i, k in enumerate(keys)]
         self._build = build_client
@@ -151,6 +204,7 @@ class KeyPool[C]:
         self._clock = clock
         self._sleep = sleep
         self._jitter = jitter
+        self._on_invalid = on_invalid_key
 
     def __repr__(self) -> str:
         return f"KeyPool(name={self._name!r}, keys={len(self._keys)})"
@@ -195,13 +249,14 @@ class KeyPool[C]:
                 soonest = self._soonest()
                 wait = None if soonest is None else max(0.0, soonest - self._clock()) + 0.05
                 if wait is None or wait > self._cfg.max_cooldown_wait_s:
-                    raise AllKeysExhausted(self._name, len(self._keys), attempt) from last
+                    raise AllKeysExhausted(self._name, len(self._keys), attempt, last) from None
                 log.warning("all %s keys cooling down; waiting %.0fs", self._name, wait)
                 await self._sleep(wait)  # a pure cooldown wait does not use an attempt
                 continue
             state.last_used_at = self._clock()
+            client = self._build(state.key)  # a factory bug is ours: not retried on other keys
             try:
-                result = await fn(self._build(state.key), state.key_id)
+                result = await fn(client, state.key_id)
             except Exception as err:  # noqa: BLE001 - classified below, re-raised when fatal
                 last = err
                 kind = classify_error(err, self._non_retryable)
@@ -216,7 +271,7 @@ class KeyPool[C]:
                 continue
             state.failures = 0
             return result
-        raise AllKeysExhausted(self._name, len(self._keys), self.max_attempts) from last
+        raise AllKeysExhausted(self._name, len(self._keys), self.max_attempts, last) from None
 
     def _penalise(self, state: _KeyState, kind: ErrorClass, err: BaseException) -> None:
         state.failures += 1
@@ -230,6 +285,8 @@ class KeyPool[C]:
             )  # fmt: skip
         elif kind == "invalid-key":
             state.disabled = True
+            if self._on_invalid is not None:  # KeySource skips it for later pools too
+                self._on_invalid(KeyWithMeta(state.key_id, state.key))
             log.warning("%s key #%d rejected (401): disabled until restart", self._name,
                         state.index, extra={"error": error})  # fmt: skip
         elif kind == "forbidden":
@@ -251,9 +308,9 @@ class AcquiredKey:
 class SpeechmaticsKeyPool:
     def __init__(self, keys: list[KeyWithMeta]) -> None:
         if not keys:
-            raise ValueError(
-                "No Speechmatics API keys configured: set SPEECHMATICS_API_KEY or add a key "
-                "in the admin UI"
+            raise NoUsableKeys(
+                detail="No usable Speechmatics API keys: none configured (SPEECHMATICS_API_KEY "
+                "or admin UI) or all rejected with 401"
             )
         self._keys = list(keys)
         self._in_flight = [0] * len(keys)

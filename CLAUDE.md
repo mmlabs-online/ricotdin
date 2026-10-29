@@ -180,6 +180,36 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Integration tests** (`*_integration.py`) create and drop `ricotdin_test_*` databases on the
   `DATABASE_URL` branch (never point it at `main`); CI runs them against a `pgvector/pgvector:pg18` service.
 
+### 0.4 v2 platform services (ARC-06)
+
+- **`Platform`** (`app/services/platform.py`, `app.state.platform`, `get_platform`): `keys`
+  (`KeySource`), `config` (`AppConfigReader`), `storage_config`, `r2(conn)`. Use them only inside
+  `db.role_transaction('ricotdin_service' | 'ricotdin_worker')`; `ricotdin_app` cannot read
+  `admin_config` / `storage_config`.
+- **Crypto** (`crypto.py`): AES-256-GCM, byte-compatible with v1 (fixture test).
+  `KEY_ENCRYPTION_SECRET` must be the **same value as v1**: 64 hex chars or standard base64 of 32
+  bytes. A malformed value stops startup. An unset value means stored keys and R2 are unusable;
+  only an error is logged. No rotation path yet (open follow-up).
+- **Keys** (`keys/source.py`, `pool.py`): active `admin_config` rows, decrypted and cached 30 s.
+  If none, the env fallback (`GEMINI_API_KEYS`, then `GEMINI_API_KEY_1..20`, then
+  `GEMINI_API_KEY`; `SPEECHMATICS_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY` / `GROK_API_KEY`).
+  A DB failure also falls back to env, cached 5 s. Keys rejected with 401 are skipped
+  process-wide until `keys.invalidate(provider)`, which ARC-10 must call after every key
+  mutation. No usable key raises `NoUsableKeys` (503). Pools keep cooldowns and in-flight state
+  per instance, so keep one pool per provider (ARC-08), never one per request.
+- **Config** (`config.py`): `app_config` reader, cache 30 s, `invalidate(key)` after an admin
+  PATCH. `coerce_config_bool` / `parse_int_setting` fail closed.
+- **Storage** (`storage/`): R2 only from `storage_config`, with no env fallback and a 30 s cache.
+  `storage_config.invalidate()` runs after an admin change. Rows with
+  `storage_provider='supabase'` raise `LegacyStorageUnsupported` (ARC-03 copies them).
+  - **Callers must check ownership first** (`owned_audio_path` / `is_owned_audio_key` /
+    `is_owned_avatar_key`); `R2Storage` accepts any key.
+  - Upload presign: media types only (parameters such as `;codecs=opus` are allowed); the URL
+    is signed with the exact `Content-Type`. Pass `content_length`. An unsupported type raises
+    415 `UnsupportedContentType`.
+  - Reads always take `max_bytes`.
+  - botocore, boto3, s3transfer and urllib3 log at WARNING, redacted.
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the

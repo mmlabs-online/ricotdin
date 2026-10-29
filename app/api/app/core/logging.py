@@ -22,6 +22,10 @@ REDACTED_LOGGERS = (
     "uvicorn.access",
     "sqlalchemy",
     "asyncpg",
+    "botocore",
+    "boto3",
+    "s3transfer",
+    "urllib3",
 )
 _STANDARD = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}
 
@@ -79,6 +83,8 @@ def setup_logging(level: str = "INFO") -> None:
             logger.setLevel(level.upper())
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("asyncpg").setLevel(logging.WARNING)
+    for name in ("botocore", "boto3", "s3transfer", "urllib3"):  # debug logs carry signed headers
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str = "") -> logging.Logger:

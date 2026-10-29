@@ -6,6 +6,10 @@ Routes, the worker and schedulers (ARC-07..10) use it inside a ``ricotdin_servic
     async with db.role_transaction("ricotdin_worker") as conn:
         keys = await platform.keys.active_keys(conn, "gemini")
         storage = await platform.r2(conn)
+
+Key pools (``KeyPool`` / ``SpeechmaticsKeyPool``) keep cooldowns and in-flight counts per
+instance: callers (ARC-08) must keep one pool per provider and rebuild it only when
+``keys.active_keys`` returns a different key set, never one pool per request.
 """
 
 import os
@@ -44,6 +48,7 @@ class Platform:
         """The bucket from the active storage_config; rebuilt when the config changes."""
         cfg = await self.storage_config.r2(conn)
         if cfg is None:
+            self._r2 = None  # drop the client: it holds the old secret
             raise StorageNotConfigured(detail="no active, decryptable storage_config row for r2")
         if self._r2 is None or self._r2.config != cfg:
             self._r2 = R2Storage(cfg)

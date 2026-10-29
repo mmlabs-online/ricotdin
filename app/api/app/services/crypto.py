@@ -2,8 +2,9 @@
 
 Same format as v1 so rows written by v1 decrypt here: random 12-byte IV, 16-byte tag, and three
 base64 strings (``ciphertext``, ``iv``, ``authTag``) stored in separate columns. The master key is
-``KEY_ENCRYPTION_SECRET`` (64 hex chars or base64 of 32 bytes) — never log it or a plaintext;
-losing it makes every stored provider key and the R2 secret unrecoverable.
+``KEY_ENCRYPTION_SECRET`` (64 hex chars or standard base64 of 32 bytes; v1 also took base64url
+via ``Buffer.from`` — the real secret is hex, verified against v1 data). Never log it or a
+plaintext; losing it makes every stored provider key and the R2 secret unrecoverable.
 """
 
 import base64

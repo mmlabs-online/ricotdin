@@ -157,7 +157,7 @@ def _add_storage(env: dict[str, Any], bucket: str, *, key: bytes = KEY, status: 
         env,
         "INSERT INTO storage_config (provider, label, account_id, access_key_id, bucket, "
         "secret_ciphertext, secret_iv, secret_auth_tag, secret_last4, status, created_at) "
-        "VALUES ('r2', 'l', 'acct', 'AKID', %s, %s, %s, %s, 'last', %s, "
+        "VALUES ('r2', 'l', '0123456789abcdef0123456789abcdef', 'AKID', %s, %s, %s, %s, 'last', %s, "
         "now() + make_interval(secs => %s))",
         bucket, s.ciphertext, s.iv, s.auth_tag, status, offset_s,
     )  # fmt: skip
@@ -184,7 +184,7 @@ def test_storage_config_newest_active_row_wins_and_none_without_rows(env: dict[s
     assert (cfg.bucket, cfg.secret_access_key, cfg.account_id) == (
         "new-bucket",
         "secret-new-bucket",
-        "acct",
+        "0123456789abcdef0123456789abcdef",
     )
 
 

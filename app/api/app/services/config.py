@@ -6,6 +6,7 @@ Values are cached 30 s per key (a flag flipped in the admin UI applies within 30
 fallback — a bad value never turns a flag on.
 """
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -33,8 +34,11 @@ def parse_int_setting(value: Any, *, minimum: int, maximum: int) -> int | None:
     """A whole number within bounds (JSON number or numeric string), else None (fails closed)."""
     if isinstance(value, bool):
         return None
-    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
-        value = int(value.strip())
+    if isinstance(value, float) and value.is_integer():  # v1: Number.isInteger(30.0)
+        value = int(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        value = int(text) if re.fullmatch(r"[0-9]{1,18}", text, re.ASCII) else None
     if isinstance(value, int) and minimum <= value <= maximum:
         return value
     return None

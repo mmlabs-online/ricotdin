@@ -11,6 +11,7 @@ from app.services.keys.pool import (
     AllKeysExhausted,
     KeyPool,
     KeyWithMeta,
+    NoUsableKeys,
     PoolConfig,
     SpeechmaticsKeyPool,
     classify_error,
@@ -66,7 +67,7 @@ def _run[T](fn: Callable[[], Awaitable[T]]) -> T:
 
 
 def test_empty_key_list_is_refused() -> None:
-    with pytest.raises(ValueError, match="No test API keys"):
+    with pytest.raises(NoUsableKeys, match="No usable test API keys"):
         KeyPool([], lambda k: k, "test", CFG)
 
 
@@ -170,7 +171,7 @@ def test_single_rate_limited_key_fails_fast_when_cooldown_exceeds_wait() -> None
     with pytest.raises(AllKeysExhausted) as exc:
         _run(go)
     assert exc.value.key_count == 1
-    assert isinstance(exc.value.__cause__, HttpError)
+    assert exc.value.last_status == 429
 
 
 def test_short_cooldown_is_waited_out() -> None:
@@ -337,7 +338,7 @@ def test_status_code_attribute_wins_over_message() -> None:
 
 
 def test_speechmatics_needs_keys() -> None:
-    with pytest.raises(ValueError, match="Speechmatics"):
+    with pytest.raises(NoUsableKeys, match="Speechmatics"):
         SpeechmaticsKeyPool([])
 
 
@@ -364,3 +365,110 @@ def test_speechmatics_least_active_and_tie_order() -> None:
 
 def test_speechmatics_repr_hides_keys() -> None:
     assert "k0" not in repr(SpeechmaticsKeyPool(_keys(1)))
+
+
+# --- review round 1 --------------------------------------------------------------------------
+
+
+class GenaiClientError(Exception):
+    """Shaped like google.genai.errors.ClientError (code + message)."""
+
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(f"{code} {message}")
+        self.code = code
+
+
+class OpenAIStatusError(Exception):
+    """Shaped like openai.APIStatusError (status_code + response.headers)."""
+
+    def __init__(self, status_code: int, headers: dict[str, str]) -> None:
+        super().__init__(f"Error code: {status_code}")
+        self.status_code = status_code
+        self.response = type("Resp", (), {"headers": headers})()
+
+
+def test_gemini_invalid_key_400_is_an_invalid_key_not_a_bad_request() -> None:
+    err = GenaiClientError(
+        400, "INVALID_ARGUMENT. API key not valid. Please pass a valid API key. API_KEY_INVALID"
+    )
+    assert classify_error(err, lambda _e: False) == "invalid-key"
+    pool, _ = _pool(2)
+    used: list[str] = []
+
+    async def go() -> str:
+        return await pool.call(_failing([err], used))
+
+    assert _run(go) == "ok" and used == ["client:k0", "client:k1"] and pool.is_disabled(0)
+
+
+def test_quota_message_is_a_rate_limit_whatever_the_status() -> None:
+    err = GenaiClientError(400, "RESOURCE_EXHAUSTED quota")
+    assert classify_error(err, lambda _e: False) == "rate-limit"
+
+
+def test_plain_400_is_still_a_bad_request() -> None:
+    err = GenaiClientError(400, "INVALID_ARGUMENT: bad schema")
+    assert classify_error(err, lambda _e: False) == "bad-request"
+
+
+def test_retry_after_header_of_http_sdks_is_used_and_capped() -> None:
+    assert retry_after_seconds(OpenAIStatusError(429, {"retry-after": "12"})) == 12
+    assert retry_after_seconds(OpenAIStatusError(429, {"Retry-After": "999999"})) == 3600
+    assert retry_after_seconds(OpenAIStatusError(429, {"retry-after": "soon"})) is None
+
+
+def test_a_cooldown_wait_does_not_use_an_attempt() -> None:
+    cfg = PoolConfig(
+        default_cooldown_s=5, base_backoff_s=0, max_backoff_s=0, max_attempts=2,
+        max_cooldown_wait_s=30,
+    )  # fmt: skip
+    pool, _ = _pool(1, cfg)
+    used: list[str] = []
+
+    async def go() -> str:
+        return await pool.call(_failing([HttpError(429)], used))
+
+    assert _run(go) == "ok" and len(used) == 2
+
+
+def test_exhaustion_does_not_chain_the_provider_error_but_keeps_safe_facts() -> None:
+    pool, _ = _pool(1)
+
+    async def go() -> str:
+        errors: list[BaseException | None] = [GenaiClientError(503, "UNAVAILABLE key=sm_x_123")] * 3
+        return await pool.call(_failing(errors, []))
+
+    with pytest.raises(AllKeysExhausted) as exc:
+        _run(go)
+    assert exc.value.__cause__ is None and exc.value.__suppress_context__
+    assert (exc.value.last_error_type, exc.value.last_status) == ("GenaiClientError", 503)
+    assert "sm_x_123" not in str(exc.value)
+
+
+def test_a_client_factory_bug_is_not_retried_on_every_key() -> None:
+    def broken(_key: str) -> str:
+        raise RuntimeError("bug in factory")
+
+    clock = FakeClock()
+    pool: KeyPool[str] = KeyPool(_keys(3), broken, "t", CFG, clock=clock, sleep=clock.sleep)
+
+    async def go() -> str:
+        return await pool.call(lambda c, _i: _const(c))
+
+    with pytest.raises(RuntimeError, match="factory"):
+        _run(go)
+
+
+def test_invalid_keys_are_reported_so_later_pools_skip_them() -> None:
+    reported: list[str] = []
+    clock = FakeClock()
+    pool: KeyPool[str] = KeyPool(
+        _keys(2), lambda k: k, "t", CFG, clock=clock, sleep=clock.sleep, jitter=lambda: 1.0,
+        on_invalid_key=lambda k: reported.append(k.key),
+    )  # fmt: skip
+
+    async def go() -> str:
+        return await pool.call(_failing([HttpError(401)], []))
+
+    _run(go)
+    assert reported == ["k0"]

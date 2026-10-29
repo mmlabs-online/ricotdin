@@ -19,7 +19,15 @@ from app.services.storage.ownership import (
     owned_audio_delete_items,
     owned_audio_path,
 )
-from app.services.storage.r2 import presign_get, presign_put, r2_client
+from app.services.storage.r2 import (
+    ObjectTooLarge,
+    R2Storage,
+    StorageObjectNotFound,
+    UnsupportedContentType,
+    presign_get,
+    presign_put,
+    r2_client,
+)
 
 # --- env fallback -----------------------------------------------------------------------------
 
@@ -171,7 +179,7 @@ def test_mask_storage_row_keeps_display_fields_only() -> None:
 
 
 def test_r2_config_repr_hides_the_secret() -> None:
-    cfg = R2Config("acc", "AKID", "very-secret-value", "bucket")
+    cfg = R2Config("0" * 32, "AKID", "very-secret-value", "bucket")
     assert "very-secret-value" not in repr(cfg)
 
 
@@ -255,7 +263,8 @@ def test_avatar_user_id_with_slash_or_empty_is_rejected() -> None:
 # --- R2 presigning (offline: SigV4 is computed locally) ----------------------------------------
 
 
-CFG = R2Config("acct123", "AKIDEXAMPLE", "secret-example-value", "ricotdin-test")
+ACCOUNT = "0123456789abcdef0123456789abcdef"
+CFG = R2Config(ACCOUNT, "AKIDEXAMPLE", "secret-example-value", "ricotdin-test")
 
 
 def test_presigned_put_binds_bucket_key_and_content_type() -> None:
@@ -264,7 +273,7 @@ def test_presigned_put_binds_bucket_key_and_content_type() -> None:
     url = presign_put(client, CFG.bucket, key, content_type="audio/webm", expires_in=900)
     parts = urlsplit(url)
     assert parts.scheme == "https"
-    assert parts.netloc == "acct123.r2.cloudflarestorage.com"
+    assert parts.netloc == f"{ACCOUNT}.r2.cloudflarestorage.com"
     assert parts.path == f"/ricotdin-test/{key}"
     q = parse_qs(parts.query)
     assert q["X-Amz-Expires"] == ["900"]
@@ -280,3 +289,160 @@ def test_presigned_get_expiry_is_bounded() -> None:
         presign_get(client, CFG.bucket, f"{U}/{M}.webm", expires_in=8 * 24 * 3600)
     with pytest.raises(ValueError):
         presign_put(client, CFG.bucket, f"{U}/{M}.webm", content_type="audio/webm", expires_in=0)
+
+
+# --- review round 1 --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["--5", "\u00b2", "+5", " 5x", "5.5"])
+def test_odd_numeric_strings_fail_closed_without_raising(value: str) -> None:
+    assert parse_int_setting(value, minimum=1, maximum=3650) is None
+
+
+def test_integral_json_floats_are_accepted_like_v1() -> None:
+    assert parse_int_setting(30.0, minimum=1, maximum=3650) == 30
+    assert parse_int_setting(30.5, minimum=1, maximum=3650) is None
+
+
+@pytest.mark.parametrize(
+    ("account", "bucket"),
+    [
+        ("evil.com/#", "b-ok"),
+        ("169.254.169.254/x?", "b-ok"),
+        ("A" * 32, "b-ok"),
+        ("0" * 31, "b-ok"),
+        ("0" * 32, "Bad_Bucket"),
+        ("0" * 32, "ab"),
+        ("0" * 32, "x" * 64),
+        ("0" * 32, "-starts-with-dash"),
+    ],
+)
+def test_r2_config_rejects_odd_account_ids_and_bucket_names(account: str, bucket: str) -> None:
+    with pytest.raises(ValueError):
+        R2Config(account, "AKID", "s", bucket)
+
+
+def test_presigned_put_can_bind_the_content_length() -> None:
+    client = r2_client(CFG)
+    url = presign_put(
+        client, CFG.bucket, f"{U}/{M}.webm", content_type="audio/webm", content_length=1234
+    )
+    assert "content-length" in parse_qs(urlsplit(url).query)["X-Amz-SignedHeaders"][0]
+
+
+@pytest.mark.parametrize(
+    "ct", ["text/html", "application/javascript", "image/svg+xml", "", "audio"]
+)
+def test_upload_urls_only_for_media_types(ct: str) -> None:
+    with pytest.raises(UnsupportedContentType, match="content type"):
+        R2Storage(CFG).upload_url(f"{U}/{M}.webm", ct)
+
+
+@pytest.mark.parametrize(
+    "ct", ["audio/webm", "audio/mpeg", "video/mp4", "image/png", "image/jpeg", "image/webp"]
+)
+def test_media_upload_types_are_allowed(ct: str) -> None:
+    assert R2Storage(CFG).upload_url(f"{U}/{M}.bin", ct).startswith("https://")
+
+
+class _FakeBody:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+
+    def read(self, n: int = -1) -> bytes:
+        if n < 0:
+            out, self.data = self.data, b""
+        else:
+            out, self.data = self.data[:n], self.data[n:]
+        return out
+
+    def close(self) -> None:
+        pass
+
+
+class _FakeS3:
+    def __init__(self, objects: dict[str, bytes]) -> None:
+        self.objects = objects
+
+    def head_object(self, Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803
+        from botocore.exceptions import ClientError
+
+        if Key not in self.objects:
+            raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
+        return {"ContentLength": len(self.objects[Key])}
+
+    def get_object(self, Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803
+        from botocore.exceptions import ClientError
+
+        if Key not in self.objects:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"Body": _FakeBody(self.objects[Key])}
+
+
+def _storage(objects: dict[str, bytes]) -> R2Storage:
+    st = R2Storage(CFG)
+    st._client = _FakeS3(objects)  # type: ignore[assignment]
+    return st
+
+
+def test_get_bytes_refuses_objects_over_the_limit() -> None:
+    import anyio
+
+    st = _storage({"k": b"x" * 100})
+    assert anyio.run(lambda: st.get_bytes("k", "r2", max_bytes=100)) == b"x" * 100
+    with pytest.raises(ObjectTooLarge):
+        anyio.run(lambda: st.get_bytes("k", "r2", max_bytes=99))
+
+
+def test_missing_objects_raise_not_found_not_unavailable() -> None:
+    import anyio
+
+    with pytest.raises(StorageObjectNotFound):
+        anyio.run(lambda: _storage({}).get_bytes("nope", "r2", max_bytes=10))
+
+
+def test_download_to_file_streams_and_respects_the_limit(tmp_path: Any) -> None:
+    import anyio
+
+    st = _storage({"k": b"abc" * 1000})
+    target = tmp_path / "audio.webm"
+    assert anyio.run(lambda: st.download_to_file("k", "r2", target, max_bytes=3000)) == 3000
+    assert target.read_bytes() == b"abc" * 1000
+    with pytest.raises(ObjectTooLarge):
+        anyio.run(lambda: st.download_to_file("k", "r2", tmp_path / "b", max_bytes=10))
+    assert not (tmp_path / "b").exists()
+
+
+def test_key_source_skips_keys_reported_invalid() -> None:
+    from app.services.keys.pool import KeyWithMeta
+    from app.services.keys.source import KeySource
+
+    src = KeySource(None, {"GEMINI_API_KEYS": "a,b"})
+    src.mark_invalid(KeyWithMeta(None, "a"))
+    assert [k.key for k in src.usable(env_keys("gemini", {"GEMINI_API_KEYS": "a,b"}))] == ["b"]
+
+
+def test_platform_keeps_only_provider_fallback_variables() -> None:
+    from app.core.settings import Settings
+    from app.services.platform import Platform
+
+    env = {
+        "GEMINI_API_KEY_3": "g", "OPENAI_API_KEY": "o", "DATABASE_URL": "postgres://x",
+        "JWT_PRIVATE_KEY": "pem",
+    }  # fmt: skip
+    p = Platform.from_settings(Settings.model_validate({}), env=env)
+    assert set(p.keys.env_names) == {"GEMINI_API_KEY_3", "OPENAI_API_KEY"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://a.r2.cloudflarestorage.com/b/k?X-Amz-Credential=AKID%2F20261029&X-Amz-Signature=abcdef0123",
+        "x-amz-signature: abcdef0123",
+    ],
+)
+def test_presigned_url_credentials_are_redacted(text: str) -> None:
+    from app.core.redact import redact
+
+    out = redact(text)
+    assert "abcdef0123" not in out and "AKID%2F20261029" not in out

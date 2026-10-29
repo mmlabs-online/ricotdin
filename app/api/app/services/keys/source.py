@@ -6,6 +6,7 @@ Run inside ``db.role_transaction('ricotdin_service' | 'ricotdin_worker')``. Plai
 only in memory; a row that fails to decrypt is logged by id only.
 """
 
+import hashlib
 from collections.abc import Callable, Mapping
 
 from sqlalchemy import text
@@ -19,6 +20,12 @@ from app.services.keys.pool import KeyWithMeta
 log = get_logger("keys")
 
 CACHE_TTL_S = 30.0
+FALLBACK_ENV_NAMES = frozenset(
+    {"GEMINI_API_KEYS", "GEMINI_API_KEY", "SPEECHMATICS_API_KEY", "OPENAI_API_KEY", "GROK_API_KEY",
+     "XAI_API_KEY"}
+    | {f"GEMINI_API_KEY_{i}" for i in range(1, 21)}
+)  # fmt: skip
+FAILURE_TTL_S = 5.0  # after a failed lookup, retry the database soon
 _CONFIG_KEYS = {
     "gemini": "gemini_api_key",
     "speechmatics": "speechmatics_api_key",
@@ -66,26 +73,60 @@ class KeySource:
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._master = master_key
-        self._env = env
+        # Only the provider fallback variables: never hold DATABASE_URL, JWT keys, ... here.
+        self._env = {k: v for k, v in env.items() if k in FALLBACK_ENV_NAMES}
         self._cache: TtlCache[str, list[KeyWithMeta]] = (
             TtlCache(CACHE_TTL_S, clock) if clock else TtlCache(CACHE_TTL_S)
         )
+        self._failed: TtlCache[str, list[KeyWithMeta]] = (
+            TtlCache(FAILURE_TTL_S, clock) if clock else TtlCache(FAILURE_TTL_S)
+        )
+        self._invalid: set[str] = set()  # sha-256 of keys a provider rejected (401)
+
+    @property
+    def env_names(self) -> list[str]:
+        return sorted(self._env)
+
+    @staticmethod
+    def _fingerprint(key: KeyWithMeta) -> str:
+        return hashlib.sha256(key.key.encode()).hexdigest()
+
+    def mark_invalid(self, key: KeyWithMeta) -> None:
+        """Pass as ``KeyPool(on_invalid_key=...)``: a key rejected with 401 is skipped by every
+        later pool of this process until ``invalidate()`` runs (an admin key change)."""
+        self._invalid.add(self._fingerprint(key))
+
+    def usable(self, keys: list[KeyWithMeta]) -> list[KeyWithMeta]:
+        return [k for k in keys if self._fingerprint(k) not in self._invalid]
 
     def __repr__(self) -> str:
         return "KeySource()"
 
     def invalidate(self, provider: str | None = None) -> None:
-        """Call after a key is added, disabled or deleted (ARC-10)."""
-        self._cache.invalidate(config_key_for(provider) if provider else None)
+        """Call after a key is added, enabled, disabled or deleted (ARC-10). Also forgets keys
+        rejected with 401, so an admin can bring a re-enabled or re-added key back."""
+        name = config_key_for(provider) if provider else None
+        self._cache.invalidate(name)
+        self._failed.invalidate(name)
+        self._invalid.clear()
 
     async def active_keys(self, conn: AsyncConnection, provider: str) -> list[KeyWithMeta]:
         config_key = config_key_for(provider)
-        hit, cached = self._cache.get(config_key)
-        if hit and cached is not None:
-            return cached
-        keys = await self._load(conn, config_key) or env_keys(provider, self._env)
+        for cache in (self._cache, self._failed):
+            hit, cached = cache.get(config_key)
+            if hit and cached is not None:
+                return self.usable(cached)
+        try:
+            async with conn.begin_nested():  # a failed read must not abort the caller's tx
+                loaded = await self._load(conn, config_key)
+        except Exception as exc:  # noqa: BLE001 - v1: a DB failure falls back to env keys
+            log.error("admin_config lookup failed for %s (%s)", config_key, type(exc).__name__)
+            fallback = env_keys(provider, self._env)
+            self._failed.put(config_key, fallback)
+            return self.usable(fallback)
+        keys = loaded or env_keys(provider, self._env)
         self._cache.put(config_key, keys)
-        return keys
+        return self.usable(keys)
 
     async def _load(self, conn: AsyncConnection, config_key: str) -> list[KeyWithMeta]:
         rows = (
