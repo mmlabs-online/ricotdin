@@ -179,7 +179,7 @@ Today the schema relies on `auth.users`, `auth.uid()`, `auth.jwt()`, the custom 
 ---
 
 ### ARC-03 — Data migration Supabase → Neon (+ legacy storage → R2)
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Partial — script + tests done; the two owner rehearsals (done check) are pending
 
 **User Story**  
 As the owner, I want a repeatable script that copies all users, meetings, transcripts, embeddings, keys and files from Supabase into v2 so that nobody loses data or has to reset their password.
@@ -219,8 +219,19 @@ Owner chose to migrate everything. Supabase stores bcrypt password hashes (porta
 **Out of scope**
 - The final cutover run (ARC-15).
 
-**Key files (expected)**
-- `app/api/scripts/migrate_from_supabase.py`, `app/api/app/migration/**`, `docs/ops/v2-migration-rehearsal.md`
+**Key files**
+- `app/api/scripts/migrate_from_supabase.py` (I/O), `app/api/app/migration/{transform,plan,checksum,report}.py` (pure)
+- Tests: `app/api/tests/test_migration_transform.py`, `test_migration_integration.py` (v1 replay with
+  GoTrue columns + `storage.objects` → v2 at head; includes a real v2 login with the old password)
+- Runbook + rehearsal log: `docs/ops/v2-migration-rehearsal.md`
+
+**Delivered**
+- All five acceptance criteria are covered by integration tests on synthetic data.
+- Open:
+  - The two rehearsals on throwaway Neon branches (owner, production credentials).
+  - No hard refusal of Neon `main` as the target: `--confirm-target` only.
+  - A re-run overwrites `users.*`, so the final run must happen before v2 accepts logins (ARC-15).
+  - `KEY_ENCRYPTION_SECRET` re-key is a follow-up.
 
 ---
 

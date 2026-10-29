@@ -1,0 +1,342 @@
+"""ARC-03 pure logic: auth.users → users, row projection, load order, SQL builders, digests,
+report. No I/O."""
+
+import json
+
+import pytest
+
+from app.migration.checksum import RowDigest
+from app.migration.plan import load_order, select_sql, upsert_sql
+from app.migration.report import Report, StorageResult, TableResult
+from app.migration.transform import (
+    MigrationBlocked,
+    map_auth_user,
+    map_row,
+    source_user_problems,
+)
+
+NOW = "2026-10-29 03:00:00+00"
+UID = "11111111-1111-1111-1111-111111111111"
+
+
+def _user(**over: object) -> dict[str, object]:
+    row: dict[str, object] = {
+        "id": UID,
+        "email": "A@Example.com",
+        "encrypted_password": "$2a$10$abcdefghijklmnopqrstuuabcdefghijklmnopqrstuvwxyz012",
+        "email_confirmed_at": "2026-01-02 03:04:05.123456+00",
+        "banned": False,
+        "last_sign_in_at": "2026-10-01 00:00:00+00",
+        "created_at": "2026-01-01 00:00:00+00",
+        "updated_at": "2026-01-03 00:00:00+00",
+        "raw_app_meta_data": json.dumps({"provider": "email", "role": "admin"}),
+        "is_anonymous": False,
+        "deleted_at": None,
+    }
+    row.update(over)
+    return row
+
+
+# --- map_auth_user ---------------------------------------------------------------------------
+
+
+def test_user_keeps_id_email_and_bcrypt_hash() -> None:
+    out = map_auth_user(_user(), now=NOW)
+    assert out["id"] == UID
+    assert out["email"] == "A@Example.com"  # unchanged: users has a lower(email) unique index
+    assert str(out["password_hash"]).startswith("$2a$10$")
+    assert out["email_verified_at"] == "2026-01-02 03:04:05.123456+00"
+    assert out["last_sign_in_at"] == "2026-10-01 00:00:00+00"
+    assert out["created_at"] == "2026-01-01 00:00:00+00"
+    assert out["updated_at"] == "2026-01-03 00:00:00+00"
+    assert out["disabled_at"] is None
+
+
+@pytest.mark.parametrize(
+    ("meta", "role"),
+    [
+        (json.dumps({"role": "admin"}), "admin"),
+        (json.dumps({"role": "user"}), "user"),
+        (json.dumps({"role": "superuser"}), "user"),
+        (json.dumps({"role": ["admin"]}), "user"),
+        (json.dumps({}), "user"),
+        ("not json", "user"),
+        (None, "user"),
+        (json.dumps(["admin"]), "user"),
+    ],
+)
+def test_role_comes_only_from_app_metadata_and_fails_closed(meta: object, role: str) -> None:
+    assert map_auth_user(_user(raw_app_meta_data=meta), now=NOW)["role"] == role
+
+
+def test_active_ban_becomes_disabled_at_snapshot_time() -> None:
+    assert map_auth_user(_user(banned=True), now=NOW)["disabled_at"] == NOW
+    assert map_auth_user(_user(banned=None), now=NOW)["disabled_at"] is None
+
+
+def test_soft_deleted_user_is_disabled_at_deletion_time() -> None:
+    out = map_auth_user(_user(deleted_at="2026-05-05 00:00:00+00"), now=NOW)
+    assert out["disabled_at"] == "2026-05-05 00:00:00+00"
+
+
+def test_missing_password_and_timestamps_get_safe_values() -> None:
+    out = map_auth_user(_user(encrypted_password=None, created_at=None, updated_at=None), now=NOW)
+    assert out["password_hash"] == ""  # no scheme: login fails until a password reset
+    assert out["created_at"] == NOW
+    assert out["updated_at"] == NOW
+
+
+def test_anonymous_or_emailless_users_block_the_migration() -> None:
+    with pytest.raises(MigrationBlocked, match="anonymous"):
+        map_auth_user(_user(is_anonymous=True), now=NOW)
+    for email in (None, "", "   "):
+        with pytest.raises(MigrationBlocked, match="email"):
+            map_auth_user(_user(email=email), now=NOW)
+
+
+def test_source_user_problems_lists_blockers_by_id_only() -> None:
+    rows = [
+        _user(),
+        _user(id="22222222-2222-2222-2222-222222222222", is_anonymous=True),
+        _user(id="33333333-3333-3333-3333-333333333333", email=None),
+        _user(id="44444444-4444-4444-4444-444444444444", email="a@example.COM"),
+    ]
+    problems = source_user_problems(rows)
+    text = "\n".join(problems)
+    assert "1 anonymous" in text and "22222222" in text
+    assert "1 without email" in text and "33333333" in text
+    assert "duplicate email" in text and "44444444" in text and UID in text
+    assert "example" not in text.lower()  # never the address itself
+    assert source_user_problems([_user()]) == []
+
+
+# --- map_row ---------------------------------------------------------------------------------
+
+
+def test_map_row_projects_to_target_columns_in_order() -> None:
+    row = {"b": "2", "a": "1", "extra": "x"}
+    assert map_row("t", row, ["a", "b"]) == ["1", "2"]
+
+
+def test_map_row_refuses_a_missing_column() -> None:
+    with pytest.raises(MigrationBlocked, match=r"t\.c"):
+        map_row("t", {"a": "1"}, ["a", "c"])
+
+
+# --- plan ------------------------------------------------------------------------------------
+
+
+def test_load_order_puts_parents_first_and_is_deterministic() -> None:
+    tables = {"users", "meetings", "folders", "todos", "transcript_segments", "app_config"}
+    fks = [
+        ("meetings", "users"),
+        ("meetings", "folders"),
+        ("folders", "users"),
+        ("todos", "meetings"),
+        ("todos", "transcript_segments"),
+        ("transcript_segments", "meetings"),
+        ("app_config", "users"),
+        ("meetings", "meetings"),  # self reference ignored
+        ("todos", "elsewhere"),  # outside the set ignored
+    ]
+    order = load_order(tables, fks)
+    assert order == load_order(tables, list(reversed(fks)))
+    assert order[0] == "users"
+    for child, parent in fks:
+        if child != parent and parent in tables:
+            assert order.index(parent) < order.index(child)
+
+
+def test_load_order_refuses_a_cycle() -> None:
+    with pytest.raises(MigrationBlocked, match="cycle"):
+        load_order({"a", "b"}, [("a", "b"), ("b", "a")])
+
+
+def test_select_sql_casts_every_column_to_text() -> None:
+    sql = select_sql("transcript_chunks", ["id", "embedding"])
+    assert sql == 'SELECT "id"::text, "embedding"::text FROM public."transcript_chunks"'
+
+
+def test_upsert_sql_casts_from_text_and_updates_non_key_columns() -> None:
+    sql = upsert_sql(
+        "todos", ["id", "title", "due"], ["uuid", "text", "timestamp with time zone"], ["id"]
+    )
+    assert sql == (
+        'INSERT INTO public."todos" AS t ("id", "title", "due") VALUES '
+        "(%s::text::uuid, %s::text::text, %s::text::timestamp with time zone) "
+        'ON CONFLICT ("id") DO UPDATE SET "title" = EXCLUDED."title", "due" = EXCLUDED."due"'
+    )
+
+
+def test_upsert_sql_for_a_table_that_is_only_key_does_nothing_on_conflict() -> None:
+    sql = upsert_sql("k", ["id"], ["uuid"], ["id"])
+    assert sql.endswith('ON CONFLICT ("id") DO NOTHING')
+
+
+def test_meetings_upsert_never_moves_copied_audio_back_to_supabase() -> None:
+    sql = upsert_sql(
+        "meetings",
+        ["id", "audio_path", "storage_provider"],
+        ["uuid", "text", "text"],
+        ["id"],
+    )
+    assert (
+        '"storage_provider" = CASE WHEN t."storage_provider" = \'r2\' AND '
+        't."audio_path" IS NOT DISTINCT FROM EXCLUDED."audio_path" THEN \'r2\' '
+        'ELSE EXCLUDED."storage_provider" END'
+    ) in sql
+
+
+def test_identifiers_are_validated() -> None:
+    with pytest.raises(MigrationBlocked):
+        select_sql('x"; DROP TABLE users; --', ["id"])
+    with pytest.raises(MigrationBlocked):
+        upsert_sql("t", ["id"], ["uuid); DROP TABLE users; --"], ["id"])
+
+
+# --- checksum --------------------------------------------------------------------------------
+
+
+def test_digest_is_order_independent_but_content_sensitive() -> None:
+    a, b = RowDigest(), RowDigest()
+    rows: list[list[str | None]] = [["1", "x", None], ["2", "y", ""]]
+    for r in rows:
+        a.add(r)
+    for r in reversed(rows):
+        b.add(r)
+    assert a.hexdigest() == b.hexdigest() and a.count == b.count == 2
+
+    c = RowDigest()
+    c.add(["1", "x", ""])  # NULL and '' differ
+    c.add(["2", "y", ""])
+    assert c.hexdigest() != a.hexdigest()
+
+    d = RowDigest()
+    d.add(["1", "x", None])
+    d.add(["1", "x", None])  # duplicates count
+    assert d.hexdigest() != RowDigest().hexdigest()
+    e = RowDigest()
+    e.add(["1", "x", None])
+    assert d.hexdigest() != e.hexdigest()
+
+
+def test_digest_does_not_confuse_column_boundaries() -> None:
+    a, b = RowDigest(), RowDigest()
+    a.add(["ab", "c"])
+    b.add(["a", "bc"])
+    assert a.hexdigest() != b.hexdigest()
+
+
+# --- report ----------------------------------------------------------------------------------
+
+
+def _report(**over: object) -> Report:
+    r = Report(
+        started_at=NOW,
+        source_host="aws-0-x.pooler.supabase.com",
+        target_host="ep-x.neon.tech",
+        tables=[TableResult("users", 2, 2, "aa", "aa"), TableResult("meetings", 1, 1, "bb", "bb")],
+        embeddings_source=5,
+        embeddings_target=5,
+        secrets_ok=["admin_config 1"],
+        secrets_failed=[],
+        storage=StorageResult(),
+    )
+    for k, v in over.items():
+        setattr(r, k, v)
+    return r
+
+
+def test_report_passes_only_when_everything_matches() -> None:
+    assert _report().passed
+    assert not _report(tables=[TableResult("users", 2, 1, "aa", "ab")]).passed
+    assert not _report(tables=[TableResult("users", 2, 2, "aa", "ab")]).passed
+    assert not _report(embeddings_target=4).passed
+    assert not _report(secrets_failed=["storage_config 9"]).passed
+    assert not _report(storage=StorageResult(failed=["k: timeout"])).passed
+    assert not _report(blocked=["1 anonymous user"]).passed
+    assert not _report(errors=["users: UniqueViolation 23505"]).passed
+    assert not _report(source_only_tables=["provider_keys"]).passed
+    assert not _report(storage=StorageResult(skipped=True)).passed
+    assert not _report(dry_run=True).passed
+    # Missing at source is reported, not a failure (spec).
+    assert _report(storage=StorageResult(missing_at_source=["u/m.webm"])).passed
+
+
+def test_report_renders_markdown_with_verdict() -> None:
+    text = _report(
+        storage=StorageResult(copied=["u/m.webm"], missing_at_source=["u/x.webm"])
+    ).render()
+    assert "| users | 2 | 2 | ✅ |" in text
+    assert "u/x.webm" in text
+    assert "Destination bucket" in text
+    assert text.rstrip().endswith("**Result: PASS**")
+    bad = _report(tables=[TableResult("users", 2, 1, "aa", "ab")]).render()
+    assert "| users | 2 | 1 | ❌ |" in bad
+    assert bad.rstrip().endswith("**Result: FAIL**")
+
+
+def test_column_drift_reports_names_and_types_ignoring_schema_prefix() -> None:
+    from app.migration.plan import column_drift
+
+    src = {"id": "uuid", "embedding": "extensions.vector(768)", "old": "text", "n": "integer"}
+    tgt = {"id": "uuid", "embedding": "vector(768)", "new": "text", "n": "bigint"}
+    assert column_drift("t", src, tgt) == [
+        "t.new: missing in source",
+        "t.old: missing in target",
+        "t.n: integer in source, bigint in target",
+    ]
+    assert column_drift("t", {"a": "text"}, {"a": "text"}) == []
+
+
+def test_r2_target_maps_every_boto_failure_to_a_code_only_copy_error(tmp_path: object) -> None:
+    from pathlib import Path
+
+    from boto3.exceptions import S3UploadFailedError
+    from botocore.exceptions import EndpointConnectionError
+
+    from app.services.storage.config import R2Config
+    from scripts.migrate_from_supabase import CopyError, R2Target
+
+    class Boom:
+        def __init__(self, exc: Exception) -> None:
+            self.exc = exc
+
+        def upload_file(self, *_a: object, **_k: object) -> None:
+            raise self.exc
+
+        def head_object(self, **_k: object) -> None:
+            raise self.exc
+
+    t = R2Target(R2Config("0123456789abcdef0123456789abcdef", "AKID", "secret", "bucket"))
+    path = Path(str(tmp_path)) / "audio"
+    for exc, reason in (
+        (
+            S3UploadFailedError("Failed to upload C:/tmp/x to bucket/key: boom"),
+            "S3UploadFailedError",
+        ),
+        (EndpointConnectionError(endpoint_url="https://x"), "EndpointConnectionError"),
+    ):
+        t._client = Boom(exc)  # type: ignore[assignment]
+        with pytest.raises(CopyError) as info:
+            t.upload(path, "k", "audio/webm")
+        assert str(info.value) == f"r2 upload {reason}"
+        with pytest.raises(CopyError):
+            t.size("k")
+
+
+def test_supabase_download_refuses_redirects() -> None:
+    import urllib.request
+
+    from scripts.migrate_from_supabase import SupabaseStorage, _NoRedirect
+
+    store = SupabaseStorage("https://ref.supabase.co", "service-key")
+    handlers = [
+        h
+        for h in store._opener.handlers  # type: ignore[attr-defined]
+        if isinstance(h, urllib.request.HTTPRedirectHandler)
+    ]
+    assert handlers and all(isinstance(h, _NoRedirect) for h in handlers)
+    assert handlers[0].redirect_request(None, None, 302, "", {}, "https://x") is None  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        SupabaseStorage("http://ref.supabase.co", "k")

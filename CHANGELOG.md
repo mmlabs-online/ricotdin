@@ -6,6 +6,12 @@
 ## [Unreleased]
 
 ### Thay đổi
+- Script chuyển dữ liệu v1 → v2 `app/api/scripts/migrate_from_supabase.py` (chủ dự án tự chạy):
+  - Chép toàn bộ người dùng (giữ id và mật khẩu, tự băm lại sang argon2 ở lần đăng nhập đầu), mọi bảng và audio còn trên Supabase Storage sang Neon + R2.
+  - Kiểm tra trước khi ghi; đọc Supabase trong một snapshot chỉ đọc; chạy lại không tạo bản trùng.
+  - Báo cáo PASS/FAIL theo số dòng + checksum từng bảng, thử giải mã mọi secret, kết quả chép audio — không chứa secret, email hay nội dung cuộc họp.
+  - Hướng dẫn chạy thử 2 lần: `docs/ops/v2-migration-rehearsal.md`.
+  - Không có migration, không có env runtime mới (ARC-03)
 - Dịch vụ nền của API v2:
   - Mã hoá AES-256-GCM đọc được ciphertext của v1 (cùng `KEY_ENCRYPTION_SECRET`).
   - Kho API key của nhà cung cấp lấy từ `admin_config`, dự phòng bằng biến môi trường, cache 30 giây; xoay vòng key khi bị giới hạn tần suất, tạm khoá key khi bị từ chối.

@@ -210,6 +210,35 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   - Reads always take `max_bytes`.
   - botocore, boto3, s3transfer and urllib3 log at WARNING, redacted.
 
+### 0.5 v1 → v2 data migration (ARC-03)
+
+- `app/api/scripts/migrate_from_supabase.py` is an owner-run CLI; the pure logic lives in
+  `app/migration/`. Runbook and rehearsal log: `docs/ops/v2-migration-rehearsal.md`.
+- Env lives only in the git-ignored `app/api/.env.migrate`:
+  - `SUPABASE_DB_URL` (session pooler), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`;
+  - `MIGRATION_TARGET_DATABASE_URL`, an owner URL; never `DATABASE_URL`;
+  - `KEY_ENCRYPTION_SECRET`.
+  None of these is an app runtime variable.
+- **Run** with `--confirm-target <host>` plus either `--r2-bucket <bucket>` or `--skip-storage`.
+  Rehearsals copy audio into a separate `ricotdin-rehearsal` bucket, never into production.
+- **Source:** one `REPEATABLE READ READ ONLY` snapshot; Supabase is never written.
+- **Target:**
+  - Upsert by primary key, in foreign-key order, one transaction per table, with user triggers
+    off so `updated_at` values are kept.
+  - Values travel as text: `col::text` → `%s::text::<type>`.
+  - Session output settings are pinned on both sides.
+  - `profiles.role` is taken from `users.role`.
+  - The script reads the schema from the catalog, so a future migration needs no code change
+    unless it renames or retypes a column. The preflight then blocks on the drift.
+- **Report:**
+  - Order-independent digests per table, plus secrets and storage results.
+  - PASS needs a full run (storage not skipped).
+  - Database errors appear only as class and SQLSTATE. Never print psycopg messages: their
+    DETAIL quotes row values.
+  - Report files (`migration-report*.md`) are git-ignored.
+- **The final run (ARC-15)** must happen after v1 writes stop and **before** v2 accepts logins,
+  because a re-run overwrites `users.*`.
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the
