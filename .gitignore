@@ -52,3 +52,6 @@ __pycache__/
 .pytest_cache/
 app/api/openapi.json
 *.env
+
+# ARC-03 migration reports (user ids, storage keys): keep local
+migration-report*.md
