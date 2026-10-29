@@ -836,11 +836,129 @@ Final repo layout approved by the owner. Supabase is shut down only after v2 has
 
 ---
 
+### ARC-17 — Google Drive storage backend (replaces R2 in v2)
+**Priority:** High | **Status:** ❌ Not started
+
+**User Story**  
+As the owner, I want v2 to store meeting audio and avatars in my Google One Drive (5 TB) instead of Cloudflare R2 so that storage uses capacity I already pay for.
+
+**Context**
+v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Google One 5 TB account and decided (2026-10-29) to move v2 storage there and drop Cloudflare from v2. Trade-offs accepted: a personal account cannot use a service account (OAuth refresh token instead), Drive has no signed URLs (playback is proxied by the home server), and recordings live next to personal data. Rejected: keep R2 (near-zero cost at current volume); R2 for hot files + Drive as archive (less work, but keeps Cloudflare).
+
+**Use Cases**
+1. Owner runs `connect_gdrive` once, signs in with Google, and v2 can store files.
+2. A user finishes a recording; the browser uploads it straight to Drive; the API verifies it.
+3. A user plays a 1-hour meeting and seeks to minute 45 without downloading the whole file.
+4. Retention purge / meeting delete removes the file permanently from Drive.
+
+**Frontend**
+- Upload: `PUT` to the resumable session URI returned by the API (single request, or 8 MiB chunks in multiples of 256 KiB), then report the returned file id (ARC-12 wires it).
+- Playback: `<audio src>` = signed media URL from the API.
+
+**Backend**
+- OAuth: owner's Google Cloud project, client type "Desktop app", consent screen External + publishing status **In production** (Testing expires refresh tokens after 7 days), scope `https://www.googleapis.com/auth/drive.file` only. `scripts/connect_gdrive.py` runs a loopback + PKCE flow, creates (or reuses) the root folder, stores client id, client secret and refresh token (AES-256-GCM, `KEY_ENCRYPTION_SECRET`), root folder id and account email in `drive_config`.
+- Migration `0003`: `drive_config` (single row) and `storage_objects(key PK, file_id UNIQUE, size_bytes, content_type, md5, created_at)`. Grants: `ricotdin_service` read/write, `ricotdin_worker` read (+ write on `storage_objects`), `ricotdin_app` none.
+- `storage/base.py`: a `Storage` protocol (upload_session, confirm_upload, media_url, get_bytes, download_to_file, size, delete, delete_many, check) so ARC-07/08/10 code against it; `platform.storage(conn)` returns `DriveStorage`. `r2.py` remains only as an ARC-18 source reader (removed in ARC-16).
+- Access token cached in memory until 60 s before expiry; `invalid_grant` → `StorageNotConfigured` (503) and an error log telling the owner to re-run `connect_gdrive`. HTTP via httpx; no Google SDK.
+- Upload session: `POST upload/drive/v3/files?uploadType=resumable` with name = key, parent = root, `appProperties.key`, `X-Upload-Content-Type`, `X-Upload-Content-Length`, `Origin: WEB_ORIGIN`. Media types and size caps as in ARC-06. The session URI is a bearer secret: never logged, returned once.
+- Confirm: `files.get` on the reported id; accept only if `appProperties.key`, parent, size (= declared, ≤ cap) and MIME type match; otherwise delete it and answer 422. Upsert `storage_objects`; a replaced file id is deleted.
+- Media: `media_url(key)` → `/media?t=<token>`. The token is HMAC-SHA256 over (key, expiry ≤ 15 min), key derived by HKDF from `KEY_ENCRYPTION_SECRET` (no new env var). The route checks the token before any Drive call, forwards `Range` to `alt=media`, returns 200/206 with `Content-Range`, `Accept-Ranges: bytes`, `Content-Type` from the map, `Cache-Control: private, max-age=0`; at most 8 concurrent streams per process (503 beyond).
+- Delete: `files.delete` (permanent, no trash), then the map row; 404 counts as deleted.
+- Retry: 429, 403 `rateLimitExceeded`/`userRateLimitExceeded` and 5xx with exponential backoff + jitter, max 5 attempts, then `StorageError` (503).
+- `check()`: token refresh works, root folder exists, `permissions.list` on root returns only the owner (otherwise `shared_root`), plus `about.storageQuota` for admin usage.
+
+**Acceptance Criteria**
+- Given no `drive_config` row or a revoked refresh token, when any storage call runs, then it raises `StorageNotConfigured` (503) and no token or secret appears in logs.
+- Given an upload session for `<uid>/<mid>.webm`, when the reported file id has a different `appProperties.key`, parent, size or MIME type, then the file is deleted from Drive and the call answers 422; a matching file gets a `storage_objects` row.
+- Given a valid media URL, when it is requested with `Range: bytes=1000-1999`, then the answer is 206 with `Content-Range: bytes 1000-1999/<size>` and exactly those bytes; an expired or tampered token answers 403 without a Drive call.
+- Given a stored key, when `delete` runs twice, then the file is gone from Drive (not in trash), the map row is gone and the second call is a no-op.
+- Given Drive answers 429 four times then 200, when a call runs, then it succeeds; after 5 failures it raises `StorageError`.
+- Given the root folder has a permission for anyone other than the owner, when `check()` runs, then it reports `shared_root`.
+
+**Test Plan**
+- Pure logic in `app/api/app/services/storage/drive_rules.py`: `verify_uploaded_file()`, `parse_range()`, `is_retryable()`, `retry_delay()`, `root_is_private()`; `media_token.py`: `sign_media_token()` / `verify_media_token(now=...)`.
+- Tests: `app/api/tests/test_drive_rules.py`, `test_media_token.py` (pure); `test_drive_storage.py` with `httpx.MockTransport` as a fake Drive (session, confirm, range, delete, retry, revoked token); `test_drive_storage_integration.py` for migration 0003 grants (app role cannot read `drive_config` / `storage_objects`).
+
+**Structural flags**
+- New provider (Google Drive API) and OAuth secrets → SEC review.
+- Migration `0003` (two tables + grants).
+- New public route `/media` (token-authorised, no session).
+- >10 files; CLAUDE.md §0.4 rewritten for Drive.
+
+**Done check**
+- `cd app/api && uv run pytest -q` green, and `uv run --env-file .env python -m scripts.drive_smoke` uploads a test file through a session, range-reads it via `/media`, deletes it and reports `check()` OK on the dev root folder.
+
+**Out of scope**
+- "Connect Google Drive" button on `/admin/storage` (follow-up after ARC-14).
+- Copying v1 files (ARC-18). v1 keeps R2 until cutover.
+- DB backups (OPS-03 stays on its own R2 bucket).
+- Server-side audio cache, multiple Drive accounts, restoring from Drive trash.
+
+**Key files (expected)**
+- `app/api/app/services/storage/{base,gdrive,drive_rules,media_token,config}.py`, `app/api/app/services/platform.py`
+- `app/api/app/routers/media.py`, `app/api/app/main.py`
+- `app/api/scripts/connect_gdrive.py`, `app/api/scripts/drive_smoke.py`
+- `app/api/migrations/versions/0003_drive_storage.py`
+- Tests listed above; `CLAUDE.md` §0.4
+
+---
+
+### ARC-18 — Migration copies files to Google Drive
+**Priority:** High | **Status:** ❌ Not started
+
+**User Story**  
+As the owner, I want the v1 → v2 migration to copy every audio file and avatar (v1 R2 bucket and legacy Supabase Storage) into Google Drive so that no file is lost at cutover.
+
+**Context**
+ARC-03 copies only legacy Supabase Storage objects into R2 and assumes R2 files stay in place. With ARC-17, v2 reads only Drive, so every object from both v1 sources must move. Rejected: keeping a dual-read R2 fallback in v2 (keeps Cloudflare, two code paths).
+
+**Use Cases**
+1. Rehearsal: the owner copies all files into a separate `ricotdin-rehearsal` Drive folder and gets a PASS report.
+2. Final run (ARC-15): files land in the production root folder; a re-run copies nothing.
+
+**Frontend**
+- n/a.
+
+**Backend**
+- For every `meetings.audio_path` and avatar key: ownership check (`is_owned_audio_key` / `is_owned_avatar_key`); source chosen by the row's storage provider (Supabase Storage, or the v1 R2 bucket with credentials decrypted from v1 `storage_config`); stream to a temp file with `max_bytes`; upload via DriveStorage server-side into the target folder; verify size + md5; upsert `storage_objects`.
+- Skip when a `storage_objects` row with the same size + md5 exists (idempotent). Source is never written or deleted.
+- Flags: `--confirm-drive-folder <id>` must equal the folder in the target's `drive_config`, replacing `--r2-bucket`; `--skip-storage` kept.
+- Report: copied / skipped / rejected (ownership) / failed counts and an order-independent digest of (key, size, md5); no row values or messages from Drive.
+- Runbook `docs/ops/v2-migration-rehearsal.md` rewritten: rehearsal folder via `connect_gdrive --folder ricotdin-rehearsal` on the rehearsal branch, deleted afterwards.
+
+**Acceptance Criteria**
+- Given one meeting whose audio is in the v1 R2 bucket and one in Supabase Storage, when the script runs, then both exist in the target Drive folder with matching size and md5 and a `storage_objects` row.
+- Given a completed run, when the same command runs again, then nothing is uploaded and the report PASSes.
+- Given a row whose key fails the ownership check, when the script runs, then it is not copied and is counted as rejected.
+- Given `--confirm-drive-folder` that differs from the target's `drive_config` folder, when the script starts, then it exits 2 before copying.
+- The source R2 bucket and Supabase Storage receive no write or delete calls.
+
+**Test Plan**
+- Pure logic: `app/api/app/migration/storage_plan.py` → `plan_object_copies(rows, existing_map)` (copy / skip / reject), `storage_digest()`.
+- Tests: `app/api/tests/test_migration_storage.py`; source/target fakes for the run loop (no network).
+
+**Structural flags**
+- Reads v1 R2 credentials (secrets) → SEC review of logging. No new migration.
+
+**Done check**
+- Two rehearsals with a PASS report including storage, logged in `docs/ops/v2-migration-rehearsal.md` (this also closes ARC-03).
+
+**Out of scope**
+- Deleting the v1 R2 buckets and the Supabase bucket (ARC-16, after a stable period).
+
+**Key files (expected)**
+- `app/api/scripts/migrate_from_supabase.py`, `app/api/app/migration/{plan,report,storage_plan}.py`
+- `app/api/tests/test_migration_storage.py`, `docs/ops/v2-migration-rehearsal.md`
+
+---
+
 ## Build Order
 
-ARC-00 → ARC-01 → ARC-02 → ARC-04 → ARC-03 → ARC-05 → ARC-06 → ARC-07 → ARC-08 → ARC-09 → ARC-10 →
-ARC-11 → ARC-12 → ARC-13 → ARC-14 → ARC-15 → ARC-16.
+ARC-00 → ARC-01 → ARC-02 → ARC-04 → ARC-03 → ARC-05 → ARC-06 → ARC-17 → ARC-07 → ARC-08 → ARC-09 → ARC-10 →
+ARC-11 → ARC-12 → ARC-13 → ARC-14 → ARC-18 → ARC-15 → ARC-16.
 ARC-11/12 may start once ARC-05 OpenAPI is frozen (parallel to ARC-07..10).
+ARC-17 (Google Drive storage, owner 2026-10-29) comes before ARC-07/08/10/12, which use storage;
+ARC-18 needs ARC-03 + ARC-17, and the ARC-03 rehearsals run after it.
 
 ## Dependencies
 
