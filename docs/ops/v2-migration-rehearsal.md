@@ -144,5 +144,17 @@ neonctl branches delete rehearsal-YYYYMMDD --project-id dark-grass-92968821
 
 | # | Date | Target branch | Tables (rows) | Embeddings | Secrets OK / failed | Audio copied / on R2 / missing / failed | Second run | Result |
 |---|---|---|---|---|---|---|---|---|
-| 1 | | | | | | | | |
+| 1 | 2026-10-29 | `rehearsal-20261029` | 22/22 match (3763) | 324 → 324 | 10 / 0 | 0 / 0 / 0 / 0 (22 unreferenced, not copied) | PASS, 22/22 | **PASS** |
 | 2 | | | | | | | | |
+
+Notes from rehearsal 1:
+- The first preflight blocked on `meetings.pinned_at` and `meetings.audio_purged_at`. Production had never run
+  v1 migrations 004 and 032. The owner applied both in the Supabase SQL editor on 2026-10-29.
+  Migration 033 (BUG-003 revoke) was still missing in production at that time; it does not block the migration.
+- The Supabase **Direct connection** is IPv6-only. Use the **shared Session pooler**
+  (`aws-<n>-<region>.pooler.supabase.com:5432`, user `postgres.<ref>`); the IPv4 add-on is not needed.
+- On a Windows console the script crashed while printing the report (`UnicodeEncodeError`, cp1252); the
+  report file was complete, but the exit code was always 1. Fixed in BUG-019: characters the console
+  cannot show are printed as `?`; the report file keeps the full text.
+- All 45 meetings were already on R2, so no audio was copied and R2 was never contacted. The 22 objects
+  left in the Supabase `recordings` bucket are not referenced by any meeting.
