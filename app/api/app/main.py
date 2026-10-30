@@ -19,6 +19,7 @@ from app.core.sentry import init_sentry
 from app.core.settings import Settings, get_settings
 from app.core.version import resolve_version
 from app.routers import auth as auth_router
+from app.routers import media as media_router
 from app.routers import profile as profile_router
 from app.services.platform import Platform
 
@@ -60,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from app.db.session import Database
 
         async with AsyncExitStack() as stack:
+            stack.push_async_callback(app.state.platform.aclose)  # Drive HTTP client
             app.state.db = await Database.start(s)
             stack.push_async_callback(app.state.db.close)
             for hook in BACKGROUND_HOOKS:  # each started hook is stopped even if a later one fails
@@ -84,4 +86,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router.router)
     app.include_router(auth_router.wellknown)
     app.include_router(profile_router.router)
+    app.include_router(media_router.router)
     return app

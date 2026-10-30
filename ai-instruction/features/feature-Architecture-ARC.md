@@ -837,7 +837,7 @@ Final repo layout approved by the owner. Supabase is shut down only after v2 has
 ---
 
 ### ARC-17 — Google Drive storage backend (replaces R2 in v2)
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Code done — owner smoke check pending (`connect_gdrive` + `drive_smoke`)
 
 **User Story**  
 As the owner, I want v2 to store meeting audio and avatars in my Google One Drive (5 TB) instead of Cloudflare R2 so that storage uses capacity I already pay for.
@@ -895,10 +895,11 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 - Server-side audio cache, multiple Drive accounts, restoring from Drive trash.
 
 **Key files (expected)**
-- `app/api/app/services/storage/{base,gdrive,drive_rules,media_token,config}.py`, `app/api/app/services/platform.py`
-- `app/api/app/routers/media.py`, `app/api/app/main.py`
+- `app/api/app/services/storage/{base,gdrive,drive_rules,drive_oauth,media_token,config}.py`, `app/api/app/services/platform.py`
+- `app/api/app/routers/media.py`, `app/api/app/main.py`, `app/api/app/core/{logging,redact}.py`
 - `app/api/scripts/connect_gdrive.py`, `app/api/scripts/drive_smoke.py`
-- `app/api/migrations/versions/0003_drive_storage.py`
+- `app/api/migrations/versions/0003_drive_storage.py`, `app/api/migrations/sql/0003_drive_storage{,_down}.sql`
+- Tests: `test_drive_rules.py`, `test_media_token.py`, `test_drive_oauth.py`, `test_drive_storage.py` (+ `fake_drive.py`), `test_media_route.py`, `test_drive_storage_integration.py`
 - Tests listed above; `CLAUDE.md` §0.4
 
 ---

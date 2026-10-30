@@ -26,6 +26,8 @@ REDACTED_LOGGERS = (
     "boto3",
     "s3transfer",
     "urllib3",
+    "httpx2",
+    "httpcore2",
 )
 _STANDARD = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}
 
@@ -83,7 +85,8 @@ def setup_logging(level: str = "INFO") -> None:
             logger.setLevel(level.upper())
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("asyncpg").setLevel(logging.WARNING)
-    for name in ("botocore", "boto3", "s3transfer", "urllib3"):  # debug logs carry signed headers
+    # debug/info logs carry signed headers, Drive upload session URIs and bearer tokens
+    for name in ("botocore", "boto3", "s3transfer", "urllib3", "httpx2", "httpcore2"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

@@ -180,12 +180,13 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Integration tests** (`*_integration.py`) create and drop `ricotdin_test_*` databases on the
   `DATABASE_URL` branch (never point it at `main`); CI runs them against a `pgvector/pgvector:pg18` service.
 
-### 0.4 v2 platform services (ARC-06)
+### 0.4 v2 platform services (ARC-06, storage ARC-17)
 
 - **`Platform`** (`app/services/platform.py`, `app.state.platform`, `get_platform`): `keys`
-  (`KeySource`), `config` (`AppConfigReader`), `storage_config`, `r2(conn)`. Use them only inside
-  `db.role_transaction('ricotdin_service' | 'ricotdin_worker')`; `ricotdin_app` cannot read
-  `admin_config` / `storage_config`.
+  (`KeySource`), `config` (`AppConfigReader`), `drive_config`, `storage(conn)` (Google Drive),
+  `media_signer`, `media_slots`; `storage_config` + `r2(conn)` only for the ARC-18 v1 source.
+  Use them only inside `db.role_transaction('ricotdin_service' | 'ricotdin_worker')`;
+  `ricotdin_app` cannot read `admin_config` / `storage_config` / `drive_config` / `storage_objects`.
 - **Crypto** (`crypto.py`): AES-256-GCM, byte-compatible with v1 (fixture test).
   `KEY_ENCRYPTION_SECRET` must be the **same value as v1**: 64 hex chars or standard base64 of 32
   bytes. A malformed value stops startup. An unset value means stored keys and R2 are unusable;
@@ -199,16 +200,38 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   per instance, so keep one pool per provider (ARC-08), never one per request.
 - **Config** (`config.py`): `app_config` reader, cache 30 s, `invalidate(key)` after an admin
   PATCH. `coerce_config_bool` / `parse_int_setting` fail closed.
-- **Storage** (`storage/`): R2 only from `storage_config`, with no env fallback and a 30 s cache.
-  `storage_config.invalidate()` runs after an admin change. Rows with
-  `storage_provider='supabase'` raise `LegacyStorageUnsupported` (ARC-03 copies them).
+- **Storage = Google Drive** (ARC-17, `storage/`; owner decision 2026-10-29). Code against the
+  `Storage` protocol (`base.py`); `platform.storage(conn)` returns `DriveStorage` (`gdrive.py`).
+  `r2.py` is only the ARC-18 reader of the v1 bucket (removed in ARC-16). No Google SDK (httpx2).
   - **Callers must check ownership first** (`owned_audio_path` / `is_owned_audio_key` /
-    `is_owned_avatar_key`); `R2Storage` accepts any key.
-  - Upload presign: media types only (parameters such as `;codecs=opus` are allowed); the URL
-    is signed with the exact `Content-Type`. Pass `content_length`. An unsupported type raises
-    415 `UnsupportedContentType`.
+    `is_owned_avatar_key`); storage accepts any key (≤ 121 bytes, the Drive appProperty limit).
+  - **Account:** one row in `drive_config` (migration `0003`), written by
+    `uv run --env-file .env python -m scripts.connect_gdrive [--folder NAME]` (Desktop-app OAuth
+    client, consent screen *In production* — *Testing* expires the refresh token after 7 days;
+    scope `drive.file`; loopback + PKCE). Client secret + refresh token AES-256-GCM with
+    `KEY_ENCRYPTION_SECRET`; cached 30 s (`drive_config.invalidate()`). A revoked token →
+    `StorageNotConfigured` (503) + an error log asking to re-run `connect_gdrive`. Check end to end
+    with `python -m scripts.drive_smoke`. No new env var.
+  - **Map:** `storage_objects(key PK, file_id UNIQUE, size_bytes, content_type, md5)`; service
+    read/write, worker read/write, app none. `stat`/`size` read only the map.
+  - **Upload:** `upload_session(key, content_type, content_length, max_bytes=)` → resumable session
+    URI (bearer secret: return once, never log) with `Origin: WEB_ORIGIN`; the browser PUTs the file
+    and reports the file id; `confirm_upload` accepts it only if `appProperties.key`, parent, size
+    (= declared, ≤ cap) and type match, else deletes it and raises 422 `UploadRejected`. Media types
+    only (415). Server-side: `upload_file` (8 MiB chunks, md5 check). Orphans of never-confirmed
+    sessions are not cleaned up yet (follow-up).
+  - **Playback:** `media_url(key)` → path-relative `/media?t=<token>` (HMAC-SHA256 over key +
+    expiry ≤ 15 min, key from HKDF of `KEY_ENCRYPTION_SECRET`); the SPA prefixes the API origin.
+    `GET /media` checks the token before any DB/Drive call (403), forwards `Range` (206 +
+    `Content-Range`, 416 past the end), `Cache-Control: private, max-age=0`, at most 8 streams per
+    process (503 `media_busy`).
+  - **Delete:** permanent (`files.delete`, never trash), then the map row; a missing key or Drive
+    404 is a no-op. Retry with backoff + jitter on 429, rate-limit 403 and 5xx, 5 attempts, then
+    `StorageError` (503). `check()` → `StorageHealth` (token, root present, `shared_root` if anyone
+    else has access, quota).
   - Reads always take `max_bytes`.
-  - botocore, boto3, s3transfer and urllib3 log at WARNING, redacted.
+  - botocore, boto3, s3transfer, urllib3, httpx2 and httpcore2 log at WARNING, redacted (Google
+    `ya29.`/`1//` tokens and `upload_id=` are redaction patterns).
 
 ### 0.5 v1 → v2 data migration (ARC-03)
 

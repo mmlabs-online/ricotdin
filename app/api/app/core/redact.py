@@ -46,6 +46,10 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bAIza[0-9A-Za-z_-]{20,}"), REDACTED),  # Google API keys
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"), REDACTED),  # OpenAI-style keys
     (re.compile(r"\bxai-[A-Za-z0-9_-]{12,}"), REDACTED),  # xAI keys
+    (re.compile(r"\bya29\.[A-Za-z0-9._-]{10,}"), REDACTED),  # Google OAuth access tokens
+    (re.compile(r"\b1//[A-Za-z0-9_-]{10,}"), REDACTED),  # Google OAuth refresh tokens
+    # Drive resumable upload session ids (the session URI is a bearer upload credential)
+    (re.compile(r"(\bupload_id=)[^\s&\"']+"), rf"\1{REDACTED}"),
     # key=value, key: value, 'key': 'value', "key": "value", key%3Dvalue in free text / reprs.
     # (?!\[REDACTED\]) keeps redaction idempotent (text is redacted again by the formatter).
     (
