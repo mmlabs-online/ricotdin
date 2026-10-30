@@ -16,6 +16,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+import anyio
 import httpx2
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -32,6 +33,7 @@ from app.services.storage.media_token import MediaTokenSigner, derive_media_key
 from app.services.storage.r2 import R2Storage
 
 MEDIA_STREAMS = 8  # concurrent /media streams per process
+MEDIA_STREAMS_PER_KEY = 2
 
 
 @dataclass
@@ -42,10 +44,14 @@ class Platform:
     drive_config: DriveConfigSource
     media_signer: MediaTokenSigner | None = field(default=None, repr=False)
     web_origin: str | None = None
-    media_slots: StreamSlots = field(default_factory=lambda: StreamSlots(MEDIA_STREAMS))
+    media_slots: StreamSlots = field(
+        default_factory=lambda: StreamSlots(MEDIA_STREAMS, MEDIA_STREAMS_PER_KEY)
+    )
     drive_transport: httpx2.AsyncBaseTransport | None = field(default=None, repr=False)
     _r2: R2Storage | None = field(default=None, repr=False)
     _drive: DriveClient | None = field(default=None, repr=False)
+    _retired: list[DriveClient] = field(default_factory=list, repr=False)
+    _drive_lock: anyio.Lock = field(default_factory=anyio.Lock, repr=False)
 
     @classmethod
     def from_settings(cls, settings: Settings, env: Mapping[str, str] | None = None) -> "Platform":
@@ -62,25 +68,28 @@ class Platform:
 
     async def storage(self, conn: AsyncConnection) -> DriveStorage:
         """Google Drive storage bound to ``conn`` for the key → file id map (ARC-17). The Drive
-        client (HTTP pool + cached access token) is shared and rebuilt when the config changes."""
+        client (HTTP pool + cached access token) is shared. A failed or missing config only
+        raises: streams still running on the current client are never cut. After a reconnect
+        (new config) the old client is retired, not closed, and closed at shutdown."""
         cfg = await self.drive_config.get(conn)
         if cfg is None or self.media_signer is None:
-            await self._close_drive()  # drop the client: it holds the old secrets
             raise StorageNotConfigured(
                 detail="no decryptable drive_config row: run `python -m scripts.connect_gdrive`"
             )
-        if self._drive is None or self._drive.config != cfg:
-            await self._close_drive()
-            self._drive = DriveClient(cfg, transport=self.drive_transport)
-        return DriveStorage(self._drive, SqlObjectMap(conn), self.media_signer, self.web_origin)
-
-    async def _close_drive(self) -> None:
-        if self._drive is not None:
-            old, self._drive = self._drive, None
-            await old.aclose()
+        async with self._drive_lock:
+            if self._drive is None or self._drive.config != cfg:
+                if self._drive is not None:
+                    self._retired.append(self._drive)
+                self._drive = DriveClient(cfg, transport=self.drive_transport)
+            client = self._drive
+        return DriveStorage(client, SqlObjectMap(conn), self.media_signer, self.web_origin)
 
     async def aclose(self) -> None:
-        await self._close_drive()
+        clients, self._retired = [*self._retired, self._drive], []
+        self._drive = None
+        for client in clients:
+            if client is not None:
+                await client.aclose()
 
     async def r2(self, conn: AsyncConnection) -> R2Storage:
         """The v1 bucket from the active storage_config (ARC-18 source reader only; v2 stores

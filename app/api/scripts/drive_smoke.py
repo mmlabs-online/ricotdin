@@ -34,6 +34,7 @@ async def run() -> int:
     key = f"smoke/{uuid.uuid4()}.webm"
     data = os.urandom(SIZE)
     failures: list[str] = []
+    uploaded = False
     try:
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "smoke.webm"
@@ -42,6 +43,7 @@ async def run() -> int:
                 storage = await platform.storage(conn)
                 obj = await storage.upload_file(key, src, "audio/webm", max_bytes=SIZE)
                 url = storage.media_url(key, ttl=120)
+        uploaded = True
         print(f"upload: ok ({obj.size_bytes} bytes, md5 verified)")
 
         app = create_app(settings)
@@ -63,6 +65,7 @@ async def run() -> int:
             storage = await platform.storage(conn)
             await storage.delete(key)
             await storage.delete(key)  # second call is a no-op
+            uploaded = False
             gone = await storage.client.get_file(obj.file_id) is None
             unmapped = await storage.stat(key) is None
             health = await storage.check()
@@ -78,6 +81,9 @@ async def run() -> int:
         if not health.ok:
             failures.append("check")
     finally:
+        if uploaded:  # a failed step must not leave the test file in Drive
+            async with db.role_transaction("ricotdin_service") as conn:
+                await (await platform.storage(conn)).delete(key)
         await platform.aclose()
         await db.close()
     print("PASS" if not failures else f"FAIL: {', '.join(failures)}")

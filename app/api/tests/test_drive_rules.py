@@ -273,3 +273,42 @@ def test_stream_slots_release_never_goes_negative() -> None:
     slots = StreamSlots(1)
     slots.release()
     assert slots.in_use == 0
+
+
+# --- review round 1 -------------------------------------------------------------------------------
+
+
+def test_only_this_keys_session_file_counts_as_an_orphan() -> None:
+    from app.services.storage.drive_rules import is_session_orphan
+
+    assert is_session_orphan(meta(), key=KEY, root_id=ROOT)
+    assert not is_session_orphan(meta(appProperties={"key": "x"}), key=KEY, root_id=ROOT)
+    assert not is_session_orphan(meta(appProperties=None), key=KEY, root_id=ROOT)
+    assert not is_session_orphan(meta(parents=["x"]), key=KEY, root_id=ROOT)
+    folder = meta(mimeType="application/vnd.google-apps.folder")
+    assert not is_session_orphan(folder, key=KEY, root_id=ROOT)
+    assert not is_session_orphan(meta(id=ROOT), key=KEY, root_id=ROOT)
+
+
+def test_cap_window() -> None:
+    from app.services.storage.drive_rules import cap_window
+
+    assert cap_window(None, 100, 1000) is None  # small file, no range: plain 200
+    assert cap_window(None, 5000, 1000) == ByteRange(0, 999)
+    assert cap_window(ByteRange(2000, 4999), 5000, 1000) == ByteRange(2000, 2999)
+    assert cap_window(ByteRange(10, 20), 5000, 1000) == ByteRange(10, 20)
+
+
+def test_huge_range_numbers_are_ignored() -> None:
+    assert parse_range("bytes=" + "9" * 5000 + "-", 10) is None
+    assert parse_range("bytes=٣-٤", 10) is None  # non-ASCII digits
+
+
+def test_stream_slots_per_key() -> None:
+    slots = StreamSlots(8, per_key=2)
+    assert slots.try_acquire("a") and slots.try_acquire("a")
+    assert not slots.try_acquire("a")
+    assert slots.try_acquire("b")
+    slots.release("a")
+    assert slots.try_acquire("a")
+    assert slots.in_use == 3

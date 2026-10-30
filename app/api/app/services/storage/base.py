@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from app.core.errors import AppError, NotFound, ServiceUnavailable
+from app.core.errors import AppError, Conflict, NotFound, ServiceUnavailable
 
 # Media only: an uploaded text/html or SVG file would be served back from our origin.
 _UPLOAD_TYPES = re.compile(r"(?:audio|video)/[a-z0-9][a-z0-9.+-]*|image/(?:jpeg|png|webp)")
@@ -41,6 +41,11 @@ class ObjectTooLarge(AppError):
     status = 413
     code = "object_too_large"
     message = "The file is too large."
+
+
+class KeyAlreadyStored(Conflict):
+    code = "file_already_stored"
+    message = "A file is already stored here. Delete it before uploading a new one."
 
 
 class UploadRejected(AppError):
@@ -90,7 +95,9 @@ class Storage(Protocol):
     async def confirm_upload(
         self, key: str, file_id: str, *, content_type: str, content_length: int, max_bytes: int
     ) -> StoredObject:
-        """Verify the file the browser reported and map ``key`` to it (422 otherwise)."""
+        """Verify the file the browser reported and map ``key`` to it. 422 when it is not the
+        file the session for ``key`` created; 409 when ``key`` is already mapped (a key is
+        never replaced: ``delete(key)`` first, in its own step)."""
         ...
 
     def media_url(self, key: str, *, ttl: int = ...) -> str:

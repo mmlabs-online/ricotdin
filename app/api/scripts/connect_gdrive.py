@@ -18,6 +18,12 @@ token (AES-256-GCM with KEY_ENCRYPTION_SECRET), folder id and account email in `
 Env: ``DATABASE_URL_SERVICE`` (written by ``scripts.provision_db_roles``) and
 ``KEY_ENCRYPTION_SECRET``. Prints only the account email, folder name and folder id.
 After reconnecting, restart the API (or wait 30 s for the config cache).
+
+Rotating after a suspected leak: FIRST revoke the old grant at Google (myaccount.google.com →
+Security → Third-party connections → remove the app) and replace the client secret in the Cloud
+console, THEN run this script. Re-running alone does not revoke the old refresh token.
+Reconnecting a different Google account or OAuth project orphans every stored file (drive.file
+only sees files this project created in that account), so it needs ``--force``.
 """
 
 import argparse
@@ -113,6 +119,14 @@ def _root_folder(http: httpx2.Client, name: str) -> str:
     return str(created["id"])
 
 
+def _current(url: str) -> tuple[str, str] | None:
+    """(client_id, account_email) of the stored connection, if any."""
+    with psycopg.connect(url) as conn:
+        conn.execute("SET ROLE ricotdin_service")
+        row = conn.execute("SELECT client_id, account_email FROM drive_config").fetchone()
+    return (str(row[0]), str(row[1])) if row else None
+
+
 def _store(url: str, master: bytes, values: dict[str, str]) -> None:
     sec = encrypt_with_key(values["client_secret"], master)
     ref = encrypt_with_key(values["refresh_token"], master)
@@ -156,6 +170,11 @@ def main() -> int:
     parser.add_argument("--folder", default="ricotdin", help="root folder under My Drive")
     parser.add_argument("--client-id", default="", help="OAuth client id (prompted if omitted)")
     parser.add_argument("--port", type=int, default=0, help="loopback port (default: random)")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="allow switching to another Google account or OAuth client (orphans stored files)",
+    )
     args = parser.parse_args()
     db_url = os.environ.get("DATABASE_URL_SERVICE", "")
     raw_master = os.environ.get("KEY_ENCRYPTION_SECRET", "")
@@ -163,6 +182,11 @@ def main() -> int:
         print("DATABASE_URL_SERVICE and KEY_ENCRYPTION_SECRET must be set", file=sys.stderr)
         return 2
     master = parse_master_key(raw_master)
+    try:
+        current = _current(db_url)
+    except psycopg.Error as exc:  # never print psycopg messages: DETAIL can quote row values
+        print(f"database error {type(exc).__name__} ({exc.sqlstate})", file=sys.stderr)
+        return 1
     folder_query(args.folder)  # validate the name before signing in
     client_id = args.client_id or input("OAuth client id: ").strip()
     client_secret = getpass.getpass("OAuth client secret (not shown): ").strip()
@@ -215,17 +239,28 @@ def main() -> int:
                 f"folder {args.folder!r} is shared with others; unshare it first", file=sys.stderr
             )
             return 1
-    _store(
-        db_url,
-        master,
-        {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": str(refresh),
-            "root_folder_id": root,
-            "account_email": email,
-        },
-    )
+    if current and current != (client_id, email) and not args.force:
+        print(
+            "drive_config holds another Google account or OAuth client; stored files would be "
+            "unreachable. Re-run with --force to switch anyway.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        _store(
+            db_url,
+            master,
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": str(refresh),
+                "root_folder_id": root,
+                "account_email": email,
+            },
+        )
+    except psycopg.Error as exc:
+        print(f"database error {type(exc).__name__} ({exc.sqlstate})", file=sys.stderr)
+        return 1
     print(f"Connected {email}: folder {args.folder!r} ({root}) stored in drive_config.")
     print("Next: uv run --env-file .env python -m scripts.drive_smoke")
     return 0

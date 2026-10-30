@@ -869,7 +869,7 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 
 **Acceptance Criteria**
 - Given no `drive_config` row or a revoked refresh token, when any storage call runs, then it raises `StorageNotConfigured` (503) and no token or secret appears in logs.
-- Given an upload session for `<uid>/<mid>.webm`, when the reported file id has a different `appProperties.key`, parent, size or MIME type, then the file is deleted from Drive and the call answers 422; a matching file gets a `storage_objects` row.
+- Given an upload session for `<uid>/<mid>.webm`, when the reported file id has a different `appProperties.key`, parent, size or MIME type, then the call answers 422; the file is deleted only if that key's session created it in the root (never another key's file, a folder or the root); a matching file gets a `storage_objects` row, and a key that is already mapped answers 409 (review round 1).
 - Given a valid media URL, when it is requested with `Range: bytes=1000-1999`, then the answer is 206 with `Content-Range: bytes 1000-1999/<size>` and exactly those bytes; an expired or tampered token answers 403 without a Drive call.
 - Given a stored key, when `delete` runs twice, then the file is gone from Drive (not in trash), the map row is gone and the second call is a no-op.
 - Given Drive answers 429 four times then 200, when a call runs, then it succeeds; after 5 failures it raises `StorageError`.

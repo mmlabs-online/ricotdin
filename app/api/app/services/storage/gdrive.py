@@ -13,6 +13,7 @@ Drive response body. httpx2 / httpcore2 log at WARNING (``app.core.logging``).
 
 import hashlib
 import random
+import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.logging import get_logger
 from app.services.storage.base import (
+    KeyAlreadyStored,
     ObjectTooLarge,
     StorageError,
     StorageHealth,
@@ -43,6 +45,7 @@ from app.services.storage.drive_rules import (
     ByteRange,
     error_reason,
     is_retryable,
+    is_session_orphan,
     is_valid_file_id,
     retry_delay,
     root_is_private,
@@ -53,6 +56,7 @@ from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S, MediaTokenSign
 log = get_logger("storage.drive")
 
 TOKEN_MARGIN_S = 60
+REJECTED_TOKEN_BACKOFF_S = 30.0
 UPLOAD_CHUNK = 8 * 1024 * 1024  # multiple of 256 KiB (Drive resumable rule)
 _STREAM_CHUNK = 64 * 1024
 _APP_PROPERTY_MAX = 124  # bytes of key + value per Drive appProperty
@@ -93,6 +97,7 @@ class DriveClient:
         self._token: str | None = None
         self._token_expires = 0.0
         self._token_lock = anyio.Lock()
+        self._rejected_until = 0.0  # a revoked refresh token is not retried for a while
 
     def __repr__(self) -> str:
         return "DriveClient()"
@@ -106,6 +111,8 @@ class DriveClient:
         async with self._token_lock:
             if self._token and self._clock() < self._token_expires:
                 return self._token
+            if self._clock() < self._rejected_until:
+                raise StorageNotConfigured(detail="drive refresh token was rejected recently")
             data = {
                 "client_id": self.config.client_id,
                 "client_secret": self.config.client_secret,
@@ -122,6 +129,7 @@ class DriveClient:
                     "`python -m scripts.connect_gdrive` to reconnect the account",
                     code,
                 )
+                self._rejected_until = self._clock() + REJECTED_TOKEN_BACKOFF_S
                 raise StorageNotConfigured(detail=f"drive token refresh {code}")
             if resp.status_code != 200 or not isinstance(body, Mapping):
                 raise StorageError(detail=f"drive token refresh HTTP {resp.status_code}")
@@ -142,10 +150,13 @@ class DriveClient:
 
     # --- requests ------------------------------------------------------------------------------
 
-    async def _send(self, call: Callable[[], Awaitable[httpx2.Response]]) -> httpx2.Response:
+    async def _send(
+        self, call: Callable[[], Awaitable[httpx2.Response]], *, retry: bool = True
+    ) -> httpx2.Response:
         """Run ``call`` with retry on transport errors and retryable statuses."""
-        for attempt in range(MAX_ATTEMPTS):
-            last = attempt == MAX_ATTEMPTS - 1
+        attempts = MAX_ATTEMPTS if retry else 1
+        for attempt in range(attempts):
+            last = attempt == attempts - 1
             try:
                 resp = await call()
             except httpx2.TransportError as exc:
@@ -155,8 +166,11 @@ class DriveClient:
                 continue
             if resp.status_code < 400:
                 return resp
-            reason = error_reason(_json(resp)) if resp.status_code == 403 else None
-            if not is_retryable(resp.status_code, reason):
+            reason = None
+            if resp.status_code == 403:
+                await resp.aread()  # a streamed response has no body yet; error bodies are small
+                reason = error_reason(_json(resp))
+            if not retry or not is_retryable(resp.status_code, reason):
                 return resp
             await resp.aclose()
             if last:
@@ -176,6 +190,7 @@ class DriveClient:
         content: bytes | None = None,
         headers: Mapping[str, str] | None = None,
         stream: bool = False,
+        retry: bool = True,
     ) -> httpx2.Response:
         """An authorised Drive call. A 401 refreshes the access token once."""
         for refreshed in (False, True):
@@ -188,7 +203,7 @@ class DriveClient:
                 )
                 return await self._http.send(req, stream=stream)
 
-            resp = await self._send(call)
+            resp = await self._send(call, retry=retry)
             if resp.status_code == 401 and not refreshed:
                 await resp.aclose()
                 self._drop_token()
@@ -212,9 +227,12 @@ class DriveClient:
         return body
 
     async def delete_file(self, file_id: str) -> None:
-        """Permanent delete (not trash). A missing file counts as deleted."""
+        """Permanent delete (not trash). A missing file counts as deleted. The root folder is
+        never deleted (Drive would delete every file in it)."""
         if not is_valid_file_id(file_id):
             return
+        if file_id == self.config.root_folder_id:
+            raise StorageError(detail="refusing to delete the storage root folder")
         resp = await self.request("DELETE", f"{DRIVE_API}/files/{file_id}")
         if resp.status_code not in (200, 204, 404):
             raise StorageError(detail=f"drive files.delete HTTP {resp.status_code}")
@@ -223,7 +241,9 @@ class DriveClient:
         """A streamed ``alt=media`` response (200 full, or 206 for ``rng``). Caller closes it."""
         if not is_valid_file_id(file_id):
             raise StorageObjectNotFound(detail="invalid file id")
-        headers = {"Range": rng.header} if rng else {}
+        headers = {"Accept-Encoding": "identity"}  # bytes must match Content-Length / Range
+        if rng:
+            headers["Range"] = rng.header
         resp = await self.request(
             "GET",
             f"{DRIVE_API}/files/{file_id}",
@@ -274,25 +294,56 @@ class DriveClient:
         return location
 
     async def put_chunks(self, session_uri: str, path: Path, total: int) -> str:
-        """Upload a local file to a resumable session in 8 MiB chunks; returns the file id."""
+        """Upload a local file to a resumable session in chunks; returns the file id. Follows the
+        offset Drive reports (308 ``Range``); after a failed PUT it asks Drive for the offset
+        instead of re-sending blindly."""
         offset = 0
+        failures = 0
         async with await anyio.open_file(path, "rb") as fh:
             while True:
-                chunk = await fh.read(UPLOAD_CHUNK)
-                end = offset + len(chunk) - 1
-                rng = f"bytes {offset}-{end}/{total}" if chunk else f"bytes */{total}"
-                resp = await self.request(
-                    "PUT", session_uri, content=chunk, headers={"Content-Range": rng}
+                await fh.seek(offset)
+                chunk = await fh.read(UPLOAD_CHUNK) if offset < total else b""
+                rng = (
+                    f"bytes {offset}-{offset + len(chunk) - 1}/{total}"
+                    if chunk
+                    else f"bytes */{total}"
                 )
-                if resp.status_code in (200, 201):
+                try:
+                    resp = await self.request(
+                        "PUT",
+                        session_uri,
+                        content=chunk,
+                        headers={"Content-Range": rng},
+                        retry=False,
+                    )
+                except StorageError:
+                    resp = None
+                if resp is not None and resp.status_code in (200, 201):
                     body = _json(resp)
                     file_id = body.get("id") if isinstance(body, Mapping) else None
                     if not isinstance(file_id, str):
                         raise StorageError(detail="drive upload finished without a file id")
                     return file_id
-                if resp.status_code != 308 or not chunk:
-                    raise StorageError(detail=f"drive upload HTTP {resp.status_code}")
-                offset += len(chunk)
+                if resp is not None and resp.status_code == 308:
+                    offset = _persisted_offset(resp.headers.get("range"))
+                    failures = 0
+                    continue
+                failures += 1
+                status = resp.status_code if resp is not None else "transport"
+                if failures >= MAX_ATTEMPTS or (
+                    resp is not None and not is_retryable(resp.status_code, None)
+                ):
+                    raise StorageError(detail=f"drive upload HTTP {status}")
+                await self._sleep(retry_delay(failures - 1, self._rand()))
+                offset = await self._query_offset(session_uri, total)
+
+    async def _query_offset(self, session_uri: str, total: int) -> int:
+        resp = await self.request(
+            "PUT", session_uri, content=b"", headers={"Content-Range": f"bytes */{total}"}
+        )
+        if resp.status_code != 308:
+            raise StorageError(detail=f"drive upload status HTTP {resp.status_code}")
+        return _persisted_offset(resp.headers.get("range"))
 
     async def health(self) -> StorageHealth:
         email = self.config.account_email
@@ -317,12 +368,19 @@ class DriveClient:
             about = await self.request(
                 "GET", f"{DRIVE_API}/about", params={"fields": "storageQuota(limit,usage)"}
             )
-            quota = (_json(about) or {}).get("storageQuota") if about.status_code == 200 else None
+            about_body = _json(about) if about.status_code == 200 else None
+            quota = about_body.get("storageQuota") if isinstance(about_body, Mapping) else None
             used, limit = _quota(quota)
         except StorageError as exc:
             log.warning("drive health check failed: %s", exc.detail)
             return StorageHealth(False, "error", email)
         return StorageHealth(True, None, email, used, limit)
+
+
+def _persisted_offset(range_header: str | None) -> int:
+    """Next byte to send after a 308: ``Range: bytes=0-N`` → N + 1; no header → 0."""
+    m = re.fullmatch(r"bytes=0-([0-9]{1,19})", range_header or "")
+    return int(m.group(1)) + 1 if m else 0
 
 
 def _quota(quota: Any) -> tuple[int | None, int | None]:
@@ -349,7 +407,10 @@ _SELECT_OBJECT_FOR_UPDATE = _SELECT_OBJECT + " FOR UPDATE"
 
 class ObjectMap(Protocol):
     async def get(self, key: str, *, for_update: bool = False) -> StoredObject | None: ...
-    async def put(self, obj: StoredObject) -> None: ...
+    async def insert(self, obj: StoredObject) -> bool:
+        """Map a new key; False when the key is already mapped (never overwrites)."""
+        ...
+
     async def delete(self, key: str) -> None: ...
 
 
@@ -366,14 +427,12 @@ class SqlObjectMap:
             return None
         return StoredObject(row.key, row.file_id, int(row.size_bytes), row.content_type, row.md5)
 
-    async def put(self, obj: StoredObject) -> None:
-        await self.conn.execute(
+    async def insert(self, obj: StoredObject) -> bool:
+        result = await self.conn.execute(
             text(
                 "INSERT INTO storage_objects (key, file_id, size_bytes, content_type, md5) "
                 "VALUES (:key, :file_id, :size, :ct, :md5) "
-                "ON CONFLICT (key) DO UPDATE SET file_id = EXCLUDED.file_id, "
-                "size_bytes = EXCLUDED.size_bytes, content_type = EXCLUDED.content_type, "
-                "md5 = EXCLUDED.md5, created_at = now()"
+                "ON CONFLICT (key) DO NOTHING RETURNING key"
             ),
             {
                 "key": obj.key,
@@ -383,6 +442,7 @@ class SqlObjectMap:
                 "md5": obj.md5,
             },
         )
+        return result.first() is not None
 
     async def delete(self, key: str) -> None:
         await self.conn.execute(text("DELETE FROM storage_objects WHERE key = :key"), {"key": key})
@@ -397,8 +457,11 @@ class MemoryObjectMap:
     async def get(self, key: str, *, for_update: bool = False) -> StoredObject | None:
         return self.items.get(key)
 
-    async def put(self, obj: StoredObject) -> None:
+    async def insert(self, obj: StoredObject) -> bool:
+        if obj.key in self.items:
+            return False
         self.items[obj.key] = obj
+        return True
 
     async def delete(self, key: str) -> None:
         self.items.pop(key, None)
@@ -439,60 +502,85 @@ class DriveStorage:
     async def confirm_upload(
         self, key: str, file_id: str, *, content_type: str, content_length: int, max_bytes: int
     ) -> StoredObject:
+        """Map ``key`` to the file the browser reported, after checking it is the file the
+        session for ``key`` created. A key is mapped once: to replace a file, ``delete(key)``
+        first (in its own step), then upload again; a confirm for a mapped key answers 409."""
+        return await self._confirm(
+            key,
+            file_id,
+            content_type=content_type,
+            content_length=content_length,
+            max_bytes=max_bytes,
+            expected_md5=None,
+        )
+
+    async def _confirm(
+        self,
+        key: str,
+        file_id: str,
+        *,
+        content_type: str,
+        content_length: int,
+        max_bytes: int,
+        expected_md5: str | None,
+    ) -> StoredObject:
         _check_key(key)
         meta = await self.client.get_file(file_id)
         if meta is None:
             raise UploadRejected(detail="reported file id does not exist")
+        existing = await self.objects.get(key, for_update=True)
+        if existing is not None and existing.file_id == file_id:
+            raise KeyAlreadyStored(detail="file is already confirmed for this key")
+        root = self.client.config.root_folder_id
         reason = verify_uploaded_file(
             meta,
             key=key,
-            root_id=self.client.config.root_folder_id,
+            root_id=root,
             size=content_length,
             content_type=content_type,
             max_bytes=max_bytes,
         )
+        md5 = str(meta["md5Checksum"]) if meta.get("md5Checksum") else None
+        if reason is None and expected_md5 is not None and md5 != expected_md5:
+            reason = "md5_mismatch"
         if reason:
-            # Only files this app created are visible (drive.file), so deleting is safe.
-            try:
-                await self.client.delete_file(file_id)
-            except StorageError:
-                log.warning("could not delete a rejected upload (%s)", reason)
+            # Delete only an unmapped file that a session for this very key created in our
+            # root: never a file id that belongs to another key, a mapped file or a folder.
+            if is_session_orphan(meta, key=key, root_id=root):
+                await self._discard(file_id, reason)
             raise UploadRejected(detail=f"uploaded file rejected: {reason}")
-        obj = StoredObject(
-            key,
-            file_id,
-            content_length,
-            base_media_type(content_type),
-            str(meta["md5Checksum"]) if meta.get("md5Checksum") else None,
-        )
-        previous = await self.objects.get(key, for_update=True)
-        await self.objects.put(obj)
-        if previous and previous.file_id != file_id:
-            try:  # the key now points at the new file; the old one is unreachable
-                await self.client.delete_file(previous.file_id)
-            except StorageError:
-                log.warning("could not delete the replaced Drive file for a key")
+        obj = StoredObject(key, file_id, content_length, base_media_type(content_type), md5)
+        if existing is not None or not await self.objects.insert(obj):
+            await self._discard(file_id, "key_taken")  # this key's session file, never mapped
+            raise KeyAlreadyStored(detail="key already maps to another file")
         return obj
+
+    async def _discard(self, file_id: str, reason: str) -> None:
+        try:
+            await self.client.delete_file(file_id)
+        except StorageError:
+            log.warning("could not delete a rejected upload (%s)", reason)
 
     async def upload_file(
         self, key: str, path: Path, content_type: str, *, max_bytes: int
     ) -> StoredObject:
         """Server-side upload of a local file (migration, smoke check): session, chunked PUT,
-        md5 check, then the same verification as a browser upload."""
+        then the browser-upload checks plus an md5 match, before the key is mapped."""
         total = (await anyio.Path(path).stat()).st_size
         _validate_upload(key, content_type, total, max_bytes)
+        local_md5 = await anyio.to_thread.run_sync(_md5_file, path)
         session = await self.client.create_session(
             key, key=key, content_type=content_type, content_length=total, origin=None
         )
         file_id = await self.client.put_chunks(session, path, total)
-        obj = await self.confirm_upload(
-            key, file_id, content_type=content_type, content_length=total, max_bytes=max_bytes
+        return await self._confirm(
+            key,
+            file_id,
+            content_type=content_type,
+            content_length=total,
+            max_bytes=max_bytes,
+            expected_md5=local_md5,
         )
-        local_md5 = await anyio.to_thread.run_sync(_md5_file, path)
-        if obj.md5 and obj.md5 != local_md5:
-            await self.delete(key)
-            raise StorageError(detail="md5 mismatch after upload")
-        return obj
 
     def media_url(self, key: str, *, ttl: int = DEFAULT_MEDIA_TTL_S) -> str:
         return f"/media?t={self.signer.sign(key, now=self.clock(), ttl=ttl)}"
@@ -532,15 +620,14 @@ class DriveStorage:
         """Stream to ``target`` (pipeline audio); the partial file is removed on failure."""
         obj = await self._require(key, max_bytes)
         written = 0
-        out = anyio.Path(target)
         try:
             async with await anyio.open_file(target, "wb") as fh:
                 async for chunk in self._iter_media(obj, max_bytes):
                     written += len(chunk)
                     await fh.write(chunk)
         except BaseException:
-            if await out.exists():
-                await out.unlink()
+            with anyio.CancelScope(shield=True):  # remove it even when cancelled
+                await anyio.Path(target).unlink(missing_ok=True)
             raise
         return written
 

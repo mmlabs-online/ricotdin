@@ -36,7 +36,7 @@ class FakeDb:
 
     @asynccontextmanager
     async def role_transaction(self, group: str) -> AsyncIterator[Any]:
-        assert group == "ricotdin_service"
+        assert group == "ricotdin_worker"
         self.transactions += 1
         yield None
 
@@ -65,7 +65,7 @@ def env() -> Any:
     )
     platform.drive = drive
     platform.objects = MemoryObjectMap()
-    anyio.run(platform.objects.put, StoredObject(KEY, fid, len(DATA), "audio/webm", None))
+    anyio.run(platform.objects.insert, StoredObject(KEY, fid, len(DATA), "audio/webm", None))
     app = create_app(Settings.model_validate({}))
     app.state.platform = platform
     db = FakeDb()
@@ -84,7 +84,7 @@ def test_range_request_returns_206_with_exact_bytes(env: Any) -> None:
     assert r.headers["content-length"] == "1000"
     assert r.headers["accept-ranges"] == "bytes"
     assert r.headers["content-type"] == "audio/webm"
-    assert r.headers["cache-control"] == "private, max-age=0"
+    assert r.headers["cache-control"] == "no-store"
     assert r.content == DATA[1000:2000]
     assert env["platform"].media_slots.in_use == 0
 
@@ -125,8 +125,8 @@ def test_range_past_the_end_is_416(env: Any) -> None:
 
 def test_busy_server_answers_503(env: Any) -> None:
     slots = env["platform"].media_slots
-    for _ in range(slots.limit):
-        assert slots.try_acquire()
+    for i in range(slots.limit):
+        assert slots.try_acquire(f"other/{i}")
     r = env["client"].get(f"/media?t={token()}")
     assert r.status_code == 503 and r.json()["error"]["code"] == "media_busy"
     assert env["drive"].requests == []
@@ -141,3 +141,30 @@ def test_drive_failure_releases_the_slot(env: Any) -> None:
 
 def test_missing_token_is_422(env: Any) -> None:
     assert env["client"].get("/media").status_code == 422
+
+
+def test_one_file_cannot_take_more_than_two_slots(env: Any) -> None:
+    slots = env["platform"].media_slots
+    assert slots.try_acquire(KEY) and slots.try_acquire(KEY)
+    r = env["client"].get(f"/media?t={token()}")
+    assert r.status_code == 503 and r.json()["error"]["code"] == "media_busy"
+    assert slots.try_acquire("u1/other.webm")  # other files still play
+
+
+def test_open_ended_range_on_a_large_file_is_capped_to_the_window(
+    env: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.routers.media as media
+
+    monkeypatch.setattr(media, "MEDIA_WINDOW", 1000)
+    r = env["client"].get(f"/media?t={token()}", headers={"Range": "bytes=2000-"})
+    assert r.status_code == 206
+    assert r.headers["content-range"] == f"bytes 2000-2999/{len(DATA)}"
+    assert r.content == DATA[2000:3000]
+    full = env["client"].get(f"/media?t={token()}")
+    assert full.status_code == 206 and full.headers["content-range"] == f"bytes 0-999/{len(DATA)}"
+
+
+def test_huge_range_numbers_do_not_crash(env: Any) -> None:
+    r = env["client"].get(f"/media?t={token()}", headers={"Range": "bytes=" + "9" * 5000 + "-"})
+    assert r.status_code == 200

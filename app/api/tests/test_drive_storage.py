@@ -1,14 +1,16 @@
 """ARC-17: DriveStorage / DriveClient against an in-memory fake Drive (no network, no DB)."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 import anyio
+import httpx2
 import pytest
 
 from app.services.storage.base import (
+    KeyAlreadyStored,
     ObjectTooLarge,
     StorageError,
     StorageNotConfigured,
@@ -157,13 +159,14 @@ def test_matching_upload_is_confirmed_and_mapped() -> None:
 @pytest.mark.parametrize(
     ("meta", "declared"),
     [
-        ({"appProperties": {"key": "someone/else.webm"}}, 100),
-        ({"parents": ["another-folder"]}, 100),
         ({"mimeType": "text/html"}, 100),
         ({}, 99),  # browser uploaded more than it declared
+        ({"trashed": True}, 100),
     ],
 )
-def test_mismatching_upload_is_deleted_and_rejected(meta: dict[str, Any], declared: int) -> None:
+def test_own_session_file_that_mismatches_is_deleted_and_rejected(
+    meta: dict[str, Any], declared: int
+) -> None:
     env = Env()
     fid = env.drive.add_file(b"z" * 100, key=KEY, **meta)
     with pytest.raises(UploadRejected) as exc:
@@ -175,6 +178,53 @@ def test_mismatching_upload_is_deleted_and_rejected(meta: dict[str, Any], declar
     assert exc.value.status == 422
     assert fid in env.drive.deleted and fid not in env.drive.files
     assert env.objects.items == {}
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        {"appProperties": {"key": "someone/else.webm"}},  # another user's file
+        {"appProperties": None},
+        {"parents": ["another-folder"]},
+        {"mimeType": "application/vnd.google-apps.folder"},
+    ],
+)
+def test_file_not_created_for_this_key_is_rejected_but_never_deleted(meta: dict[str, Any]) -> None:
+    env = Env()
+    fid = env.drive.add_file(b"z" * 100, key=KEY, **meta)
+    with pytest.raises(UploadRejected):
+        run(
+            lambda: env.storage.confirm_upload(
+                KEY, fid, content_type=CT, content_length=100, max_bytes=MAX
+            )
+        )
+    assert fid in env.drive.files and env.drive.deleted == []
+
+
+def test_reporting_the_root_folder_id_never_deletes_it() -> None:
+    env = Env(_with_root(FakeDrive()))
+    with pytest.raises(UploadRejected):
+        run(
+            lambda: env.storage.confirm_upload(
+                KEY, ROOT, content_type=CT, content_length=1, max_bytes=MAX
+            )
+        )
+    assert ROOT in env.drive.files and env.drive.deleted == []
+    with pytest.raises(StorageError):
+        run(lambda: env.client.delete_file(ROOT))
+    assert ROOT in env.drive.files
+
+
+def test_reconfirming_a_mapped_file_with_wrong_values_does_not_delete_it() -> None:
+    env = Env()
+    fid = run(lambda: _store(env, b"a" * 50))
+    with pytest.raises(KeyAlreadyStored):
+        run(
+            lambda: env.storage.confirm_upload(
+                KEY, fid, content_type=CT, content_length=49, max_bytes=MAX
+            )
+        )
+    assert fid in env.drive.files and env.objects.items[KEY].file_id == fid
 
 
 @pytest.mark.parametrize("fid", ["missing-file-0000", "../../about", "a?alt=media"])
@@ -189,12 +239,19 @@ def test_unknown_or_malformed_file_id_is_rejected_without_a_drive_path(fid: str)
     assert all("about" not in r.url.path for r in env.drive.drive_requests())
 
 
-def test_replacing_a_key_deletes_the_previous_file() -> None:
+def test_a_mapped_key_is_never_replaced_the_new_upload_is_discarded() -> None:
+    # Replacing inside the caller's transaction could delete the old file and then roll back
+    # the map: callers delete(key) first, then upload again.
     env = Env()
     first = run(lambda: _store(env, b"1" * 10))
+    with pytest.raises(KeyAlreadyStored) as exc:
+        run(lambda: _store(env, b"2" * 20))
+    assert exc.value.status == 409
+    assert env.objects.items[KEY].file_id == first and first in env.drive.files
+    assert len(env.drive.deleted) == 1 and env.drive.deleted[0] != first
+    run(lambda: env.storage.delete(KEY))
     second = run(lambda: _store(env, b"2" * 20))
     assert env.objects.items[KEY].file_id == second
-    assert first in env.drive.deleted and second in env.drive.files
 
 
 def test_server_side_upload_file_in_chunks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -359,3 +416,106 @@ def test_check_reports_missing_root_and_revoked_token() -> None:
     assert run(Env(FakeDrive(token_error="invalid_grant")).storage.check).problem == (
         "token_refresh_failed"
     )
+
+
+# --- review round 1 regressions ------------------------------------------------------------------
+
+
+def test_streamed_rate_limit_403_is_read_retried_and_closed() -> None:
+    env = Env()
+    data = b"m" * 100
+    fid = run(lambda: _store(env, data))
+    calls = {"n": 0}
+    inner = env.drive.handle
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        if request.url.params.get("alt") == "media" and calls["n"] == 0:
+            calls["n"] += 1
+
+            async def body() -> AsyncIterator[bytes]:
+                yield b'{"error": {"errors": [{"reason": "rateLimitExceeded"}]}}'
+
+            return httpx2.Response(403, content=body())
+        return inner(request)
+
+    env.client._http = httpx2.AsyncClient(transport=httpx2.MockTransport(handle))
+
+    async def go() -> bytes:
+        resp = await env.client.open_media(fid, None)
+        try:
+            return await resp.aread()
+        finally:
+            await resp.aclose()
+
+    assert run(go) == data and len(env.sleeps) == 1
+
+
+def test_upload_follows_the_offset_drive_persisted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.storage.gdrive as gdrive
+
+    monkeypatch.setattr(gdrive, "UPLOAD_CHUNK", 256 * 1024)
+    env = Env()
+    env.drive.persist_limit = 100_000  # Drive keeps only part of each chunk
+    data = bytes(range(256)) * 2000
+    src = tmp_path / "a.webm"
+    src.write_bytes(data)
+    obj = run(lambda: env.storage.upload_file(KEY, src, "audio/webm", max_bytes=len(data)))
+    assert env.drive.files[obj.file_id].data == data
+
+
+def test_upload_recovers_from_a_failed_chunk_by_asking_for_the_offset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.storage.gdrive as gdrive
+
+    monkeypatch.setattr(gdrive, "UPLOAD_CHUNK", 256 * 1024)
+    env = Env()
+    env.drive.fail_put_once = True
+    data = bytes(range(256)) * 2000
+    src = tmp_path / "a.webm"
+    src.write_bytes(data)
+    obj = run(lambda: env.storage.upload_file(KEY, src, "audio/webm", max_bytes=len(data)))
+    assert env.drive.files[obj.file_id].data == data
+    status_queries = [
+        r
+        for r in env.drive.drive_requests()
+        if r.headers.get("content-range", "").startswith("bytes */")
+    ]
+    assert len(status_queries) == 1
+
+
+def test_md5_mismatch_is_rejected_before_mapping(tmp_path: Path) -> None:
+    env = Env()
+    env.drive.corrupt_md5 = True
+    src = tmp_path / "a.webm"
+    src.write_bytes(b"x" * 1000)
+    with pytest.raises(UploadRejected):
+        run(lambda: env.storage.upload_file(KEY, src, "audio/webm", max_bytes=1000))
+    assert env.objects.items == {} and env.drive.files == {}
+
+
+def test_revoked_token_is_not_retried_for_30_seconds() -> None:
+    env = Env(FakeDrive(token_error="invalid_grant"))
+    for _ in range(3):
+        with pytest.raises(StorageNotConfigured):
+            run(env.client.access_token)
+    assert env.drive.token_calls == 1
+    env.clock += 31
+    with pytest.raises(StorageNotConfigured):
+        run(env.client.access_token)
+    assert env.drive.token_calls == 2
+
+
+def test_media_request_asks_for_identity_encoding() -> None:
+    env = Env()
+    fid = run(lambda: _store(env, b"e" * 10))
+
+    async def go() -> None:
+        resp = await env.client.open_media(fid, None)
+        await resp.aclose()
+
+    run(go)
+    media = [r for r in env.drive.drive_requests() if r.url.params.get("alt") == "media"]
+    assert media[-1].headers["accept-encoding"] == "identity"

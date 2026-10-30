@@ -38,6 +38,9 @@ class FakeDrive:
         default_factory=lambda: [{"type": "user", "role": "owner", "emailAddress": OWNER}]
     )
     deleted: list[str] = field(default_factory=list)
+    persist_limit: int | None = None  # bytes Drive keeps per chunk PUT (partial persistence)
+    fail_put_once: bool = False  # answer the second chunk PUT with 503 (nothing kept)
+    corrupt_md5: bool = False
     _n: int = 0
 
     def transport(self) -> httpx2.MockTransport:
@@ -132,9 +135,24 @@ class FakeDrive:
     def _put_chunk(self, request: httpx2.Request) -> httpx2.Response:
         sid = request.url.params["upload_id"]
         s = self.sessions[sid]
-        s["data"] += request.content
+        crange = request.headers.get("content-range", "")
+        if crange.startswith("bytes */"):  # status query
+            return self._progress(s)
+        if crange:
+            m = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", crange)
+            assert m, crange
+            if int(m.group(1)) != len(s["data"]):
+                return httpx2.Response(400)  # out-of-order chunk
+            s["puts"] = s.get("puts", 0) + 1
+            if self.fail_put_once and s["puts"] == 2:
+                self.fail_put_once = False
+                return httpx2.Response(503)
+        chunk = request.content
+        if self.persist_limit is not None:
+            chunk = chunk[: self.persist_limit]
+        s["data"] += chunk
         if len(s["data"]) < s["length"]:
-            return httpx2.Response(308, headers={"Range": f"bytes=0-{len(s['data']) - 1}"})
+            return self._progress(s)
         meta = s["meta"]
         fid = self.add_file(
             s["data"],
@@ -143,7 +161,14 @@ class FakeDrive:
             mimeType=meta["mimeType"],
             parents=meta["parents"],
         )
+        if self.corrupt_md5:
+            self.files[fid].meta["md5Checksum"] = "f" * 32
         return httpx2.Response(200, json={"id": fid})
+
+    @staticmethod
+    def _progress(s: dict[str, Any]) -> httpx2.Response:
+        headers = {"Range": f"bytes=0-{len(s['data']) - 1}"} if s["data"] else {}
+        return httpx2.Response(308, headers=headers)
 
     def upload_via_session(self, uri: str, data: bytes) -> str:
         """What the browser does: one PUT of the whole file to the session URI."""

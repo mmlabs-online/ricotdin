@@ -8,13 +8,14 @@ from typing import Any
 
 from app.core.errors import AppError
 from app.services.storage.base import base_media_type
+from app.services.storage.drive_oauth import FOLDER_MIME
 
 MAX_ATTEMPTS = 5
 _MAX_DELAY_S = 32.0
 _BASE_DELAY_S = 0.5
 _RATE_LIMIT_REASONS = {"rateLimitExceeded", "userRateLimitExceeded"}
 _FILE_ID = re.compile(r"[A-Za-z0-9_-]{10,200}")
-_RANGE = re.compile(r"\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*", re.IGNORECASE)
+_RANGE = re.compile(r"\s*bytes\s*=\s*([0-9]{0,15})\s*-\s*([0-9]{0,15})\s*", re.IGNORECASE)
 
 
 class RangeNotSatisfiable(AppError):
@@ -73,6 +74,19 @@ def verify_uploaded_file(
     return None
 
 
+def is_session_orphan(meta: Mapping[str, Any], *, key: str, root_id: str) -> bool:
+    """Whether a rejected file may be deleted: a non-folder in our root that an upload session
+    for ``key`` created. Anything else (another key's file, the root, a folder) is left alone."""
+    props = meta.get("appProperties") or {}
+    return (
+        isinstance(props, Mapping)
+        and props.get("key") == key
+        and meta.get("parents") == [root_id]
+        and meta.get("mimeType") != FOLDER_MIME
+        and meta.get("id") != root_id
+    )
+
+
 def parse_range(header: str | None, size: int) -> ByteRange | None:
     """A single satisfiable byte range, or None (absent/malformed/multi-range → full body).
     A well-formed range that starts past the end raises ``RangeNotSatisfiable`` (416)."""
@@ -96,6 +110,16 @@ def parse_range(header: str | None, size: int) -> ByteRange | None:
     if suffix == 0 or size == 0:
         return None
     return ByteRange(max(0, size - suffix), size - 1)
+
+
+def cap_window(rng: ByteRange | None, size: int, window: int) -> ByteRange | None:
+    """Serve at most ``window`` bytes per request. Players ask for ``bytes=N-`` and keep the
+    response open while paused; a bounded 206 frees the stream slot and they ask again."""
+    if size <= window and rng is None:
+        return None
+    start = rng.start if rng else 0
+    end = rng.end if rng else size - 1
+    return ByteRange(start, min(end, start + window - 1))
 
 
 def content_range(rng: ByteRange, size: int) -> str:
@@ -139,17 +163,26 @@ def root_is_private(permissions: Iterable[Mapping[str, Any]], owner_email: str) 
 
 
 class StreamSlots:
-    """At most ``limit`` concurrent /media streams per process (a busy server answers 503)."""
+    """Caps concurrent /media streams per process (``limit``) and per stored key
+    (``per_key``), so one user cannot hold every slot. A busy server answers 503."""
 
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int, per_key: int | None = None) -> None:
         self.limit = limit
+        self.per_key = per_key or limit
         self.in_use = 0
+        self._by_key: dict[str, int] = {}
 
-    def try_acquire(self) -> bool:
-        if self.in_use >= self.limit:
+    def try_acquire(self, key: str = "") -> bool:
+        if self.in_use >= self.limit or self._by_key.get(key, 0) >= self.per_key:
             return False
         self.in_use += 1
+        self._by_key[key] = self._by_key.get(key, 0) + 1
         return True
 
-    def release(self) -> None:
+    def release(self, key: str = "") -> None:
         self.in_use = max(0, self.in_use - 1)
+        left = self._by_key.get(key, 0) - 1
+        if left > 0:
+            self._by_key[key] = left
+        else:
+            self._by_key.pop(key, None)

@@ -117,7 +117,8 @@ def test_config_decrypts_and_object_map_round_trips(env: dict[str, Any]) -> None
             async with db.role_transaction("ricotdin_worker") as conn:
                 cfg = await DriveConfigSource(KEY).get(conn)
                 objects = SqlObjectMap(conn)
-                await objects.put(obj)
+                assert await objects.insert(obj)
+                assert not await objects.insert(obj)
                 got = await objects.get("u/m.webm", for_update=True)
             async with db.role_transaction("ricotdin_service") as conn:
                 objects = SqlObjectMap(conn)
