@@ -223,7 +223,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     `storage_config`, `drive_config` (re-run `connect_gdrive`) and invalidates open media links.
   - **Map:** `storage_objects(key PK, file_id UNIQUE, size_bytes, content_type, md5)`; service
     read/write, worker read/write, app none. `stat`/`size` read only the map. **A key is mapped
-    once:** `confirm_upload` on a mapped key answers 409 `KeyAlreadyStored`; to replace a file,
+    once:** repeating `confirm_upload` with the same file id returns the mapping (idempotent, also
+    under a concurrent double submit); another file for a mapped key answers 409 `KeyAlreadyStored`
+    and is discarded; to replace a file,
     `delete(key)` in its own step, then upload again (never delete inside a transaction that may
     roll back the map).
   - **Upload:** `upload_session(key, content_type, content_length, max_bytes=)` → resumable session

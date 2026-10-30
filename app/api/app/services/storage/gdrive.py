@@ -319,14 +319,16 @@ class DriveClient:
                 except StorageError:
                     resp = None
                 if resp is not None and resp.status_code in (200, 201):
-                    body = _json(resp)
-                    file_id = body.get("id") if isinstance(body, Mapping) else None
-                    if not isinstance(file_id, str):
-                        raise StorageError(detail="drive upload finished without a file id")
-                    return file_id
+                    return _file_id(resp)
                 if resp is not None and resp.status_code == 308:
-                    offset = _persisted_offset(resp.headers.get("range"))
-                    failures = 0
+                    new_offset = _persisted_offset(resp.headers.get("range"))
+                    if new_offset > offset or (new_offset == offset and not chunk):
+                        failures = 0
+                    else:
+                        failures += 1  # no progress: count it, so the loop always ends
+                        if failures >= MAX_ATTEMPTS:
+                            raise StorageError(detail="drive upload made no progress")
+                    offset = new_offset
                     continue
                 failures += 1
                 status = resp.status_code if resp is not None else "transport"
@@ -335,15 +337,14 @@ class DriveClient:
                 ):
                     raise StorageError(detail=f"drive upload HTTP {status}")
                 await self._sleep(retry_delay(failures - 1, self._rand()))
-                offset = await self._query_offset(session_uri, total)
-
-    async def _query_offset(self, session_uri: str, total: int) -> int:
-        resp = await self.request(
-            "PUT", session_uri, content=b"", headers={"Content-Range": f"bytes */{total}"}
-        )
-        if resp.status_code != 308:
-            raise StorageError(detail=f"drive upload status HTTP {resp.status_code}")
-        return _persisted_offset(resp.headers.get("range"))
+                status_resp = await self.request(
+                    "PUT", session_uri, content=b"", headers={"Content-Range": f"bytes */{total}"}
+                )
+                if status_resp.status_code in (200, 201):  # the failed PUT had in fact finished
+                    return _file_id(status_resp)
+                if status_resp.status_code != 308:
+                    raise StorageError(detail=f"drive upload status HTTP {status_resp.status_code}")
+                offset = _persisted_offset(status_resp.headers.get("range"))
 
     async def health(self) -> StorageHealth:
         email = self.config.account_email
@@ -375,6 +376,14 @@ class DriveClient:
             log.warning("drive health check failed: %s", exc.detail)
             return StorageHealth(False, "error", email)
         return StorageHealth(True, None, email, used, limit)
+
+
+def _file_id(resp: httpx2.Response) -> str:
+    body = _json(resp)
+    file_id = body.get("id") if isinstance(body, Mapping) else None
+    if not isinstance(file_id, str):
+        raise StorageError(detail="drive upload finished without a file id")
+    return file_id
 
 
 def _persisted_offset(range_header: str | None) -> int:
@@ -530,7 +539,7 @@ class DriveStorage:
             raise UploadRejected(detail="reported file id does not exist")
         existing = await self.objects.get(key, for_update=True)
         if existing is not None and existing.file_id == file_id:
-            raise KeyAlreadyStored(detail="file is already confirmed for this key")
+            return existing  # repeated confirm (double click, client retry): idempotent
         root = self.client.config.root_folder_id
         reason = verify_uploaded_file(
             meta,
@@ -550,10 +559,15 @@ class DriveStorage:
                 await self._discard(file_id, reason)
             raise UploadRejected(detail=f"uploaded file rejected: {reason}")
         obj = StoredObject(key, file_id, content_length, base_media_type(content_type), md5)
-        if existing is not None or not await self.objects.insert(obj):
-            await self._discard(file_id, "key_taken")  # this key's session file, never mapped
-            raise KeyAlreadyStored(detail="key already maps to another file")
-        return obj
+        if existing is None and await self.objects.insert(obj):
+            return obj
+        # Lost a race or the key was mapped before. Re-read: a concurrent confirm of the same
+        # file mapped it, so it must never be discarded.
+        winner = await self.objects.get(key)
+        if winner is not None and winner.file_id == file_id:
+            return winner
+        await self._discard(file_id, "key_taken")  # this key's session file, never mapped
+        raise KeyAlreadyStored(detail="key already maps to another file")
 
     async def _discard(self, file_id: str, reason: str) -> None:
         try:

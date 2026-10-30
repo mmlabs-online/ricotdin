@@ -15,6 +15,7 @@ from app.services.storage.base import (
     StorageError,
     StorageNotConfigured,
     StorageObjectNotFound,
+    StoredObject,
     UnsupportedContentType,
     UploadRejected,
 )
@@ -215,16 +216,56 @@ def test_reporting_the_root_folder_id_never_deletes_it() -> None:
     assert ROOT in env.drive.files
 
 
-def test_reconfirming_a_mapped_file_with_wrong_values_does_not_delete_it() -> None:
+def test_repeated_confirm_of_the_same_file_is_idempotent_and_never_deletes() -> None:
     env = Env()
     fid = run(lambda: _store(env, b"a" * 50))
+    again = run(
+        lambda: env.storage.confirm_upload(
+            KEY, fid, content_type=CT, content_length=50, max_bytes=MAX
+        )
+    )
+    assert again.file_id == fid
+    assert fid in env.drive.files and env.drive.deleted == []
+
+
+class RacingMap(MemoryObjectMap):
+    """A concurrent confirm committed the same mapping between our get() and insert()."""
+
+    def __init__(self, winner_file_id: str) -> None:
+        super().__init__()
+        self.winner = winner_file_id
+
+    async def insert(self, obj: StoredObject) -> bool:
+        self.items[obj.key] = StoredObject(
+            obj.key, self.winner, obj.size_bytes, obj.content_type, None
+        )
+        return False
+
+
+def test_concurrent_confirm_of_the_same_file_keeps_it() -> None:
+    env = Env()
+    fid = env.drive.add_file(b"r" * 100, key=KEY)
+    env.storage.objects = RacingMap(fid)
+    obj = run(
+        lambda: env.storage.confirm_upload(
+            KEY, fid, content_type=CT, content_length=100, max_bytes=MAX
+        )
+    )
+    assert obj.file_id == fid and fid in env.drive.files and env.drive.deleted == []
+
+
+def test_concurrent_confirm_of_another_file_discards_ours() -> None:
+    env = Env()
+    winner = env.drive.add_file(b"w" * 100, key=KEY)
+    ours = env.drive.add_file(b"o" * 100, key=KEY)
+    env.storage.objects = RacingMap(winner)
     with pytest.raises(KeyAlreadyStored):
         run(
             lambda: env.storage.confirm_upload(
-                KEY, fid, content_type=CT, content_length=49, max_bytes=MAX
+                KEY, ours, content_type=CT, content_length=100, max_bytes=MAX
             )
         )
-    assert fid in env.drive.files and env.objects.items[KEY].file_id == fid
+    assert env.drive.deleted == [ours] and winner in env.drive.files
 
 
 @pytest.mark.parametrize("fid", ["missing-file-0000", "../../about", "a?alt=media"])
@@ -519,3 +560,17 @@ def test_media_request_asks_for_identity_encoding() -> None:
     run(go)
     media = [r for r in env.drive.drive_requests() if r.url.params.get("alt") == "media"]
     assert media[-1].headers["accept-encoding"] == "identity"
+
+
+def test_upload_that_never_progresses_ends_with_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.storage.gdrive as gdrive
+
+    monkeypatch.setattr(gdrive, "UPLOAD_CHUNK", 256 * 1024)
+    env = Env()
+    env.drive.persist_limit = 0  # Drive keeps nothing, answers 308 forever
+    src = tmp_path / "a.webm"
+    src.write_bytes(b"x" * 300_000)
+    with pytest.raises(StorageError):
+        run(lambda: env.storage.upload_file(KEY, src, "audio/webm", max_bytes=300_000))

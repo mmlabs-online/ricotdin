@@ -96,7 +96,8 @@ class Storage(Protocol):
         self, key: str, file_id: str, *, content_type: str, content_length: int, max_bytes: int
     ) -> StoredObject:
         """Verify the file the browser reported and map ``key`` to it. 422 when it is not the
-        file the session for ``key`` created; 409 when ``key`` is already mapped (a key is
+        file the session for ``key`` created; the same file again returns the mapping; 409 when
+        ``key`` is mapped to another file (a key is
         never replaced: ``delete(key)`` first, in its own step)."""
         ...
 
