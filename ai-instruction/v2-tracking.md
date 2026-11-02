@@ -21,14 +21,14 @@
 | REC-02 | Audio-only capture | ARC-12 | — (browser only) | n/a | Record | todo | — | video track dropped in capture |
 | REC-03 | Missing-audio warning | ARC-12 | — (browser only) | n/a | Record | todo | — | |
 | REC-04 | Browser support | ARC-12 | — (browser only) | n/a | Record | todo | — | `lib/audio/support.ts` |
-| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — port it |
+| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — v2: extracted by the ARC-08 worker (08a), the original video stays in Drive |
 | PRP-01 | Audio upload | ARC-07 | `POST /meetings` (presigned R2 PUT), `POST /meetings/{id}/uploaded` | todo | Record | todo | storage-config | browser → R2 direct |
-| PRP-02 | Format transcoding | ARC-08 | — (worker) | todo | — | n/a | transcode | ffmpeg mono 16 kHz |
+| PRP-02 | Format transcoding | ARC-08 | — (worker) | done | — | n/a | transcode, ffprobe | ffmpeg mono 16 kHz (08a, `app/worker/audio.py`; input guards); Gemini long-audio chunking not ported (owner 2026-11-02) |
 | PRP-03 | Transcript generation | ARC-08 | — (worker) | todo | — | n/a | speechmatics, pipeline-parse | |
 | PRP-04 | Summary & meeting notes | ARC-08 | — (worker), `POST /meetings/{id}/regenerate` | todo | Meeting detail | todo | pipeline-parse | prompt `ai-instruction/ai-gen/` |
 | PRP-05 | Extract to-dos & calendar mentions | ARC-08 | — (worker) | todo | — | n/a | pipeline-parse | |
 | PRP-06 | RAG embeddings | ARC-08 | — (worker) | todo | — | n/a | chunk | 768 dims |
-| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | in_progress | Meetings list, Meeting detail | todo | processMeeting-guard, error-message | API: status + queueing done (ARC-07); the worker is ARC-08; 0-segment guard |
+| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | in_progress | Meetings list, Meeting detail | todo | processMeeting-guard, error-message | API: status + queueing done (ARC-07); `process` queues at most one active job, 30/h per user (ARC-08a); the worker is ARC-08; 0-segment guard |
 | PRP-08 | Long-meeting support | ARC-08 | — (worker) | todo | — | n/a | chunk, transcode | |
 | MTD-01 | Meeting detail page | ARC-07, ARC-13 | `GET /meetings/{id}`, `GET /meetings/{id}/transcript`, `GET /meetings/{id}/todos`, `GET /meetings/{id}/calendar-suggestions` *(proposed)* | done | Meeting detail | todo | transcript-export | replaces direct Supabase reads (table d) |
 | MTD-02 | Audio player | ARC-07, ARC-12 | `GET /meetings/{id}/audio-url` | todo | Meeting detail | todo | audio-duration-fix | `hackAudioRender` flag in response |
@@ -64,9 +64,9 @@
 | PRF-04 | Avatar upload | ARC-07, ARC-12 | `POST /profile/avatar` (presign) → browser PUT to R2 → `PATCH /profile` (`avatar_key`) | todo | Profile | todo | avatar-key | two steps as in v1; `isOwnedAvatarKey` |
 | PRF-05 | Theme configuration | ARC-07, ARC-11 | `PATCH /profile` (`theme_preference`) | done | Profile, app shell | todo | — | v2: one design, light/dark only |
 | PRF-08 | Default AI model preference | ARC-07 | `GET/PATCH /profile/preferences` | done | Profile | todo | aip-control-plane, model-label | within admin allow-list |
-| REL-01 | Durable job queue/worker | ARC-08 | — (worker, Postgres `SKIP LOCKED`) | todo | — | n/a | processMeeting-guard | |
+| REL-01 | Durable job queue/worker | ARC-08 | — (worker, Postgres `SKIP LOCKED`) | in_progress | — | n/a | processMeeting-guard | 08a: `JobRunner` + step `start`, one active job per meeting (migration 0005); steps transcribe_poll/analyse/embed in 08b–08d |
 | REL-02 | Stuck-job recovery | ARC-08, ARC-10 | — (worker), `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline | |
-| REL-03 | Idempotent retries | ARC-08 | — (worker) | todo | — | n/a | processMeeting-guard | |
+| REL-03 | Idempotent retries | ARC-08 | — (worker) | in_progress | — | n/a | processMeeting-guard | 08a: backoff + terminal errors, guarded job writes, restart-safe `start`; later steps 08b–08d |
 | PRV-02 | Retention & deletion policy | ARC-08 | — (scheduler) | todo | Meeting detail ("audio deleted") | todo | retention | 409 on reprocess without audio |
 | PRV-03 | Encrypt & purge audio after processing | ARC-08 | — (superseded by PRV-02) | n/a | — | n/a | retention | carried by PRV-02 |
 | OBS-01 | Error tracking | ARC-04, ARC-11 | — (Sentry in api, body stripped) | todo | — (Sentry in web) | todo | — | |
@@ -85,7 +85,7 @@
 | QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | done | Profile | todo | quota | balance stays in `GET /profile` for parity |
 | QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
 | QUO-03 | Ask-agent enforcement | ARC-09 | `POST /chat` (pre-check + deduct) | todo | Chat | todo | quota | |
-| QUO-04 | Idempotent deduction | ARC-08 | — (worker, same transaction as usage) | todo | — | n/a | quota, quota-integration | |
+| QUO-04 | Idempotent deduction | ARC-08 | — (worker, same transaction as usage) | in_progress | — | n/a | quota, quota-integration | 08a: reserve + refund keyed per job (`gen:<job_id>:…`, owner 2026-11-02); settle 08b, reconcile 08e |
 | QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /profile` (balance), `GET/POST /admin/users/{id}/quota` | in_progress | Profile, Admin › User detail | todo | quota | user balance done (ARC-07); admin top-up is ARC-10 |
 | AIP-01 | Provider interface & registry | ARC-08 | — (AI service layer) | todo | — | n/a | ai-registry | |
 | AIP-02 | OpenAI adapter | ARC-08 | — (AI service layer) | todo | — | n/a | ai-openai-adapter, ai-gemini-adapter | also the Grok (xAI) adapter, `legacy/lib/grok` |
