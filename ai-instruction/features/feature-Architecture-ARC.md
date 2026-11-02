@@ -409,7 +409,7 @@ As the system, I want encryption, the provider key pool, app config and R2 stora
 ---
 
 ### ARC-07 — Core domain API: meetings, folders, todos, calendar, profile, quota
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Partial — part 1 (everything without file storage) done; part 2 (create + upload, `uploaded`, `audio-url`, meeting delete, folder delete with meetings, avatar) after ARC-17 (owner decision 2026-10-29)
 
 **User Story**  
 As a user, I want my meetings, folders and shares, to-dos, calendar suggestions, profile and quota available through the v2 API so that every non-AI screen can be built.
@@ -445,8 +445,12 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 **Out of scope**
 - Pipeline execution (ARC-08).
 
-**Key files (expected)**
-- `app/api/app/routers/{meetings,folders,todos,calendar,profile,quota}.py`, `app/api/app/services/access.py`
+**Key files**
+- Part 1: `app/api/app/routers/{meetings,content,folders,profile,activity,_common}.py`, `app/api/app/services/access.py`, `app/api/app/domain/{access,rules,ics,models}.py`
+- Tests: `app/api/tests/test_{ics,domain_access,domain_rules,domain_models}.py` (pure), `test_core_domain_integration.py` (role matrix on a scratch DB)
+- `regenerate` moved to ARC-08 (needs the analysis step).
+
+**Open — owner decision before part 2 merges** (security review 2026-10-29, CWE-269, v1 parity): an editor of a shared folder can move someone else's meeting into a folder they own and then counts as its owner (folder owner = owner). Delete, pin and process stay meeting-owner only, but the editor can then share their folder with anyone (exposing the meeting) and cut the other grantees off. Decide whether moving a meeting out of a shared folder needs the meeting owner (or the current folder owner).
 
 ---
 
@@ -474,6 +478,7 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Given the same fixture transcript JSON, v2 parsing produces the same segments/todos/suggestions as v1.
 - Given a 0-segment result, the meeting is not marked done.
 - Two worker processes never process the same job.
+- Given a meeting with a queued or running job, when `POST /meetings/{id}/process` is called again, then no second job is queued (v1 and ARC-07 part 1 insert one per call; fix before the worker goes live, plus a per-user limit) — ARC-07 security review 2026-10-29.
 - A quota charge happens exactly once per job across retries/restarts.
 - Usage rows keep `unit` separated (tokens vs audio_seconds).
 

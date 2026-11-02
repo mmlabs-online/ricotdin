@@ -13,6 +13,7 @@
   - Phát audio qua `GET /media?t=…`: link ký HMAC, sống tối đa 15 phút, hỗ trợ `Range` để tua, tối đa 8 luồng phát cùng lúc.
   - Tự thử lại khi Drive báo quá tải (429, 403 rate limit, 5xx); `check()` báo nếu thư mục gốc bị chia sẻ.
   - Deploy: migration Alembic `0003_drive_storage`; không có biến môi trường mới; chủ dự án tạo OAuth client "Desktop app" (consent screen **In production**), chạy `connect_gdrive` rồi `drive_smoke` (ARC-17)
+- API v2 phần lõi, đợt 1 (không đụng file): danh sách / chi tiết meeting, transcript, to-do, gợi ý lịch; đổi tên, chuyển folder, ghim, đưa vào hàng đợi xử lý; đổi trạng thái to-do, bỏ gợi ý lịch, tải `.ics`; folder + chia sẻ + sắp xếp + tìm người dùng; profile (kèm số dư quota), đổi username / tên hiển thị / theme, chọn model mặc định; ghi activity từ trình duyệt. Status code giống v1 cho owner / editor / viewer / người lạ (test ma trận quyền). Không có migration, không có env mới. Đợt 2 (tạo meeting + upload, audio, xoá meeting, avatar) làm sau ARC-17 (ARC-07)
 - Script chuyển dữ liệu v1 → v2 `app/api/scripts/migrate_from_supabase.py` (chủ dự án tự chạy):
   - Chép toàn bộ người dùng (giữ id và mật khẩu, tự băm lại sang argon2 ở lần đăng nhập đầu), mọi bảng và audio còn trên Supabase Storage sang Neon + R2.
   - Kiểm tra trước khi ghi; đọc Supabase trong một snapshot chỉ đọc; chạy lại không tạo bản trùng.

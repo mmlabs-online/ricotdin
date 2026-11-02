@@ -288,6 +288,35 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **The final run (ARC-15)** must happen after v1 writes stop and **before** v2 accepts logins,
   because a re-run overwrites `users.*`.
 
+### 0.6 v2 core domain API (ARC-07)
+
+- **Part 1 (no file storage)** — routers `meetings.py`, `content.py` (todos, calendar, `.ics`),
+  `folders.py` (folders, shares, reorder, `/users/lookup`), `profile.py`, `activity.py`. **Part 2
+  after ARC-17:** `POST /meetings` + upload, `uploaded`, `audio-url`, `DELETE /meetings/{id}`,
+  `DELETE /folders/{id}?deleteMeetings=true` (503 until then), avatar (`avatar_url` is null).
+  `regenerate` is ARC-08. Paths have no `/api` prefix (`v2-tracking.md`).
+- **Status codes = v1** for owner / folder owner / editor / viewer / stranger (matrix test:
+  `tests/test_core_domain_integration.py`). Messages keep v1's text inside `{"error": {code, message}}`.
+  Where v1 crashed (500 on `null` bodies, non-UUID ids, `folder_id: ""`) v2 answers 400/404/422.
+  Kept on purpose: stranger → 403 on meeting writes but 404 on reads and on folder PATCH/DELETE;
+  share PATCH/DELETE answer 200 for a non-member; reorder always 200; `process` does not dedupe jobs.
+- **Who runs what:** meeting reads (`GET /meetings*`) run as `ricotdin_app` under RLS. Meeting /
+  todo / calendar writes run as `ricotdin_service`, with the role decided **in the same transaction**
+  by `app/services/access.py` + pure `app/domain/access.py` (same logic as `can_access_meeting`;
+  admins get no extra access). Folders, shares and lookup run as service with checks in code (v1 did
+  the same; avoids the `folders_select` bug, §0.1). `PATCH /profile` and preferences write as
+  `ricotdin_app` (column grant + `profiles_update`), so `role` can never be written.
+- **Validation** is pure in `app/domain/rules.py`; `.ics` in `app/domain/ics.py`; the model
+  allow-list in `app/domain/models.py` (from `app_settings['generation.allowed_models']`, fallback
+  gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
+- `POST /activity`: 10 per user per minute (in-process, `app.state.activity_limiter`); the insert is
+  best effort and `meetingId` is stored only for a meeting the caller can see (else NULL).
+- Email → account lookups (`POST /users/lookup`, adding a share): 20 per user per 15 min
+  (`app.state.lookup_limiter`): v2 searches every user, v1 only the first page.
+- Differences from v1 to know: `PATCH /profile` validates every field before the username-taken
+  check (v1 checked taken first); a body with only `avatar_key` is "No updatable fields" until part 2.
+  Transcript `confidence` is returned as a number.
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the

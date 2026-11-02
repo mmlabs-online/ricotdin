@@ -28,26 +28,26 @@
 | PRP-04 | Summary & meeting notes | ARC-08 | — (worker), `POST /meetings/{id}/regenerate` | todo | Meeting detail | todo | pipeline-parse | prompt `ai-instruction/ai-gen/` |
 | PRP-05 | Extract to-dos & calendar mentions | ARC-08 | — (worker) | todo | — | n/a | pipeline-parse | |
 | PRP-06 | RAG embeddings | ARC-08 | — (worker) | todo | — | n/a | chunk | 768 dims |
-| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | todo | Meetings list, Meeting detail | todo | processMeeting-guard, error-message | 0-segment guard |
+| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | in_progress | Meetings list, Meeting detail | todo | processMeeting-guard, error-message | API: status + queueing done (ARC-07); the worker is ARC-08; 0-segment guard |
 | PRP-08 | Long-meeting support | ARC-08 | — (worker) | todo | — | n/a | chunk, transcode | |
-| MTD-01 | Meeting detail page | ARC-07, ARC-13 | `GET /meetings/{id}`, `GET /meetings/{id}/transcript`, `GET /meetings/{id}/todos`, `GET /meetings/{id}/calendar-suggestions` *(proposed)* | todo | Meeting detail | todo | transcript-export | replaces direct Supabase reads (table d) |
+| MTD-01 | Meeting detail page | ARC-07, ARC-13 | `GET /meetings/{id}`, `GET /meetings/{id}/transcript`, `GET /meetings/{id}/todos`, `GET /meetings/{id}/calendar-suggestions` *(proposed)* | done | Meeting detail | todo | transcript-export | replaces direct Supabase reads (table d) |
 | MTD-02 | Audio player | ARC-07, ARC-12 | `GET /meetings/{id}/audio-url` | todo | Meeting detail | todo | audio-duration-fix | `hackAudioRender` flag in response |
-| MTD-03 | To-do interaction | ARC-07 | `PATCH /todos/{id}` | todo | Meeting detail | todo | — | jump to source segment |
+| MTD-03 | To-do interaction | ARC-07 | `PATCH /todos/{id}` | done | Meeting detail | todo | — | jump to source segment |
 | RAG-01 | Q&A scope | ARC-09 | `POST /chat` (meeting / folder / global scope) | todo | Chat, Meeting detail | todo | rag | |
 | RAG-02 | Grounded answers | ARC-09 | `POST /chat` | todo | Chat | todo | rag | "not found" answer |
 | RAG-03 | Citations & history | ARC-09 | `POST /chat`, `GET /chat?meetingId=&folderId=` | todo | Chat, Meeting detail | todo | rag | invented chunk ids dropped |
 | RAG-04 | Folder-scoped chat | ARC-09 | `POST /chat` (folderId) | todo | Folder view | todo | rag-folder | access-filtered retrieval |
-| CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | todo | Meeting detail | todo | ics | |
-| CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | todo | Meeting detail | todo | ics | |
-| CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | todo | Meeting detail | todo | — | |
-| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | todo | Meetings list | todo | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
-| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | todo | Meetings list, Meeting detail | todo | — | |
-| MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | todo | Meetings list | todo | — | |
+| CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | done | Meeting detail | todo | ics | |
+| CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | done | Meeting detail | todo | ics | |
+| CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | done | Meeting detail | todo | — | |
+| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | done | Meetings list | todo | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
+| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | done | Meetings list, Meeting detail | todo | — | |
+| MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | done | Meetings list | todo | — | |
 | MMG-04 | Delete meeting | ARC-07 | `DELETE /meetings/{id}` | todo | Meetings list | todo | retention | audio deleted first, `warning` on failure |
 | AUT-01 | Sign up | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Register, Verify email | todo | auth-validate | |
 | AUT-02 | Log in | ARC-05 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` *(proposed)* | todo | Sign in, Forgot password, Reset password | todo | auth-validate | email or username; reset screens replace Supabase's hosted recovery |
 | AUT-03 | Role authorization | ARC-05, ARC-11 | role claim in access JWT; JWKS `GET /.well-known/jwks.json` *(proposed)* | todo | Route guards | todo | admin-guards | |
-| AUT-04 | Data isolation | ARC-02, ARC-07 | every meeting-scoped endpoint (app-layer check + RLS backstop) | todo | — | n/a | folder-shares | `can_access_meeting` |
+| AUT-04 | Data isolation | ARC-02, ARC-07 | every meeting-scoped endpoint (app-layer check + RLS backstop) | in_progress | — | n/a | folder-shares | ARC-07 part 1: every endpoint checks access (role matrix test); part 2 adds the storage endpoints; `can_access_meeting` |
 | ADM-01 | User list | ARC-10 | `GET /admin/users` | todo | Admin › Users | todo | user-status, admin-guards, admin-adm, usage-by-user | per-user usage column |
 | ADM-02 | Account management | ARC-10 | `PATCH /admin/users/{id}/role`, `PATCH /admin/users/{id}/status`, `POST /admin/users/{id}/reset-password`, `DELETE /admin/users/{id}` | todo | Admin › Users | todo | admin-guards, admin-adm | role sync `users.role` + `profiles.role`; the reset email lands on the ARC-05 Reset password screen |
 | ADM-03 | Safety constraints | ARC-10 | same as ADM-02 + `POST /admin/users/bulk` | todo | Admin › Users | todo | admin-guards, admin-adm | v1 bulk skips the last-admin guard (only `excludeSelf` protects the caller; a race between two admins remains) — **v2: guard bulk too** (defense in depth) |
@@ -58,12 +58,12 @@
 | ADM-08 | System health | ARC-10 | `GET /admin/health` | todo | Admin › Health | todo | admin-ext | |
 | ADM-09 | Extended user management | ARC-10 | `GET /admin/users/{id}`, `POST /admin/users/bulk`, `GET /admin/activity` | todo | Admin › Users, User detail | todo | admin-ext, user-status, usage-by-user | |
 | ADM-10 | Config & feature flags | ARC-10 | `GET /admin/config`, `PATCH /admin/config/{key}`, `GET/PATCH /admin/generation-config` | todo | Admin › Config | todo | aip-control-plane | |
-| PRF-01 | Profile page & account info | ARC-07 | `GET /profile` | todo | Profile | todo | — | |
-| PRF-02 | Edit display name & username | ARC-07 | `PATCH /profile` | todo | Profile | todo | auth-validate | username unique |
+| PRF-01 | Profile page & account info | ARC-07 | `GET /profile` | in_progress | Profile | todo | — | `avatar_url` is null until ARC-07 part 2 |
+| PRF-02 | Edit display name & username | ARC-07 | `PATCH /profile` | done | Profile | todo | auth-validate | username unique |
 | PRF-03 | Change password | ARC-05 | `POST /profile/change-password` | todo | Profile | todo | auth-validate | current password required |
 | PRF-04 | Avatar upload | ARC-07, ARC-12 | `POST /profile/avatar` (presign) → browser PUT to R2 → `PATCH /profile` (`avatar_key`) | todo | Profile | todo | avatar-key | two steps as in v1; `isOwnedAvatarKey` |
-| PRF-05 | Theme configuration | ARC-07, ARC-11 | `PATCH /profile` (`theme_preference`) | todo | Profile, app shell | todo | — | v2: one design, light/dark only |
-| PRF-08 | Default AI model preference | ARC-07 | `GET/PATCH /profile/preferences` | todo | Profile | todo | aip-control-plane, model-label | within admin allow-list |
+| PRF-05 | Theme configuration | ARC-07, ARC-11 | `PATCH /profile` (`theme_preference`) | done | Profile, app shell | todo | — | v2: one design, light/dark only |
+| PRF-08 | Default AI model preference | ARC-07 | `GET/PATCH /profile/preferences` | done | Profile | todo | aip-control-plane, model-label | within admin allow-list |
 | REL-01 | Durable job queue/worker | ARC-08 | — (worker, Postgres `SKIP LOCKED`) | todo | — | n/a | processMeeting-guard | |
 | REL-02 | Stuck-job recovery | ARC-08, ARC-10 | — (worker), `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline | |
 | REL-03 | Idempotent retries | ARC-08 | — (worker) | todo | — | n/a | processMeeting-guard | |
@@ -80,19 +80,19 @@
 | OPS-04 | Tag-driven release to deployment repo | ARC-15 | `GET /version.json` | todo | — | n/a | app-version | two images in v2 |
 | OPS-06 | CI on dev branch | ARC-00 | — (CI triggers include `dev`) | done | — | done | — | delivered by ARC-00 |
 | OPS-07 | Release runbook + deploy verify | ARC-15 | `GET /version.json`, `GET /health` | todo | — | n/a | verify-deploy | runbook rewritten for v2 |
-| COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | todo | Record (notice dialog) | todo | recording-notice, activity-log | 12 h ack per tab |
-| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | todo | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | moving a meeting = `PATCH /meetings/{id}` |
-| QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | todo | Profile | todo | quota | balance stays in `GET /profile` for parity |
+| COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | done | Record (notice dialog) | todo | recording-notice, activity-log | 12 h ack per tab |
+| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | in_progress | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | all routes done except `DELETE /folders/{id}?deleteMeetings=true` (503 until ARC-07 part 2); moving a meeting = `PATCH /meetings/{id}` |
+| QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | done | Profile | todo | quota | balance stays in `GET /profile` for parity |
 | QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
 | QUO-03 | Ask-agent enforcement | ARC-09 | `POST /chat` (pre-check + deduct) | todo | Chat | todo | quota | |
 | QUO-04 | Idempotent deduction | ARC-08 | — (worker, same transaction as usage) | todo | — | n/a | quota, quota-integration | |
-| QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /profile` (balance), `GET/POST /admin/users/{id}/quota` | todo | Profile, Admin › User detail | todo | quota | |
+| QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /profile` (balance), `GET/POST /admin/users/{id}/quota` | in_progress | Profile, Admin › User detail | todo | quota | user balance done (ARC-07); admin top-up is ARC-10 |
 | AIP-01 | Provider interface & registry | ARC-08 | — (AI service layer) | todo | — | n/a | ai-registry | |
 | AIP-02 | OpenAI adapter | ARC-08 | — (AI service layer) | todo | — | n/a | ai-openai-adapter, ai-gemini-adapter | also the Grok (xAI) adapter, `legacy/lib/grok` |
 | AIP-03 | Per-meeting model lock | ARC-08 | — (worker) | todo | Meeting detail (model label) | todo | aip-model-lock, model-label | |
 | AIP-04 | Cross-meeting RAG model rule | ARC-09 | `POST /chat` | todo | — | n/a | aip04-chat-model | |
 | AIP-05 | Provider-aware key pool | ARC-06 | — (key pool service) | todo | — | n/a | key-pool-base, key-pool-speechmatics, key-healthcheck | |
-| AIP-06 | Control plane | ARC-07, ARC-10 | `GET/PATCH /admin/generation-config`, `GET/PATCH /profile/preferences` | todo | Admin › Config, Profile | todo | aip-control-plane | |
+| AIP-06 | Control plane | ARC-07, ARC-10 | `GET/PATCH /admin/generation-config`, `GET/PATCH /profile/preferences` | in_progress | Admin › Config, Profile | todo | aip-control-plane | `/profile/preferences` done (ARC-07); admin config is ARC-10 |
 
 ---
 
@@ -102,7 +102,7 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 
 | Legacy route | Methods | v2 endpoint | ARC | Status | Note |
 |---|---|---|---|---|---|
-| activity | POST | `POST /activity` | ARC-07 | todo | client events only, own user, rate-limited |
+| activity | POST | `POST /activity` | ARC-07 | done | client events only, own user, rate-limited |
 | admin/activity | GET | `GET /admin/activity` | ARC-10 | todo | |
 | admin/ai-usage | GET | `GET /admin/ai-usage` | ARC-10 | todo | |
 | admin/audit-logs | GET | `GET /admin/audit-logs` | ARC-10 | todo | |
@@ -135,28 +135,28 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | auth/login | POST | `POST /auth/login` | ARC-05 | todo | |
 | auth/logout | POST | `POST /auth/logout` | ARC-05 | todo | revokes refresh token |
 | auth/register | POST | `POST /auth/register` | ARC-05 | todo | |
-| calendar-suggestions/[id] | PATCH | `PATCH /calendar-suggestions/{id}` | ARC-07 | todo | |
-| calendar-suggestions/[id]/ics | GET | `GET /calendar-suggestions/{id}/ics` | ARC-07 | todo | |
+| calendar-suggestions/[id] | PATCH | `PATCH /calendar-suggestions/{id}` | ARC-07 | done | |
+| calendar-suggestions/[id]/ics | GET | `GET /calendar-suggestions/{id}/ics` | ARC-07 | done | |
 | chat | GET, POST | `GET /chat`, `POST /chat` | ARC-09 | todo | GET = session history per scope |
-| folders | GET, POST | `GET /folders`, `POST /folders` | ARC-07 | todo | |
-| folders/[id] | PATCH, DELETE | `PATCH /folders/{id}`, `DELETE /folders/{id}` | ARC-07 | todo | delete removes only the caller's meetings (BUG-011) |
-| folders/[id]/shares | GET, POST | `GET /folders/{id}/shares`, `POST /folders/{id}/shares` | ARC-07 | todo | |
-| folders/[id]/shares/[granteeId] | PATCH, DELETE | `PATCH /folders/{id}/shares/{granteeId}`, `DELETE /folders/{id}/shares/{granteeId}` | ARC-07 | todo | |
-| folders/reorder | PUT | `PUT /folders/reorder` | ARC-07 | todo | |
+| folders | GET, POST | `GET /folders`, `POST /folders` | ARC-07 | done | |
+| folders/[id] | PATCH, DELETE | `PATCH /folders/{id}`, `DELETE /folders/{id}` | ARC-07 | in_progress | PATCH + keep-path DELETE done; `?deleteMeetings=true` answers 503 until ARC-07 part 2. delete removes only the caller's meetings (BUG-011) |
+| folders/[id]/shares | GET, POST | `GET /folders/{id}/shares`, `POST /folders/{id}/shares` | ARC-07 | done | |
+| folders/[id]/shares/[granteeId] | PATCH, DELETE | `PATCH /folders/{id}/shares/{granteeId}`, `DELETE /folders/{id}/shares/{granteeId}` | ARC-07 | done | |
+| folders/reorder | PUT | `PUT /folders/reorder` | ARC-07 | done | |
 | health | GET | `GET /health` | ARC-04 | done | skeleton in ARC-00; keep dependency-free |
 | meetings | POST | `POST /meetings` | ARC-07 | todo | returns presigned R2 PUT |
-| meetings/[id] | PATCH, DELETE | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | ARC-07 | todo | |
-| meetings/[id]/pin | PATCH | `PATCH /meetings/{id}/pin` | ARC-07 | todo | |
-| meetings/[id]/process | POST | `POST /meetings/{id}/process` | ARC-07, ARC-08 | todo | 409 without audio |
+| meetings/[id] | PATCH, DELETE | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | ARC-07 | in_progress | PATCH done; DELETE in ARC-07 part 2 (storage). |
+| meetings/[id]/pin | PATCH | `PATCH /meetings/{id}/pin` | ARC-07 | done | |
+| meetings/[id]/process | POST | `POST /meetings/{id}/process` | ARC-07, ARC-08 | done | queues the job; the worker is ARC-08. 409 without audio |
 | meetings/[id]/regenerate | POST | `POST /meetings/{id}/regenerate` | ARC-07, ARC-08 | todo | route in the ARC-07 meetings router, analysis via ARC-08; owner only, 422 without segments |
 | meetings/[id]/uploaded | POST | `POST /meetings/{id}/uploaded` | ARC-07 | todo | ownership + ffprobe, enqueues job; `source='video'` → ffmpeg extracts audio, original deleted |
 | openapi | GET | `GET /openapi.json` (FastAPI) | ARC-04 | todo | generated, published as CI artifact |
-| profile | GET, PATCH | `GET /profile`, `PATCH /profile` | ARC-07 | todo | |
+| profile | GET, PATCH | `GET /profile`, `PATCH /profile` | ARC-07 | in_progress | `avatar_key` / `avatar_url` in ARC-07 part 2. |
 | profile/avatar | POST | `POST /profile/avatar` | ARC-07 | todo | |
 | profile/change-password | POST | `POST /profile/change-password` | ARC-05 | todo | |
-| profile/preferences | GET, PATCH | `GET /profile/preferences`, `PATCH /profile/preferences` | ARC-07 | todo | |
-| todos/[id] | PATCH | `PATCH /todos/{id}` | ARC-07 | todo | editor+ |
-| users/lookup | POST | `POST /users/lookup` | ARC-07 | todo | returns the match (username for an email) but never echoes an email back; do **not** port v1's unpaged `auth.admin.listUsers()` (misses users past page 1) — query `users` directly |
+| profile/preferences | GET, PATCH | `GET /profile/preferences`, `PATCH /profile/preferences` | ARC-07 | done | |
+| todos/[id] | PATCH | `PATCH /todos/{id}` | ARC-07 | done | editor+ |
+| users/lookup | POST | `POST /users/lookup` | ARC-07 | done | returns the match (username for an email) but never echoes an email back; do **not** port v1's unpaged `auth.admin.listUsers()` (misses users past page 1) — query `users` directly |
 | version.json (non-API route) | GET | `GET /version.json` | ARC-04 | todo | `RICOTDIN_VERSION` → build commit → `"unknown"` |
 
 ---
@@ -192,11 +192,11 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 
 | v1 browser call | Where | v2 endpoint | ARC | Status |
 |---|---|---|---|---|
-| `from('meetings')` list (+ folder filter) | `meetings/page.tsx`, `meetings/folder/[id]/page.tsx` | `GET /meetings?folderId=` | ARC-07 | todo |
-| `from('meetings')` single | `meetings/[id]/page.tsx` | `GET /meetings/{id}` | ARC-07 | todo |
-| `from('transcript_segments')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/transcript` | ARC-07 | todo |
-| `from('todos')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/todos` | ARC-07 | todo |
-| `from('calendar_suggestions')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/calendar-suggestions` | ARC-07 | todo |
+| `from('meetings')` list (+ folder filter) | `meetings/page.tsx`, `meetings/folder/[id]/page.tsx` | `GET /meetings?folderId=` | ARC-07 | done |
+| `from('meetings')` single | `meetings/[id]/page.tsx` | `GET /meetings/{id}` | ARC-07 | done |
+| `from('transcript_segments')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/transcript` | ARC-07 | done |
+| `from('todos')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/todos` | ARC-07 | done |
+| `from('calendar_suggestions')` | `meetings/[id]/page.tsx` | `GET /meetings/{id}/calendar-suggestions` | ARC-07 | done |
 | `auth.getSession` / `getUser` / `onAuthStateChange` / `setSession` / `signOut` | `(routes)/layout.tsx`, `(auth)/login`, `(auth)/register`, `profile`, `admin/users`, `admin/features`, `meetings`, `meetings/[id]`, `meetings/folder/[id]` (`getUser` → current user id for role helpers), `components/RecorderUI.tsx`, `lib/upload/upload.ts` (token), `lib/supabase/auth.ts` | `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/logout` | ARC-05, ARC-11 | todo |
 | Supabase email verification link (`detectSessionInUrl`) | login | `POST /auth/verify-email` (token from the email link) | ARC-05 | todo |
 

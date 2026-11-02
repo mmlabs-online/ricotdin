@@ -1,20 +1,26 @@
-"""Profile endpoints (ARC-05: change password; the rest of PRF-* arrives in ARC-07)."""
+"""Profile endpoints: change password (ARC-05); profile, quota balance and model preference
+(ARC-07). The avatar (upload URL, ``avatar_key``, ``avatar_url``) arrives with ARC-07 part 2."""
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import service
 from app.auth.deps import auth_runtime, client_ip, current_identity
 from app.auth.passwords import hash_password, verify_password
 from app.auth.runtime import AuthRuntime
 from app.auth.validate import validate_password
-from app.core.errors import Conflict, Forbidden, Unauthorized, UnprocessableEntity
+from app.core.errors import Conflict, Forbidden, NotFound, Unauthorized, UnprocessableEntity
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
-from app.routers.auth import SERVICE, enforce, set_refresh_cookie
+from app.domain.models import allowed_models, model_label
+from app.domain.rules import parse_preferences, parse_profile_patch
+from app.routers._common import SERVICE, is_unique_violation, json_object, jsonb
+from app.routers.auth import enforce, set_refresh_cookie
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -72,3 +78,120 @@ async def change_password(
         )
     set_refresh_cookie(response, runtime, token)
     return {"changed": True}
+
+
+Identity = Annotated[RequestIdentity, Depends(current_identity)]
+Db = Annotated[Database, Depends(get_database)]
+
+_TAKEN = "Username is already taken."
+
+
+@router.get("")
+async def get_profile(identity: Identity, db: Db) -> dict[str, Any]:
+    """Own profile, counts of owned meetings / folders and the quota balance (raw, may be
+    negative; the UI clamps it)."""
+    async with db.role_transaction(SERVICE) as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT p.id, u.email, p.username, p.display_name, p.avatar_key, "
+                    "p.theme_preference, p.role, p.created_at, "
+                    "(SELECT count(*) FROM public.meetings m WHERE m.user_id = p.id) AS meetings, "
+                    "(SELECT count(*) FROM public.folders f WHERE f.user_id = p.id) AS folders, "
+                    "w.audio_seconds_remaining, w.agent_queries_remaining "
+                    "FROM public.profiles p LEFT JOIN public.users u ON u.id = p.id "
+                    "LEFT JOIN public.quota_wallets w ON w.user_id = p.id WHERE p.id = :me"
+                ),
+                {"me": identity.user_id},
+            )
+        ).first()
+    if row is None:
+        raise NotFound("Profile not found.")
+    return {
+        "id": str(row.id),
+        "email": row.email,
+        "username": row.username,
+        "display_name": row.display_name,
+        "avatar_key": row.avatar_key,
+        "avatar_url": None,  # ARC-07 part 2 (storage)
+        "theme_preference": row.theme_preference,
+        "role": row.role,
+        "created_at": row.created_at,
+        "meeting_count": int(row.meetings),
+        "folder_count": int(row.folders),
+        "audio_seconds_remaining": int(row.audio_seconds_remaining or 0),
+        "agent_queries_remaining": int(row.agent_queries_remaining or 0),
+    }
+
+
+@router.patch("")
+async def update_profile(request: Request, identity: Identity, db: Db) -> dict[str, bool]:
+    """username / display_name / theme_preference. The write runs as ricotdin_app, so the
+    ``profiles_update`` policy and the column grant apply (``role`` can never be written)."""
+    changes = parse_profile_patch(await json_object(request))
+    if "username" in changes:
+        async with db.role_transaction(SERVICE) as conn:
+            taken = await conn.execute(
+                text("SELECT 1 FROM public.profiles WHERE username = :u AND id <> :me"),
+                {"u": changes["username"], "me": identity.user_id},
+            )
+            if taken.first() is not None:
+                raise Conflict(_TAKEN)
+    sets = ", ".join(f"{k} = :{k}" for k in changes)
+    try:
+        async with db.app_transaction(identity) as conn:
+            await conn.execute(
+                text(f"UPDATE public.profiles SET {sets} WHERE id = :me"),  # noqa: S608 - fixed keys
+                {**changes, "me": identity.user_id},
+            )
+    except IntegrityError as exc:
+        if is_unique_violation(exc):
+            raise Conflict(_TAKEN) from None
+        raise
+    return {"ok": True}
+
+
+async def _allowed(db: Database) -> list[tuple[str, str]]:
+    async with db.role_transaction(SERVICE) as conn:
+        raw = (
+            await conn.execute(
+                text(
+                    "SELECT value FROM public.app_settings WHERE key = 'generation.allowed_models'"
+                )
+            )
+        ).scalar_one_or_none()
+    return allowed_models(jsonb(raw))
+
+
+@router.get("/preferences")
+async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
+    allowed = await _allowed(db)
+    async with db.app_transaction(identity) as conn:
+        row = (
+            await conn.execute(
+                text("SELECT default_provider, default_model FROM public.profiles WHERE id = :me"),
+                {"me": identity.user_id},
+            )
+        ).first()
+    return {
+        "provider": row.default_provider if row else None,
+        "model": row.default_model if row else None,
+        "allowedModels": [
+            {"provider": p, "model": m, "label": model_label(p, m)} for p, m in allowed
+        ],
+    }
+
+
+@router.patch("/preferences")
+async def update_preferences(request: Request, identity: Identity, db: Db) -> dict[str, bool]:
+    body = await json_object(request)
+    provider, model = parse_preferences(body, await _allowed(db))
+    async with db.app_transaction(identity) as conn:
+        await conn.execute(
+            text(
+                "UPDATE public.profiles SET default_provider = :p, default_model = :m "
+                "WHERE id = :me"
+            ),
+            {"p": provider, "m": model, "me": identity.user_id},
+        )
+    return {"ok": True}
