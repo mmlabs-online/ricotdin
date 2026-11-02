@@ -6,6 +6,13 @@
 ## [Unreleased]
 
 ### Thay đổi
+- API v2 lưu file trên Google Drive của chủ dự án thay cho Cloudflare R2:
+  - Kết nối một lần bằng `python -m scripts.connect_gdrive` (đăng nhập Google, quyền `drive.file`); client secret và refresh token được mã hoá bằng `KEY_ENCRYPTION_SECRET` trong bảng `drive_config`.
+  - Trình duyệt upload thẳng lên Drive qua phiên resumable; API kiểm tra lại tên key, thư mục, kích thước và kiểu file, file sai bị xoá (422).
+  - Bảng `storage_objects` ghi key → file id Drive; xoá file là xoá vĩnh viễn, không vào thùng rác.
+  - Phát audio qua `GET /media?t=…`: link ký HMAC, sống tối đa 15 phút, hỗ trợ `Range` để tua, tối đa 8 luồng phát cùng lúc.
+  - Tự thử lại khi Drive báo quá tải (429, 403 rate limit, 5xx); `check()` báo nếu thư mục gốc bị chia sẻ.
+  - Deploy: migration Alembic `0003_drive_storage`; không có biến môi trường mới; chủ dự án tạo OAuth client "Desktop app" (consent screen **In production**), chạy `connect_gdrive` rồi `drive_smoke` (ARC-17)
 - Script chuyển dữ liệu v1 → v2 `app/api/scripts/migrate_from_supabase.py` (chủ dự án tự chạy):
   - Chép toàn bộ người dùng (giữ id và mật khẩu, tự băm lại sang argon2 ở lần đăng nhập đầu), mọi bảng và audio còn trên Supabase Storage sang Neon + R2.
   - Kiểm tra trước khi ghi; đọc Supabase trong một snapshot chỉ đọc; chạy lại không tạo bản trùng.

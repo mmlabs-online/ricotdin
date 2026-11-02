@@ -88,3 +88,23 @@ def test_cycles_do_not_recurse_forever() -> None:
 )
 def test_private_keys_are_masked(text: str) -> None:
     assert "MC4CAQAwBQYDK2VwBCIEIabc" not in redact(text)
+
+
+# --- ARC-17: Google OAuth tokens and Drive upload sessions ----------------------------------------
+
+
+def test_google_oauth_tokens_and_upload_session_ids_are_redacted() -> None:
+    text = (
+        "access ya29.a0AfB_byC-xyz123456789 refresh 1//0gAbCdEfGhIjKlMn "
+        "PUT https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
+        "&upload_id=ADPycdu-SECRETSESSION&x=1 secret GOCSPX-AbCdEfGhIjKlMnOp"
+    )
+    out = redact(text)
+    for secret in (
+        "ya29.a0AfB_byC-xyz123456789",
+        "1//0gAbCdEfGhIjKlMn",
+        "ADPycdu-SECRETSESSION",
+        "GOCSPX-AbCdEfGhIjKlMnOp",
+    ):
+        assert secret not in out
+    assert "uploadType=resumable" in out and "&x=1" in out
