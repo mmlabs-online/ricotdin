@@ -39,3 +39,9 @@ def can_assign_to_folder(
     if folder_owner is None:
         return False
     return user_id == folder_owner or share_role == "editor"
+
+
+def can_move_meeting(user_id: uuid.UUID, *, meeting_owner: uuid.UUID) -> bool:
+    """Owner decision 2026-11-02 (CWE-269 fix): only the meeting owner moves it to another
+    folder. In v1 any editor could, and by moving it into their own folder became its owner."""
+    return user_id == meeting_owner

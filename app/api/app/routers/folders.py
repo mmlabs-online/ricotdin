@@ -18,7 +18,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.auth.deps import current_identity
-from app.core.errors import Conflict, Forbidden, NotFound, ServiceUnavailable
+from app.core.errors import Conflict, Forbidden, NotFound
+from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
@@ -41,8 +42,13 @@ from app.routers._common import (
     json_object,
     path_id,
 )
+from app.routers.meetings import delete_files
+from app.routers.meetings import record_activity as meeting_activity
+from app.services.platform import Platform, get_platform
+from app.services.storage.ownership import is_owned_audio_key
 
 router = APIRouter(tags=["folders"])
+log = get_logger("folders")
 
 Identity = Annotated[RequestIdentity, Depends(current_identity)]
 Db = Annotated[Database, Depends(get_database)]
@@ -59,10 +65,6 @@ def lookup_limiter() -> RateLimiter:
     """Email → account lookups (``/users/lookup`` and adding a share) per user: v2 searches every
     user, so without a limit it would be an enumeration oracle."""
     return RateLimiter(capacity=LOOKUPS_PER_15_MIN, refill_per_second=LOOKUPS_PER_15_MIN / 900)
-
-
-class FolderMeetingDeleteUnavailable(ServiceUnavailable):
-    message = "Deleting the meetings in a folder is not available yet."
 
 
 def _duplicate(name: str) -> Conflict:
@@ -174,11 +176,18 @@ async def rename_folder(
 
 @router.delete("/folders/{folder_id}")
 async def delete_folder(
-    folder_id: str, identity: Identity, db: Db, deleteMeetings: str | None = None
+    folder_id: str,
+    request: Request,
+    identity: Identity,
+    db: Db,
+    platform: Annotated[Platform, Depends(get_platform)],
+    deleteMeetings: str | None = None,
 ) -> dict[str, bool]:
     """Keep path: everyone's meetings move to Uncategorized (FK SET NULL); shares and folder chats
-    cascade. ``deleteMeetings=true`` needs storage and arrives with ARC-07 part 2."""
+    cascade. ``deleteMeetings=true`` also deletes the caller's own meetings in the folder (never
+    an editor's, BUG-011), each one's audio first; a storage failure does not stop the delete."""
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
+    meetings: list[tuple[uuid.UUID, str | None]] = []
     async with db.role_transaction(SERVICE) as conn:
         owned = await conn.execute(
             text("SELECT 1 FROM public.folders WHERE id = :id AND user_id = :me FOR UPDATE"),
@@ -186,9 +195,39 @@ async def delete_folder(
         )
         if owned.first() is None:
             raise NotFound(_FOLDER_NOT_FOUND)
-        if deleteMeetings == "true":
-            raise FolderMeetingDeleteUnavailable()
-        await conn.execute(text("DELETE FROM public.folders WHERE id = :id"), {"id": fid})
+        if deleteMeetings != "true":
+            await conn.execute(text("DELETE FROM public.folders WHERE id = :id"), {"id": fid})
+            return {"ok": True}
+        rows = await conn.execute(
+            text(
+                "SELECT id, audio_path FROM public.meetings WHERE folder_id = :id AND user_id = :me"
+            ),
+            {"id": fid, "me": identity.user_id},
+        )
+        meetings = [(r.id, r.audio_path) for r in rows]
+    keys = [
+        key
+        for mid, key in meetings
+        if key and is_owned_audio_key(key, str(identity.user_id), str(mid))
+    ]
+    failed = await delete_files(db, platform, keys)
+    if failed:
+        log.warning("folder delete: %d audio file(s) could not be removed", len(failed))
+    async with db.role_transaction(SERVICE) as conn:
+        await conn.execute(
+            text("DELETE FROM public.meetings WHERE id = ANY(:ids) AND user_id = :me").bindparams(
+                bindparam("ids", type_=ARRAY(UUID(as_uuid=True)))
+            ),
+            {"ids": [m for m, _ in meetings], "me": identity.user_id},
+        )
+        await conn.execute(
+            text("DELETE FROM public.folders WHERE id = :id AND user_id = :me"),
+            {"id": fid, "me": identity.user_id},
+        )
+    for mid, _ in meetings:
+        await meeting_activity(
+            db, request, identity.user_id, "meeting_deleted", None, {"meeting_id": str(mid)}
+        )
     return {"ok": True}
 
 

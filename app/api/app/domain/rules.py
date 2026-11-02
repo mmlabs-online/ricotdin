@@ -130,10 +130,11 @@ def normalize_lookup_username(identifier: str) -> str:
 # --- profile ----------------------------------------------------------------------------------
 
 
-def parse_profile_patch(body: dict[str, Any]) -> dict[str, Any]:
+def parse_profile_patch(body: dict[str, Any], *, allow_empty: bool = False) -> dict[str, Any]:
     """username → display_name → theme_preference, first failure wins (v1 order).
 
-    ``avatar_key`` arrives with ARC-07 part 2 (storage); until then it is ignored.
+    ``avatar_key`` is parsed by ``app.domain.uploads.parse_avatar_patch``; the route passes
+    ``allow_empty`` when the body changes only the avatar.
     """
     out: dict[str, Any] = {}
     if "username" in body:
@@ -159,7 +160,7 @@ def parse_profile_patch(body: dict[str, Any]) -> dict[str, Any]:
         if theme is not None and theme not in THEMES:
             raise UnprocessableEntity("theme_preference must be one of: luxury, default, playful.")
         out["theme_preference"] = theme
-    if not out:
+    if not out and not allow_empty:
         raise BadRequest("No updatable fields provided.")
     return out
 
