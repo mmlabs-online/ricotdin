@@ -16,6 +16,7 @@ dependencies = [
     "pyjwt[crypto]>=2.15.1",
     "sentry-sdk[fastapi]>=2.73.0",
     "sqlalchemy[asyncio]>=2.1.6",
+    "httpx2>=2.16.0",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -23,7 +24,6 @@ dependencies = [
 dev = [
     "anyio>=4.15.1",
     "boto3-stubs[s3]>=1.43.121",
-    "httpx2>=2.16.0",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.2",

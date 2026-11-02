@@ -6,6 +6,13 @@
 ## [Unreleased]
 
 ### Thay đổi
+- API v2 lưu file trên Google Drive của chủ dự án thay cho Cloudflare R2:
+  - Kết nối một lần bằng `python -m scripts.connect_gdrive` (đăng nhập Google, quyền `drive.file`); client secret và refresh token được mã hoá bằng `KEY_ENCRYPTION_SECRET` trong bảng `drive_config`.
+  - Trình duyệt upload thẳng lên Drive qua phiên resumable; API kiểm tra lại tên key, thư mục, kích thước và kiểu file, file sai bị xoá (422).
+  - Bảng `storage_objects` ghi key → file id Drive; xoá file là xoá vĩnh viễn, không vào thùng rác.
+  - Phát audio qua `GET /media?t=…`: link ký HMAC, sống tối đa 15 phút, hỗ trợ `Range` để tua, tối đa 8 luồng phát cùng lúc.
+  - Tự thử lại khi Drive báo quá tải (429, 403 rate limit, 5xx); `check()` báo nếu thư mục gốc bị chia sẻ.
+  - Deploy: migration Alembic `0003_drive_storage`; không có biến môi trường mới; chủ dự án tạo OAuth client "Desktop app" (consent screen **In production**), chạy `connect_gdrive` rồi `drive_smoke` (ARC-17)
 - API v2 phần lõi, đợt 1 (không đụng file): danh sách / chi tiết meeting, transcript, to-do, gợi ý lịch; đổi tên, chuyển folder, ghim, đưa vào hàng đợi xử lý; đổi trạng thái to-do, bỏ gợi ý lịch, tải `.ics`; folder + chia sẻ + sắp xếp + tìm người dùng; profile (kèm số dư quota), đổi username / tên hiển thị / theme, chọn model mặc định; ghi activity từ trình duyệt. Status code giống v1 cho owner / editor / viewer / người lạ (test ma trận quyền). Không có migration, không có env mới. Đợt 2 (tạo meeting + upload, audio, xoá meeting, avatar) làm sau ARC-17 (ARC-07)
 - Script chuyển dữ liệu v1 → v2 `app/api/scripts/migrate_from_supabase.py` (chủ dự án tự chạy):
   - Chép toàn bộ người dùng (giữ id và mật khẩu, tự băm lại sang argon2 ở lần đăng nhập đầu), mọi bảng và audio còn trên Supabase Storage sang Neon + R2.
@@ -26,6 +33,7 @@
 - Bắt đầu chuyển sang v2: app v1 (Next.js + Supabase) dời vào `legacy/` (giữ lịch sử); khung `app/api` (FastAPI, uv) và `app/web` (Vite + React) có CI riêng; CI của v1 chỉ chạy khi `legacy/` đổi và nay build thử image + kiểm tra `/api/health`; image v1 build từ gốc repo bằng `docker build -f legacy/Dockerfile .`. Lệnh v1 chạy trong `legacy/`, file env ở `legacy/.env.local` (ARC-00)
 
 ### Sửa lỗi
+- Script chuyển dữ liệu v1 → v2 bị chặn ở bước kiểm tra trước vì 2 bảng mới của v2 (`drive_config`, `storage_objects`); nay được bỏ qua đúng cách (BUG-020)
 - Script chuyển dữ liệu v1 → v2 không còn bị crash khi in báo cáo trên console Windows (cp1252) và trả đúng exit code (0 PASS/dry run, 1 FAIL, 2 bị chặn); ký tự console không hiển thị được thành `?`, file báo cáo vẫn đầy đủ (BUG-019)
 - Tài liệu nói đúng nhánh mặc định là `dev` và cách cấu hình environment `backup` (cần 6 secret, nhận nhánh `dev`) — trước đây hướng dẫn sai nên không ai nhận ra backup DB chưa từng chạy được vì thiếu secret; PRF-08 được đánh dấu đã xong (qua AIP-06) (BUG-018, PRF-08)
 

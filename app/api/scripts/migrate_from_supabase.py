@@ -59,7 +59,10 @@ from app.services.storage.ownership import is_owned_audio_key
 from app.services.storage.r2 import r2_client
 
 API_ROOT = Path(__file__).resolve().parents[1]
-V2_ONLY_TABLES = {"users", "refresh_tokens", "email_tokens"}
+# Tables with no v1 counterpart: never read from Supabase (auth tables; ARC-17 Drive storage).
+V2_ONLY_TABLES = {"users", "refresh_tokens", "email_tokens", "drive_config", "storage_objects"}
+# v2-only tables with nothing to copy (``users`` is filled from Supabase ``auth.users``).
+NOT_COPIED_TABLES = V2_ONLY_TABLES - {"users"}
 LEGACY_BUCKET = "recordings"
 BATCH = 500
 # Digests ignore columns the migration itself changes after the copy.
@@ -288,7 +291,7 @@ def migrate_tables(
     """All tables in FK order. Stops at the first database error (recorded in the report)."""
     user_roles = {u["id"]: u["role"] for u in users}
     for table in load_order(cat.tables, cat.fks):
-        if table in {"refresh_tokens", "email_tokens"}:
+        if table in NOT_COPIED_TABLES:
             continue  # v2-only, nothing in v1
         cols = cat.columns[table]
         dcols = [c for c in cols if c not in DIGEST_EXCLUDE.get(table, set())]

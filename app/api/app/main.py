@@ -22,6 +22,7 @@ from app.routers import activity as activity_router
 from app.routers import auth as auth_router
 from app.routers import content as content_router
 from app.routers import folders as folders_router
+from app.routers import media as media_router
 from app.routers import meetings as meetings_router
 from app.routers import profile as profile_router
 from app.services.platform import Platform
@@ -64,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from app.db.session import Database
 
         async with AsyncExitStack() as stack:
+            stack.push_async_callback(app.state.platform.aclose)  # Drive HTTP client
             app.state.db = await Database.start(s)
             stack.push_async_callback(app.state.db.close)
             for hook in BACKGROUND_HOOKS:  # each started hook is stopped even if a later one fails
@@ -92,4 +94,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.lookup_limiter = folders_router.lookup_limiter()
     for module in (meetings_router, content_router, folders_router, activity_router):
         app.include_router(module.router)
+    app.include_router(media_router.router)
     return app

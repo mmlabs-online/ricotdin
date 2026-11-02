@@ -842,7 +842,7 @@ Final repo layout approved by the owner. Supabase is shut down only after v2 has
 ---
 
 ### ARC-17 — Google Drive storage backend (replaces R2 in v2)
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Code done — owner smoke check pending (`connect_gdrive` + `drive_smoke`)
 
 **User Story**  
 As the owner, I want v2 to store meeting audio and avatars in my Google One Drive (5 TB) instead of Cloudflare R2 so that storage uses capacity I already pay for.
@@ -874,7 +874,7 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 
 **Acceptance Criteria**
 - Given no `drive_config` row or a revoked refresh token, when any storage call runs, then it raises `StorageNotConfigured` (503) and no token or secret appears in logs.
-- Given an upload session for `<uid>/<mid>.webm`, when the reported file id has a different `appProperties.key`, parent, size or MIME type, then the file is deleted from Drive and the call answers 422; a matching file gets a `storage_objects` row.
+- Given an upload session for `<uid>/<mid>.webm`, when the reported file id has a different `appProperties.key`, parent, size or MIME type, then the call answers 422; the file is deleted only if that key's session created it in the root (never another key's file, a folder or the root); a matching file gets a `storage_objects` row, and a key that is already mapped answers 409 (review round 1).
 - Given a valid media URL, when it is requested with `Range: bytes=1000-1999`, then the answer is 206 with `Content-Range: bytes 1000-1999/<size>` and exactly those bytes; an expired or tampered token answers 403 without a Drive call.
 - Given a stored key, when `delete` runs twice, then the file is gone from Drive (not in trash), the map row is gone and the second call is a no-op.
 - Given Drive answers 429 four times then 200, when a call runs, then it succeeds; after 5 failures it raises `StorageError`.
@@ -900,10 +900,11 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 - Server-side audio cache, multiple Drive accounts, restoring from Drive trash.
 
 **Key files (expected)**
-- `app/api/app/services/storage/{base,gdrive,drive_rules,media_token,config}.py`, `app/api/app/services/platform.py`
-- `app/api/app/routers/media.py`, `app/api/app/main.py`
+- `app/api/app/services/storage/{base,gdrive,drive_rules,drive_oauth,media_token,config}.py`, `app/api/app/services/platform.py`
+- `app/api/app/routers/media.py`, `app/api/app/main.py`, `app/api/app/core/{logging,redact}.py`
 - `app/api/scripts/connect_gdrive.py`, `app/api/scripts/drive_smoke.py`
-- `app/api/migrations/versions/0003_drive_storage.py`
+- `app/api/migrations/versions/0003_drive_storage.py`, `app/api/migrations/sql/0003_drive_storage{,_down}.sql`
+- Tests: `test_drive_rules.py`, `test_media_token.py`, `test_drive_oauth.py`, `test_drive_storage.py` (+ `fake_drive.py`), `test_media_route.py`, `test_drive_storage_integration.py`
 - Tests listed above; `CLAUDE.md` §0.4
 
 ---

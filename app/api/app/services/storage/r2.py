@@ -1,5 +1,9 @@
 """Cloudflare R2 object storage (ARC-06; port of v1 ``lib/storage/index.ts``). Server-only.
 
+Since ARC-17 v2 stores files in Google Drive (``gdrive.py``); this module remains only as the
+ARC-18 reader of the v1 bucket and is removed in ARC-16. Errors live in ``base.py`` and are
+re-exported here for existing imports.
+
 boto3 is synchronous: presigning is local computation (no network); every other call runs in a
 worker thread. Each ``R2Storage`` builds its client once, from its own boto3 session (the default
 session is not thread-safe; a built client is). Legacy rows with ``storage_provider = 'supabase'``
@@ -13,7 +17,6 @@ size-limited: ``get_bytes`` for small objects, ``download_to_file`` for meeting 
 """
 
 import os
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,7 +27,15 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-from app.core.errors import AppError, NotFound, ServiceUnavailable
+from app.core.errors import ServiceUnavailable
+from app.services.storage.base import (
+    ObjectTooLarge,
+    StorageError,
+    StorageNotConfigured,
+    StorageObjectNotFound,
+    UnsupportedContentType,
+    check_upload_type,
+)
 from app.services.storage.config import R2Config
 
 if TYPE_CHECKING:
@@ -36,41 +47,12 @@ MAX_PRESIGN_S = 7 * 24 * 3600  # SigV4 limit
 UPLOAD_URL_TTL_S = 900
 DOWNLOAD_URL_TTL_S = 3600
 _CHUNK = 1024 * 1024
-# Media only: an uploaded text/html or SVG object would be served back from our bucket.
-_UPLOAD_TYPES = re.compile(r"(?:audio|video)/[a-z0-9][a-z0-9.+-]*|image/(?:jpeg|png|webp)")
 _MISSING = {"404", "NoSuchKey", "NotFound"}
-
-
-class UnsupportedContentType(AppError):
-    status = 415
-    code = "unsupported_content_type"
-    message = "This file type cannot be uploaded."
-
-
-class StorageNotConfigured(ServiceUnavailable):
-    code = "storage_not_configured"
-    message = "Storage is not configured yet. Please contact an administrator."
 
 
 class LegacyStorageUnsupported(ServiceUnavailable):
     code = "legacy_storage"
     message = "This recording is not available yet. Please try again later."
-
-
-class StorageError(ServiceUnavailable):
-    code = "storage_error"
-    message = "The recording storage is temporarily unavailable. Please try again later."
-
-
-class StorageObjectNotFound(NotFound):
-    code = "object_not_found"
-    message = "The file was not found."
-
-
-class ObjectTooLarge(AppError):
-    status = 413
-    code = "object_too_large"
-    message = "The file is too large."
 
 
 def r2_client(cfg: R2Config) -> S3Client:
@@ -163,11 +145,7 @@ class R2Storage:
     ) -> str:
         # Parameters (``audio/webm;codecs=opus`` from the recorder) and case are ignored for the
         # check; the URL is still signed with the exact string the browser will send.
-        base = content_type.split(";", 1)[0].strip().lower()
-        if not _UPLOAD_TYPES.fullmatch(base):
-            raise UnsupportedContentType(
-                detail="upload content type must be audio/*, video/* or a jpeg/png/webp image"
-            )
+        check_upload_type(content_type)
         return presign_put(
             self.client,
             self.config.bucket,
@@ -289,3 +267,17 @@ class R2Storage:
             raise StorageError(detail=f"ClientError {code or ''}".strip()) from None
         except BotoCoreError as exc:
             raise StorageError(detail=type(exc).__name__) from None
+
+
+__all__ = [
+    "LegacyStorageUnsupported",
+    "ObjectTooLarge",
+    "R2Storage",
+    "StorageError",
+    "StorageNotConfigured",
+    "StorageObjectNotFound",
+    "UnsupportedContentType",
+    "presign_get",
+    "presign_put",
+    "r2_client",
+]
