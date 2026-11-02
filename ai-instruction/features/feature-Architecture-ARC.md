@@ -409,7 +409,7 @@ As the system, I want encryption, the provider key pool, app config and R2 stora
 ---
 
 ### ARC-07 — Core domain API: meetings, folders, todos, calendar, profile, quota
-**Priority:** High | **Status:** ⚠️ Partial — part 1 (everything without file storage) done; part 2 (create + upload, `uploaded`, `audio-url`, meeting delete, folder delete with meetings, avatar) after ARC-17 (owner decision 2026-10-29)
+**Priority:** High | **Status:** ✅ Done — part 1 (PR #40) and part 2 (files in Google Drive, ARC-17)
 
 **User Story**  
 As a user, I want my meetings, folders and shares, to-dos, calendar suggestions, profile and quota available through the v2 API so that every non-AI screen can be built.
@@ -429,7 +429,7 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 
 **Acceptance Criteria**
 - Every endpoint in table (b) of `v2-tracking.md` for these modules returns the same status codes as v1 for owner / editor / viewer / stranger.
-- Deleting a meeting removes the R2 object first; on storage failure the row is still deleted and the response has `warning`.
+- Deleting a meeting removes the Drive file (ARC-17) first; on storage failure the row is still deleted and the response has `warning`.
 - `.ics` for a suggestion without `proposed_at` returns 422.
 - Reprocess of a purged meeting returns 409.
 
@@ -448,9 +448,11 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 **Key files**
 - Part 1: `app/api/app/routers/{meetings,content,folders,profile,activity,_common}.py`, `app/api/app/services/access.py`, `app/api/app/domain/{access,rules,ics,models}.py`
 - Tests: `app/api/tests/test_{ics,domain_access,domain_rules,domain_models}.py` (pure), `test_core_domain_integration.py` (role matrix on a scratch DB)
-- `regenerate` moved to ARC-08 (needs the analysis step).
+- Part 2: `app/api/app/domain/uploads.py`, `app/api/app/routers/{meetings,folders,profile}.py`, migration `0004_meetings_gdrive`
+- Tests part 2: `test_domain_uploads.py` (pure), `test_meetings_storage_integration.py` (scratch DB + fake Drive)
+- `regenerate` moved to ARC-08 (needs the analysis step); ffprobe check and video → audio extraction move to the ARC-08 worker.
 
-**Open — owner decision before part 2 merges** (security review 2026-10-29, CWE-269, v1 parity): an editor of a shared folder can move someone else's meeting into a folder they own and then counts as its owner (folder owner = owner). Delete, pin and process stay meeting-owner only, but the editor can then share their folder with anyone (exposing the meeting) and cut the other grantees off. Decide whether moving a meeting out of a shared folder needs the meeting owner (or the current folder owner).
+**Decided 2026-11-02 (owner):** only the meeting owner may move a meeting to another folder (403 otherwise); editors still rename. Closes the CWE-269 finding of the part 1 security review.
 
 ---
 
