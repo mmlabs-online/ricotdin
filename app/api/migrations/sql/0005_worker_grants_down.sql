@@ -1,6 +1,9 @@
 -- Reverse of 0005_worker_grants.sql: back to the 0004 privileges of ricotdin_worker (0002: the
 -- service's privileges minus the auth tables; 0003: drive_config SELECT) and no unique index.
 -- Jobs failed as duplicates by the upgrade stay failed.
+DROP FUNCTION IF EXISTS public.pipeline_reserve(uuid, bigint);
+DROP FUNCTION IF EXISTS public.pipeline_refund(uuid);
+DROP FUNCTION IF EXISTS public.pipeline_settle(uuid, bigint);
 DROP INDEX IF EXISTS public.jobs_one_active_per_meeting;
 
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ricotdin_worker;
@@ -22,6 +25,7 @@ ALTER POLICY service_all ON public.chat_messages TO ricotdin_service, ricotdin_w
 ALTER POLICY service_all ON public.features TO ricotdin_service, ricotdin_worker;
 ALTER POLICY service_all ON public.storage_config TO ricotdin_service, ricotdin_worker;
 ALTER POLICY service_all ON public.quota_ledger TO ricotdin_service, ricotdin_worker;
+ALTER POLICY service_all ON public.audit_logs TO ricotdin_service, ricotdin_worker;
 
 -- 0002 granted the worker EXECUTE wherever the service had it.
 DO $$

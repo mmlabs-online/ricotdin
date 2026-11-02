@@ -69,6 +69,7 @@ MEETING_COLUMNS = (
 _NOT_FOUND = "Meeting not found."
 _STORAGE_WARNING = "Audio file could not be removed from storage."
 _ALREADY_UPLOADED = "This meeting was already uploaded."
+_STILL_UPLOADING = "This meeting is still being uploaded."
 _MOVE_OWNER_ONLY = "Only the meeting owner can move it to another folder."
 _NO_AUDIO = (
     "This meeting has no audio (it may have been deleted by the retention policy), "
@@ -229,7 +230,8 @@ async def process_meeting(
     meeting_id: str, request: Request, identity: Identity, db: Db
 ) -> JSONResponse:
     """Meeting owner only: queue a durable job, unless one is already queued or running (then
-    nothing is added; still 202). 409 without audio; 30 calls per user per hour."""
+    nothing is added; still 202). 409 without audio, and while the upload is not confirmed yet
+    (pending + file not mapped: ``/uploaded`` queues it). 30 calls per user per hour."""
     mid = path_id(meeting_id, _NOT_FOUND)
     enforce_limit(request.app.state.process_limiter, identity.user_id)
     async with db.role_transaction(SERVICE) as conn:
@@ -240,6 +242,18 @@ async def process_meeting(
             raise Forbidden("Forbidden.")
         if not can_reprocess(facts.audio_path):
             raise Conflict(_NO_AUDIO)
+        uploading = (
+            await conn.execute(
+                text(
+                    "SELECT m.status = 'pending' AND NOT EXISTS (SELECT 1 FROM "
+                    "public.storage_objects o WHERE o.key = m.audio_path) "
+                    "FROM public.meetings m WHERE m.id = :id"
+                ),
+                {"id": mid},
+            )
+        ).scalar_one()
+        if uploading:  # /uploaded queues the job once the file is confirmed
+            raise Conflict(_STILL_UPLOADING)
         await conn.execute(text(_QUEUE_JOB), {"id": mid, "payload": "{}"})
     return JSONResponse(
         status_code=202, content={"ok": True, "meetingId": str(mid), "status": "processing"}

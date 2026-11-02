@@ -99,6 +99,7 @@ class StepContext:
     workdir: Path  # private temp directory, removed after the step
     transcriber: Transcriber | None
     now: Callable[[], datetime]
+    worker_id: str  # guards the step's own job writes (locked_by)
 
 
 StepHandler = Callable[[StepContext], Awaitable[Outcome]]

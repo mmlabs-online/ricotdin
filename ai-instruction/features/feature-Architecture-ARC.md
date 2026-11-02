@@ -506,15 +506,20 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
   dispatch, retry/terminal/refund, stuck sweep, per-job deadline, release on shutdown), step
   `start` up to the transcriber submit (`Transcriber` protocol), ffprobe / extraction / transcode
   with input guards, `python -m app.worker` (refuses extra credentials and missing steps),
-  migration `0005_worker_grants` (worker allow-list + one active job per meeting), `process`
-  dedupe + 30/h limit. Not deployable until 08b–08d.
-- 08b Speechmatics adapter + `transcribe_poll` (settle `gen:<job>:settle`, key pool per provider).
+  migration `0005_worker_grants` (worker allow-list + one active job per meeting + quota
+  wrappers `pipeline_reserve/refund/settle`), `process` dedupe + 30/h limit + 409 while uploading,
+  ARC-03 preflight for duplicate active v1 jobs. Review round 1 (2026-11-02): no general quota
+  function for the worker, ffmpeg without secrets in its env and with RLIMITs, user-facing error
+  messages only. Not deployable until 08b–08d.
+- 08b Speechmatics adapter + `transcribe_poll` (settle via `pipeline_settle`, key pool per provider).
 - 08c AI service layer (Gemini / OpenAI / Grok), model lock (`lock_generation_model` hook,
   allow-list check of `payload.preferred_*`), `analyse` + `regenerate`.
 - 08d `embed` (768 dims), `processing_done`, worker deploy target (own container, only
   `DATABASE_URL_WORKER`).
-- 08e schedulers: key health check, retention purge (audit `meeting.audio_purged`), quota
-  reconcile with job-keyed dedup keys.
+- 08e schedulers: key health check, retention purge (audit `meeting.audio_purged` through a
+  SECURITY DEFINER function with a forced system actor), quota reconcile with job-keyed dedup keys.
+- ARC-15: sandbox ffmpeg (separate uid, no network, seccomp); `stop_grace_period: 30s`; run the
+  ARC-18 file copy before the worker starts.
 
 **Decided 2026-11-02 (owner)**
 - Quota dedup keys per job (`gen:<job_id>:reserve|settle|refund`): a requeue / reprocess is

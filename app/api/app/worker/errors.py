@@ -12,7 +12,12 @@ from app.core.errors import AppError, RateLimited, ServiceUnavailable
 
 
 class PipelineError(Exception):
-    """Terminal: never retried. The message is shown to the user (meetings.error_message)."""
+    """Terminal: never retried. ``str(exc)`` is the user-facing text (meetings.error_message);
+    ``detail`` is internal (jobs.last_error, logs) and never shown to users."""
+
+    def __init__(self, message: str, *, detail: str | None = None) -> None:
+        super().__init__(message)
+        self.detail = detail
 
 
 class TransientError(Exception):
@@ -27,3 +32,8 @@ def is_terminal(exc: BaseException) -> bool:
     if isinstance(exc, AppError):
         return not isinstance(exc, ServiceUnavailable | RateLimited)
     return False
+
+
+class JobLockLost(TransientError):
+    """The job is no longer running under this worker (the sweeper took it back): the step's
+    transaction is rolled back; the runner's guarded writes then find nothing to update."""

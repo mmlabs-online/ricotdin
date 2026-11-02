@@ -1,9 +1,10 @@
 """ARC-08 worker: user-visible / stored error texts (meetings.error_message ≤ 500 chars,
 activity metadata ≤ 200 chars, v1 ``describeError(err).slice(0, 500)``) and fixed messages."""
 
-from app.core.errors import NotFound
-from app.worker.errors import PipelineError
+from app.core.errors import NotFound, ServiceUnavailable
+from app.worker.errors import PipelineError, TransientError
 from app.worker.messages import (
+    GENERIC_FAILURE,
     MAX_ACTIVITY_ERROR_CHARS,
     MAX_ERROR_CHARS,
     activity_error,
@@ -11,6 +12,7 @@ from app.worker.messages import (
     quota_blocked_message,
     stuck_requeued_message,
     truncate,
+    user_message,
 )
 
 
@@ -20,8 +22,29 @@ def test_quota_blocked_message_is_v1_text() -> None:
     )
 
 
-def test_pipeline_error_text_is_its_message() -> None:
+def test_pipeline_error_text_is_its_message_plus_detail() -> None:
     assert error_text(PipelineError("Invalid file: no audio")) == "Invalid file: no audio"
+    exc = PipelineError("The file could not be read.", detail="ffprobe exited 1: moov atom")
+    assert error_text(exc) == "The file could not be read. — ffprobe exited 1: moov atom"
+
+
+# Review round 1: meetings.error_message is user-visible: never internal detail.
+
+
+def test_user_message_of_a_pipeline_error_is_its_message_only() -> None:
+    exc = PipelineError("The file could not be read.", detail="ffprobe exited 1: /tmp/x")
+    assert user_message(exc) == "The file could not be read."
+
+
+def test_user_message_of_an_app_error_is_its_public_message() -> None:
+    assert user_message(NotFound(detail="key is not in storage_objects")) == "Not found."
+    assert user_message(ServiceUnavailable(detail="db down")) == ServiceUnavailable.message
+
+
+def test_user_message_of_anything_else_is_generic() -> None:
+    assert GENERIC_FAILURE == "Processing failed. Please try again or contact an administrator."
+    for exc in (RuntimeError("asyncpg: password=x"), TimeoutError(), TransientError("down")):
+        assert user_message(exc) == GENERIC_FAILURE
 
 
 def test_other_errors_carry_their_type() -> None:

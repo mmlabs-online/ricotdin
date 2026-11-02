@@ -115,7 +115,15 @@ def test_worker_updates_pipeline_columns_of_meetings_only(db: str) -> None:
 
 
 def test_worker_updates_jobs_but_never_creates_or_deletes_them(db: str) -> None:
-    _allowed(db, "UPDATE jobs SET last_error = 'x' WHERE meeting_id = %s", MEETING)
+    _allowed(
+        db,
+        "UPDATE jobs SET status = 'queued', step = 'start', attempts = 1, last_error = 'x', "
+        "run_after = now(), payload = '{}', locked_at = NULL, locked_by = NULL "
+        "WHERE meeting_id = %s",
+        MEETING,
+    )
+    for column, value in [("meeting_id", MEETING), ("max_attempts", 99), ("created_at", None)]:
+        _denied(db, f"UPDATE jobs SET {column} = %s", value)  # noqa: S608
     _denied(db, "INSERT INTO jobs (meeting_id) VALUES (%s)", MEETING)
     _denied(db, "DELETE FROM jobs")
 
@@ -145,11 +153,12 @@ def test_worker_appends_to_logs(db: str) -> None:
             "INSERT INTO usage_log (provider, model, operation, unit, quantity) "
             "VALUES ('gemini', 'm', 'analyse', 'tokens', 1)"
         )
-        conn.execute(
-            "INSERT INTO audit_logs (action, actor_email, target_type, target_id) "
-            "VALUES ('meeting.audio_purged', 'system:retention', 'meeting', %s)",
-            (str(MEETING),),
-        )
+    # 08e adds a definer function for the retention purge's audit row (forced system actor).
+    _denied(
+        db,
+        "INSERT INTO audit_logs (action, actor_email, target_type, target_id) "
+        "VALUES ('x', 'admin@example.test', 'meeting', 'm')",
+    )
 
 
 def test_worker_updates_only_key_health_columns(db: str) -> None:
@@ -164,7 +173,7 @@ def test_worker_updates_only_key_health_columns(db: str) -> None:
     _denied(db, "UPDATE app_config SET value = 'true'::jsonb")
 
 
-def test_worker_is_granted_only_the_two_pipeline_functions(db: str) -> None:
+def test_worker_is_granted_only_the_pipeline_functions(db: str) -> None:
     # Explicit grants. can_access_meeting (answers only for app.user_id, unset for the worker)
     # and the SECURITY INVOKER match_transcript_chunks stay PUBLIC-executable as in v1.
     with psycopg.connect(db, autocommit=True) as conn:
@@ -177,7 +186,147 @@ def test_worker_is_granted_only_the_two_pipeline_functions(db: str) -> None:
                 (WORKER,),
             )
         }
-    assert granted == {"claim_next_job", "quota_apply_movement"}
+        movement = conn.execute(
+            "SELECT has_function_privilege(%s, 'quota_apply_movement(uuid,bigint,integer,text,"
+            "text,boolean,uuid,uuid,jsonb)', 'EXECUTE')",
+            (WORKER,),
+        ).fetchone()
+        wrappers_public = conn.execute(
+            "SELECT bool_or(has_function_privilege(r, p.oid, 'EXECUTE')) FROM pg_proc p, "
+            "unnest(ARRAY['ricotdin_app', 'ricotdin_service']) r "
+            "WHERE p.proname LIKE 'pipeline\\_%%'"
+        ).fetchone()
+    assert granted == {"claim_next_job", "pipeline_reserve", "pipeline_refund", "pipeline_settle"}
+    assert movement == (False,)  # the worker cannot move any user's quota
+    assert wrappers_public == (False,)
+
+
+def test_worker_cannot_call_quota_apply_movement(db: str) -> None:
+    _denied(
+        db,
+        "SELECT * FROM quota_apply_movement(%s, 1000, 0, 'topup', NULL, false, NULL, NULL, '{}')",
+        USER,
+    )
+
+
+# --- pipeline quota wrappers -----------------------------------------------------------------
+
+
+@contextmanager
+def _quota_world(url: str, balance: int = 100) -> Iterator[tuple[psycopg.Connection[Any], Any]]:
+    """A running job on a fresh meeting of a fresh user (+ a bystander), as the worker; all rolled
+    back."""
+    user, other, meeting = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    with psycopg.connect(url) as conn:
+        for u in (user, other):
+            conn.execute(
+                "INSERT INTO users (id, email, password_hash) VALUES (%s, %s, 'x')",
+                (u, f"{u.hex[:10]}@example.test"),
+            )
+            conn.execute(
+                "INSERT INTO quota_wallets (user_id, audio_seconds_remaining) VALUES (%s, %s)",
+                (u, balance),
+            )
+        conn.execute("INSERT INTO meetings (id, user_id) VALUES (%s, %s)", (meeting, user))
+        job = conn.execute(
+            "INSERT INTO jobs (meeting_id, status) VALUES (%s, 'running') RETURNING id", (meeting,)
+        ).fetchone()
+        assert job is not None
+        conn.execute(f"SET LOCAL ROLE {WORKER}")
+        try:
+            yield conn, type("W", (), {"user": user, "other": other, "job": job[0]})
+        finally:
+            conn.rollback()
+
+
+def _wallet(conn: psycopg.Connection[Any], user: uuid.UUID) -> int:
+    conn.execute("RESET ROLE")
+    row = conn.execute(
+        "SELECT audio_seconds_remaining FROM quota_wallets WHERE user_id = %s", (user,)
+    ).fetchone()
+    conn.execute(f"SET LOCAL ROLE {WORKER}")
+    assert row is not None
+    return int(row[0])
+
+
+def _ledger_keys(conn: psycopg.Connection[Any], user: uuid.UUID) -> list[tuple[str, int]]:
+    conn.execute("RESET ROLE")
+    rows = conn.execute(
+        "SELECT dedup_key, delta_audio_seconds FROM quota_ledger WHERE user_id = %s "
+        "ORDER BY delta_audio_seconds",
+        (user,),
+    ).fetchall()
+    conn.execute(f"SET LOCAL ROLE {WORKER}")
+    return [(r[0], int(r[1])) for r in rows]
+
+
+def test_reserve_charges_only_the_meeting_owner_once(db: str) -> None:
+    with _quota_world(db) as (conn, w):
+        first = conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,)).fetchone()
+        again = conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,)).fetchone()
+        assert first == ("applied", 70) and again is not None and again[0] == "already_applied"
+        assert (_wallet(conn, w.user), _wallet(conn, w.other)) == (70, 100)
+        assert _ledger_keys(conn, w.user) == [(f"gen:{w.job}:reserve", -30)]
+
+
+def test_reserve_insufficient_moves_nothing(db: str) -> None:
+    with _quota_world(db, balance=10) as (conn, w):
+        row = conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,)).fetchone()
+        assert row == ("insufficient", 10)
+        assert _ledger_keys(conn, w.user) == []
+
+
+@pytest.mark.parametrize("seconds", [0, -5, 86401])
+def test_reserve_refuses_out_of_range_amounts(db: str, seconds: int) -> None:
+    with _quota_world(db) as (conn, w), pytest.raises(psycopg.errors.InvalidParameterValue):
+        conn.execute("SELECT * FROM pipeline_reserve(%s, %s)", (w.job, seconds))
+
+
+def test_reserve_needs_a_running_job(db: str) -> None:
+    with _quota_world(db) as (conn, w):
+        conn.execute("UPDATE jobs SET status = 'queued' WHERE id = %s", (w.job,))
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            conn.execute("SELECT * FROM pipeline_reserve(%s, 5)", (w.job,))
+    with _quota_world(db) as (conn, _w), pytest.raises(psycopg.errors.InvalidParameterValue):
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 5)", (uuid.uuid4(),))
+
+
+def test_refund_gives_back_exactly_the_reserve_once(db: str) -> None:
+    with _quota_world(db) as (conn, w):
+        assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
+            "nothing_reserved", 0,
+        )  # fmt: skip
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
+            "applied", 30,
+        )  # fmt: skip
+        again = conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone()
+        assert again is not None and again[0] == "already_applied"
+        assert _wallet(conn, w.user) == 100
+        assert _ledger_keys(conn, w.user) == [
+            (f"gen:{w.job}:reserve", -30), (f"gen:{w.job}:refund", 30),
+        ]  # fmt: skip
+        # no settle after a refund
+        assert conn.execute("SELECT * FROM pipeline_settle(%s, 10)", (w.job,)).fetchone() == (
+            "refunded", 0,
+        )  # fmt: skip
+
+
+def test_settle_charges_the_difference_and_blocks_a_later_refund(db: str) -> None:
+    with _quota_world(db) as (conn, w):
+        assert conn.execute("SELECT * FROM pipeline_settle(%s, 10)", (w.job,)).fetchone() == (
+            "nothing_reserved", 0,
+        )  # fmt: skip
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        assert conn.execute("SELECT * FROM pipeline_settle(%s, 45)", (w.job,)).fetchone() == (
+            "applied", -15,
+        )  # fmt: skip
+        assert _wallet(conn, w.user) == 55
+        assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
+            "settled", 0,
+        )  # fmt: skip
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            conn.execute("SELECT * FROM pipeline_settle(%s, 86401)", (w.job,))
 
 
 def test_worker_policies_cover_only_kept_tables(db: str) -> None:
@@ -192,7 +341,7 @@ def test_worker_policies_cover_only_kept_tables(db: str) -> None:
     assert tables == {
         "meetings", "jobs", "transcript_segments", "transcript_chunks", "todos",
         "calendar_suggestions", "storage_objects", "drive_config", "admin_config", "app_config",
-        "app_settings", "quota_wallets", "profiles", "usage_log", "activity_log", "audit_logs",
+        "app_settings", "quota_wallets", "profiles", "usage_log", "activity_log",
     }  # fmt: skip
 
 

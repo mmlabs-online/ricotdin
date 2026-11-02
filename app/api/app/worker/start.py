@@ -6,9 +6,10 @@
 3. Model lock hook (ARC-08c).
 4. Download, validate streams with ffprobe (``video`` meetings: extract the audio track first;
    owner decision: extraction moved from ``/uploaded`` to the worker), estimate the duration.
-5. Reserve quota once per job (``gen:<job_id>:reserve``) and record the reserve in the job
-   payload in the same transaction, so a later failure always refunds it. Insufficient balance
-   ends the job (``QUOTA_BLOCKED: …``).
+5. Reserve quota once per job (``pipeline_reserve``: the meeting owner, ``gen:<job_id>:reserve``)
+   and record it in the job payload in the same transaction, guarded by this worker's lock.
+   Insufficient balance ends the job (``QUOTA_BLOCKED: …``). A later failure refunds from the
+   ledger (``pipeline_refund``), whatever the payload says.
 6. Transcode to mono 16 kHz mp3 (failure keeps the original), submit to the transcriber and
    continue at ``transcribe_poll`` (ARC-08b) after 5 s.
 """
@@ -22,11 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.core.logging import get_logger
 from app.services.storage.ownership import owned_audio_path
 from app.worker import audio
-from app.worker.errors import PipelineError, TransientError
+from app.worker.errors import JobLockLost, PipelineError, TransientError
 from app.worker.jobs import Advance, Done, Fail, Outcome, StepContext, StepHandler
-from app.worker.messages import quota_blocked_message
-from app.worker.policy import FIRST_POLL_DELAY_S
-from app.worker.quota import estimate_seconds, reserve_key
+from app.worker.messages import GENERIC_FAILURE, quota_blocked_message
+from app.worker.policy import FIRST_POLL_DELAY_S, MAX_AUDIO_SECONDS
+from app.worker.quota import estimate_seconds
 
 log = get_logger("worker.start")
 
@@ -101,12 +102,14 @@ async def run_start(ctx: StepContext) -> Outcome:
         key = owned_audio_path(meeting)
         if key is None:  # BUG-003: never read another user's recording
             raise PipelineError(
-                "Meeting audio_path does not belong to this meeting — refusing to process"
+                "The audio file of this meeting is invalid.",
+                detail="audio_path does not belong to this meeting — refusing to process",
             )
         if meeting["storage_provider"] != "gdrive":
             raise PipelineError(
-                f"The audio is stored in '{meeting['storage_provider']}', not Google Drive yet "
-                "(copied by ARC-18) — cannot process"
+                "The audio of this meeting has not been moved to the new storage yet. "
+                "Please try again later.",
+                detail=f"storage_provider '{meeting['storage_provider']}', not gdrive (ARC-18)",
             )
         await lock_generation_model(conn, ctx, meeting)
 
@@ -120,6 +123,11 @@ async def run_start(ctx: StepContext) -> Outcome:
     else:
         probed = await audio.inspect(source, "audio-only")
     estimate = estimate_seconds(probed, meeting["duration_seconds"])
+    if estimate > MAX_AUDIO_SECONDS:
+        raise PipelineError(
+            f"Recordings longer than {MAX_AUDIO_SECONDS // 3600} hours cannot be processed.",
+            detail=f"estimate {estimate} s",
+        )
     user = meeting["user_id"]
 
     state: dict[str, Any] = {
@@ -130,21 +138,14 @@ async def run_start(ctx: StepContext) -> Outcome:
         "started_at": job.payload.get("started_at") or ctx.now().isoformat(),
     }
     async with ctx.db.role_transaction(WORKER) as conn:
+        reserved = False
         if estimate > 0:
+            # User = the job's meeting owner, key gen:<job>:reserve (SQL wrapper, migration 0005).
             reserve = (
                 await conn.execute(
-                    text(
-                        "SELECT status, audio_remaining FROM quota_apply_movement(:u, :d, 0, "
-                        "'generate', :key, false, :m, NULL, CAST(:md AS jsonb))"
-                    ),
-                    {
-                        "u": user,
-                        "d": -estimate,
-                        "key": reserve_key(job.id),
-                        "m": job.meeting_id,
-                        "md": json.dumps({"estimate_seconds": estimate}),
-                    },
-                )  # fmt: skip
+                    text("SELECT status, audio_remaining FROM pipeline_reserve(:job, :d)"),
+                    {"job": job.id, "d": estimate},
+                )
             ).one()
             if reserve.status == "insufficient":
                 remaining = int(reserve.audio_remaining or 0)
@@ -153,18 +154,26 @@ async def run_start(ctx: StepContext) -> Outcome:
                     {"reason": "quota_blocked", "required_seconds": estimate,
                      "remaining_seconds": remaining},
                 )  # fmt: skip
-            state["reserve_done"] = True  # 'applied' or 'already_applied' (retry of this job)
-        # Recorded with the reserve: a failure from here on refunds it (v1 lost the flag).
-        await conn.execute(
-            text(
-                "UPDATE jobs SET payload = payload || CAST(:p AS jsonb) "
-                "WHERE id = :id AND status = 'running'"
-            ),
-            {"p": json.dumps(state), "id": job.id},
-        )
+            reserved = True  # 'applied' or 'already_applied' (retry of this job)
+        # Recorded in the same transaction as the reserve, only while this worker still holds the
+        # job: otherwise both roll back. reserve_done never goes from true back to false.
+        merged = (
+            await conn.execute(
+                text(
+                    "UPDATE jobs SET payload = payload || CAST(:p AS jsonb) || jsonb_build_object("
+                    "'reserve_done', COALESCE((payload->>'reserve_done')::boolean, false) OR :rd) "
+                    "WHERE id = :id AND status = 'running' AND locked_by = :wid "
+                    "RETURNING (payload->>'reserve_done')::boolean"
+                ),
+                {"p": json.dumps(state), "rd": reserved, "id": job.id, "wid": ctx.worker_id},
+            )
+        ).first()
+        if merged is None:
+            raise JobLockLost("job was taken back while starting; reserve rolled back")
+        state["reserve_done"] = bool(merged[0])
 
     if ctx.transcriber is None:
-        raise PipelineError("No transcription provider is configured")
+        raise PipelineError(GENERIC_FAILURE, detail="no transcription provider is configured")
     upload = await audio.transcode(source, ctx.workdir)
     submission = await ctx.transcriber.submit(
         upload, language=meeting["language"], speaker_count=_speaker_count(job.payload)

@@ -26,7 +26,7 @@ from app.services.platform import Platform
 from app.worker import audio
 from app.worker.errors import TransientError
 from app.worker.jobs import Done, Outcome, StepContext, StepHandler, Submission
-from app.worker.messages import DEADLINE_EXCEEDED, MEETING_TIMED_OUT
+from app.worker.messages import DEADLINE_EXCEEDED, GENERIC_FAILURE, MEETING_TIMED_OUT
 from app.worker.runner import JobRunner
 from app.worker.start import default_steps
 from tests.conftest import alembic_upgrade, requires_db
@@ -171,6 +171,23 @@ def _job(world: dict[str, Any], case: Case, *, step: str = "start", **cols: Any)
     )
     case.job = row[0][0]
     return case.job
+
+
+def _reserved(world: dict[str, Any], case: Case, job: uuid.UUID, seconds: int) -> None:
+    """A reserve this job made earlier (ledger row + wallet), as the pipeline would have."""
+    _sql(
+        world["db"],
+        "INSERT INTO quota_ledger (user_id, delta_audio_seconds, reason, dedup_key, meeting_id) "
+        "VALUES (%s, %s, 'generate', %s, %s)",
+        case.user, -seconds, f"gen:{job}:reserve", case.meeting,
+    )  # fmt: skip
+    _sql(
+        world["db"],
+        "UPDATE quota_wallets SET audio_seconds_remaining = audio_seconds_remaining - %s "
+        "WHERE user_id = %s",
+        seconds,
+        case.user,
+    )
 
 
 def _job_row(world: dict[str, Any], job: uuid.UUID) -> dict[str, Any]:
@@ -416,7 +433,11 @@ def test_a_file_that_is_not_media_is_terminal(world: dict[str, Any]) -> None:
     _once(world, FakeTranscriber())
     row = _job_row(world, job)
     assert (row["status"], row["attempts"]) == ("failed", 1)
-    assert "ffprobe failed to analyse the file" in (_meeting(world, case)[1] or "")
+    # Users see a fixed text; the ffprobe detail stays in jobs.last_error (review round 1).
+    assert _meeting(world, case)[1] == (
+        "The file could not be read. Please upload a valid audio or video file."
+    )
+    assert "ffprobe failed to analyse the file" in row["last_error"]
     assert _activity(world, case)[0][0] == "processing_failed"
 
 
@@ -424,8 +445,8 @@ def test_a_file_that_is_not_media_is_terminal(world: dict[str, Any]) -> None:
     ("kwargs", "fragment"),
     [
         ({"audio_path": "someone-else/abc.webm"}, "does not belong to this meeting"),
-        ({"provider": "r2"}, "not Google Drive yet"),
-        ({"mapped": False}, "missing from storage"),
+        ({"provider": "r2"}, "not gdrive"),
+        ({"mapped": False}, "unmapped"),
     ],
 )
 def test_terminal_start_errors_fail_at_once(
@@ -437,7 +458,8 @@ def test_terminal_start_errors_fail_at_once(
     row = _job_row(world, job)
     assert (row["status"], row["attempts"]) == ("failed", 1)
     status, message = _meeting(world, case)
-    assert status == "failed" and fragment in (message or "")
+    assert status == "failed" and fragment not in (message or "")  # detail is admin-only
+    assert fragment in row["last_error"]
     assert _activity(world, case) == [("processing_failed", {"error": message})]
 
 
@@ -488,34 +510,48 @@ def test_transient_errors_back_off_then_fail_with_one_refund(world: dict[str, An
     _once(world, FakeTranscriber(fail=[TransientError("provider down")]))
     row = _job_row(world, job)
     assert (row["status"], row["attempts"]) == ("failed", 5)
-    assert _meeting(world, case) == ("failed", "TransientError: provider down")
+    assert _meeting(world, case) == ("failed", GENERIC_FAILURE)
+    assert row["last_error"] == "TransientError: provider down"
     assert _balance(world, case) == 50
     assert _ledger(world, case) == [(f"gen:{job}:reserve", -2), (f"gen:{job}:refund", 2)]
-    assert _activity(world, case) == [
-        ("processing_failed", {"error": "TransientError: provider down"})
-    ]
+    assert _activity(world, case) == [("processing_failed", {"error": GENERIC_FAILURE})]
 
 
 def test_unknown_step_is_terminal_and_refunds(world: dict[str, Any]) -> None:
     case = _seed(world, balance=10)
     payload = {"reserve_done": True, "estimate_seconds": 4, "user_id": str(case.user)}
     job = _job(world, case, step="analyse", payload=payload)
+    _reserved(world, case, job, 4)
     _once(world, FakeTranscriber())
     row = _job_row(world, job)
     assert (row["status"], row["attempts"], row["last_error"]) == (
-        "failed", 1, "Unknown job step: analyse",
+        "failed", 1, f"{GENERIC_FAILURE} — Unknown job step: analyse",
     )  # fmt: skip
-    assert _balance(world, case) == 14  # refund of the (seeded) reserve
-    assert _ledger(world, case) == [(f"gen:{job}:refund", 4)]
+    assert _meeting(world, case) == ("failed", GENERIC_FAILURE)
+    assert _balance(world, case) == 10  # the reserve came back
+    assert sorted(_ledger(world, case)) == [(f"gen:{job}:refund", 4), (f"gen:{job}:reserve", -4)]
+
+
+def test_payload_claims_without_a_ledger_reserve_refund_nothing(world: dict[str, Any]) -> None:
+    # Review round 1: amounts come from the ledger, never the payload (e.g. a v1 job copied by
+    # ARC-03 whose reserve is keyed by meeting: no free refund).
+    case = _seed(world, balance=10)
+    payload = {"reserve_done": True, "estimate_seconds": 500, "user_id": str(case.user)}
+    _job(world, case, step="analyse", payload=payload)
+    _once(world, FakeTranscriber())
+    assert _balance(world, case) == 10 and _ledger(world, case) == []
 
 
 def test_settled_jobs_are_not_refunded(world: dict[str, Any]) -> None:
     case = _seed(world, balance=10)
     payload = {"reserve_done": True, "transcription_settled": True, "estimate_seconds": 4,
                "user_id": str(case.user)}  # fmt: skip
-    _job(world, case, step="embed", payload=payload)
+    job = _job(world, case, step="embed", payload=payload)
+    _reserved(world, case, job, 4)
+    _sql(world["db"], "INSERT INTO quota_ledger (user_id, delta_audio_seconds, reason, dedup_key) "
+         "VALUES (%s, 0, 'generate', %s)", case.user, f"gen:{job}:settle")  # fmt: skip
     _once(world, FakeTranscriber())
-    assert _balance(world, case) == 10 and _ledger(world, case) == []
+    assert _balance(world, case) == 6 and len(_ledger(world, case)) == 2  # no refund
 
 
 def test_the_pipeline_deadline_fails_the_job_with_a_refund(world: dict[str, Any]) -> None:
@@ -524,6 +560,7 @@ def test_the_pipeline_deadline_fails_the_job_with_a_refund(world: dict[str, Any]
     payload = {"reserve_done": True, "estimate_seconds": 3, "user_id": str(case.user),
                "started_at": started}  # fmt: skip
     job = _job(world, case, step="transcribe_poll", payload=payload)
+    _reserved(world, case, job, 3)
     called: list[str] = []
 
     async def poll(ctx: StepContext) -> Outcome:
@@ -534,7 +571,7 @@ def test_the_pipeline_deadline_fails_the_job_with_a_refund(world: dict[str, Any]
     assert called == []
     assert _job_row(world, job)["status"] == "failed"
     assert _meeting(world, case) == ("failed", DEADLINE_EXCEEDED)
-    assert _balance(world, case) == 13
+    assert _balance(world, case) == 10
     assert _activity(world, case) == [("processing_failed", {"reason": "deadline"})]
 
 
@@ -644,6 +681,9 @@ def test_sweep_fails_an_exhausted_job_with_refund_and_activity(world: dict[str, 
     job = _job(world, case, step="transcribe_poll", status="running", attempts=4,
                locked_by="dead", locked_at=datetime.now(UTC) - timedelta(minutes=30),
                payload=payload)  # fmt: skip
+    _sql(world["db"], "UPDATE quota_wallets SET audio_seconds_remaining = 30 WHERE user_id = %s",
+         case.user)  # fmt: skip
+    _reserved(world, case, job, 30)
 
     async def body(runner: Callable[..., JobRunner]) -> int:
         return await runner().sweep_stuck()
@@ -653,7 +693,7 @@ def test_sweep_fails_an_exhausted_job_with_refund_and_activity(world: dict[str, 
     assert (row["status"], row["attempts"]) == ("failed", 5)
     assert _meeting(world, case) == ("failed", MEETING_TIMED_OUT)
     assert _balance(world, case) == 30
-    assert _ledger(world, case) == [(f"gen:{job}:refund", 30)]
+    assert sorted(_ledger(world, case)) == [(f"gen:{job}:refund", 30), (f"gen:{job}:reserve", -30)]
     assert _activity(world, case) == [("processing_failed", {"reason": "stuck_timeout"})]
 
 
@@ -679,3 +719,80 @@ def test_run_forever_works_through_the_queue_and_stops(world: dict[str, Any]) ->
 
     _run(world, body)
     assert [_job_row(world, j)["step"] for j in jobs] == ["transcribe_poll"] * 2
+
+
+# --- review round 1 -------------------------------------------------------------------------------
+
+
+def test_a_lock_lost_during_start_rolls_back_the_reserve(
+    world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = _seed(world, balance=50)
+    job = _job(world, case)
+    real = audio.inspect
+
+    async def swept_meanwhile(path: Path, mode: Any) -> float:
+        _sql(world["db"], "UPDATE jobs SET locked_by = 'other-worker' WHERE id = %s", job)
+        return await real(path, mode)
+
+    monkeypatch.setattr(audio, "inspect", swept_meanwhile)
+    t = FakeTranscriber()
+    _once(world, t)
+    assert t.calls == [] and _ledger(world, case) == [] and _balance(world, case) == 50
+    row = _job_row(world, job)
+    assert (row["status"], row["locked_by"], row["attempts"]) == ("running", "other-worker", 0)
+
+
+def test_a_retry_with_no_estimate_keeps_reserve_done(
+    world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = _seed(world, balance=50)
+    job = _job(world, case)
+    _once(world, FakeTranscriber(fail=[TransientError("down")]))
+    assert _job_row(world, job)["payload"]["reserve_done"] is True
+    _sql(world["db"], "UPDATE jobs SET run_after = now() WHERE id = %s", job)
+
+    async def unknown(path: Path, mode: Any) -> float:
+        return 0.0
+
+    monkeypatch.setattr(audio, "inspect", unknown)
+    _once(world, FakeTranscriber())
+    row = _job_row(world, job)
+    assert row["step"] == "transcribe_poll" and row["payload"]["reserve_done"] is True
+    assert row["payload"]["estimate_seconds"] == 0
+
+
+def test_a_failed_job_never_flips_a_done_meeting(world: dict[str, Any]) -> None:
+    case = _seed(world, status="done")
+    _job(world, case, step="analyse")
+    _once(world, FakeTranscriber())
+    assert _meeting(world, case) == ("done", None)
+
+
+def test_audio_longer_than_six_hours_is_refused(world: dict[str, Any]) -> None:
+    raw = subprocess.run(  # noqa: S603 - pipe output: no duration header, client says 7 h
+        ["ffmpeg", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i",  # noqa: S607
+         "sine=duration=1", "-c:a", "libopus", "-f", "webm", "pipe:1"],
+        check=True, capture_output=True,
+    ).stdout  # fmt: skip
+    case = _seed(world, data=raw, duration=7 * 3600)
+    job = _job(world, case)
+    _once(world, FakeTranscriber())
+    assert _job_row(world, job)["status"] == "failed" and _ledger(world, case) == []
+    assert "longer than 6 hours" in (_meeting(world, case)[1] or "")
+
+
+def test_stale_job_temp_dirs_are_removed_at_startup(world: dict[str, Any], tmp_path: Path) -> None:
+    import os
+
+    old, new, other = (tmp_path / n for n in ("ricotdin-job-old", "ricotdin-job-new", "keep"))
+    for d in (old, new, other):
+        d.mkdir()
+    os.utime(old, (0, 0))
+    os.utime(other, (0, 0))
+
+    async def body(runner: Callable[..., JobRunner]) -> list[str]:
+        return runner(tmp_root=tmp_path).remove_stale_workdirs()
+
+    assert _run(world, body) == ["ricotdin-job-old"]
+    assert not old.exists() and new.exists() and other.exists()

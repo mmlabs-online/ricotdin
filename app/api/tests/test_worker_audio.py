@@ -48,8 +48,9 @@ def test_inspect_rejects_video_for_audio_meetings(tmp_path: Path) -> None:
 def test_inspect_rejects_a_file_that_is_not_media(tmp_path: Path) -> None:
     src = tmp_path / "x.webm"
     src.write_bytes(b"this is not audio" * 100)
-    with pytest.raises(PipelineError, match="ffprobe failed to analyse the file"):
+    with pytest.raises(PipelineError, match="could not be read") as info:
         _run(audio.inspect, src, "audio-only")
+    assert info.value.detail is not None and "ffprobe failed" in info.value.detail
 
 
 def test_a_playlist_disguised_as_audio_is_not_followed(tmp_path: Path) -> None:
@@ -67,7 +68,7 @@ def test_a_playlist_disguised_as_audio_is_not_followed(tmp_path: Path) -> None:
             capture_output=True,
         )
         assert unguarded.returncode == 0  # without the guard the playlist is opened
-        with pytest.raises(PipelineError, match="ffprobe failed"):
+        with pytest.raises(PipelineError, match="could not be read"):
             _run(audio.inspect, src, "audio-only")
         assert _run(audio.transcode, src, tmp_path) == src  # transcode refuses too: original kept
 
@@ -100,7 +101,7 @@ def test_extract_audio_from_video(tmp_path: Path) -> None:
 def test_extract_audio_failure_is_terminal(tmp_path: Path) -> None:
     junk = tmp_path / "v.mp4"
     junk.write_bytes(b"\x00" * 1000)
-    with pytest.raises(PipelineError, match="Audio extraction"):
+    with pytest.raises(PipelineError, match="could not be extracted"):
         _run(audio.extract_audio, junk, tmp_path / "out.mp3")
 
 
@@ -121,5 +122,57 @@ def test_missing_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(audio, "FFMPEG", "ricotdin-no-such-tool")
     assert _run(audio.inspect, src, "audio-only") == 0.0  # v1: validation skipped
     assert _run(audio.transcode, src, tmp_path) == src
-    with pytest.raises(PipelineError, match="ffmpeg is required"):
+    with pytest.raises(PipelineError, match="not available") as info:
         _run(audio.extract_audio, src, tmp_path / "x.mp3")
+    assert info.value.detail == "ffmpeg is required to extract audio from a video"
+
+
+# --- review round 1: the child process gets no secrets and has limits -------------------------
+
+
+def test_tools_get_a_minimal_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL_WORKER", "postgresql://secret")
+    monkeypatch.setenv("KEY_ENCRYPTION_SECRET", "00" * 32)
+    out = anyio.run(audio.run_tool, ["/usr/bin/env"], 5.0).decode()
+    names = {line.split("=", 1)[0] for line in out.splitlines() if line}
+    # Sentry's stdlib integration (once initialised) adds trace ids, which are not secrets.
+    assert names - {"SUBPROCESS_SENTRY_TRACE", "SUBPROCESS_BAGGAGE"} <= {"PATH", "LANG", "LC_ALL"}
+    assert "secret" not in out and "00" * 32 not in out
+
+
+def test_tools_run_with_resource_limits_and_no_stdin() -> None:
+    script = "ulimit -v; ulimit -f; ulimit -t; ulimit -c; cat"  # cat reads stdin: /dev/null
+    out = anyio.run(audio.run_tool, ["/bin/sh", "-c", script], 5.0).decode().split()
+    assert out == [
+        str(audio.TOOL_MAX_MEMORY // 1024),
+        str(audio.TOOL_MAX_FILE // 512),  # sh reports 512-byte blocks
+        str(int(5.0 * audio.TOOL_THREADS) + 10),
+        "0",
+    ]
+
+
+def test_ffmpeg_runs_carry_output_caps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+    real = audio.run_tool
+
+    async def spy(args: list[str], limit_s: float) -> bytes:
+        seen.append(args)
+        return await real(args, limit_s)
+
+    monkeypatch.setattr(audio, "run_tool", spy)
+    src = make_media(tmp_path / "v.mp4", video=True)
+    _run(audio.transcode, src, tmp_path)
+    _run(audio.extract_audio, src, tmp_path / "e.mp3")
+    for args in seen:
+        joined = " ".join(args)
+        assert "-t 21600" in joined and f"-fs {audio.TOOL_MAX_OUTPUT}" in joined
+        assert "-threads 2" in joined and "-protocol_whitelist file" in joined
+
+
+def test_a_probe_timeout_is_terminal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def slow(args: list[str], limit_s: float) -> bytes:
+        raise TimeoutError
+
+    monkeypatch.setattr(audio, "run_tool", slow)
+    with pytest.raises(PipelineError, match="could not be read"):
+        _run(audio.inspect, tmp_path / "x.webm", "audio-only")

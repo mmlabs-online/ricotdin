@@ -3,12 +3,15 @@
 Dedup keys are per **job** (owner decision 2026-11-02): ``gen:<job_id>:reserve|settle|refund``.
 v1 used the meeting id, so a requeue / reprocess was never charged again. Every process or
 requeue inserts a new job row, so each run is charged once and the retries and restarts of one
-job stay idempotent (``quota_apply_movement`` answers ``already_applied``)."""
+job stay idempotent (``already_applied``).
+
+The worker moves quota only through the SECURITY DEFINER wrappers of migration 0005
+(``pipeline_reserve`` / ``pipeline_refund`` / ``pipeline_settle``): the user is the job's meeting
+owner, refund and settle amounts come from the reserve ledger row, never from ``jobs.payload``.
+These builders name the keys the wrappers use."""
 
 import math
 import uuid
-from collections.abc import Mapping
-from typing import Any
 
 
 def reserve_key(job_id: uuid.UUID) -> str:
@@ -33,17 +36,3 @@ def estimate_seconds(probed: float, fallback: int | None) -> int:
 def settle_delta(estimate: int, actual_seconds: float) -> int:
     """Wallet delta at settle: refund (> 0) or extra charge (< 0). Quota columns are bigint."""
     return estimate - math.ceil(actual_seconds)
-
-
-def refund_due(payload: Mapping[str, Any]) -> tuple[uuid.UUID, int] | None:
-    """(user, seconds) to give back when a job fails after its reserve but before the settle."""
-    if payload.get("reserve_done") is not True or payload.get("transcription_settled") is True:
-        return None
-    seconds = payload.get("estimate_seconds")
-    if not isinstance(seconds, int) or isinstance(seconds, bool) or seconds <= 0:
-        return None
-    try:
-        user = uuid.UUID(str(payload.get("user_id")))
-    except ValueError:
-        return None
-    return user, seconds

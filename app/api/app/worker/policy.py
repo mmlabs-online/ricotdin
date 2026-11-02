@@ -15,6 +15,11 @@ STEP_TIMEOUT_S = 12 * 60
 # steps (transcribe_poll, 08b) that never finish; the job then fails with a refund.
 JOB_MAX_AGE_S = 6 * 60 * 60
 FIRST_POLL_DELAY_S = 5.0  # start → transcribe_poll (v1)
+MAX_AUDIO_SECONDS = 6 * 60 * 60  # longest recording processed (ffmpeg -t, reserve bound)
+WORKDIR_PREFIX = "ricotdin-job-"
+STALE_WORKDIR_S = 60 * 60  # temp dirs left by a killed worker are removed at startup
+LOOP_ERROR_BACKOFF_MAX_S = 30.0
+REPORT_INTERVAL_S = 60.0  # at most one Sentry report per interval for loop errors
 
 REQUIRED_STEPS = ("start", "transcribe_poll", "analyse", "embed")
 
@@ -68,3 +73,33 @@ def worker_env_problems(env: Mapping[str, str]) -> list[str]:
         if env.get(name, "").strip():
             problems.append(f"{name} must not be set in the worker container")
     return problems
+
+
+def loop_error_backoff(consecutive: int) -> float:
+    """Wait after ``consecutive`` loop errors in a row (e.g. database down): 1, 2, 4 … 30 s."""
+    return min(2.0 ** (max(consecutive, 1) - 1), LOOP_ERROR_BACKOFF_MAX_S)
+
+
+class ReportThrottle:
+    """At most one report per ``interval_s`` (time from the caller's clock)."""
+
+    def __init__(self, interval_s: float = REPORT_INTERVAL_S) -> None:
+        self.interval_s = interval_s
+        self._last: float | None = None
+
+    def allow(self, now: float) -> bool:
+        if self._last is not None and now - self._last < self.interval_s:
+            return False
+        self._last = now
+        return True
+
+
+def stale_workdirs(
+    entries: list[tuple[str, float]], now: float, *, max_age_s: float = STALE_WORKDIR_S
+) -> list[str]:
+    """Names of job temp dirs (``(name, mtime)``) older than ``max_age_s``."""
+    return [
+        name
+        for name, mtime in entries
+        if name.startswith(WORKDIR_PREFIX) and now - mtime > max_age_s
+    ]

@@ -8,12 +8,16 @@ import pytest
 
 from app.worker.policy import (
     JOB_MAX_AGE_S,
+    MAX_AUDIO_SECONDS,
     REQUIRED_STEPS,
     STEP_TIMEOUT_S,
     STUCK_THRESHOLD_S,
+    ReportThrottle,
     deadline_exceeded,
+    loop_error_backoff,
     missing_steps,
     retry_decision,
+    stale_workdirs,
     worker_env_problems,
 )
 
@@ -98,3 +102,28 @@ def test_worker_refuses_credentials_it_must_not_hold(name: str) -> None:
 def test_empty_values_do_not_count_as_set() -> None:
     assert worker_env_problems({"DATABASE_URL_WORKER": "w", "DATABASE_URL_APP": ""}) == []
     assert worker_env_problems({"DATABASE_URL_WORKER": " "}) == ["DATABASE_URL_WORKER is not set"]
+
+
+def test_max_audio_is_six_hours() -> None:
+    assert MAX_AUDIO_SECONDS == 6 * 3600
+
+
+def test_loop_error_backoff_grows_and_is_capped() -> None:
+    assert [loop_error_backoff(n) for n in (0, 1, 2, 3, 6, 50)] == [1.0, 1.0, 2.0, 4.0, 30.0, 30.0]
+
+
+def test_report_throttle_allows_one_report_per_interval() -> None:
+    t = ReportThrottle(60.0)
+    assert t.allow(100.0) and not t.allow(130.0) and t.allow(160.0) and not t.allow(219.0)
+
+
+def test_stale_workdirs_are_old_job_directories_only() -> None:
+    now = 10_000.0
+    entries = [
+        ("ricotdin-job-old", now - 3601),
+        ("ricotdin-job-new", now - 60),
+        ("other-old", now - 99_999),
+        ("ricotdin-jobs", now - 99_999),
+    ]
+    assert stale_workdirs(entries, now) == ["ricotdin-job-old"]
+    assert stale_workdirs(entries, now, max_age_s=30) == ["ricotdin-job-old", "ricotdin-job-new"]

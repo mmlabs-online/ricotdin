@@ -216,6 +216,26 @@ def test_create_validation_and_folder_rules(client: TestClient, world: dict[str,
     assert r.status_code == 200
 
 
+def test_process_waits_for_the_upload(
+    client: TestClient, world: dict[str, Any], drive: FakeDrive
+) -> None:
+    # Review round 1: a job queued before /uploaded would make /uploaded queue nothing and the
+    # worker fail on an unmapped file.
+    data = b"p" * 300
+    mid, url = _create(client, "a", data)
+    r = client.post(f"/meetings/{mid}/process", headers=_as(client, "a"))
+    assert (r.status_code, _msg(r)) == (409, "This meeting is still being uploaded.")
+    assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(0,)]
+    fid = drive.upload_via_session(url, data)
+    r = client.post(
+        f"/meetings/{mid}/uploaded", headers=_as(client, "a"), json={"fileId": fid, "size": 300}
+    )
+    assert r.status_code == 200
+    # uploaded but not picked up yet (still pending): 202, and still one job
+    assert client.post(f"/meetings/{mid}/process", headers=_as(client, "a")).status_code == 202
+    assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(1,)]
+
+
 def test_uploaded_verifies_and_queues_one_job(
     client: TestClient, world: dict[str, Any], drive: FakeDrive
 ) -> None:

@@ -3,7 +3,11 @@
 Owner decision 2026-11-02: dedup keys are per *job* (``gen:<job_id>:reserve|settle|refund``).
 v1 keyed them by meeting (``gen:<meeting_id>:…``), so a requeue or reprocess of the same meeting
 was never charged again (the reserve answered ``already_applied``). A new job row is created per
-process / requeue, so each run is charged once and retries of the same job stay idempotent."""
+process / requeue, so each run is charged once and retries of the same job stay idempotent.
+
+Review round 1: the worker moves quota only through the SQL wrappers pipeline_reserve / _refund /
+_settle (migration 0005); refund and settle amounts come from the reserve ledger row, never from
+jobs.payload (tests/test_worker_grants_integration.py)."""
 
 import math
 import uuid
@@ -12,7 +16,6 @@ import pytest
 
 from app.worker.quota import (
     estimate_seconds,
-    refund_due,
     refund_key,
     reserve_key,
     settle_delta,
@@ -54,17 +57,3 @@ def test_settle_delta_refunds_or_charges_the_difference(
     estimate: int, actual: float, delta: int
 ) -> None:
     assert settle_delta(estimate, actual) == delta
-
-
-def test_refund_due_only_for_a_reserve_that_was_never_settled() -> None:
-    user = str(uuid.uuid4())
-    base = {"reserve_done": True, "estimate_seconds": 90, "user_id": user}
-    assert refund_due(base) == (uuid.UUID(user), 90)
-    assert refund_due({**base, "transcription_settled": True}) is None
-    assert refund_due({**base, "reserve_done": False}) is None
-    assert refund_due({**base, "estimate_seconds": 0}) is None
-    assert refund_due({**base, "estimate_seconds": "90"}) is None
-    assert refund_due({**base, "estimate_seconds": True}) is None
-    assert refund_due({**base, "user_id": None}) is None
-    assert refund_due({**base, "user_id": "not-a-uuid"}) is None
-    assert refund_due({}) is None

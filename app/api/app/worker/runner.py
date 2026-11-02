@@ -19,6 +19,7 @@ import json
 import random
 import shutil
 import tempfile
+import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -49,21 +50,26 @@ from app.worker.jobs import (
 )
 from app.worker.messages import (
     DEADLINE_EXCEEDED,
+    GENERIC_FAILURE,
     JOB_STUCK_FAILED,
     MEETING_TIMED_OUT,
     activity_error,
     error_text,
     stuck_requeued_message,
+    user_message,
 )
 from app.worker.policy import (
     POLL_INTERVAL_S,
     STEP_TIMEOUT_S,
     STUCK_THRESHOLD_S,
     SWEEP_INTERVAL_S,
+    WORKDIR_PREFIX,
+    ReportThrottle,
     deadline_exceeded,
+    loop_error_backoff,
     retry_decision,
+    stale_workdirs,
 )
-from app.worker.quota import refund_due, refund_key
 
 log = get_logger("worker")
 
@@ -71,11 +77,11 @@ WORKER = "ricotdin_worker"
 _JOB_COLUMNS = "id, meeting_id, step, attempts, max_attempts, payload, locked_by, locked_at"
 _FAIL_MINE = (
     "UPDATE jobs SET status = 'failed', attempts = :n, last_error = :err, locked_at = NULL, "
-    "locked_by = NULL WHERE id = :id AND status = 'running' AND locked_by = :wid RETURNING payload"
+    "locked_by = NULL WHERE id = :id AND status = 'running' AND locked_by = :wid RETURNING id"
 )
 _FAIL_SWEPT = (  # the sweeper holds the row lock (FOR UPDATE)
     "UPDATE jobs SET status = 'failed', attempts = :n, last_error = :err, locked_at = NULL, "
-    "locked_by = NULL WHERE id = :id AND status = 'running' RETURNING payload"
+    "locked_by = NULL WHERE id = :id AND status = 'running' RETURNING id"
 )
 _SWEEP_BATCH = 100
 
@@ -149,12 +155,14 @@ class JobRunner:
     async def _dispatch(self, job: Job) -> Outcome:
         handler = self.steps.get(job.step)
         if handler is None:
-            raise PipelineError(f"Unknown job step: {job.step}")
+            raise PipelineError(GENERIC_FAILURE, detail=f"Unknown job step: {job.step}")
         if job.step != "start" and deadline_exceeded(job.payload, self.now()):
             return Fail(DEADLINE_EXCEEDED, {"reason": "deadline"})
-        workdir = Path(tempfile.mkdtemp(prefix="ricotdin-job-", dir=self.tmp_root))
+        workdir = Path(tempfile.mkdtemp(prefix=WORKDIR_PREFIX, dir=self.tmp_root))
         try:
-            ctx = StepContext(self.db, self.platform, job, workdir, self.transcriber, self.now)
+            ctx = StepContext(
+                self.db, self.platform, job, workdir, self.transcriber, self.now, self.worker_id
+            )
             with anyio.fail_after(self.step_timeout_s):
                 return await handler(ctx)
         finally:
@@ -228,7 +236,8 @@ class JobRunner:
         log.error("job failed (%s)", "terminal" if terminal else "attempts exhausted", extra=extra)
         if not terminal:
             capture_unhandled(exc)
-        spec = FailSpec(attempts, message, message, {"error": activity_error(message)})
+        shown = user_message(exc)
+        spec = FailSpec(attempts, message, shown, {"error": activity_error(shown)})
         async with self.db.role_transaction(WORKER) as conn:
             await self._fail(conn, job, spec, mine=True)
 
@@ -249,7 +258,8 @@ class JobRunner:
             log.warning("job release failed (%s)", type(exc).__name__)
 
     async def _fail(self, conn: AsyncConnection, job: Job, spec: FailSpec, *, mine: bool) -> None:
-        """Job failed → refund (if reserved and not settled) → meeting failed → activity."""
+        """Job failed → refund (if this job reserved and did not settle) → meeting failed (never a
+        done meeting) → activity."""
         row = (
             await conn.execute(
                 text(_FAIL_MINE if mine else _FAIL_SWEPT),
@@ -259,26 +269,17 @@ class JobRunner:
         if row is None:
             self._lost(job)
             return
-        payload = row.payload if isinstance(row.payload, dict) else json.loads(row.payload)
-        due = refund_due(payload)
-        if due is not None:
-            user, seconds = due
-            try:
-                async with conn.begin_nested():
-                    await conn.execute(
-                        text(
-                            "SELECT status FROM quota_apply_movement(:u, :d, 0, 'refund', :key, "
-                            "false, :m, NULL, CAST(:md AS jsonb))"
-                        ),
-                        {"u": user, "d": seconds, "key": refund_key(job.id), "m": job.meeting_id,
-                         "md": json.dumps({"reason": "pipeline_failure",
-                                           "error": activity_error(spec.last_error)})},
-                    )  # fmt: skip
-            except SQLAlchemyError as exc:  # never blocks failing the job (v1: non-fatal)
-                log.error("quota refund failed (%s)", type(exc).__name__,
-                          extra={"job_id": str(job.id)})  # fmt: skip
+        try:  # amount and user come from the job's reserve ledger row (no-op without one)
+            async with conn.begin_nested():
+                await conn.execute(text("SELECT * FROM pipeline_refund(:job)"), {"job": job.id})
+        except SQLAlchemyError as exc:  # never blocks failing the job (v1: non-fatal)
+            log.error("quota refund failed (%s)", type(exc).__name__,
+                      extra={"job_id": str(job.id)})  # fmt: skip
         await conn.execute(
-            text("UPDATE meetings SET status = 'failed', error_message = :msg WHERE id = :m"),
+            text(
+                "UPDATE meetings SET status = 'failed', error_message = :msg "
+                "WHERE id = :m AND status <> 'done'"
+            ),
             {"msg": spec.meeting_message, "m": job.meeting_id},
         )
         await _activity(conn, job.meeting_id, "processing_failed", spec.metadata)
@@ -338,8 +339,25 @@ class JobRunner:
 
     # --- loop -----------------------------------------------------------------------------------
 
+    def remove_stale_workdirs(self) -> list[str]:
+        """Temp dirs of jobs a killed worker left behind (older than 1 h). Never raises."""
+        root = Path(self.tmp_root or tempfile.gettempdir())
+        try:
+            entries = [(p.name, p.stat().st_mtime) for p in root.iterdir() if p.is_dir()]
+        except OSError:
+            return []
+        stale = stale_workdirs(entries, time.time())
+        for name in stale:
+            shutil.rmtree(root / name, ignore_errors=True)
+        if stale:
+            log.info("removed %d stale job temp dirs", len(stale))
+        return stale
+
     async def run_forever(self, stop: anyio.Event) -> None:
         log.info("worker started", extra={"worker_id": self.worker_id})
+        await anyio.to_thread.run_sync(self.remove_stale_workdirs)
+        throttle = ReportThrottle()
+        errors = 0  # consecutive loop errors (e.g. database down): back off, report once a minute
         next_sweep = self.clock()
         while not stop.is_set():
             if self.clock() >= next_sweep:
@@ -350,10 +368,15 @@ class JobRunner:
                 next_sweep = self.clock() + self.sweep_interval_s
             try:
                 worked = await self.run_once()
+                errors = 0
             except Exception as exc:  # noqa: BLE001 - e.g. database unreachable during claim
-                log.error("worker loop error (%s)", type(exc).__name__)
-                capture_unhandled(exc)
-                worked = False
+                errors += 1
+                log.error("worker loop error (%s), %d in a row", type(exc).__name__, errors)
+                if throttle.allow(self.clock()):
+                    capture_unhandled(exc)
+                with anyio.move_on_after(loop_error_backoff(errors)):
+                    await stop.wait()
+                continue
             if not worked:
                 with anyio.move_on_after(self.poll_interval_s):
                     await stop.wait()

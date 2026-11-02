@@ -43,7 +43,14 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from app.migration.checksum import RowDigest
-from app.migration.plan import column_drift, load_order, select_sql, upsert_sql
+from app.migration.plan import (
+    DUPLICATE_ACTIVE_JOBS_SQL,
+    column_drift,
+    duplicate_active_jobs_problem,
+    load_order,
+    select_sql,
+    upsert_sql,
+)
 from app.migration.report import Report, StorageResult, TableResult
 from app.migration.transform import (
     AUTH_USER_COLUMNS,
@@ -202,6 +209,11 @@ def preflight(
             dict(zip(src_cat.columns[table], src_cat.types[table], strict=True)),
             dict(zip(cat.columns[table], cat.types[table], strict=True)),
         )
+    if "jobs" in src_cat.tables:
+        dup = src.execute(DUPLICATE_ACTIVE_JOBS_SQL).fetchone()
+        problem = duplicate_active_jobs_problem(int(dup[0]) if dup else 0)
+        if problem:
+            problems.append(problem)
     queries: dict[str, str] = {}
     for table in sorted(cat.tables):
         if not cat.pks.get(table):

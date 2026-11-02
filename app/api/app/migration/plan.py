@@ -92,3 +92,27 @@ def column_drift(table: str, source: dict[str, str], target: dict[str, str]) -> 
         if normalize_type(source[c]) != normalize_type(target[c])
     ]
     return out
+
+
+# ARC-08 migration 0005: one queued/running job per meeting (unique index). A v1 database can hold
+# more; the copy would then abort on the index half-way, so the preflight blocks first.
+DUPLICATE_ACTIVE_JOBS_SQL = (
+    "SELECT count(*) FROM (SELECT meeting_id FROM public.jobs "
+    "WHERE status IN ('queued', 'running') GROUP BY meeting_id HAVING count(*) > 1) d"
+)
+_FAIL_EXTRAS = (
+    "UPDATE public.jobs j SET status = 'failed', last_error = 'duplicate active job' "
+    "WHERE j.status IN ('queued', 'running') AND EXISTS (SELECT 1 FROM public.jobs k "
+    "WHERE k.meeting_id = j.meeting_id AND k.status IN ('queued', 'running') "
+    "AND (k.created_at, k.id) > (j.created_at, j.id));"
+)
+
+
+def duplicate_active_jobs_problem(meetings: int) -> str | None:
+    if meetings <= 0:
+        return None
+    return (
+        f"{meetings} meeting(s) have more than one queued/running job in v1; v2 allows one "
+        "(migration 0005). Fail the extras in Supabase first (keeps the newest per meeting): "
+        + _FAIL_EXTRAS
+    )

@@ -49,3 +49,9 @@ def test_terminal_subclass_of_transient_is_still_terminal() -> None:
         pass
 
     assert is_terminal(Weird("x"))
+
+
+def test_pipeline_error_keeps_detail_out_of_its_message() -> None:
+    exc = PipelineError("Shown to the user.", detail="internal")
+    assert str(exc) == "Shown to the user." and exc.detail == "internal"
+    assert PipelineError("x").detail is None

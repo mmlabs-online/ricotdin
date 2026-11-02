@@ -28,7 +28,7 @@ from app.worker.start import default_steps
 
 log = get_logger("worker")
 
-SHUTDOWN_GRACE_S = 20.0
+SHUTDOWN_GRACE_S = 8.0  # below docker's default 10 s stop timeout (compose: stop_grace_period 30s)
 
 
 def startup_problems(
