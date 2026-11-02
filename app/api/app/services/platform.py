@@ -7,6 +7,9 @@ Routes, the worker and schedulers (ARC-07..10) use it inside a ``ricotdin_servic
         keys = await platform.keys.active_keys(conn, "gemini")
         storage = await platform.storage(conn)  # Google Drive (ARC-17)
 
+``r2`` (``storage_config``) needs ``ricotdin_service``: the worker has no access to it
+(explicit allow-list, migration 0005).
+
 Key pools (``KeyPool`` / ``SpeechmaticsKeyPool``) keep cooldowns and in-flight counts per
 instance: callers (ARC-08) must keep one pool per provider and rebuild it only when
 ``keys.active_keys`` returns a different key set, never one pool per request.

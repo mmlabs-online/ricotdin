@@ -1,5 +1,5 @@
 """Meetings (ARC-07): reads under RLS; create + Drive upload, uploaded, audio-url, rename / move,
-pin, process, delete.
+pin, process (one active job per meeting), delete.
 
 Reads run as ``ricotdin_app`` with the caller's RLS context (owner, folder owner, editor or
 viewer see a meeting; anyone else gets 404, like the v1 browser reads). Writes run as
@@ -58,6 +58,7 @@ Identity = Annotated[RequestIdentity, Depends(current_identity)]
 Db = Annotated[Database, Depends(get_database)]
 Plat = Annotated[Platform, Depends(get_platform)]
 UPLOADS_PER_HOUR = 30
+PROCESS_PER_HOUR = 30  # POST /meetings/{id}/process per user (ARC-08)
 MAX_PENDING_PER_USER = 20  # unfinished uploads per user (each holds a Drive session)
 
 MEETING_COLUMNS = (
@@ -210,10 +211,27 @@ async def toggle_pin(meeting_id: str, identity: Identity, db: Db) -> dict[str, A
     return {"ok": True, "pinned_at": pinned}
 
 
+# One queued/running job per meeting (unique index jobs_one_active_per_meeting, migration 0005):
+# a second request while one is active inserts nothing instead of failing on the index.
+_QUEUE_JOB = (
+    "INSERT INTO public.jobs (meeting_id, step, status, run_after, payload) "
+    "VALUES (:id, 'start', 'queued', now(), CAST(:payload AS jsonb)) "
+    "ON CONFLICT (meeting_id) WHERE status IN ('queued', 'running') DO NOTHING"
+)
+
+
+def process_limiter() -> RateLimiter:
+    return RateLimiter(capacity=PROCESS_PER_HOUR, refill_per_second=PROCESS_PER_HOUR / 3600)
+
+
 @router.post("/meetings/{meeting_id}/process", status_code=202)
-async def process_meeting(meeting_id: str, identity: Identity, db: Db) -> JSONResponse:
-    """Meeting owner only: queue a durable job (the worker is ARC-08). 409 without audio."""
+async def process_meeting(
+    meeting_id: str, request: Request, identity: Identity, db: Db
+) -> JSONResponse:
+    """Meeting owner only: queue a durable job, unless one is already queued or running (then
+    nothing is added; still 202). 409 without audio; 30 calls per user per hour."""
     mid = path_id(meeting_id, _NOT_FOUND)
+    enforce_limit(request.app.state.process_limiter, identity.user_id)
     async with db.role_transaction(SERVICE) as conn:
         facts = await meeting_facts(conn, mid, identity.user_id)
         if facts is None:
@@ -222,13 +240,7 @@ async def process_meeting(meeting_id: str, identity: Identity, db: Db) -> JSONRe
             raise Forbidden("Forbidden.")
         if not can_reprocess(facts.audio_path):
             raise Conflict(_NO_AUDIO)
-        await conn.execute(
-            text(
-                "INSERT INTO public.jobs (meeting_id, step, status, run_after, payload) "
-                "VALUES (:id, 'start', 'queued', now(), '{}'::jsonb)"
-            ),
-            {"id": mid},
-        )
+        await conn.execute(text(_QUEUE_JOB), {"id": mid, "payload": "{}"})
     return JSONResponse(
         status_code=202, content={"ok": True, "meetingId": str(mid), "status": "processing"}
     )
@@ -382,15 +394,7 @@ async def mark_uploaded(
                     "preferred_provider": upload.preferred[0],
                     "preferred_model": upload.preferred[1],
                 }
-            await conn.execute(
-                text(
-                    "INSERT INTO public.jobs (meeting_id, step, status, run_after, payload) "
-                    "SELECT :id, 'start', 'queued', now(), CAST(:payload AS jsonb) "
-                    "WHERE NOT EXISTS (SELECT 1 FROM public.jobs WHERE meeting_id = :id "
-                    "AND status IN ('queued', 'running'))"
-                ),
-                {"id": mid, "payload": json.dumps(payload)},
-            )
+            await conn.execute(text(_QUEUE_JOB), {"id": mid, "payload": json.dumps(payload)})
     if rejected is not None:
         raise rejected
     return {"ok": True, "meetingId": str(mid)}

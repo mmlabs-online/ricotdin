@@ -29,7 +29,8 @@ from app.services.platform import Platform
 
 log = get_logger("app")
 
-# Background tasks started with the app (ARC-08 registers the worker and schedulers here).
+# Background tasks started with the app. The pipeline worker is NOT one: it runs as its own
+# process / container with only DATABASE_URL_WORKER (`python -m app.worker`, ARC-08).
 # A hook starts its task and returns an async ``stop`` callable.
 BackgroundHook = Callable[[FastAPI], Awaitable[Callable[[], Awaitable[None]]]]
 BACKGROUND_HOOKS: list[BackgroundHook] = []
@@ -93,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.activity_limiter = activity_router.activity_limiter()
     app.state.lookup_limiter = folders_router.lookup_limiter()
     app.state.upload_limiter = meetings_router.upload_limiter()
+    app.state.process_limiter = meetings_router.process_limiter()
     for module in (meetings_router, content_router, folders_router, activity_router):
         app.include_router(module.router)
     app.include_router(media_router.router)

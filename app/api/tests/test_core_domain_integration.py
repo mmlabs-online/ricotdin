@@ -298,9 +298,31 @@ def test_process_queues_a_job(client: TestClient, world: dict[str, Any]) -> None
         m1,
     )
     assert len(rows) == before + 1 and rows[-1] == ("start", "queued", "{}")
+    # ARC-08: one queued/running job per meeting — a repeat queues nothing (still 202).
+    again = client.post(f"/meetings/{m1}/process", headers=_as(client, "a"))
+    assert again.status_code == 202 and again.json() == r.json()
+    count = _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", m1)[0][0]
+    assert count == before + 1
+    _sql(world["db"], "UPDATE jobs SET status = 'failed' WHERE meeting_id = %s", m1)
+    assert _status(client, "a", "POST", f"/meetings/{m1}/process") == 202  # requeue after failure
+    count = _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", m1)[0][0]
+    assert count == before + 2
     assert _status(client, "a", "POST", f"/meetings/{world['m2']}/process") == 403  # folder owner
     r = client.post(f"/meetings/{world['m3']}/process", headers=_as(client, "a"))
     assert r.status_code == 409 and "has no audio" in _msg(r)
+
+
+def test_process_is_rate_limited_per_user(client: TestClient, world: dict[str, Any]) -> None:
+    app: Any = client.app
+    saved = app.state.process_limiter
+    app.state.process_limiter = RateLimiter(capacity=1, refill_per_second=1 / 3600)
+    try:
+        _sql(world["db"], "UPDATE jobs SET status = 'failed' WHERE meeting_id = %s", world["m1"])
+        assert _status(client, "a", "POST", f"/meetings/{world['m1']}/process") == 202
+        assert _status(client, "a", "POST", f"/meetings/{world['m1']}/process") == 429
+        assert _status(client, "b", "POST", f"/meetings/{world['m1']}/process") == 403  # own bucket
+    finally:
+        app.state.process_limiter = saved
 
 
 # --- todos / calendar -------------------------------------------------------------------------

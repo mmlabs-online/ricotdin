@@ -167,7 +167,8 @@ def test_storage_config_newest_active_row_wins_and_none_without_rows(env: dict[s
     source = StorageConfigSource(KEY)
 
     async def empty(db: Database) -> Any:
-        async with db.role_transaction("ricotdin_worker") as conn:
+        # ricotdin_service: the worker has no access to storage_config (migration 0005).
+        async with db.role_transaction("ricotdin_service") as conn:
             return await source.r2(conn)
 
     assert _with_db(env, empty) is None
@@ -197,7 +198,7 @@ def test_platform_r2_raises_a_typed_error_when_the_secret_does_not_decrypt(
     )
 
     async def body(db: Database) -> None:
-        async with db.role_transaction("ricotdin_worker") as conn:
+        async with db.role_transaction("ricotdin_service") as conn:
             await platform.r2(conn)
 
     with pytest.raises(StorageNotConfigured):
