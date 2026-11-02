@@ -463,3 +463,14 @@ def test_migration_0004_downgrade_refuses_with_drive_meetings() -> None:
         assert _sql(url, "SELECT storage_provider FROM meetings") == [("gdrive",)]
         with pytest.raises(Exception, match="gdrive"):
             alembic_downgrade(url, "0003_drive_storage")
+
+
+def test_uploaded_meetings_waiting_for_the_worker_do_not_count_as_unfinished(
+    client: TestClient, drive: FakeDrive, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.routers.meetings as meetings
+
+    monkeypatch.setattr(meetings, "MAX_PENDING_PER_USER", 1)
+    _upload(client, drive, "d")  # pending until ARC-08 picks it up, but its file is mapped
+    r = client.post("/meetings", headers=_as(client, "d"), json={"size": 1})
+    assert r.status_code == 200

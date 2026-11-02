@@ -281,8 +281,10 @@ async def create_meeting(request: Request, identity: Identity, db: Db, platform:
         pending = (
             await conn.execute(
                 text(
-                    "SELECT count(*) FROM public.meetings WHERE user_id = :u AND status = 'pending'"
-                ),
+                    "SELECT count(*) FROM public.meetings m WHERE m.user_id = :u "
+                    "AND m.status = 'pending' AND NOT EXISTS "
+                    "(SELECT 1 FROM public.storage_objects o WHERE o.key = m.audio_path)"
+                ),  # unfinished uploads only (an uploaded meeting waiting for the worker is fine)
                 {"u": identity.user_id},
             )
         ).scalar_one()
