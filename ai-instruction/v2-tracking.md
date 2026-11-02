@@ -131,7 +131,7 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | admin/users/[id]/role | PATCH | `PATCH /admin/users/{id}/role` | ARC-10 | todo | |
 | admin/users/[id]/status | PATCH | `PATCH /admin/users/{id}/status` | ARC-10 | todo | v2: `disabled_at` + revoke refresh tokens |
 | admin/users/bulk | POST | `POST /admin/users/bulk` | ARC-10 | todo | v2 also applies the last-admin guard (defense in depth; v1 relies on `excludeSelf`) |
-| audio-url/[id] | GET | `GET /meetings/{id}/audio-url` | ARC-07 | todo | path moves under `/meetings` |
+| audio-url/[id] | GET | `GET /meetings/{id}/audio-url` | ARC-07 | done | path moves under `/meetings`; returns a 15-min `/media` link (Drive, ARC-17) + `hackAudioRender` |
 | auth/login | POST | `POST /auth/login` | ARC-05 | todo | |
 | auth/logout | POST | `POST /auth/logout` | ARC-05 | todo | revokes refresh token |
 | auth/register | POST | `POST /auth/register` | ARC-05 | todo | |
@@ -139,20 +139,20 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | calendar-suggestions/[id]/ics | GET | `GET /calendar-suggestions/{id}/ics` | ARC-07 | done | |
 | chat | GET, POST | `GET /chat`, `POST /chat` | ARC-09 | todo | GET = session history per scope |
 | folders | GET, POST | `GET /folders`, `POST /folders` | ARC-07 | done | |
-| folders/[id] | PATCH, DELETE | `PATCH /folders/{id}`, `DELETE /folders/{id}` | ARC-07 | in_progress | PATCH + keep-path DELETE done; `?deleteMeetings=true` answers 503 until ARC-07 part 2. delete removes only the caller's meetings (BUG-011) |
+| folders/[id] | PATCH, DELETE | `PATCH /folders/{id}`, `DELETE /folders/{id}` | ARC-07 | done | `?deleteMeetings=true` deletes only the caller's meetings (BUG-011), Drive audio first |
 | folders/[id]/shares | GET, POST | `GET /folders/{id}/shares`, `POST /folders/{id}/shares` | ARC-07 | done | |
 | folders/[id]/shares/[granteeId] | PATCH, DELETE | `PATCH /folders/{id}/shares/{granteeId}`, `DELETE /folders/{id}/shares/{granteeId}` | ARC-07 | done | |
 | folders/reorder | PUT | `PUT /folders/reorder` | ARC-07 | done | |
 | health | GET | `GET /health` | ARC-04 | done | skeleton in ARC-00; keep dependency-free |
-| meetings | POST | `POST /meetings` | ARC-07 | todo | returns presigned R2 PUT |
-| meetings/[id] | PATCH, DELETE | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | ARC-07 | in_progress | PATCH done; DELETE in ARC-07 part 2 (storage). |
+| meetings | POST | `POST /meetings` | ARC-07 | done | creates the meeting + a Drive resumable upload URL; body needs `size` (ARC-07 part 2) |
+| meetings/[id] | PATCH, DELETE | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | ARC-07 | done | PATCH: only the meeting owner moves it (owner decision 2026-11-02); DELETE: Drive audio first, `warning` on failure |
 | meetings/[id]/pin | PATCH | `PATCH /meetings/{id}/pin` | ARC-07 | done | |
 | meetings/[id]/process | POST | `POST /meetings/{id}/process` | ARC-07, ARC-08 | done | queues the job; the worker is ARC-08. 409 without audio |
 | meetings/[id]/regenerate | POST | `POST /meetings/{id}/regenerate` | ARC-07, ARC-08 | todo | route in the ARC-07 meetings router, analysis via ARC-08; owner only, 422 without segments |
-| meetings/[id]/uploaded | POST | `POST /meetings/{id}/uploaded` | ARC-07 | todo | ownership + ffprobe, enqueues job; `source='video'` → ffmpeg extracts audio, original deleted |
+| meetings/[id]/uploaded | POST | `POST /meetings/{id}/uploaded` | ARC-07 | done | body `fileId` + `size`; verified with Drive, one job per meeting, 409 unless pending; ffprobe + video extraction move to the ARC-08 worker |
 | openapi | GET | `GET /openapi.json` (FastAPI) | ARC-04 | todo | generated, published as CI artifact |
-| profile | GET, PATCH | `GET /profile`, `PATCH /profile` | ARC-07 | in_progress | `avatar_key` / `avatar_url` in ARC-07 part 2. |
-| profile/avatar | POST | `POST /profile/avatar` | ARC-07 | todo | |
+| profile | GET, PATCH | `GET /profile`, `PATCH /profile` | ARC-07 | done | `PATCH` confirms a new avatar (`avatar_key`, `avatar_file_id`, `avatar_size`); `avatar_url` = `/media` link |
+| profile/avatar | POST | `POST /profile/avatar` | ARC-07 | done | Drive upload URL (jpeg/png/webp, 2 MB) |
 | profile/change-password | POST | `POST /profile/change-password` | ARC-05 | todo | |
 | profile/preferences | GET, PATCH | `GET /profile/preferences`, `PATCH /profile/preferences` | ARC-07 | done | |
 | todos/[id] | PATCH | `PATCH /todos/{id}` | ARC-07 | done | editor+ |

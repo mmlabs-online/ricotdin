@@ -21,8 +21,13 @@ UNIQUE_VIOLATION = "23505"
 async def json_object(request: Request, invalid: str = "Invalid JSON body.") -> dict[str, Any]:
     """The request body as a JSON object. Bad JSON and non-objects get v1's 400 message (v1
     crashed with a 500 on ``null``, arrays and scalars)."""
+    return json_body(await request.body(), invalid)
+
+
+def json_body(raw: bytes, invalid: str = "Invalid JSON body.") -> dict[str, Any]:
+    """``json_object`` for a body read earlier (to check access before parsing it)."""
     try:
-        body = json.loads(await request.body() or b"null")
+        body = json.loads(raw or b"null")
     except ValueError:
         raise BadRequest(invalid) from None
     if not isinstance(body, dict):

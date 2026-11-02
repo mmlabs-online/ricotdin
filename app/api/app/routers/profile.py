@@ -1,6 +1,9 @@
 """Profile endpoints: change password (ARC-05); profile, quota balance and model preference
-(ARC-07). The avatar (upload URL, ``avatar_key``, ``avatar_url``) arrives with ARC-07 part 2."""
+(ARC-07). Avatars live in Google Drive (part 2): ``POST /profile/avatar`` gives an upload URL,
+``PATCH /profile`` confirms the uploaded file and stores ``avatar_key``; ``avatar_url`` is a
+short-lived ``/media`` link."""
 
+import time
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -14,13 +17,31 @@ from app.auth.deps import auth_runtime, client_ip, current_identity
 from app.auth.passwords import hash_password, verify_password
 from app.auth.runtime import AuthRuntime
 from app.auth.validate import validate_password
-from app.core.errors import Conflict, Forbidden, NotFound, Unauthorized, UnprocessableEntity
+from app.core.errors import (
+    BadRequest,
+    Conflict,
+    Forbidden,
+    NotFound,
+    Unauthorized,
+    UnprocessableEntity,
+)
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.models import allowed_models, model_label
 from app.domain.rules import parse_preferences, parse_profile_patch
-from app.routers._common import SERVICE, is_unique_violation, json_object, jsonb
+from app.domain.uploads import (
+    MAX_AVATAR_BYTES,
+    avatar_content_type,
+    avatar_key,
+    parse_avatar_patch,
+    parse_avatar_request,
+)
+from app.routers._common import SERVICE, enforce_limit, is_unique_violation, json_object, jsonb
 from app.routers.auth import enforce, set_refresh_cookie
+from app.routers.meetings import delete_files
+from app.services.platform import Platform, get_platform
+from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
+from app.services.storage.ownership import is_owned_avatar_key
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -86,8 +107,19 @@ Db = Annotated[Database, Depends(get_database)]
 _TAKEN = "Username is already taken."
 
 
+Plat = Annotated[Platform, Depends(get_platform)]
+
+
+def _avatar_url(platform: Platform, key: str | None, user_id: Any) -> str | None:
+    # BUG-002: never sign a link for a key that is not this user's avatar.
+    if not key or not is_owned_avatar_key(key, str(user_id)) or platform.media_signer is None:
+        return None
+    token = platform.media_signer.sign(key, now=time.time(), ttl=DEFAULT_MEDIA_TTL_S)
+    return f"/media?t={token}"
+
+
 @router.get("")
-async def get_profile(identity: Identity, db: Db) -> dict[str, Any]:
+async def get_profile(identity: Identity, db: Db, platform: Plat) -> dict[str, Any]:
     """Own profile, counts of owned meetings / folders and the quota balance (raw, may be
     negative; the UI clamps it)."""
     async with db.role_transaction(SERVICE) as conn:
@@ -113,7 +145,7 @@ async def get_profile(identity: Identity, db: Db) -> dict[str, Any]:
         "username": row.username,
         "display_name": row.display_name,
         "avatar_key": row.avatar_key,
-        "avatar_url": None,  # ARC-07 part 2 (storage)
+        "avatar_url": _avatar_url(platform, row.avatar_key, identity.user_id),
         "theme_preference": row.theme_preference,
         "role": row.role,
         "created_at": row.created_at,
@@ -125,10 +157,18 @@ async def get_profile(identity: Identity, db: Db) -> dict[str, Any]:
 
 
 @router.patch("")
-async def update_profile(request: Request, identity: Identity, db: Db) -> dict[str, bool]:
-    """username / display_name / theme_preference. The write runs as ricotdin_app, so the
-    ``profiles_update`` policy and the column grant apply (``role`` can never be written)."""
-    changes = parse_profile_patch(await json_object(request))
+async def update_profile(
+    request: Request, identity: Identity, db: Db, platform: Plat
+) -> dict[str, bool]:
+    """username / display_name / theme_preference / avatar_key. The write runs as ricotdin_app, so
+    the ``profiles_update`` policy and the column grant apply (``role`` can never be written).
+    A new avatar must be the Drive file uploaded for that key (confirmed first); the old avatar is
+    deleted after the new key is saved (v1: only if it really is this user's avatar)."""
+    body = await json_object(request)
+    changes = parse_profile_patch(body, allow_empty=True)
+    avatar = parse_avatar_patch(body, identity.user_id)
+    if not changes and avatar is None:
+        raise BadRequest("No updatable fields provided.")
     if "username" in changes:
         async with db.role_transaction(SERVICE) as conn:
             taken = await conn.execute(
@@ -137,6 +177,26 @@ async def update_profile(request: Request, identity: Identity, db: Db) -> dict[s
             )
             if taken.first() is not None:
                 raise Conflict(_TAKEN)
+    old_key: str | None = None
+    if avatar is not None:
+        new_key, file_id, size = avatar
+        async with db.role_transaction(SERVICE) as conn:
+            old_key = (
+                await conn.execute(
+                    text("SELECT avatar_key FROM public.profiles WHERE id = :me"),
+                    {"me": identity.user_id},
+                )
+            ).scalar_one_or_none()
+            if new_key is not None and new_key != old_key:
+                storage = await platform.storage(conn)
+                await storage.confirm_upload(
+                    new_key,
+                    str(file_id),
+                    content_type=str(avatar_content_type(new_key)),
+                    content_length=int(size or 0),
+                    max_bytes=MAX_AVATAR_BYTES,
+                )
+        changes["avatar_key"] = new_key
     sets = ", ".join(f"{k} = :{k}" for k in changes)
     try:
         async with db.app_transaction(identity) as conn:
@@ -148,7 +208,25 @@ async def update_profile(request: Request, identity: Identity, db: Db) -> dict[s
         if is_unique_violation(exc):
             raise Conflict(_TAKEN) from None
         raise
+    if avatar is not None and old_key and old_key != avatar[0]:
+        if is_owned_avatar_key(old_key, str(identity.user_id)):
+            await delete_files(db, platform, [old_key])  # best effort (v1: non-fatal)
     return {"ok": True}
+
+
+@router.post("/avatar")
+async def avatar_upload(
+    request: Request, identity: Identity, db: Db, platform: Plat
+) -> dict[str, str]:
+    """Step 1 of an avatar change: a one-time Drive upload URL for a new key. Step 2 is
+    ``PATCH /profile {avatar_key, avatar_file_id, avatar_size}``."""
+    content_type, size = parse_avatar_request(await json_object(request))
+    enforce_limit(request.app.state.upload_limiter, identity.user_id)
+    key = avatar_key(identity.user_id, content_type)
+    async with db.role_transaction(SERVICE) as conn:
+        storage = await platform.storage(conn)
+        url = await storage.upload_session(key, content_type, size, max_bytes=MAX_AVATAR_BYTES)
+    return {"uploadUrl": url, "avatarKey": key}
 
 
 async def _allowed(db: Database) -> list[tuple[str, str]]:

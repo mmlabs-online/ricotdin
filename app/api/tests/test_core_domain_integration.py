@@ -249,9 +249,19 @@ def test_rename_validation_before_access(client: TestClient, world: dict[str, An
 
 def test_move_to_folder(client: TestClient, world: dict[str, Any]) -> None:
     m1 = world["m1"]
-    # B edits M1 but is not editor of C's private folder
+    # B edits M1 but only the meeting owner may move it (owner decision 2026-11-02, CWE-269)
+    for dest in (str(world["fc"]), str(world["f1"]), None):
+        r = client.patch(f"/meetings/{m1}", headers=_as(client, "b"), json={"folder_id": dest})
+        assert (r.status_code, _msg(r)) == (
+            403,
+            "Only the meeting owner can move it to another folder.",
+        ), dest
+    # ... B still renames it (editor)
+    r = client.patch(f"/meetings/{m1}", headers=_as(client, "b"), json={"title": "M1"})
+    assert r.status_code == 200
+    # A owns M1 but is not editor of C's private folder
     r = client.patch(
-        f"/meetings/{m1}", headers=_as(client, "b"), json={"folder_id": str(world["fc"])}
+        f"/meetings/{m1}", headers=_as(client, "a"), json={"folder_id": str(world["fc"])}
     )
     assert (r.status_code, _msg(r)) == (404, "Folder not found.")
     r = client.patch(f"/meetings/{m1}", headers=_as(client, "a"), json={"folder_id": None})
@@ -377,8 +387,8 @@ def test_folder_create_rename_delete(client: TestClient, world: dict[str, Any]) 
     r = client.patch(f"/folders/{fid}", headers=_as(client, "d"), json={"name": "Ideas 2"})
     assert r.status_code == 200 and r.json()["folder"]["name"] == "Ideas 2"
     assert _status(client, "a", "DELETE", f"/folders/{fid}") == 404
-    assert _status(client, "d", "DELETE", f"/folders/{fid}?deleteMeetings=true") == 503
-    assert _status(client, "d", "DELETE", f"/folders/{fid}") == 200
+    # empty folder: nothing to remove from storage (ARC-07 part 2)
+    assert _status(client, "d", "DELETE", f"/folders/{fid}?deleteMeetings=true") == 200
     assert _status(client, "d", "DELETE", f"/folders/{fid}") == 404
 
 

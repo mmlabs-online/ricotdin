@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### Thay đổi
+- API v2 phần lõi, đợt 2 (file trên Google Drive): tạo meeting kèm link upload Drive, xác nhận upload (kiểm tra file với Drive, chỉ tạo một job), link nghe audio `/media` 15 phút, xoá meeting (xoá file Drive trước, có `warning` nếu lỗi), xoá folder kèm meeting của chính mình, upload / đổi avatar. Chỉ chủ meeting được chuyển meeting sang folder khác (quyết định 2026-11-02). Deploy: migration Alembic `0004_meetings_gdrive`; không có biến môi trường mới (ARC-07)
 - API v2 lưu file trên Google Drive của chủ dự án thay cho Cloudflare R2:
   - Kết nối một lần bằng `python -m scripts.connect_gdrive` (đăng nhập Google, quyền `drive.file`); client secret và refresh token được mã hoá bằng `KEY_ENCRYPTION_SECRET` trong bảng `drive_config`.
   - Trình duyệt upload thẳng lên Drive qua phiên resumable; API kiểm tra lại tên key, thư mục, kích thước và kiểu file, file sai bị xoá (422).

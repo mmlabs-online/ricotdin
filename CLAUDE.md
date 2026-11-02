@@ -290,16 +290,39 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 
 ### 0.6 v2 core domain API (ARC-07)
 
-- **Part 1 (no file storage)** — routers `meetings.py`, `content.py` (todos, calendar, `.ics`),
-  `folders.py` (folders, shares, reorder, `/users/lookup`), `profile.py`, `activity.py`. **Part 2
-  after ARC-17:** `POST /meetings` + upload, `uploaded`, `audio-url`, `DELETE /meetings/{id}`,
-  `DELETE /folders/{id}?deleteMeetings=true` (503 until then), avatar (`avatar_url` is null).
-  `regenerate` is ARC-08. Paths have no `/api` prefix (`v2-tracking.md`).
+- **Routers** `meetings.py`, `content.py` (todos, calendar, `.ics`), `folders.py` (folders, shares,
+  reorder, `/users/lookup`), `profile.py`, `activity.py`. `regenerate` is ARC-08. Paths have no
+  `/api` prefix (`v2-tracking.md`).
+- **Files (part 2, Google Drive, §0.4):** `POST /meetings` creates the pending row
+  (`storage_provider='gdrive'`, migration `0004`; title `Nov 2, 2026, 3:05 PM` in
+  `Asia/Ho_Chi_Minh`) and a resumable upload URL in one transaction (Drive failure → no row); the
+  body must carry `size`. `POST /meetings/{id}/uploaded` (owner, only while `pending`, else 409)
+  takes `fileId` + `size`, verifies with `confirm_upload`, queues **one** job (no second while one is
+  queued/running); a mismatching file deletes the meeting (v1 `rejectUpload`) → 422. ffprobe and
+  video → audio extraction are the ARC-08 worker's. `GET /meetings/{id}/audio-url` (viewer+) →
+  `{url: "/media?t=…" (15 min), hackAudioRender}`. Deletes (`DELETE /meetings/{id}`,
+  `DELETE /folders/{id}?deleteMeetings=true` = caller's own meetings only, BUG-011) remove the Drive
+  file first, each in its own committed step (`delete_files`), then the rows; a storage failure →
+  `warning` (meeting delete) and the rows still go. Avatar: `POST /profile/avatar` → upload URL +
+  key; `PATCH /profile {avatar_key, avatar_file_id, avatar_size}` confirms the file before saving,
+  deletes the old avatar after (only if it is this user's key); `avatar_url` = `/media` link.
+  Upload sessions (meetings + avatars): 30 per user per hour (`app.state.upload_limiter`); at most
+  20 `pending` meetings per user (429). `/uploaded`: a mapped key + another file id → 409 (the
+  meeting is never deleted); a missing file → 422 and the meeting stays (v1); only a rejected file
+  that was this meeting's own session upload deletes the meeting. Deletes run a second Drive pass
+  after the row delete (an upload confirmed in between). Known, accepted for now: Drive HTTP calls
+  run inside the service transaction (holds a connection and the row lock, ≤ ~2 min with retries);
+  the avatar map is committed before the profile UPDATE (a failed UPDATE leaves an unreferenced
+  2 MB file); deleting a v1 (`r2`/`supabase`) meeting is a Drive no-op until ARC-18 copies files.
+- **Move = meeting owner only** (owner decision 2026-11-02, CWE-269): `PATCH /meetings/{id}` with
+  `folder_id` from anyone else → 403 "Only the meeting owner can move it to another folder.";
+  editors still rename.
 - **Status codes = v1** for owner / folder owner / editor / viewer / stranger (matrix test:
   `tests/test_core_domain_integration.py`). Messages keep v1's text inside `{"error": {code, message}}`.
   Where v1 crashed (500 on `null` bodies, non-UUID ids, `folder_id: ""`) v2 answers 400/404/422.
   Kept on purpose: stranger → 403 on meeting writes but 404 on reads and on folder PATCH/DELETE;
-  share PATCH/DELETE answer 200 for a non-member; reorder always 200; `process` does not dedupe jobs.
+  share PATCH/DELETE answer 200 for a non-member; reorder always 200; `process` does not dedupe jobs
+  (`uploaded` does).
 - **Who runs what:** meeting reads (`GET /meetings*`) run as `ricotdin_app` under RLS. Meeting /
   todo / calendar writes run as `ricotdin_service`, with the role decided **in the same transaction**
   by `app/services/access.py` + pure `app/domain/access.py` (same logic as `can_access_meeting`;
@@ -314,8 +337,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - Email → account lookups (`POST /users/lookup`, adding a share): 20 per user per 15 min
   (`app.state.lookup_limiter`): v2 searches every user, v1 only the first page.
 - Differences from v1 to know: `PATCH /profile` validates every field before the username-taken
-  check (v1 checked taken first); a body with only `avatar_key` is "No updatable fields" until part 2.
-  Transcript `confidence` is returned as a number.
+  check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
+  15 min (v1 60) because `/media` proxies Drive.
 
 ## 1. What we are building
 

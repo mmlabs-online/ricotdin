@@ -92,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(profile_router.router)
     app.state.activity_limiter = activity_router.activity_limiter()
     app.state.lookup_limiter = folders_router.lookup_limiter()
+    app.state.upload_limiter = meetings_router.upload_limiter()
     for module in (meetings_router, content_router, folders_router, activity_router):
         app.include_router(module.router)
     app.include_router(media_router.router)

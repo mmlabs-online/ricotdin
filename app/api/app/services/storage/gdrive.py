@@ -34,6 +34,7 @@ from app.services.storage.base import (
     StorageNotConfigured,
     StorageObjectNotFound,
     StoredObject,
+    UploadedFileMissing,
     UploadRejected,
     base_media_type,
     check_upload_type,
@@ -536,7 +537,7 @@ class DriveStorage:
         _check_key(key)
         meta = await self.client.get_file(file_id)
         if meta is None:
-            raise UploadRejected(detail="reported file id does not exist")
+            raise UploadedFileMissing(detail="reported file id does not exist")
         existing = await self.objects.get(key, for_update=True)
         if existing is not None and existing.file_id == file_id:
             return existing  # repeated confirm (double click, client retry): idempotent
@@ -555,9 +556,11 @@ class DriveStorage:
         if reason:
             # Delete only an unmapped file that a session for this very key created in our
             # root: never a file id that belongs to another key, a mapped file or a folder.
+            rejected = UploadRejected(detail=f"uploaded file rejected: {reason}")
             if is_session_orphan(meta, key=key, root_id=root):
                 await self._discard(file_id, reason)
-            raise UploadRejected(detail=f"uploaded file rejected: {reason}")
+                rejected.discarded = True
+            raise rejected
         obj = StoredObject(key, file_id, content_length, base_media_type(content_type), md5)
         if existing is None and await self.objects.insert(obj):
             return obj
