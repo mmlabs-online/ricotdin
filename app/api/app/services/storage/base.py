@@ -52,6 +52,13 @@ class UploadRejected(AppError):
     status = 422
     code = "upload_rejected"
     message = "The uploaded file does not match what was expected. Please upload it again."
+    # True when the rejected file was this key's own session file and has been deleted.
+    discarded = False
+
+
+class UploadedFileMissing(UploadRejected):
+    code = "upload_missing"
+    message = "File not found in storage — upload may have failed."
 
 
 def base_media_type(content_type: str) -> str:

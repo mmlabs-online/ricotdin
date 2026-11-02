@@ -215,15 +215,17 @@ async def delete_folder(
         log.warning("folder delete: %d audio file(s) could not be removed", len(failed))
     async with db.role_transaction(SERVICE) as conn:
         await conn.execute(
-            text("DELETE FROM public.meetings WHERE id = ANY(:ids) AND user_id = :me").bindparams(
-                bindparam("ids", type_=ARRAY(UUID(as_uuid=True)))
-            ),
-            {"ids": [m for m, _ in meetings], "me": identity.user_id},
+            text(
+                "DELETE FROM public.meetings WHERE id = ANY(:ids) AND user_id = :me "
+                "AND folder_id = :fid"  # a meeting moved out meanwhile stays
+            ).bindparams(bindparam("ids", type_=ARRAY(UUID(as_uuid=True)))),
+            {"ids": [m for m, _ in meetings], "me": identity.user_id, "fid": fid},
         )
         await conn.execute(
             text("DELETE FROM public.folders WHERE id = :id AND user_id = :me"),
             {"id": fid, "me": identity.user_id},
         )
+    await delete_files(db, platform, keys)  # second pass: uploads confirmed meanwhile
     for mid, _ in meetings:
         await meeting_activity(
             db, request, identity.user_id, "meeting_deleted", None, {"meeting_id": str(mid)}

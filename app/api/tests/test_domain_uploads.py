@@ -248,3 +248,23 @@ def test_profile_patch_may_be_avatar_only() -> None:
     assert parse_profile_patch({"avatar_key": None}, allow_empty=True) == {}
     with pytest.raises(AppError):
         parse_profile_patch({"avatar_key": None})
+
+
+# --- review round 1 -----------------------------------------------------------------------------
+
+
+def test_create_empty_folder_id_means_no_folder() -> None:
+    assert parse_meeting_create({"size": 5, "folderId": ""}).folder_id is None
+
+
+@pytest.mark.parametrize(
+    "mime",
+    [
+        "audio/webm\r\nX-Evil: 1",
+        "audio/webm;" + "a" * 300,
+        "audio/webm; x=é",
+        'audio/webm;codecs="opus"\n',
+    ],
+)
+def test_create_drops_an_unsafe_browser_mime(mime: str) -> None:
+    assert parse_meeting_create({"size": 5, "mimeType": mime}).content_type == "audio/webm"

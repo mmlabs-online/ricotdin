@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.deps import client_ip, current_identity
-from app.core.errors import Conflict, Forbidden, NotFound, UnprocessableEntity
+from app.core.errors import Conflict, Forbidden, NotFound, RateLimited, UnprocessableEntity
 from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
@@ -36,10 +36,18 @@ from app.domain.uploads import (
     parse_uploaded,
     upload_content_type,
 )
-from app.routers._common import SERVICE, as_dict, as_dicts, enforce_limit, json_object, path_id
+from app.routers._common import (
+    SERVICE,
+    as_dict,
+    as_dicts,
+    enforce_limit,
+    json_body,
+    json_object,
+    path_id,
+)
 from app.services.access import folder_assignable, meeting_facts
 from app.services.platform import Platform, get_platform
-from app.services.storage.base import StorageNotConfigured, UploadRejected
+from app.services.storage.base import StorageNotConfigured, UploadedFileMissing, UploadRejected
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_audio_key
 
@@ -50,6 +58,7 @@ Identity = Annotated[RequestIdentity, Depends(current_identity)]
 Db = Annotated[Database, Depends(get_database)]
 Plat = Annotated[Platform, Depends(get_platform)]
 UPLOADS_PER_HOUR = 30
+MAX_PENDING_PER_USER = 20  # unfinished uploads per user (each holds a Drive session)
 
 MEETING_COLUMNS = (
     "id, user_id, title, status, source, storage_provider, audio_path, audio_purged_at, "
@@ -58,6 +67,7 @@ MEETING_COLUMNS = (
 )
 _NOT_FOUND = "Meeting not found."
 _STORAGE_WARNING = "Audio file could not be removed from storage."
+_ALREADY_UPLOADED = "This meeting was already uploaded."
 _MOVE_OWNER_ONLY = "Only the meeting owner can move it to another folder."
 _NO_AUDIO = (
     "This meeting has no audio (it may have been deleted by the retention policy), "
@@ -268,6 +278,19 @@ async def create_meeting(request: Request, identity: Identity, db: Db, platform:
     started = spec.started_at or datetime.now(UTC)
     title = format_meeting_title(started)
     async with db.role_transaction(SERVICE) as conn:
+        pending = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM public.meetings WHERE user_id = :u AND status = 'pending'"
+                ),
+                {"u": identity.user_id},
+            )
+        ).scalar_one()
+        if pending >= MAX_PENDING_PER_USER:
+            raise RateLimited(
+                "Too many unfinished uploads. Finish or delete them first.",
+                detail=f"{pending} pending meetings",
+            )
         if spec.folder_id is not None and not await folder_assignable(
             conn, spec.folder_id, identity.user_id
         ):
@@ -306,10 +329,12 @@ async def mark_uploaded(
     meeting_id: str, request: Request, identity: Identity, db: Db, platform: Plat
 ) -> dict[str, Any]:
     """Meeting owner only, while the meeting is still pending: verify the file the browser put in
-    Drive, map it and queue processing once. A file that does not match deletes the meeting (v1
-    ``rejectUpload``) and answers 422. Repeating the call is harmless (no second job)."""
-    upload = parse_uploaded(await json_object(request))
+    Drive, map it and queue processing once. Repeating the call with the same file is harmless;
+    once a file is mapped, any other file answers 409 and nothing is deleted. A missing file keeps
+    the meeting (422, v1); a wrong file that was this meeting's own upload is discarded together
+    with the meeting (v1 ``rejectUpload``)."""
     mid = path_id(meeting_id, _NOT_FOUND)
+    raw = await request.body()
     rejected: UploadRejected | None = None
     async with db.role_transaction(SERVICE) as conn:
         facts = await meeting_facts(conn, mid, identity.user_id, lock=True)
@@ -317,6 +342,7 @@ async def mark_uploaded(
             raise NotFound(_NOT_FOUND)
         if not facts.is_meeting_owner(identity.user_id):
             raise Forbidden("Forbidden.")
+        upload = parse_uploaded(json_body(raw))
         key = facts.audio_path
         content_type = upload_content_type(key) if key else None
         if (
@@ -331,16 +357,22 @@ async def mark_uploaded(
             )
         ).scalar_one()
         if status != "pending":
-            raise Conflict("This meeting was already uploaded.")
+            raise Conflict(_ALREADY_UPLOADED)
         storage = await platform.storage(conn)
+        mapped = await storage.stat(key)
+        if mapped is not None and mapped.file_id != upload.file_id:
+            raise Conflict(_ALREADY_UPLOADED)
         try:
             await storage.confirm_upload(
                 key, upload.file_id, content_type=content_type,
                 content_length=upload.size, max_bytes=MAX_UPLOAD_BYTES,
             )  # fmt: skip
+        except UploadedFileMissing:
+            raise
         except UploadRejected as exc:
             rejected = exc
-            await conn.execute(text("DELETE FROM public.meetings WHERE id = :id"), {"id": mid})
+            if exc.discarded:
+                await conn.execute(text("DELETE FROM public.meetings WHERE id = :id"), {"id": mid})
         if rejected is None:
             payload: dict[str, Any] = {}
             if upload.preferred:
@@ -424,6 +456,11 @@ async def delete_meeting(
             text("DELETE FROM public.meetings WHERE id = :id AND user_id = :u"),
             {"id": mid, "u": identity.user_id},
         )
+    if key and warning is None and is_owned_audio_key(key, str(facts.user_id), str(mid)):
+        # An upload confirmed between the storage delete and the row delete would be left
+        # behind; /uploaded cannot map it any more once the row is gone, so one more pass is
+        # enough (a no-op when nothing is mapped).
+        await delete_files(db, platform, [key])
     # meeting_id stays NULL: the row is gone (BUG-012); the id goes in metadata.
     await record_activity(
         db, request, identity.user_id, "meeting_deleted", None, {"meeting_id": str(mid)}

@@ -396,3 +396,70 @@ def test_avatar_rules(client: TestClient, world: dict[str, Any]) -> None:
             json={"avatar_key": key, "avatar_file_id": "abcDEF123_-xyz", "avatar_size": 1},
         )  # fmt: skip
         assert (r.status_code, _msg(r)) == (422, "Invalid avatar_key."), key
+
+
+# --- review round 1 regressions -------------------------------------------------------------------
+
+
+def test_second_uploaded_with_another_file_never_deletes_an_uploaded_meeting(
+    client: TestClient, world: dict[str, Any], drive: FakeDrive
+) -> None:
+    mid, fid = _upload(client, drive, "a")
+    for bogus in ("abcDEF123_-nothere", fid[:-1] + "Z"):
+        r = client.post(
+            f"/meetings/{mid}/uploaded",
+            headers=_as(client, "a"),
+            json={"fileId": bogus, "size": 300},
+        )
+        assert (r.status_code, _msg(r)) == (409, "This meeting was already uploaded."), bogus
+    assert _sql(world["db"], "SELECT count(*) FROM meetings WHERE id = %s", mid) == [(1,)]
+    assert fid in drive.files
+
+
+def test_uploaded_with_a_missing_file_keeps_the_meeting(
+    client: TestClient, world: dict[str, Any], drive: FakeDrive
+) -> None:
+    mid, _ = _create(client, "a", b"m" * 10)
+    r = client.post(
+        f"/meetings/{mid}/uploaded", headers=_as(client, "a"),
+        json={"fileId": "abcDEF123_-nothere", "size": 10},
+    )  # fmt: skip
+    assert (r.status_code, _msg(r)) == (422, "File not found in storage — upload may have failed.")
+    assert _sql(world["db"], "SELECT count(*) FROM meetings WHERE id = %s", mid) == [(1,)]
+
+
+def test_uploaded_checks_access_before_the_body(client: TestClient, world: dict[str, Any]) -> None:
+    mid, _ = _create(client, "a", b"n" * 10)
+    assert (
+        client.post(f"/meetings/{mid}/uploaded", headers=_as(client, "d"), json={}).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/meetings/{uuid.uuid4()}/uploaded", headers=_as(client, "a"), json={}
+        ).status_code
+        == 404
+    )
+
+
+def test_pending_meetings_are_capped_per_user(
+    client: TestClient, world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.routers.meetings as meetings
+
+    monkeypatch.setattr(meetings, "MAX_PENDING_PER_USER", 1)
+    _create(client, "c", b"x")
+    r = client.post("/meetings", headers=_as(client, "c"), json={"size": 1})
+    assert r.status_code == 429
+
+
+def test_migration_0004_downgrade_refuses_with_drive_meetings() -> None:
+    from tests.conftest import alembic_downgrade
+
+    with scratch_database("m0004") as url:
+        alembic_upgrade(url)
+        uid = _user(url, f"down{secrets.token_hex(2)}")
+        _sql(url, "INSERT INTO meetings (user_id, title) VALUES (%s, 't')", uid)
+        assert _sql(url, "SELECT storage_provider FROM meetings") == [("gdrive",)]
+        with pytest.raises(Exception, match="gdrive"):
+            alembic_downgrade(url, "0003_drive_storage")

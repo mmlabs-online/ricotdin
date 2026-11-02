@@ -482,6 +482,7 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Two worker processes never process the same job.
 - Given a meeting with a queued or running job, when `POST /meetings/{id}/process` is called again, then no second job is queued (v1 and ARC-07 part 1 insert one per call; fix before the worker goes live, plus a per-user limit) — ARC-07 security review 2026-10-29.
 - A quota charge happens exactly once per job across retries/restarts.
+- `jobs.payload.preferred_provider` / `preferred_model` (written by `POST /meetings/{id}/uploaded`, v1 parity, unchecked there) are used only if they are on the model allow-list (`app/domain/models.py`); otherwise the default model.
 - Usage rows keep `unit` separated (tokens vs audio_seconds).
 
 **Test Plan**

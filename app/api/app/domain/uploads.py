@@ -5,6 +5,7 @@ Ports of the v1 handlers (``legacy/app/api/meetings/route.ts``, ``meetings/[id]/
 needs the size up front, and the browser reports the Drive file id afterwards.
 """
 
+import re
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -40,6 +41,9 @@ AVATAR_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"
 SOURCES = ("uploaded", "video")
 TITLE_TZ = ZoneInfo("Asia/Ho_Chi_Minh")  # owner decision 2026-11-02 (v1 used the server zone)
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+# type/subtype plus simple parameters (``;codecs=opus``); anything else is replaced by the
+# extension's type (it is sent to Drive as a header and echoed back).
+_SAFE_MIME = re.compile(r"[a-z0-9.+-]+/[a-z0-9.+-]+(?:; ?[a-z0-9-]+=[A-Za-z0-9.,+-]+)*", re.I)
 _TOO_LARGE = f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit."
 
 
@@ -95,7 +99,14 @@ def parse_meeting_create(body: dict[str, Any]) -> MeetingCreate:
     mime = body.get("mimeType")
     # The browser's full type (``audio/webm;codecs=opus``) is kept when it agrees with the
     # extension; otherwise the extension decides (Drive and the confirm check use it).
-    content_type = mime if isinstance(mime, str) and base_media_type(mime) == expected else expected
+    content_type = expected
+    if (
+        isinstance(mime, str)
+        and len(mime) <= 100
+        and _SAFE_MIME.fullmatch(mime) is not None
+        and base_media_type(mime) == expected
+    ):
+        content_type = mime
     size = _size(body.get("size"), MAX_UPLOAD_BYTES, _TOO_LARGE)
     duration = body.get("durationSeconds")
     if duration is not None and (not _is_int(duration) or duration < 0):
@@ -111,7 +122,7 @@ def parse_meeting_create(body: dict[str, Any]) -> MeetingCreate:
             raise UnprocessableEntity("startedAt must be an ISO 8601 date-time with a time zone.")
     folder_raw = body.get("folderId")
     folder = None
-    if folder_raw is not None:
+    if folder_raw not in (None, ""):  # v1: "" means no folder
         folder = parse_uuid(folder_raw)
         if folder is None:
             raise NotFound("Folder not found.")

@@ -306,7 +306,14 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `warning` (meeting delete) and the rows still go. Avatar: `POST /profile/avatar` → upload URL +
   key; `PATCH /profile {avatar_key, avatar_file_id, avatar_size}` confirms the file before saving,
   deletes the old avatar after (only if it is this user's key); `avatar_url` = `/media` link.
-  Upload sessions (meetings + avatars): 30 per user per hour (`app.state.upload_limiter`).
+  Upload sessions (meetings + avatars): 30 per user per hour (`app.state.upload_limiter`); at most
+  20 `pending` meetings per user (429). `/uploaded`: a mapped key + another file id → 409 (the
+  meeting is never deleted); a missing file → 422 and the meeting stays (v1); only a rejected file
+  that was this meeting's own session upload deletes the meeting. Deletes run a second Drive pass
+  after the row delete (an upload confirmed in between). Known, accepted for now: Drive HTTP calls
+  run inside the service transaction (holds a connection and the row lock, ≤ ~2 min with retries);
+  the avatar map is committed before the profile UPDATE (a failed UPDATE leaves an unreferenced
+  2 MB file); deleting a v1 (`r2`/`supabase`) meeting is a Drive no-op until ARC-18 copies files.
 - **Move = meeting owner only** (owner decision 2026-11-02, CWE-269): `PATCH /meetings/{id}` with
   `folder_id` from anyone else → 403 "Only the meeting owner can move it to another folder.";
   editors still rename.
