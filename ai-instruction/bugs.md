@@ -30,7 +30,7 @@
 | BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | v1.1.1 | fix/BUG-017-docs-drift, PR #24 |
 | BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
 | BUG-019 | migrate_from_supabase crashes printing the report on a Windows console (cp1252) and exits 1 even on PASS | S3 | fixed | dev | ARC-03 | bugfix | dev | fix/BUG-019-migrate-console-encoding, PR #39 |
-| BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables |
+| BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
 
 ---
 
