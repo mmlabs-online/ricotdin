@@ -276,6 +276,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   - `profiles.role` is taken from `users.role`.
   - The script reads the schema from the catalog, so a future migration needs no code change
     unless it renames or retypes a column. The preflight then blocks on the drift.
+  - **A migration that creates a v2-only table** (no Supabase counterpart) must add it to
+    `V2_ONLY_TABLES` in the script, or every run is blocked (BUG-020);
+    `test_bug020_every_table_created_after_the_baseline_is_v2_only` enforces it.
 - **Report:**
   - Order-independent digests per table, plus secrets and storage results.
   - PASS needs a full run (storage not skipped).
