@@ -370,3 +370,22 @@ def test_bug019_report_keeps_unicode_on_a_utf8_console() -> None:
     emit_report("source → target ✅", console)
     console.flush()
     assert raw.getvalue().decode("utf-8") == "source → target ✅\n"
+
+
+def test_bug020_every_table_created_after_the_baseline_is_v2_only() -> None:
+    # Tables created by v2-only migrations (0002+) do not exist in Supabase; the preflight must
+    # skip them, or every run is blocked ("source has no table public.drive_config").
+    import re
+
+    from scripts.migrate_from_supabase import API_ROOT, NOT_COPIED_TABLES, V2_ONLY_TABLES
+
+    created: set[str] = set()
+    for sql in sorted((API_ROOT / "migrations" / "sql").glob("*.sql")):
+        if sql.name.startswith("0001_") or sql.name.endswith("_down.sql"):
+            continue
+        created |= set(
+            re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?public\.(\w+)", sql.read_text("utf-8"))
+        )
+    assert {"drive_config", "storage_objects"} <= created
+    assert created <= V2_ONLY_TABLES
+    assert created <= NOT_COPIED_TABLES  # never copied from Supabase either
