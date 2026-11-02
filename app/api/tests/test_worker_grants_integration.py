@@ -291,12 +291,14 @@ def test_reserve_needs_a_running_job(db: str) -> None:
         conn.execute("SELECT * FROM pipeline_reserve(%s, 5)", (uuid.uuid4(),))
 
 
+def _status(conn: psycopg.Connection[Any], job: Any, status: str) -> None:
+    conn.execute("UPDATE jobs SET status = %s WHERE id = %s", (status, job))
+
+
 def test_refund_gives_back_exactly_the_reserve_once(db: str) -> None:
     with _quota_world(db) as (conn, w):
-        assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
-            "nothing_reserved", 0,
-        )  # fmt: skip
         conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        _status(conn, w.job, "failed")  # the runner fails the job first, then refunds
         assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
             "applied", 30,
         )  # fmt: skip
@@ -306,10 +308,36 @@ def test_refund_gives_back_exactly_the_reserve_once(db: str) -> None:
         assert _ledger_keys(conn, w.user) == [
             (f"gen:{w.job}:reserve", -30), (f"gen:{w.job}:refund", 30),
         ]  # fmt: skip
-        # no settle after a refund
-        assert conn.execute("SELECT * FROM pipeline_settle(%s, 10)", (w.job,)).fetchone() == (
-            "refunded", 0,
+        # no settle after a refund: the job is no longer running
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            conn.execute("SELECT * FROM pipeline_settle(%s, 10)", (w.job,))
+
+
+def test_refund_without_a_reserve_is_a_no_op(db: str) -> None:
+    with _quota_world(db) as (conn, w):
+        _status(conn, w.job, "failed")
+        assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
+            "nothing_reserved", 0,
         )  # fmt: skip
+
+
+@pytest.mark.parametrize("status", ["running", "queued", "done"])
+def test_refund_only_for_a_failed_job(db: str, status: str) -> None:
+    with _quota_world(db) as (conn, w):
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        _status(conn, w.job, status)
+        with pytest.raises(psycopg.errors.InvalidParameterValue), conn.transaction():
+            conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,))
+        assert _wallet(conn, w.user) == 70
+
+
+@pytest.mark.parametrize("status", ["queued", "failed", "done"])
+def test_settle_only_for_a_running_job(db: str, status: str) -> None:
+    with _quota_world(db) as (conn, w):
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        _status(conn, w.job, status)
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            conn.execute("SELECT * FROM pipeline_settle(%s, 10)", (w.job,))
 
 
 def test_settle_charges_the_difference_and_blocks_a_later_refund(db: str) -> None:
@@ -322,11 +350,78 @@ def test_settle_charges_the_difference_and_blocks_a_later_refund(db: str) -> Non
             "applied", -15,
         )  # fmt: skip
         assert _wallet(conn, w.user) == 55
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            conn.execute("SELECT * FROM pipeline_settle(%s, 86401)", (w.job,))
+    with _quota_world(db) as (conn, w):
+        conn.execute("SELECT * FROM pipeline_reserve(%s, 30)", (w.job,))
+        conn.execute("SELECT * FROM pipeline_settle(%s, 45)", (w.job,))
+        _status(conn, w.job, "failed")  # e.g. analyse fails after the settle
         assert conn.execute("SELECT * FROM pipeline_refund(%s)", (w.job,)).fetchone() == (
             "settled", 0,
         )  # fmt: skip
-        with pytest.raises(psycopg.errors.InvalidParameterValue):
-            conn.execute("SELECT * FROM pipeline_settle(%s, 86401)", (w.job,))
+        assert _wallet(conn, w.user) == 55
+
+
+def test_concurrent_refund_and_settle_apply_only_one(db: str) -> None:
+    # Follow-up of review round 1: without a per-job lock both saw the other's row absent and both
+    # applied. The refund's transaction (job failed + refund) holds the lock; the settle waits, then
+    # sees the job is no longer running.
+    import threading
+
+    user, meeting = uuid.uuid4(), uuid.uuid4()
+    with psycopg.connect(db, autocommit=True) as owner:
+        owner.execute(
+            "INSERT INTO users (id, email, password_hash) VALUES (%s, %s, 'x')",
+            (user, f"{user.hex[:10]}@example.test"),
+        )
+        owner.execute(
+            "INSERT INTO quota_wallets (user_id, audio_seconds_remaining) VALUES (%s, 100)", (user,)
+        )
+        owner.execute("INSERT INTO meetings (id, user_id) VALUES (%s, %s)", (meeting, user))
+        job = owner.execute(
+            "INSERT INTO jobs (meeting_id, status) VALUES (%s, 'running') RETURNING id", (meeting,)
+        ).fetchone()[0]  # type: ignore[index]
+        owner.execute(f"SET ROLE {WORKER}")
+        owner.execute("SELECT * FROM pipeline_reserve(%s, 30)", (job,))
+    settle: dict[str, Any] = {}
+    try:
+        with psycopg.connect(db) as a, psycopg.connect(db) as b:
+            a.execute(f"SET LOCAL ROLE {WORKER}")
+            a.execute("UPDATE jobs SET status = 'failed' WHERE id = %s", (job,))
+            assert a.execute("SELECT * FROM pipeline_refund(%s)", (job,)).fetchone() == (
+                "applied", 30,
+            )  # fmt: skip
+            b.execute(f"SET LOCAL ROLE {WORKER}")
+
+            def run_settle() -> None:
+                try:
+                    settle["row"] = b.execute(
+                        "SELECT * FROM pipeline_settle(%s, 10)", (job,)
+                    ).fetchone()
+                except psycopg.Error as exc:
+                    settle["error"] = exc
+                b.rollback()
+
+            thread = threading.Thread(target=run_settle)
+            thread.start()
+            thread.join(1.0)
+            assert thread.is_alive()  # waiting for the job's lock
+            a.commit()
+            thread.join(10.0)
+            assert not thread.is_alive()
+        assert isinstance(settle.get("error"), psycopg.errors.InvalidParameterValue)
+        with psycopg.connect(db, autocommit=True) as owner:
+            keys = owner.execute(
+                "SELECT dedup_key FROM quota_ledger WHERE user_id = %s ORDER BY dedup_key", (user,)
+            ).fetchall()
+            wallet = owner.execute(
+                "SELECT audio_seconds_remaining FROM quota_wallets WHERE user_id = %s", (user,)
+            ).fetchone()
+        assert keys == [(f"gen:{job}:refund",), (f"gen:{job}:reserve",)]
+        assert wallet == (100,)
+    finally:
+        with psycopg.connect(db, autocommit=True) as owner:
+            owner.execute("DELETE FROM users WHERE id = %s", (user,))
 
 
 def test_worker_policies_cover_only_kept_tables(db: str) -> None:

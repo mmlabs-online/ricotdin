@@ -386,7 +386,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   only, user = the job's meeting owner), `pipeline_refund(job)` (exactly the reserve ledger row's
   amount, once; nothing without a job-keyed reserve or after a settle — so migrated v1 jobs never get
   a free refund), `pipeline_settle(job, actual)` (08b: reserved − actual, 0–86400 s, not after a
-  refund). Amounts never come from `jobs.payload`. The reserve and the payload's `reserve_done`
+  refund). Amounts never come from `jobs.payload`. Each wrapper first takes a per-job advisory
+  transaction lock; refund needs a `failed` job (the runner fails the job first, same transaction),
+  reserve and settle a `running` one — so a refund and a settle never both apply. The reserve and the payload's `reserve_done`
   (true stays true) are written in one transaction. v1 `lib/quota/reconcile.ts` still looks up
   meeting-keyed dedup keys: port it with job keys (08e).
 - **Step `start`** (`start.py`): claim meeting `pending|failed → processing` (a `processing` meeting

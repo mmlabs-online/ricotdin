@@ -33,7 +33,9 @@
 -- 3. Pipeline quota wrappers (SECURITY DEFINER, worker only): pipeline_reserve / pipeline_refund /
 --    pipeline_settle. The user is always the job's meeting owner (reserve) or the reserve row's
 --    user (refund / settle); dedup keys gen:<job_id>:reserve|refund|settle; refund and settle
---    amounts come from the reserve ledger row, never from jobs.payload.
+--    amounts come from the reserve ledger row, never from jobs.payload. All three take a per-job
+--    advisory transaction lock first, so a refund and a settle can never both apply; refund needs
+--    a failed job, reserve and settle a running one.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ricotdin_worker') THEN
@@ -122,6 +124,9 @@ BEGIN
   IF p_seconds IS NULL OR p_seconds <= 0 OR p_seconds > 86400 THEN
     RAISE EXCEPTION 'pipeline_reserve: seconds out of range' USING ERRCODE = '22023';
   END IF;
+  -- One quota movement per job at a time (reserve / refund / settle): the checks below and the
+  -- insert happen under this lock until the transaction ends.
+  PERFORM pg_advisory_xact_lock(hashtext('gen:' || p_job_id::text));
   SELECT j.meeting_id, m.user_id INTO v_meeting, v_user
   FROM public.jobs j JOIN public.meetings m ON m.id = j.meeting_id
   WHERE j.id = p_job_id AND j.status = 'running';
@@ -136,8 +141,9 @@ BEGIN
 END;
 $function$;
 
--- Gives back exactly the reserved amount, once; nothing when nothing was reserved by this job or
--- the reserve was already settled.
+-- Gives back exactly the reserved amount, once, for a failed job (the runner marks the job failed
+-- first, in the same transaction); nothing when nothing was reserved by this job or the reserve was
+-- already settled.
 CREATE FUNCTION public.pipeline_refund(p_job_id uuid)
  RETURNS TABLE(status text, refunded bigint)
  LANGUAGE plpgsql
@@ -149,6 +155,12 @@ DECLARE
   v_meeting uuid;
   v_reserved bigint;
 BEGIN
+  -- One quota movement per job at a time (reserve / refund / settle): the checks below and the
+  -- insert happen under this lock until the transaction ends.
+  PERFORM pg_advisory_xact_lock(hashtext('gen:' || p_job_id::text));
+  IF NOT EXISTS (SELECT 1 FROM public.jobs j WHERE j.id = p_job_id AND j.status = 'failed') THEN
+    RAISE EXCEPTION 'pipeline_refund: no failed job' USING ERRCODE = '22023';
+  END IF;
   SELECT l.user_id, l.meeting_id, -l.delta_audio_seconds INTO v_user, v_meeting, v_reserved
   FROM public.quota_ledger l WHERE l.dedup_key = 'gen:' || p_job_id || ':reserve';
   IF NOT FOUND OR v_reserved <= 0 THEN
@@ -167,7 +179,8 @@ BEGIN
 END;
 $function$;
 
--- 08b: reserved − actual (refund or extra charge), once. No settle after a refund.
+-- 08b: reserved − actual (refund or extra charge), once, for a running job. No settle after a
+-- refund.
 CREATE FUNCTION public.pipeline_settle(p_job_id uuid, p_actual_seconds bigint)
  RETURNS TABLE(status text, delta bigint)
  LANGUAGE plpgsql
@@ -181,6 +194,12 @@ DECLARE
 BEGIN
   IF p_actual_seconds IS NULL OR p_actual_seconds < 0 OR p_actual_seconds > 86400 THEN
     RAISE EXCEPTION 'pipeline_settle: seconds out of range' USING ERRCODE = '22023';
+  END IF;
+  -- One quota movement per job at a time (reserve / refund / settle): the checks below and the
+  -- insert happen under this lock until the transaction ends.
+  PERFORM pg_advisory_xact_lock(hashtext('gen:' || p_job_id::text));
+  IF NOT EXISTS (SELECT 1 FROM public.jobs j WHERE j.id = p_job_id AND j.status = 'running') THEN
+    RAISE EXCEPTION 'pipeline_settle: no running job' USING ERRCODE = '22023';
   END IF;
   SELECT l.user_id, l.meeting_id, -l.delta_audio_seconds INTO v_user, v_meeting, v_reserved
   FROM public.quota_ledger l WHERE l.dedup_key = 'gen:' || p_job_id || ':reserve';
