@@ -845,7 +845,7 @@ Final repo layout approved by the owner. Supabase is shut down only after v2 has
 ---
 
 ### ARC-17 — Google Drive storage backend (replaces R2 in v2)
-**Priority:** High | **Status:** ⚠️ Code done — owner smoke check pending (`connect_gdrive` + `drive_smoke`)
+**Priority:** High | **Status:** ✅ Done — `drive_smoke` PASS on the dev root folder (owner, 2026-11-02)
 
 **User Story**  
 As the owner, I want v2 to store meeting audio and avatars in my Google One Drive (5 TB) instead of Cloudflare R2 so that storage uses capacity I already pay for.
