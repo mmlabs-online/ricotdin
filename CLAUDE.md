@@ -346,14 +346,14 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
   15 min (v1 60) because `/media` proxies Drive.
 
-### 0.7 v2 worker (ARC-08; slice 08a = foundation)
+### 0.7 v2 worker (ARC-08; slices 08a foundation, 08b transcription)
 
 - **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
   with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
   to start (exit 2) if `DATABASE_URL`, `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `JWT_PRIVATE_KEY`,
   `SMTP_PASSWORD` or a Supabase / migration credential is set (`policy.worker_env_problems`), and
-  **while pipeline steps are missing**: 08a has only `start` and no transcriber, so the worker is
-  **not deployable before 08b–08d** (no deploy target yet; tests drive `JobRunner` directly).
+  **while pipeline steps are missing**: `analyse` / `embed` come with 08c–08d, so the worker is
+  **not deployable before then** (no deploy target yet; tests drive `JobRunner` directly).
   Deployment (ARC-15 / OPS-05): `stop_grace_period: 30s` for the worker service.
 - **Runner** (`runner.py`, port of v1 `lib/jobs/worker.ts`): `claim_next_job` (`SKIP LOCKED`), one
   job at a time, poll 1 s, stuck sweep every 60 s (running > 15 min). Each step runs in a private
@@ -397,9 +397,24 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   transaction, streaming outside it), ffprobe (audio-only; `source='video'`: video mode + `-vn` mp3
   extraction, moved here from `/uploaded`), estimate = ceil(ffprobe) or `duration_seconds` (> 6 h →
   terminal), reserve (insufficient → `QUOTA_BLOCKED: …`, no retry), transcode mono 16 kHz 64 kbps
-  mp3 (failure keeps the original), `Transcriber.submit` (protocol; Speechmatics is 08b) →
+  mp3 (failure keeps the original), `Transcriber.submit` (language auto-detect, v1) →
   `transcribe_poll` after 5 s. The extracted audio of a video is not stored: `/media` still serves
   the original video.
+- **Transcription (08b)** — `speechmatics.py` (pure json-v2 parse, untrusted: types, finite numbers,
+  bounded labels/language), `speechmatics_client.py` (`SpeechmaticsTranscriber`, created once in
+  `__main__`), step `transcribe_poll.py`; registry `steps.py`.
+  - One key per provider job: `payload.transcriber_key_ref` = `id:<admin_config id>` or
+    `env:<sha256[:16]>` (never the key). New jobs take the key with the fewest jobs in flight in
+    this process (counts kept per ref, survive key reloads). 401 → `KeySource.mark_invalid`
+    (submit retried with another key; a poll whose key is gone is terminal). 429/5xx/network →
+    8 tries, 0.6 → 10 s, then transient. Other 4xx → terminal "could not process". Transcript
+    ≤ 64 MiB, status ≤ 1 MiB; job ids `[A-Za-z0-9_-]{1,64}` (URL path).
+  - Poll: `running` → again in 5 s (no attempt); `done` → no speech = terminal + full refund
+    (spec; v1 job path marked done); else ONE transaction guarded by `locked_by`:
+    `transcription_settled` in the payload, `pipeline_settle(job, ceil(seconds))`, replace
+    segments (and old chunks), `meetings.language`, `usage_log` (`audio_seconds`, `key_id` only if
+    the admin key still exists) → `analyse`. A re-run with `transcription_settled` skips to
+    `analyse`. Language-detect rejection (first time) → re-download, transcode, resubmit `en`.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).
