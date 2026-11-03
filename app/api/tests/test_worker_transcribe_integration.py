@@ -3,12 +3,14 @@
 again while running, store segments + settle + usage exactly once, no speech → failed with a
 full refund, language-detection retry with ``en``, provider rejection terminal."""
 
+import shutil
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import anyio
+import pytest
 
 from app.worker.jobs import Submission
 from app.worker.transcribe_poll import NO_SPEECH
@@ -29,7 +31,11 @@ from tests.test_worker_runner_integration import (  # noqa: F401 - fixtures
 )
 from tests.test_worker_speechmatics import TWO_SPEAKER_TRANSCRIPT
 
-pytestmark = requires_db
+# The shared `world` fixture makes its audio with ffmpeg (CI installs it).
+pytestmark = [
+    requires_db,
+    pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed"),
+]
 
 KEY_ID = "00000000-0000-0000-0000-00000000c0de"
 

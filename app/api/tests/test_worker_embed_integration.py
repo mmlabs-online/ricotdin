@@ -3,11 +3,13 @@
 against a scratch database through the worker login, with fake transcriber + AI providers."""
 
 import json
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import httpx2
+import pytest
 
 from app.worker.jobs import Submission
 from app.worker.runner import JobRunner
@@ -28,7 +30,11 @@ from tests.test_worker_runner_integration import (  # noqa: F401 - fixtures
 )
 from tests.test_worker_speechmatics import TWO_SPEAKER_TRANSCRIPT
 
-pytestmark = requires_db
+# The shared `world` fixture makes its audio with ffmpeg (CI installs it).
+pytestmark = [
+    requires_db,
+    pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed"),
+]
 
 
 def provider(request: httpx2.Request) -> httpx2.Response:

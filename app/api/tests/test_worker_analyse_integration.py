@@ -4,6 +4,7 @@ and step ``analyse`` against a scratch database through the worker login, with a
 ``AIService`` over ``httpx2.MockTransport`` (usage rows written as ``ricotdin_worker``)."""
 
 import json
+import shutil
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -36,7 +37,11 @@ from tests.test_worker_runner_integration import (  # noqa: F401 - fixtures
     world,
 )
 
-pytestmark = requires_db
+# The shared `world` fixture makes its audio with ffmpeg (CI installs it).
+pytestmark = [
+    requires_db,
+    pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed"),
+]
 
 ANSWER = {
     "summary": "Roadmap sync.",

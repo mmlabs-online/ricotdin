@@ -46,6 +46,9 @@ jobs:
       - name: Install (locked)
         run: uv sync --locked
 
+      - name: ffmpeg (worker integration tests make and probe real audio)
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+
       - name: Ruff lint
         run: uv run ruff check .
 
