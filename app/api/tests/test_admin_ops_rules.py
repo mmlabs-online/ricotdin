@@ -13,6 +13,7 @@ from app.domain.admin_ops import (
     MAX_USAGE_RANGE_DAYS,
     PIPELINE_FILTERS,
     STUCK_MINUTES,
+    can_requeue,
     is_stale_task,
     is_stuck,
     parse_activity_filters,
@@ -38,9 +39,19 @@ def test_pipeline_filter() -> None:
 def test_stuck_rule() -> None:
     assert STUCK_MINUTES == 15  # v1
     old = NOW - timedelta(minutes=16)
-    assert is_stuck("processing", old, NOW)
-    assert not is_stuck("processing", NOW - timedelta(minutes=14), NOW)
-    assert not is_stuck("failed", old, NOW)
+    assert is_stuck("processing", old, NOW, active_job=False)
+    assert not is_stuck("processing", old, NOW, active_job=True)  # a long poll is not stuck
+    assert not is_stuck("processing", NOW - timedelta(minutes=14), NOW, active_job=False)
+    assert not is_stuck("failed", old, NOW, active_job=False)
+
+
+def test_requeue_only_failed_or_stuck() -> None:
+    old = NOW - timedelta(minutes=16)
+    assert can_requeue("failed", NOW, NOW, active_job=False)
+    assert can_requeue("processing", old, NOW, active_job=False)
+    for status in ("pending", "done"):
+        assert not can_requeue(status, old, NOW, active_job=False)
+    assert not can_requeue("processing", NOW, NOW, active_job=False)
 
 
 def test_task_staleness() -> None:

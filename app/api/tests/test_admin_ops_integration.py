@@ -1,7 +1,7 @@
 # ruff: noqa: F811 - pytest fixtures imported from other integration tests are parameters here
 """ARC-10b: ``/admin/{pipeline,usage,ai-usage,activity,audit-logs}`` end to end (scratch
-database, the real API). 403 for non-admins; never meeting content; requeue clears output,
-queues one job and writes one audit row; filters and paging."""
+database, the real API). 403 for non-admins; never meeting content; requeue (failed / stuck
+only) queues one job without clearing anything and writes one audit row; filters and paging."""
 
 import secrets
 import uuid
@@ -82,6 +82,10 @@ def test_overview_and_jobs_never_show_content(
     assert r.status_code == 200
     ids = {j["id"] for j in r.json()["jobs"]}
     assert str(stuck) in ids and str(fresh) not in ids and str(polling) not in ids
+    processing = client.get("/admin/pipeline/jobs?status=processing&perPage=100",
+                            headers=admin).json()["jobs"]  # fmt: skip
+    flags = {j["id"]: j["is_stuck"] for j in processing}
+    assert flags[str(stuck)] is True and flags[str(polling)] is False  # same rule as the count
     assert all(j["is_stuck"] for j in r.json()["jobs"])
     assert "SECRET" not in r.text
     row = next(j for j in r.json()["jobs"] if j["id"] == str(stuck))
@@ -92,7 +96,7 @@ def test_overview_and_jobs_never_show_content(
 def test_requeue_keeps_output_and_queues_one_job(
     client: TestClient, world: dict[str, Any], admin: dict[str, str]
 ) -> None:
-    mid = _meeting(world, "done")
+    mid = _meeting(world, "failed")
     _sql(world["db"], "INSERT INTO transcript_segments (meeting_id, segment_index, start_ms, "
          "end_ms, text) VALUES (%s, 0, 0, 1, 'x')", mid)  # fmt: skip
     _sql(world["db"], "INSERT INTO todos (meeting_id, content) VALUES (%s, 'x')", mid)
@@ -112,7 +116,7 @@ def test_requeue_keeps_output_and_queues_one_job(
     ]
     (audit,) = _sql(world["db"], "SELECT action, metadata FROM audit_logs WHERE target_id = %s",
                     str(mid))  # fmt: skip
-    assert audit[0] == "meeting.requeue" and audit[1]["previous_status"] == "done"
+    assert audit[0] == "meeting.requeue" and audit[1]["previous_status"] == "failed"
     again = client.post(f"/admin/pipeline/{mid}/requeue", headers=admin)
     assert again.status_code == 409 and _msg(again) == (
         "A job for this meeting is still queued or running."
@@ -123,25 +127,35 @@ def test_requeue_keeps_output_and_queues_one_job(
 
 
 def test_requeue_refusals(client: TestClient, world: dict[str, Any], admin: dict[str, str]) -> None:
-    purged = _meeting(world, "done", audio=False)
+    purged = _meeting(world, "failed", audio=False)
+    # done / a live processing meeting: only failed or stuck ones (v1 §9d)
+    for status in ("done", "processing"):
+        healthy = _meeting(world, status)
+        r = client.post(f"/admin/pipeline/{healthy}/requeue", headers=admin)
+        assert r.status_code == 422 and _msg(r) == "Only failed or stuck meetings can be requeued."
+        assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", healthy) == [
+            (status,)
+        ]
+    stuck = _meeting(world, "processing", age_min=20)
+    assert client.post(f"/admin/pipeline/{stuck}/requeue", headers=admin).status_code == 200
     r = client.post(f"/admin/pipeline/{purged}/requeue", headers=admin)
     assert r.status_code == 409 and "no audio" in _msg(r)
     uploading = _meeting(world, "pending", mapped=False)
-    assert client.post(f"/admin/pipeline/{uploading}/requeue", headers=admin).status_code == 409
+    assert client.post(f"/admin/pipeline/{uploading}/requeue", headers=admin).status_code == 422
     # the worker could not run these: refused before anything changes
-    missing = _meeting(world, "done", mapped=False)
+    missing = _meeting(world, "failed", mapped=False)
     r = client.post(f"/admin/pipeline/{missing}/requeue", headers=admin)
     assert r.status_code == 409 and "missing from storage" in _msg(r)
-    v1 = _meeting(world, "done")
+    v1 = _meeting(world, "failed")
     _sql(world["db"], "UPDATE meetings SET storage_provider = 'r2' WHERE id = %s", v1)
     r = client.post(f"/admin/pipeline/{v1}/requeue", headers=admin)
     assert r.status_code == 409 and "not been copied" in _msg(r)
-    forged = _meeting(world, "done")
+    forged = _meeting(world, "failed")
     _sql(world["db"], "UPDATE meetings SET audio_path = %s WHERE id = %s",
          f"{world['c']}/{uuid.uuid4()}.webm", forged)  # fmt: skip
     assert client.post(f"/admin/pipeline/{forged}/requeue", headers=admin).status_code == 409
     for mid in (missing, v1, forged):
-        assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", mid) == [("done",)]
+        assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", mid) == [("failed",)]
         assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(0,)]
     assert client.post(f"/admin/pipeline/{uuid.uuid4()}/requeue",
                        headers=admin).status_code == 404  # fmt: skip

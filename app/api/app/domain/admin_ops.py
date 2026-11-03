@@ -30,8 +30,20 @@ def parse_pipeline_filter(raw: str | None) -> str | None:
     return value
 
 
-def is_stuck(status: str, updated_at: datetime, now: datetime) -> bool:
-    return status == "processing" and updated_at < now - timedelta(minutes=STUCK_MINUTES)
+def is_stuck(status: str, updated_at: datetime, now: datetime, *, active_job: bool) -> bool:
+    """``processing``, not updated for 15 min (v1) and no queued/running job (v2: a long
+    transcription re-queues its poll for hours without touching the meeting)."""
+    return (
+        status == "processing"
+        and not active_job
+        and updated_at < now - timedelta(minutes=STUCK_MINUTES)
+    )
+
+
+def can_requeue(status: str, updated_at: datetime, now: datetime, *, active_job: bool) -> bool:
+    """Failed or stuck meetings only (v1 §9d: 422 for pending / done); a ``done`` meeting is
+    re-run by its owner (``/process``), never by an admin click that charges the owner."""
+    return status == "failed" or is_stuck(status, updated_at, now, active_job=active_job)
 
 
 def is_stale_task(last_finished_at: datetime | None, every_s: int, now: datetime) -> bool:

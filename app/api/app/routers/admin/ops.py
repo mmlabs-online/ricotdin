@@ -14,11 +14,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 
-from app.core.errors import Conflict, NotFound
+from app.core.errors import Conflict, NotFound, UnprocessableEntity
 from app.db.session import Database, get_database
 from app.domain.admin import like_pattern, parse_list_params
 from app.domain.admin_ops import (
     STUCK_MINUTES,
+    can_requeue,
     is_stale_task,
     is_stuck,
     parse_activity_filters,
@@ -43,6 +44,7 @@ _BUSY = "A job for this meeting is still queued or running."
 _UPLOADING = "This meeting is still being uploaded."
 _NOT_COPIED = "This meeting's audio has not been copied to the new storage yet."
 _NOT_OWN = "This meeting's audio key is not its own, so it cannot be reprocessed."
+_NOT_REQUEUABLE = "Only failed or stuck meetings can be requeued."
 _MISSING = "This meeting's audio file is missing from storage, so it cannot be reprocessed."
 # v2: a long transcription re-queues its poll for hours without touching the meeting, so a
 # meeting is stuck only without a queued or running job (the worker's stuck_meetings rule).
@@ -119,7 +121,8 @@ async def pipeline_jobs(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
                     "SELECT m.id, m.title, m.status, m.created_at, m.updated_at, "  # noqa: S608
                     "m.duration_seconds, m.error_message, m.user_id, u.email, p.username, "
                     "j.status AS job_status, j.step AS job_step, j.attempts AS job_attempts, "
-                    "left(j.last_error, 500) AS job_error "
+                    "left(j.last_error, 500) AS job_error, "
+                    f"NOT {_NO_ACTIVE_JOB} AS active "
                     "FROM public.meetings m "
                     "LEFT JOIN public.users u ON u.id = m.user_id "
                     "LEFT JOIN public.profiles p ON p.id = m.user_id "
@@ -135,7 +138,8 @@ async def pipeline_jobs(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
         {"id": r.id, "title": r.title, "status": r.status, "created_at": r.created_at,
          "updated_at": r.updated_at, "duration_seconds": r.duration_seconds,
          "error_message": r.error_message, "owner_email": r.email,
-         "owner_username": r.username, "is_stuck": is_stuck(r.status, r.updated_at, now),
+         "owner_username": r.username,
+         "is_stuck": is_stuck(r.status, r.updated_at, now, active_job=r.active),
          "job": None if r.job_status is None else {
              "status": r.job_status, "step": r.job_step, "attempts": r.job_attempts,
              "last_error": r.job_error}}
@@ -146,18 +150,18 @@ async def pipeline_jobs(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
 
 @router.post("/pipeline/{meeting_id}/requeue")
 async def requeue(meeting_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
-    """Re-run a meeting from the start: the meeting goes back to ``pending`` and one job is
-    queued (a new job = a new quota charge for the owner, CLAUDE.md §0.7). Unlike v1 nothing is
-    cleared here: the worker replaces the transcript, chunks, to-dos, calendar, summary and notes
-    only when the new run succeeds, so a failed re-run keeps the old results. 409 unless the
-    worker can run it: own audio key stored in Drive (v1 meetings wait for ARC-18), no job queued
-    or running (the stuck sweep releases a stuck one), upload confirmed."""
+    """Re-run a failed or stuck meeting (v1 §9d; 422 otherwise): back to ``pending`` with one job
+    (a new job = a new quota charge for the owner, CLAUDE.md §0.7). Nothing is cleared here
+    (v1 wiped the output first): the worker replaces each part as its step completes. 409 before
+    any change unless the worker can run it: own audio key stored in Drive (v1 meetings wait for
+    ARC-18), no job queued or running, upload confirmed."""
     mid = path_id(meeting_id, _MEETING_NOT_FOUND)
     async with db.role_transaction(SERVICE) as conn:
         meeting = (
             await conn.execute(
                 text(
-                    "SELECT m.id, m.user_id, m.status, m.audio_path, m.storage_provider, "
+                    "SELECT m.id, m.user_id, m.status, m.updated_at, m.audio_path, "
+                    "m.storage_provider, "
                     "EXISTS (SELECT 1 FROM public.storage_objects o WHERE o.key = m.audio_path) "
                     "AS mapped, EXISTS (SELECT 1 FROM public.jobs j WHERE j.meeting_id = m.id "
                     "AND j.status IN ('queued', 'running')) AS active "
@@ -176,6 +180,8 @@ async def requeue(meeting_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any
             raise Conflict(_NOT_OWN)
         if meeting.active:
             raise Conflict(_BUSY)
+        if not can_requeue(meeting.status, meeting.updated_at, _now(), active_job=False):
+            raise UnprocessableEntity(_NOT_REQUEUABLE)
         if not meeting.mapped:
             raise Conflict(_UPLOADING if meeting.status == "pending" else _MISSING)
         await conn.execute(
