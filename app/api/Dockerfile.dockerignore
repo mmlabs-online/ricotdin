@@ -1,0 +1,20 @@
+# Ignore rules for app/api/Dockerfile (BuildKit reads <Dockerfile>.dockerignore next to the
+# Dockerfile instead of the root .dockerignore). Build context: the repo root. Only the API sources
+# and the runtime prompt are sent; never secrets, local environments or caches.
+*
+!app/api/pyproject.toml
+!app/api/uv.lock
+!app/api/.python-version
+!app/api/alembic.ini
+!app/api/app/
+!app/api/migrations/
+!app/api/scripts/
+!ai-instruction/ai-gen/
+
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key

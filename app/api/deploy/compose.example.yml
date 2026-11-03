@@ -1,0 +1,44 @@
+# Ricotdin v2: API + pipeline worker from ONE image (ARC-08d). A reference for ARC-15, which moves
+# the real file to the deployment repository (OPS-04/05 flow) — not used by CI.
+#
+# Secrets live only in server files outside any repository, one per container:
+#   /etc/mmlabs/ricotdin-api.env     DATABASE_URL_APP, DATABASE_URL_SERVICE, DATABASE_URL_WORKER
+#                                    (the API's /media lookup), JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET,
+#                                    SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN,
+#                                    optional provider key fallbacks (GEMINI_API_KEY, …)
+#   /etc/mmlabs/ricotdin-worker.env  ONLY DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional
+#                                    provider key fallbacks, LOG_LEVEL, SENTRY_DSN — the worker
+#                                    refuses to start with any other database URL or server secret.
+# Never the owner DATABASE_URL (migrations are a separate owner step: alembic upgrade head).
+
+services:
+  api:
+    image: ${RICOTDIN_API_IMAGE:?pin by digest}
+    env_file: /etc/mmlabs/ricotdin-api.env
+    environment:
+      RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
+      FORWARDED_ALLOW_IPS: ${PROXY_SUBNET:?reverse-proxy subnet}
+    expose: ["8000"]  # behind the reverse proxy only; strip /media query strings in its logs
+    restart: unless-stopped
+    # image HEALTHCHECK: GET /health
+
+  worker:
+    image: ${RICOTDIN_API_IMAGE:?pin by digest}
+    command: ["python", "-m", "app.worker"]
+    env_file: /etc/mmlabs/ricotdin-worker.env
+    environment:
+      RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
+    # No ports: the worker only talks to Postgres, Google Drive and the AI / speech providers.
+    stop_grace_period: 30s  # SIGTERM: stop claiming, release a running step after 8 s
+    read_only: true
+    tmpfs:
+      # per-job work directories (download + transcode; recordings up to 1 GiB, 6 h)
+      - /tmp:size=4g,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker.health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    # ARC-15 follow-up (CLAUDE.md §0.7): sandbox ffmpeg (separate uid, no network, seccomp).

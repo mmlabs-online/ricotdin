@@ -121,7 +121,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Accepted:** deleting a user cascades to their `activity_log` / `quota_ledger` rows (FK actions
   run as the owner; `audit_logs` uses SET NULL). Rate limiter (`app/core/ratelimit.py`) is
   in-process; pass `time.monotonic()`.
-- **Image** `app/api/Dockerfile` (python 3.12-slim + ffmpeg, uid 10001, HEALTHCHECK `/health`); CI builds
+- **Image** `app/api/Dockerfile` (python 3.12-slim + ffmpeg, uid 10001, HEALTHCHECK `/health`; build
+  context = repo root since ARC-08d: `docker build -f app/api/Dockerfile .`); CI builds
   it and uploads `openapi.json` as an artifact (`python -m scripts.dump_openapi`). Behind a proxy set
   `FORWARDED_ALLOW_IPS` to the proxy subnet and keep port 8000 internal. Local:
   `uv run --env-file .env uvicorn app.main:create_app --factory --reload`. A container gets a
@@ -346,15 +347,21 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
   15 min (v1 60) because `/media` proxies Drive.
 
-### 0.7 v2 worker (ARC-08; slices 08a foundation, 08b transcription, 08c AI + analyse)
+### 0.7 v2 worker (ARC-08; 08a foundation, 08b transcription, 08c AI + analyse, 08d embed + deploy)
 
 - **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
   with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
   to start (exit 2) if `DATABASE_URL`, `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `JWT_PRIVATE_KEY`,
   `SMTP_PASSWORD` or a Supabase / migration credential is set (`policy.worker_env_problems`), and
-  **while pipeline steps are missing**: `embed` comes with 08d, so the worker is
-  **not deployable before then** (no deploy target yet; tests drive `JobRunner` directly).
-  Deployment (ARC-15 / OPS-05): `stop_grace_period: 30s` for the worker service.
+  while a pipeline step is missing (all four are registered since 08d: start → transcribe_poll →
+  analyse → embed). **Deploy target (08d):** the same image with `command: python -m app.worker`,
+  reference `app/api/deploy/compose.example.yml` (own env file with only the worker values, no ports,
+  `stop_grace_period: 30s`, read-only root + `/tmp` tmpfs 4 GiB for job dirs, health check
+  `python -m app.worker.health` = heartbeat file touched every 30 s, fails after 90 s). ARC-15 moves
+  it into the deployment repo. **Image build context is the repo root:**
+  `docker build -f app/api/Dockerfile .` (ignore rules `app/api/Dockerfile.dockerignore`; the image
+  carries `ai-instruction/ai-gen/` at `/app/ai-instruction/ai-gen`). CI checks the prompt is in the
+  image, the worker refuses a service credential and the health check fails without a heartbeat.
 - **Runner** (`runner.py`, port of v1 `lib/jobs/worker.ts`): `claim_next_job` (`SKIP LOCKED`), one
   job at a time, poll 1 s, stuck sweep every 60 s (running > 15 min). Each step runs in a private
   temp dir `ricotdin-job-*` (removed after; leftovers older than 1 h are removed at startup) with a
@@ -449,7 +456,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     meetings).
   - Analysis (`analysis.py`): v1 prompt format (`[N] Speaker (s.s): text`, MEETING_DATE), prompt
     text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: only the repository root —
-    five levels above the module — or `/app`; never a walk up the tree; the image copy is 08d). Untrusted output: fields fall back one by one, bad items
+    five levels above the module — or `/app`, where the image carries it; never a walk up the tree). Untrusted output: fields fall back one by one, bad items
     dropped, `due_date` must be a real `YYYY-MM-DD`, `proposed_at` an ISO date-time (no offset =
     UTC), dates only 1970–2100, text bounded without NUL / lone surrogates, no summary and no
     notes → `ParseFailed` (its detail never quotes the answer: meeting content).
@@ -462,10 +469,23 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     transcript, 10 per user per
     hour (`app.state.regenerate_limiter`), the locked model, overwrites summary + notes and sets
     `done` (v1); to-dos/calendar untouched. `app.state.ai` is the API's `AIService`.
-  - Open / accepted: regenerate is not charged to quota (v1 did not charge it either) and its
-    limiter is per process; a stored model lock is not re-checked against the allow-list (v1
+  - Open / accepted: regenerate's limiter is per process; a stored model lock is not re-checked against the allow-list (v1
     AIP-03); a provider error during the strict retry rotates and starts the attempt again; a key
     pool rebuild (key set changed, e.g. after a 401) forgets the other keys' cooldowns.
+- **Step `embed` (08d, `embed.py` + pure `chunk.py`, v1 `chunk.ts`):** ~1 200 characters per
+  chunk with one segment of overlap; `AIService.embed` = `catalog.EMBEDDING` (Gemini
+  `gemini-embedding-001`, 768 dims, pinned: changing it means re-embedding every meeting),
+  `batchEmbedContents` batches of 100, each through the pool; wrong count/dimension/non-finite →
+  `AIBadOutput`; usage provider `gemini-embedding` (v1 label), quantity = tokens or the batch size.
+  Then ONE transaction guarded by `locked_by`: chunks replaced (`CAST(:e AS vector)`), meeting
+  `processing → done` (`error_message` cleared) → `Done` + activity `processing_done`. A meeting not
+  `processing` ends the job without work; rate-limited keys re-queue `embed` without an attempt.
+- **Regenerate quota (owner decision 2026-11-03):** charged like one generation —
+  `regenerate_charge_seconds` = ceil(last segment `end_ms`) else `duration_seconds`, 1–86 400 s —
+  via `quota_apply_movement` (service role, reason `generate`, key `regen:<uuid>:charge`, no
+  overdraw) in the same transaction as the checks, BEFORE the AI call; short balance → 402
+  `QUOTA_BLOCKED: …`; any failure after the charge (AI error, 409/404 at save, cancel) refunds it
+  (`regen:<uuid>:refund`, shielded). 409/422 refusals happen before the charge (free).
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).

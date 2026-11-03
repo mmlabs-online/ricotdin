@@ -5,10 +5,10 @@ on:
   push:
     branches: [main, dev, 'release/**']
     # legacy schema/migrations feed the v1↔v2 parity test (ARC-02).
-    paths: ['app/api/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
   pull_request:
     branches: [main, dev, 'release/**']
-    paths: ['app/api/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
 
 permissions:
   contents: read
@@ -79,7 +79,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build image (no push)
-        run: docker build --build-arg BUILD_COMMIT=${{ github.sha }} -t ricotdin-api:ci app/api
+        # Context = repo root (the worker needs ai-instruction/ai-gen/); ignore rules in
+        # app/api/Dockerfile.dockerignore.
+        run: docker build -f app/api/Dockerfile --build-arg BUILD_COMMIT=${{ github.sha }} -t ricotdin-api:ci .
 
       - name: Container is healthy and reports its version
         run: |
@@ -97,3 +99,18 @@ jobs:
           echo "$version" | grep -q "${{ github.sha }}"
           [ "$(docker exec api id -u)" = "10001" ]
           docker exec api ffmpeg -version | head -1
+
+      - name: Worker image checks (prompt present, refuses extra credentials)
+        run: |
+          docker run --rm ricotdin-api:ci python -c \
+            "from app.services.ai.prompts import load_prompt; assert load_prompt().startswith('# Meeting Analysis')"
+          docker run --rm ricotdin-api:ci sh -c 'test ! -e /app/tests && test ! -e /app/.env'
+          set +e
+          docker run --rm -e DATABASE_URL_WORKER=postgresql://w@127.0.0.1:1/x \
+            -e DATABASE_URL_SERVICE=postgresql://s@127.0.0.1:1/x ricotdin-api:ci python -m app.worker
+          code=$?
+          set -e
+          [ "$code" = "2" ] || { echo "worker should refuse a service credential (exit $code)"; exit 1; }
+          if docker run --rm ricotdin-api:ci python -m app.worker.health; then
+            echo "health check passed without a heartbeat"; exit 1
+          fi
