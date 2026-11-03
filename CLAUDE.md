@@ -628,8 +628,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   disable / delete of yourself or the last active admin; the admin rows are locked
   (`lock_admin_count`) so two admins cannot remove each other concurrently.
 - Audit actions: `user.role_change {from,to}`, `user.disable`, `user.enable`,
-  `user.password_reset`, `user.delete {meetings, files, files_failed}`, `user.bulk_<action>`,
-  `quota.grant`. Admin role changes write `users.role` only (trigger mirrors `profiles.role`).
+  `user.password_reset`, `user.delete_started {files}` (committed before the Drive pass),
+  `user.delete {meetings, files, files_failed}`, `user.bulk_<action>`,
+  `quota.grant` (ledger key `admin_grant:<uuid>`). Admin role changes write `users.role` only
+  (trigger mirrors `profiles.role`).
 - **Locks:** admin rows and the target are locked `FOR NO KEY UPDATE` (never `FOR UPDATE`: that
   blocks the users' own FK inserts and deadlocked a disable against a concurrent refresh); the
   caller must be among the locked active admins (re-checked inside the mutation). Bulk locks ids

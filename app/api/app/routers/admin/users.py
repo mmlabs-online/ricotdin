@@ -259,6 +259,10 @@ async def delete_user(user_id: str, admin: CurrentAdmin, db: Db, platform: Plat)
         guard_delete(admin.user_id, uid, target.role, count)
         await _set_disabled(conn, uid, True)  # no new uploads while the files go
         first = await _owned_keys(conn, uid)
+        # Committed before the irreversible Drive pass: a delete that stops half-way (caller
+        # demoted meanwhile, database error, restart) still leaves its trace.
+        await write_audit(conn, admin, "user.delete_started", "user", str(uid),
+                          {"files": len(first)})  # fmt: skip
     failed = await delete_files(db, platform, first)
     async with db.role_transaction(SERVICE) as conn:
         count = await lock_admin_count(conn, admin, uid)  # re-checked: the target may have changed
@@ -421,7 +425,8 @@ async def grant_quota(user_id: str, request: Request, admin: CurrentAdmin, db: D
                     "public.quota_apply_movement(:u, :a, :q, 'admin_grant', :k, true, NULL, "
                     ":by, CAST(:md AS jsonb))"
                 ),
-                {"u": uid, "a": seconds, "q": queries, "k": str(grant_id), "by": admin.user_id,
+                {"u": uid, "a": seconds, "q": queries, "k": f"admin_grant:{grant_id}",
+                 "by": admin.user_id,
                  "md": json.dumps({"note": note, "grant_id": str(grant_id)})},
             )
         ).one()  # fmt: skip

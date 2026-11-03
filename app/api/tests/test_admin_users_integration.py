@@ -222,9 +222,9 @@ def test_delete_removes_drive_files_first_then_the_user(
     assert fid in drive.deleted
     assert _sql(world["db"], "SELECT count(*) FROM users WHERE id = %s", world["d"]) == [(0,)]
     assert _sql(world["db"], "SELECT count(*) FROM meetings WHERE id = %s", mid) == [(0,)]
-    ((action, actor, meta),) = _audits(world, world["d"])
-    assert (action, actor) == ("user.delete", world["a"])
-    assert meta == {"meetings": 1, "files": 1, "files_failed": 0}
+    started, done = _audits(world, world["d"])
+    assert started == ("user.delete_started", world["a"], {"files": 1})
+    assert done == ("user.delete", world["a"], {"meetings": 1, "files": 1, "files_failed": 0})
     assert client.delete(f"/admin/users/{world['d']}", headers=admin).status_code == 404
     me = client.delete(f"/admin/users/{world['a']}", headers=admin)
     assert _msg(me) == "You cannot delete your own account."
@@ -387,6 +387,30 @@ def test_disable_does_not_deadlock_with_a_concurrent_refresh(
     assert result["r"].status_code == 200, result["r"].text
     # The token the racing refresh committed is not revoked by this statement, but it is
     # useless: /auth/refresh refuses a disabled user and then revokes everything (§0.3).
+    assert _sql(world["db"], "SELECT disabled_at IS NOT NULL FROM users WHERE id = %s", uid) == [
+        (True,)
+    ]
+
+
+def test_a_delete_stopped_half_way_is_still_audited(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str], monkeypatch: Any
+) -> None:
+    from app.routers.admin import users as admin_users
+
+    uid = _new_user(world)
+    original = admin_users.delete_files  # type: ignore[attr-defined]
+
+    async def demote_caller_meanwhile(*args: Any) -> list[str]:
+        _sql(world["db"], "UPDATE users SET role = 'user' WHERE id = %s", world["a"])
+        return await original(*args)
+
+    monkeypatch.setattr(admin_users, "delete_files", demote_caller_meanwhile)
+    try:
+        r = client.delete(f"/admin/users/{uid}", headers=admin)
+    finally:
+        _sql(world["db"], "UPDATE users SET role = 'admin' WHERE id = %s", world["a"])
+    assert r.status_code == 403  # the caller is no longer an admin at the row delete
+    assert [a[0] for a in _audits(world, uid)] == ["user.delete_started"]
     assert _sql(world["db"], "SELECT disabled_at IS NOT NULL FROM users WHERE id = %s", uid) == [
         (True,)
     ]
