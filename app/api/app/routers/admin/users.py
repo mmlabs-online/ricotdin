@@ -26,6 +26,7 @@ from app.domain.admin import (
     exclude_self,
     guard_delete,
     guard_disable,
+    guard_promotion,
     guard_role_change,
     like_pattern,
     month_range,
@@ -39,7 +40,7 @@ from app.domain.admin import (
 from app.email.templates import reset_password_email
 from app.routers._common import SERVICE, json_object, jsonb, path_id
 from app.routers.admin._common import CurrentAdmin, lock_admin_count, write_audit
-from app.routers.auth import link, send_mail
+from app.routers.auth import enforce, link, send_mail
 from app.routers.meetings import delete_files
 from app.services.platform import Platform, get_platform
 from app.services.storage.ownership import is_owned_audio_key, is_owned_avatar_key
@@ -56,6 +57,10 @@ _USER_COLUMNS = (
     "u.id, u.email, p.username, u.role, u.disabled_at, u.email_verified_at, u.created_at, "
     "u.last_sign_in_at"
 )
+
+
+def _status(row: Any) -> Any:
+    return user_status(disabled_at=row.disabled_at, email_verified_at=row.email_verified_at)
 
 
 def _user_out(row: Any) -> dict[str, Any]:
@@ -75,7 +80,10 @@ def _user_out(row: Any) -> dict[str, Any]:
 async def _target(conn: AsyncConnection, user_id: uuid.UUID) -> Any:
     row = (
         await conn.execute(
-            text("SELECT id, email, role, disabled_at FROM public.users WHERE id = :id FOR UPDATE"),
+            text(
+                "SELECT id, email, role, disabled_at, email_verified_at FROM public.users "
+                "WHERE id = :id FOR NO KEY UPDATE"
+            ),
             {"id": user_id},
         )
     ).first()
@@ -172,9 +180,10 @@ async def change_role(user_id: str, request: Request, admin: CurrentAdmin, db: D
     uid = path_id(user_id, _NOT_FOUND)
     new_role = parse_role(await json_object(request))
     async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, uid)
+        count = await lock_admin_count(conn, admin, uid)
         target = await _target(conn, uid)
         guard_role_change(admin.user_id, uid, target.role, new_role, count)
+        guard_promotion(new_role, _status(target))
         await conn.execute(
             text("UPDATE public.users SET role = :r, updated_at = now() WHERE id = :id"),
             {"r": new_role, "id": uid},
@@ -190,7 +199,7 @@ async def change_status(user_id: str, request: Request, admin: CurrentAdmin, db:
     uid = path_id(user_id, _NOT_FOUND)
     disable = parse_status(await json_object(request))
     async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, uid)
+        count = await lock_admin_count(conn, admin, uid)
         target = await _target(conn, uid)
         if disable:
             guard_disable(admin.user_id, uid, target.role, count)
@@ -221,6 +230,8 @@ async def send_password_reset(
     uid = path_id(user_id, _NOT_FOUND)
     async with db.role_transaction(SERVICE) as conn:
         target = await _target(conn, uid)
+        # The same per-address limit as /auth/forgot-password (3/h): no mail-bombing a user.
+        enforce(runtime.limiters.email_address, f"reset_password:{target.email.lower()}")
         token = await auth_service.issue_email_token(
             conn, uid, "reset_password", ttl=RESET_TTL, now=datetime.now(UTC)
         )
@@ -236,44 +247,58 @@ async def send_password_reset(
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, admin: CurrentAdmin, db: Db, platform: Plat) -> Any:
-    """Files first (CLAUDE.md §9c): every owned meeting audio and the avatar are deleted from
-    Drive, each in its own step; a failure becomes ``storageWarnings`` and the user is still
-    deleted. Rows cascade (meetings, folders, chat, quota, …; audit rows keep a NULL actor)."""
+    """Files first (CLAUDE.md §9c): the account is disabled and signed out, then every owned
+    meeting audio and the avatar are deleted from Drive, each in its own step; a failure becomes
+    ``storageWarnings`` and the user is still deleted. Rows cascade (meetings, folders, chat,
+    quota, …; audit rows keep a NULL actor). Keys that appeared in between (an upload the user
+    confirmed just before being disabled) get a second Drive pass after the row delete."""
     uid = path_id(user_id, _NOT_FOUND)
     async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, uid)
+        count = await lock_admin_count(conn, admin, uid)
         target = await _target(conn, uid)
         guard_delete(admin.user_id, uid, target.role, count)
+        await _set_disabled(conn, uid, True)  # no new uploads while the files go
+        first = await _owned_keys(conn, uid)
+    failed = await delete_files(db, platform, first)
+    async with db.role_transaction(SERVICE) as conn:
+        count = await lock_admin_count(conn, admin, uid)  # re-checked: the target may have changed
+        target = await _target(conn, uid)
+        guard_delete(admin.user_id, uid, target.role, count)
+        late = [k for k in await _owned_keys(conn, uid) if k not in first]
         meetings = (
             await conn.execute(
-                text("SELECT id, user_id, audio_path FROM public.meetings WHERE user_id = :u"),
-                {"u": uid},
+                text("SELECT count(*) FROM public.meetings WHERE user_id = :u"), {"u": uid}
             )
-        ).all()
-        avatar = (
-            await conn.execute(
-                text("SELECT avatar_key FROM public.profiles WHERE id = :u"), {"u": uid}
-            )
-        ).scalar_one_or_none()
-    keys = [
-        m.audio_path for m in meetings
-        if m.audio_path and is_owned_audio_key(m.audio_path, str(m.user_id), str(m.id))
-    ]  # fmt: skip
-    if avatar and is_owned_avatar_key(avatar, str(uid)):
-        keys.append(avatar)
-    failed = await delete_files(db, platform, keys)
-    async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, uid)  # re-checked: the target may have changed
-        target = await _target(conn, uid)
-        guard_delete(admin.user_id, uid, target.role, count)
+        ).scalar_one()
         await conn.execute(text("DELETE FROM public.users WHERE id = :id"), {"id": uid})
         await write_audit(conn, admin, "user.delete", "user", str(uid),
-                          {"meetings": len(meetings), "files": len(keys),
+                          {"meetings": meetings, "files": len(first) + len(late),
                            "files_failed": len(failed)})  # fmt: skip
+    failed += await delete_files(db, platform, late)  # the map rows outlive the user
     out: dict[str, Any] = {"ok": True, "deleted": uid}
     if failed:
         out["storageWarnings"] = [f"Storage cleanup failed for {len(failed)} file(s)."]
     return out
+
+
+async def _owned_keys(conn: AsyncConnection, uid: uuid.UUID) -> list[str]:
+    """The user's own meeting audio keys and avatar key (a forged path is never included)."""
+    meetings = (
+        await conn.execute(
+            text("SELECT id, user_id, audio_path FROM public.meetings WHERE user_id = :u"),
+            {"u": uid},
+        )
+    ).all()
+    keys = [
+        m.audio_path for m in meetings
+        if m.audio_path and is_owned_audio_key(m.audio_path, str(m.user_id), str(m.id))
+    ]  # fmt: skip
+    avatar = (
+        await conn.execute(text("SELECT avatar_key FROM public.profiles WHERE id = :u"), {"u": uid})
+    ).scalar_one_or_none()
+    if avatar and is_owned_avatar_key(avatar, str(uid)):
+        keys.append(avatar)
+    return keys
 
 
 # --- bulk -----------------------------------------------------------------------------------------
@@ -282,18 +307,22 @@ async def delete_user(user_id: str, admin: CurrentAdmin, db: Db, platform: Plat)
 @router.post("/users/bulk")
 async def bulk_action(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
     """``{ids ≤ 50, action: disable|enable|set_role, role?}``; the caller is always skipped
-    (v1). One transaction and one audit row for the batch; unknown ids are reported."""
+    (v1). All or nothing: one transaction (ids locked in sorted order) and one audit row for the
+    batch; unknown ids are reported. Promotion needs an active, verified account."""
     ids, action, role = parse_bulk(await json_object(request))
     safe, self_skipped = exclude_self(admin.user_id, ids)
     processed: list[uuid.UUID] = []
     errors: list[dict[str, Any]] = []
     if safe:
         async with db.role_transaction(SERVICE) as conn:
-            for uid in safe:
-                count = await lock_admin_count(conn, uid)
+            for uid in sorted(safe):
+                count = await lock_admin_count(conn, admin, uid)
                 row = (
                     await conn.execute(
-                        text("SELECT role FROM public.users WHERE id = :id FOR UPDATE"),
+                        text(
+                            "SELECT role, disabled_at, email_verified_at FROM public.users "
+                            "WHERE id = :id FOR NO KEY UPDATE"
+                        ),
                         {"id": uid},
                     )
                 ).first()
@@ -302,6 +331,7 @@ async def bulk_action(request: Request, admin: CurrentAdmin, db: Db) -> dict[str
                     continue
                 if action == "set_role" and role is not None:
                     guard_role_change(admin.user_id, uid, row.role, role, count)
+                    guard_promotion(role, _status(row))
                     await conn.execute(
                         text(
                             "UPDATE public.users SET role = :r, updated_at = now() WHERE id = :id"
@@ -351,7 +381,7 @@ async def get_quota(user_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]
                 text(
                     "SELECT id, created_at, reason, delta_audio_seconds, delta_agent_queries, "
                     "created_by, metadata FROM public.quota_ledger WHERE user_id = :u "
-                    "ORDER BY created_at DESC, id LIMIT 20"
+                    "ORDER BY created_at DESC, id DESC LIMIT 20"
                 ),
                 {"u": uid},
             )
@@ -379,7 +409,11 @@ async def grant_quota(user_id: str, request: Request, admin: CurrentAdmin, db: D
     seconds, queries, note = parse_quota_grant(await json_object(request))
     grant_id = uuid.uuid4()
     async with db.role_transaction(SERVICE) as conn:
-        await _target(conn, uid)
+        exists = (
+            await conn.execute(text("SELECT 1 FROM public.users WHERE id = :id"), {"id": uid})
+        ).first()
+        if exists is None:
+            raise NotFound(_NOT_FOUND)
         result = (
             await conn.execute(
                 text(

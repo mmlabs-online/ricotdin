@@ -23,6 +23,7 @@ ROLES: tuple[Role, ...] = ("user", "admin")
 BULK_ACTIONS: tuple[BulkAction, ...] = ("disable", "enable", "set_role")
 BULK_MAX_IDS = 50  # v1
 MAX_SEARCH_CHARS = 200
+MAX_PAGE = 10_000  # a larger OFFSET overflows Postgres' bigint
 MAX_NOTE_CHARS = 500  # v1
 # v2: v1 had no upper bound. A grant this size is a typo, not a decision.
 MAX_GRANT_MINUTES = 100_000
@@ -61,6 +62,13 @@ def guard_delete(caller: uuid.UUID, target: uuid.UUID, target_role: str, admin_c
         raise BadRequest("You cannot delete your own account.")
     if target_role == "admin" and admin_count <= 1:
         raise BadRequest("Cannot delete the last remaining admin.")
+
+
+def guard_promotion(new_role: str, status: UserStatus) -> None:
+    """v2: only an active, verified account becomes an admin (an unverified address may have been
+    registered by someone else, CLAUDE.md §0.3; a disabled one cannot sign in)."""
+    if new_role == "admin" and status != "active":
+        raise BadRequest("Only an active, verified account can be made an admin.")
 
 
 def exclude_self(caller: uuid.UUID, ids: list[uuid.UUID]) -> tuple[list[uuid.UUID], bool]:
@@ -127,11 +135,12 @@ def parse_quota_grant(body: Mapping[str, Any]) -> tuple[int, int, str | None]:
     """``{audio_minutes?, agent_queries?, note?}`` → (audio seconds, agent queries, note)."""
     minutes = _amount(body.get("audio_minutes"), MAX_GRANT_MINUTES, integer=False)
     queries = _amount(body.get("agent_queries"), MAX_GRANT_QUERIES, integer=True)
-    if minutes == 0 and queries == 0:
+    seconds = round(minutes * 60)
+    if seconds == 0 and queries == 0:  # after rounding: 0.001 minutes is nothing
         raise BadRequest("Provide at least one positive value.")
     note = body.get("note")
     clean = note.replace("\x00", "").strip()[:MAX_NOTE_CHARS] if isinstance(note, str) else ""
-    return round(minutes * 60), int(queries), clean or None
+    return seconds, int(queries), clean or None
 
 
 # --- status + list --------------------------------------------------------------------------------
@@ -148,7 +157,7 @@ def month_range(raw: str | None, now: datetime) -> tuple[str, datetime, datetime
     """``YYYY-MM`` → (label, start, end) in UTC, end exclusive; else the current month (v1)."""
     year, month = now.year, now.month
     m = _MONTH.match((raw or "").strip())
-    if m and 1 <= int(m.group(2)) <= 12:
+    if m and 1 <= int(m.group(2)) <= 12 and 1970 <= int(m.group(1)) <= 2100:
         year, month = int(m.group(1)), int(m.group(2))
     start = datetime(year, month, 1, tzinfo=UTC)
     end = datetime(year + month // 12, month % 12 + 1, 1, tzinfo=UTC)
@@ -163,14 +172,17 @@ class ListParams:
 
 
 def _int(raw: Any, default: int) -> int:
+    text = str(raw).strip()
+    if len(text) > 12:
+        return default if not text.isdigit() else 10**12
     try:
-        return int(str(raw).strip())
+        return int(text)
     except ValueError:
         return default
 
 
 def parse_list_params(query: Mapping[str, Any]) -> ListParams:
-    page = max(1, _int(query.get("page", "1"), 1))
+    page = min(MAX_PAGE, max(1, _int(query.get("page", "1"), 1)))
     per_page = min(100, max(1, _int(query.get("perPage", "20"), 20)))
     search = str(query.get("search") or "").strip().lower()[:MAX_SEARCH_CHARS]
     return ListParams(page, per_page, search)

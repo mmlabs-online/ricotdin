@@ -630,6 +630,18 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - Audit actions: `user.role_change {from,to}`, `user.disable`, `user.enable`,
   `user.password_reset`, `user.delete {meetings, files, files_failed}`, `user.bulk_<action>`,
   `quota.grant`. Admin role changes write `users.role` only (trigger mirrors `profiles.role`).
+- **Locks:** admin rows and the target are locked `FOR NO KEY UPDATE` (never `FOR UPDATE`: that
+  blocks the users' own FK inserts and deadlocked a disable against a concurrent refresh); the
+  caller must be among the locked active admins (re-checked inside the mutation). Bulk locks ids
+  in sorted order and is all-or-nothing. Delete first disables the account and revokes its
+  tokens, deletes the files, then re-reads the keys before the row delete and gives keys that
+  appeared meanwhile a second Drive pass. v2 additions: promotion only of an active, verified
+  account (§0.3 pre-registration risk); reset mail limited like `/auth/forgot-password` (3/h per
+  address); `page ≤ 10 000`; `month` 1970–2100; a grant that rounds to 0 s is refused;
+  `email_sent: false` must be shown by ARC-14 (v1 answered 500 when the mail failed).
+- **Open (owner decision pending):** a demoted admin keeps admin RLS reads in the non-admin APIs
+  (all meetings, transcripts, chat retrieval) until the access token expires (≤ 15 min, §0.3);
+  the admin API itself refuses at once.
 
 ## 1. What we are building
 

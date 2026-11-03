@@ -17,6 +17,7 @@ from app.domain.admin import (
     exclude_self,
     guard_delete,
     guard_disable,
+    guard_promotion,
     guard_role_change,
     like_pattern,
     month_range,
@@ -176,3 +177,21 @@ def test_parse_list_params() -> None:
 def test_like_pattern_escapes_wildcards() -> None:
     assert like_pattern("ann") == "%ann%"
     assert like_pattern("50%_a\\b") == "%50\\%\\_a\\\\b%"
+
+
+def test_promotion_needs_an_active_verified_account() -> None:
+    guard_promotion("admin", "active")
+    guard_promotion("user", "unverified")  # demotion / no change: always fine
+    for status in ("unverified", "disabled"):
+        with pytest.raises(BadRequest):
+            guard_promotion("admin", status)
+
+
+def test_review_edge_inputs() -> None:
+    now = datetime(2026, 11, 3, tzinfo=UTC)
+    for bad in ("0000-05", "9999-12", "1969-12", "2101-01"):
+        assert month_range(bad, now)[0] == "2026-11"
+    assert month_range("2100-12", now)[2] == datetime(2101, 1, 1, tzinfo=UTC)
+    assert parse_list_params({"page": "99999999999999999999"}).page == 10_000
+    with pytest.raises(BadRequest):
+        parse_quota_grant({"audio_minutes": 0.001})  # rounds to 0 seconds

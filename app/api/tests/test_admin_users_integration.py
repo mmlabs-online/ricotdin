@@ -264,8 +264,12 @@ def test_bulk_skips_self_and_reports_unknown_ids(
     assert _sql(world["db"], "SELECT count(*) FROM users WHERE id IN (%s, %s) AND disabled_at IS "
                 "NOT NULL", u1, u2) == [(2,)]  # fmt: skip
     assert _sql(world["db"], "SELECT disabled_at FROM users WHERE id = %s", world["a"]) == [(None,)]
-    ((action, _, meta),) = _audits(world, u1)
+    ((action, meta),) = _sql(world["db"], "SELECT action, metadata FROM audit_logs WHERE "
+                             "metadata->'ids' ? %s", str(u1))  # fmt: skip
     assert action == "user.bulk_disable" and meta["processed"] == 2
+    enable = client.post("/admin/users/bulk", headers=admin,
+                         json={"ids": [str(u1)], "action": "enable"})  # fmt: skip
+    assert enable.json() == {"processed": 1}
     role = client.post("/admin/users/bulk", headers=admin,
                        json={"ids": [str(u1)], "action": "set_role", "role": "admin"})  # fmt: skip
     assert role.json() == {"processed": 1}
@@ -302,3 +306,87 @@ def test_quota_grant_and_history(
     assert client.post(f"/admin/users/{uuid.uuid4()}/quota", headers=admin,
                        json={"agent_queries": 1}).status_code == 404  # fmt: skip
     assert client.get(f"/admin/users/{uuid.uuid4()}/quota", headers=admin).status_code == 404
+
+
+# --- review follow-ups ------------------------------------------------------------------------------
+
+
+def test_only_active_verified_accounts_become_admins(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    unverified = _new_user(world)
+    _sql(world["db"], "UPDATE users SET email_verified_at = NULL WHERE id = %s", unverified)
+    r = client.patch(f"/admin/users/{unverified}/role", headers=admin, json={"role": "admin"})
+    assert (
+        r.status_code == 400 and _msg(r) == "Only an active, verified account can be made an admin."
+    )
+    bulk = client.post("/admin/users/bulk", headers=admin,
+                       json={"ids": [str(unverified)], "action": "set_role", "role": "admin"})  # fmt: skip
+    assert bulk.status_code == 400
+    assert _sql(world["db"], "SELECT role FROM users WHERE id = %s", unverified) == [("user",)]
+
+
+def test_reset_password_is_rate_limited_per_address(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    uid = _new_user(world)
+    codes = [client.post(f"/admin/users/{uid}/reset-password", headers=admin).status_code
+             for _ in range(4)]  # fmt: skip
+    assert codes == [200, 200, 200, 429]
+
+
+def test_delete_never_touches_a_forged_key(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str], drive: FakeDrive
+) -> None:
+    victim_key = f"{world['b']}/{uuid.uuid4()}.webm"
+    victim_file = f"f{secrets.token_hex(6)}"
+    _sql(world["db"], "INSERT INTO storage_objects (key, file_id, size_bytes, content_type) "
+         "VALUES (%s, %s, 3, 'audio/webm')", victim_key, victim_file)  # fmt: skip
+    uid = _new_user(world)
+    _sql(world["db"], "INSERT INTO meetings (user_id, status, audio_path) VALUES (%s, 'done', %s)",
+         uid, victim_key)  # fmt: skip
+    _sql(world["db"], "UPDATE profiles SET avatar_key = %s WHERE id = %s",
+         f"avatars/{world['b']}.png", uid)  # fmt: skip
+    assert client.delete(f"/admin/users/{uid}", headers=admin).status_code == 200
+    assert victim_file not in drive.deleted
+    assert _sql(world["db"], "SELECT count(*) FROM storage_objects WHERE key = %s",
+                victim_key) == [(1,)]  # fmt: skip
+
+
+def test_disable_does_not_deadlock_with_a_concurrent_refresh(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    """A refresh holds its token row and then inserts the new token (FK key-share on users)
+    while the admin disable waits on that token row: with FOR UPDATE on users this deadlocked."""
+    import threading
+
+    import psycopg
+
+    uid = _new_user(world)
+    _sql(world["db"], "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
+         "VALUES (%s, gen_random_uuid(), %s, now() + interval '1 day')", uid,
+         secrets.token_hex(16))  # fmt: skip
+    result: dict[str, Any] = {}
+    with psycopg.connect(world["db"]) as refresh:
+        refresh.execute("SELECT id FROM refresh_tokens WHERE user_id = %s FOR UPDATE", (uid,))
+
+        def disable() -> None:
+            result["r"] = client.patch(f"/admin/users/{uid}/status", headers=admin,
+                                       json={"disabled": True})  # fmt: skip
+
+        worker = threading.Thread(target=disable)
+        worker.start()
+        worker.join(1.5)  # the admin request is now waiting on the token row
+        refresh.execute(
+            "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
+            "VALUES (%s, gen_random_uuid(), %s, now() + interval '1 day')",
+            (uid, secrets.token_hex(16)),
+        )
+        refresh.commit()
+    worker.join(30)
+    assert result["r"].status_code == 200, result["r"].text
+    # The token the racing refresh committed is not revoked by this statement, but it is
+    # useless: /auth/refresh refuses a disabled user and then revokes everything (§0.3).
+    assert _sql(world["db"], "SELECT disabled_at IS NOT NULL FROM users WHERE id = %s", uid) == [
+        (True,)
+    ]

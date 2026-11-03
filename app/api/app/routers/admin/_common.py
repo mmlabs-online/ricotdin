@@ -78,16 +78,25 @@ async def write_audit(
     )  # fmt: skip
 
 
-async def lock_admin_count(conn: AsyncConnection, target: uuid.UUID) -> int:
+async def lock_admin_count(conn: AsyncConnection, admin: Admin, target: uuid.UUID) -> int:
     """Active admins, plus the target if it is a disabled admin, with their rows locked so two
-    concurrent changes cannot remove the last admin between them."""
+    concurrent changes cannot remove the last admin between them. The caller must be among them
+    (re-checked inside the mutation's transaction, so an admin demoted a moment ago is refused).
+
+    ``FOR NO KEY UPDATE`` serialises admin changes against each other but, unlike ``FOR UPDATE``,
+    does not block the foreign-key checks of the users' own inserts (a refresh token rotation,
+    a meeting, a usage row), which would otherwise deadlock with a disable.
+    """
     rows = (
         await conn.execute(
             text(
                 "SELECT id FROM public.users WHERE role = 'admin' "
-                "AND (disabled_at IS NULL OR id = :t) ORDER BY id FOR UPDATE"
+                "AND (disabled_at IS NULL OR id = :t) ORDER BY id FOR NO KEY UPDATE"
             ),
             {"t": target},
         )
     ).all()
+    ids = {r[0] for r in rows}
+    if admin.user_id not in ids:
+        raise Forbidden(detail="caller is no longer an active admin")
     return len(rows)
