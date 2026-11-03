@@ -25,6 +25,14 @@ class ModelInfo:
     label: str
 
 
+@dataclass(frozen=True)
+class EmbeddingModel:
+    provider: str
+    model: str
+    dimensions: int  # must equal transcript_chunks.embedding vector(768) (CLAUDE.md §6)
+    usage_provider: str  # usage_log.provider label (v1: 'gemini-embedding')
+
+
 class UnknownModel(LookupError):
     pass
 
@@ -47,6 +55,11 @@ MODELS: tuple[ModelInfo, ...] = (
     ModelInfo("grok", "grok-4", "Grok — grok-4"),
     ModelInfo("grok", "grok-3-mini", "Grok — grok-3-mini"),
 )
+
+
+# Embeddings are pinned (the stored vectors and every query must use the same model): changing it
+# means re-embedding every meeting, a migration of its own.
+EMBEDDING = EmbeddingModel("gemini", "gemini-embedding-001", 768, "gemini-embedding")
 
 
 def find_model(provider: str, model: str) -> tuple[ProviderInfo, ModelInfo]:

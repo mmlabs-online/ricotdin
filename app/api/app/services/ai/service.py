@@ -12,6 +12,7 @@ and ``AIBadOutput`` (502: unusable answer twice) — terminal for the worker.
 """
 
 import hashlib
+import math
 import random
 import time
 import uuid
@@ -32,6 +33,7 @@ from app.services.ai.adapters.openai_compat import OpenAICompatAdapter
 from app.services.ai.types import (
     Adapter,
     Completion,
+    Embeddings,
     JsonRequest,
     ModelRefused,
     ProviderHTTPError,
@@ -43,6 +45,8 @@ log = get_logger("ai")
 
 # provider kind → adapter. A provider with its own API (e.g. Anthropic) adds one entry here.
 ADAPTERS: dict[str, Adapter] = {"gemini": GeminiAdapter(), "openai_compat": OpenAICompatAdapter()}
+EMBED_BATCH = 100
+EMBED_MAX_ABS = 1e3  # Gemini batchEmbedContents limit (v1)
 # v1 defaults (GEMINI_* / OPENAI_* env knobs were never set in production).
 POOL_CONFIG = PoolConfig(
     default_cooldown_s=60.0, base_backoff_s=0.5, max_backoff_s=8.0, max_attempts=0,
@@ -264,6 +268,95 @@ class AIService:
             # requests it made, bounded so shutdown is not held up.
             with anyio.CancelScope(shield=True), anyio.move_on_after(5):
                 await self._write_usage(db, group, rows)
+
+    # --- embeddings -------------------------------------------------------------------------------
+
+    async def embed(
+        self, db: Database, group: str, texts: list[str], *, operation: str, usage: UsageContext
+    ) -> list[list[float]]:
+        """``catalog.EMBEDDING`` vectors, one per text, in order; batches of ``EMBED_BATCH`` each
+        through the provider's pool (a 429 on batch N does not redo batches 0..N-1, v1)."""
+        spec = catalog.EMBEDDING
+        info = catalog.PROVIDERS.get(spec.provider)
+        adapter = self.adapters.get(info.kind) if info else None
+        embedder = getattr(adapter, "embed", None)
+        if info is None or embedder is None:
+            raise AIRejected(detail=f"no embedding adapter for {spec.provider}")
+        out: list[list[float]] = []
+        for start in range(0, len(texts), EMBED_BATCH):
+            batch = texts[start : start + EMBED_BATCH]
+            out.extend(await self._embed_batch(db, group, info, embedder, batch, operation, usage))
+        return out
+
+    async def _embed_batch(
+        self, db: Database, group: str, info: catalog.ProviderInfo, embedder: Any,
+        batch: list[str], operation: str, usage: UsageContext,
+    ) -> list[list[float]]:  # fmt: skip
+        spec = catalog.EMBEDDING
+        pool = await self._pool(db, group, info.name)
+        calls: list[_Call] = []
+
+        async def attempt(key: str, key_id: str | None) -> list[list[float]]:
+            try:
+                result: Embeddings = await embedder(
+                    self.http, info, key, spec.model, batch, spec.dimensions
+                )
+            except BaseException as exc:
+                status, code = _usage_status(exc)
+                calls.append(_Call(status, code, key_id))
+                raise
+            done = Completion("", None, None, result.total_tokens)
+            calls.append(_Call("ok", None, key_id, done))
+            return valid_vectors(result, len(batch), spec.dimensions)
+
+        try:
+            vectors: list[list[float]] = await pool.call(attempt)
+            return vectors
+        except AllKeysExhausted as exc:
+            unavailable = AIUnavailable(detail=str(exc))
+            unavailable.retry_after = pool.ready_in()
+            raise unavailable from None
+        except ParseFailed as exc:
+            raise AIBadOutput(detail=f"{spec.model} {exc}") from None
+        except (ModelRefused, ProviderHTTPError) as exc:
+            raise AIRejected(detail=str(exc)) from None
+        finally:
+            rows = [
+                {"provider": spec.usage_provider, "model": spec.model, "operation": operation,
+                 "inp": None, "out": None,
+                 "tot": c.completion.total_tokens if c.completion else None,
+                 # v1: no token count from the API → the batch size stands in
+                 "qty": (c.completion.total_tokens or len(batch)) if c.completion else 0,
+                 "status": c.status, "http": c.http_code,
+                 "meeting": usage.meeting_id, "user": usage.user_id, "key": _uuid(c.key_id)}
+                for c in calls
+            ]  # fmt: skip
+            with anyio.CancelScope(shield=True), anyio.move_on_after(5):
+                await self._write_usage(db, group, rows)
+
+
+def valid_vectors(result: Embeddings, count: int, dimensions: int) -> list[list[float]]:
+    """One finite vector of ``dimensions`` floats per input text, or ``ParseFailed``."""
+    if len(result.vectors) != count:
+        raise ParseFailed(f"expected {count} embeddings, got {len(result.vectors)}")
+    out: list[list[float]] = []
+    for v in result.vectors:
+        if len(v) != dimensions or not all(_component(x) for x in v):
+            raise ParseFailed(f"embedding of the wrong shape (dimension {len(v)})")
+        out.append([float(x) for x in v])
+    return out
+
+
+def _component(x: object) -> bool:
+    """A finite number within ±1e3 (embeddings are normalised to about ±1; pgvector stores float4,
+    so a huge value would fail the INSERT instead of the parse)."""
+    if isinstance(x, bool) or not isinstance(x, int | float):
+        return False
+    try:
+        value = float(x)
+    except OverflowError:  # an int beyond float range
+        return False
+    return math.isfinite(value) and abs(value) <= EMBED_MAX_ABS
 
 
 def _uuid(value: str | None) -> uuid.UUID | None:

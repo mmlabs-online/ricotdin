@@ -457,7 +457,7 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 ---
 
 ### ARC-08 — Processing pipeline, worker & schedulers
-**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation), 08b (transcription) and 08c (AI layer + analyse) done; 08d–08e open
+**Priority:** High | **Status:** ⚠️ Partial — 08a–08d done (worker foundation, transcription, AI layer + analyse, embed + deploy target); 08e open
 
 **User Story**  
 As a user, I want my uploaded or recorded audio processed into transcript, summary, notes, to-dos, calendar suggestions and embeddings by v2 so that results match v1.
@@ -527,8 +527,11 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
   409 while processing, 10/h). Adding Claude later = `adapters/anthropic.py` + `ADAPTERS` entry +
   catalog rows + `ANTHROPIC_API_KEY` (or an admin key); an OpenAI-compatible provider = catalog
   rows only.
-- 08d `embed` (768 dims), `processing_done`, worker deploy target (own container, only
-  `DATABASE_URL_WORKER`).
+- **08d embed + deploy target — done (branch `feat/ARC-08d-embed-deploy`):** v1 chunking, 768-dim
+  embeddings through the AI layer (`catalog.EMBEDDING`), chunks + `done` in one guarded
+  transaction, `processing_done`; image built from the repo root with the runtime prompt; worker
+  heartbeat health check; `app/api/deploy/compose.example.yml` (API + worker, worker env only
+  `DATABASE_URL_WORKER`). Regenerate charged like one generation (owner decision 2026-11-03).
 - 08e schedulers: key health check, retention purge (audit `meeting.audio_purged` through a
   SECURITY DEFINER function with a forced system actor), quota reconcile with job-keyed dedup keys.
 - ARC-15: sandbox ffmpeg (separate uid, no network, seccomp); `stop_grace_period: 30s`; run the
@@ -547,6 +550,8 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Video → audio extraction runs in the worker (moved from `/uploaded`); the extracted audio is
   not stored (the Drive file stays the original video).
 - Gemini audio transcription / long-audio chunking not ported (dead in v1).
+- 08d (2026-11-03): regenerate costs what one generation costs (transcribed seconds), refunded when
+  it fails.
 - 08c (2026-11-03): design for more AI providers later (Claude etc.): adapter per API kind,
   catalog of providers/models; Claude itself not built yet.
 - 08b (2026-11-03): a transcript with no speech fails the meeting with a full refund (spec
@@ -559,6 +564,8 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - 08c: `app/api/app/services/ai/{catalog,schema,types,service,prompts,model_lock,analysis}.py`,
   `adapters/{gemini,openai_compat}.py`, `app/api/app/worker/analyse.py`, `routers/meetings.py`
   (`regenerate`)
+- 08d: `app/api/app/worker/{chunk,embed,health}.py`, `app/api/Dockerfile` +
+  `Dockerfile.dockerignore`, `app/api/deploy/compose.example.yml`, `.github/workflows/ci-api.yml`
 - Tests 08a: `test_worker_{backoff,errors,messages,probe,quota,policy,main,audio}.py`,
   `test_worker_runner_integration.py`, `test_worker_grants_integration.py`
 - Expected later: `app/api/app/pipeline/**`, `app/api/app/ai/**`, `app/api/app/schedulers/**`

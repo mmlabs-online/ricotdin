@@ -377,3 +377,65 @@ def test_a_cancelled_call_still_records_usage() -> None:
 
     anyio.run(go)
     assert [u["status"] for u in svc.usage] == ["error"]
+
+
+# --- embeddings (08d) -----------------------------------------------------------------------------
+
+
+def vectors(n: int, dims: int = 768) -> tuple[int, Any]:
+    return 200, {"embeddings": [{"values": [0.1] * dims} for _ in range(n)]}
+
+
+def embed(svc: AIService, texts: list[str]) -> list[list[float]]:
+    async def go() -> list[list[float]]:
+        return await svc.embed(None, "ricotdin_worker", texts, operation="embed",  # type: ignore[arg-type]
+                               usage=UsageContext(MEETING, None))  # fmt: skip
+
+    result: list[list[float]] = anyio.run(go)
+    return result
+
+
+def test_embeddings_are_batched_at_100_with_768_dimensions() -> None:
+    server = Server(vectors(100), vectors(100), vectors(50))
+    svc = Svc(server, [K1])
+    out = embed(svc, [f"t{i}" for i in range(250)])
+    assert len(out) == 250 and len(out[0]) == 768
+    req = server.requests[0]
+    assert req.url.path == "/v1beta/models/gemini-embedding-001:batchEmbedContents"
+    assert req.headers["x-goog-api-key"] == "key-one" and "key" not in req.url.params
+    body = server.body(0)
+    assert len(body["requests"]) == 100
+    assert body["requests"][0] == {"model": "models/gemini-embedding-001",
+                                   "content": {"parts": [{"text": "t0"}]},
+                                   "outputDimensionality": 768}  # fmt: skip
+    assert len(server.body(2)["requests"]) == 50
+    assert [(u["provider"], u["operation"], u["qty"]) for u in svc.usage] == [
+        ("gemini-embedding", "embed", 100), ("gemini-embedding", "embed", 100),
+        ("gemini-embedding", "embed", 50),
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [vectors(1), vectors(2, dims=767), (200, {"embeddings": [{"values": ["x"] * 768}] * 2}),
+     (200, {}), (200, {"embeddings": [{"values": [10**400] + [0.1] * 767}] * 2}),
+     (200, {"embeddings": [{"values": [5e38] + [0.1] * 767}] * 2})],
+)  # fmt: skip
+def test_wrong_embeddings_are_bad_output_without_rotating(answer: Any) -> None:
+    server = Server(answer)
+    svc = Svc(server, [K1, K2])
+    with pytest.raises(AIBadOutput):
+        embed(svc, ["a", "b"])
+    assert len(server.requests) == 1
+
+
+def test_embedding_429_rotates_keys() -> None:
+    server = Server((429, {"error": {"status": "RESOURCE_EXHAUSTED"}}), vectors(1))
+    svc = Svc(server, [K1, K2])
+    assert len(embed(svc, ["a"])) == 1
+    assert [u["status"] for u in svc.usage] == ["rate_limited", "ok"]
+
+
+def test_no_texts_no_call() -> None:
+    server = Server(vectors(0))
+    assert embed(Svc(server, [K1]), []) == [] and server.requests == []

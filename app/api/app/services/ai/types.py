@@ -70,6 +70,19 @@ class Adapter(Protocol):
     ) -> Completion: ...
 
 
+@dataclass(frozen=True)
+class Embeddings:
+    vectors: list[list[float]]
+    total_tokens: int | None = None
+
+
+class EmbeddingAdapter(Protocol):
+    async def embed(
+        self, http: httpx2.AsyncClient, provider: ProviderInfo, key: str, model: str,
+        texts: list[str], dimensions: int,
+    ) -> Embeddings: ...  # fmt: skip
+
+
 def token_count(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 

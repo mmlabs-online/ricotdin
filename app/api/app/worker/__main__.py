@@ -22,6 +22,7 @@ from app.core.version import resolve_version
 from app.db.session import Database
 from app.services.ai.service import AIService
 from app.services.platform import Platform
+from app.worker import health
 from app.worker.jobs import StepHandler
 from app.worker.policy import missing_steps, worker_env_problems
 from app.worker.runner import JobRunner
@@ -66,8 +67,17 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
                 await runner.run_forever(stop)
                 tg.cancel_scope.cancel()
 
+            async def heartbeat() -> None:  # container health check (app.worker.health)
+                while True:
+                    try:
+                        await anyio.to_thread.run_sync(health.beat)
+                    except OSError as exc:  # the health check fails; the worker keeps going
+                        log.error("heartbeat write failed (%s)", type(exc).__name__)
+                    await anyio.sleep(health.HEARTBEAT_INTERVAL_S)
+
             tg.start_soon(watch_signals)
             tg.start_soon(work)
+            tg.start_soon(heartbeat)
     finally:
         with anyio.CancelScope(shield=True):
             if transcriber is not None:

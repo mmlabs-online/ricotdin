@@ -1,7 +1,13 @@
 # syntax=docker/dockerfile:1
-# Ricotdin v2 API (FastAPI) — ARC-04. Build context: app/api.
-#   docker build -t ricotdin-api:local app/api
-#   docker run -p 8000:8000 --env-file runtime.env ricotdin-api:local
+# Ricotdin v2 API (FastAPI, ARC-04) and pipeline worker (ARC-08). Build context: the REPO ROOT
+# (the worker needs the runtime prompt ai-instruction/ai-gen/); ignore rules are in
+# app/api/Dockerfile.dockerignore (BuildKit), not the root .dockerignore (v1 image).
+#   docker build -f app/api/Dockerfile -t ricotdin-api:local .
+#   docker run -p 8000:8000 --env-file runtime.env ricotdin-api:local          # API
+#   docker run --env-file worker.env ricotdin-api:local python -m app.worker   # worker
+# The worker container gets ONLY worker.env (DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional
+# provider key fallbacks, LOG_LEVEL, SENTRY_DSN): it refuses to start with any other credential.
+# Its health check is `python -m app.worker.health` (no HTTP port); see app/api/deploy/.
 # runtime.env holds ONLY runtime values (DATABASE_URL_APP/_SERVICE/_WORKER, JWT_PRIVATE_KEY,
 # KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN, optional
 # provider key fallbacks GEMINI_API_KEYS / GEMINI_API_KEY_1..20 / GEMINI_API_KEY,
@@ -25,15 +31,18 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:0.11.17 /uv /usr/local/bin/uv
 
 WORKDIR /app
-COPY pyproject.toml uv.lock .python-version ./
+COPY app/api/pyproject.toml app/api/uv.lock app/api/.python-version ./
 RUN uv sync --locked --no-dev --no-install-project
 
-COPY alembic.ini ./
-COPY app ./app
-COPY migrations ./migrations
-COPY scripts ./scripts
+COPY app/api/alembic.ini ./
+COPY app/api/app ./app
+COPY app/api/migrations ./migrations
+COPY app/api/scripts ./scripts
+# Runtime prompt of the analyse step / regenerate (app/services/ai/prompts.py reads /app/...).
+COPY ai-instruction/ai-gen ./ai-instruction/ai-gen
 
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin api
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin api \
+ && mkdir -p /work && chown 10001 /work  # worker job dirs (TMPDIR=/work in compose)
 USER 10001
 
 # Commit the image was built from: /version.json fallback when RICOTDIN_VERSION is unset.

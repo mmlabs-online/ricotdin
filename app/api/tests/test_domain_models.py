@@ -64,3 +64,17 @@ def test_model_label() -> None:
     assert model_label("openai", "gpt-4o-mini") == "OpenAI — GPT-4o mini"
     assert model_label("grok", "grok-4") == "Grok — grok-4"
     assert model_label("openai", "gpt-5") == "openai — gpt-5"
+
+
+# --- ARC-08d: regenerate is charged like one generation (owner decision 2026-11-03) ---------------
+
+
+def test_regenerate_charge_is_the_transcribed_length() -> None:
+    from app.domain.models import regenerate_charge_seconds
+
+    assert regenerate_charge_seconds(2600, None) == 3  # ceil, like the transcription settle
+    assert regenerate_charge_seconds(60_000, 75) == 60  # the transcript wins
+    assert regenerate_charge_seconds(None, 75) == 75  # fallback: the recorded length
+    assert regenerate_charge_seconds(0, 0) == 1  # never free
+    assert regenerate_charge_seconds(None, None) == 1
+    assert regenerate_charge_seconds(10**12, None) == 86_400  # quota wrapper bound
