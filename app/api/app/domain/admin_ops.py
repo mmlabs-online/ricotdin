@@ -51,6 +51,8 @@ def _instant(raw: Any) -> tuple[datetime, bool] | None:
     try:
         if len(text) == 10:
             d = date.fromisoformat(text)
+            if not 1970 <= d.year <= 2100:
+                return None
             return datetime(d.year, d.month, d.day, tzinfo=UTC), True
         value = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
@@ -141,11 +143,11 @@ def parse_audit_filters(query: Mapping[str, Any]) -> AuditFilters:
 def parse_usage_range(
     raw_from: str | None, raw_to: str | None, now: datetime
 ) -> tuple[datetime, datetime]:
-    """``from`` / ``to`` instants (a date = its midnight, v1); defaults last 30 days → now."""
-    start = _instant(raw_from)
-    end = _instant(raw_to)
-    lower = start[0] if start else now - timedelta(days=DEFAULT_USAGE_DAYS)
-    upper = end[0] if end else now
+    """``[from, to)``; a date-only ``to`` covers that whole day (the v1 UI appended
+    ``T23:59:59Z``); defaults last 30 days → now."""
+    lower, upper = _range({"from": raw_from, "to": raw_to})
+    lower = lower or now - timedelta(days=DEFAULT_USAGE_DAYS)
+    upper = upper or now
     if lower >= upper:
         raise BadRequest('"from" must be earlier than "to".')
     if upper - lower > timedelta(days=MAX_USAGE_RANGE_DAYS):

@@ -70,6 +70,7 @@ def test_activity_filters() -> None:
     assert f.end == datetime(2026, 10, 31, 10, 0, 0, 1, tzinfo=UTC)
     # invalid dates are ignored (v1 audit parser); a bad user id is a 400 (v1 crashed with a 500)
     assert parse_activity_filters({"from": "nope"}).start is None
+    assert parse_activity_filters({"to": "9999-12-31", "from": "0001-01-01"}).end is None  # no 500
     with pytest.raises(BadRequest):
         parse_activity_filters({"userId": "x"})
     assert parse_activity_filters({"eventType": "e" * 200}).event_type == "e" * 64
@@ -91,7 +92,10 @@ def test_usage_range() -> None:
     start, end = parse_usage_range(None, None, NOW)
     assert (start, end) == (NOW - timedelta(days=30), NOW)  # v1 default: last 30 days
     start, end = parse_usage_range("2026-10-01", "2026-10-02", NOW)
-    assert (start, end) == (datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 2, tzinfo=UTC))
+    assert (start, end) == (datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 3, tzinfo=UTC))
+    assert parse_usage_range("2026-10-01", "2026-10-01", NOW)[1] == datetime(
+        2026, 10, 2, tzinfo=UTC
+    )
     assert parse_usage_range("garbage", None, NOW)[0] == NOW - timedelta(days=30)
     with pytest.raises(BadRequest) as err:
         parse_usage_range("2026-10-02", "2026-10-01", NOW)

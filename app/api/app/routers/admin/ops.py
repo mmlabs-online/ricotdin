@@ -1,8 +1,8 @@
 """Admin operations (ARC-10b; port of v1 ``app/api/admin/{pipeline,usage,ai-usage,activity,
 audit-logs}``, CLAUDE.md §9d, §9e, §9g). Reads as ``ricotdin_service``; only requeue writes.
 
-Never returned: meeting content (summary, notes, transcript), ciphertext or keys. Requeue clears
-the previous output and queues ONE job (the same unique index as ``/process``) with an audit row
+Never returned: meeting content (summary, notes, transcript), ciphertext or keys. Requeue queues ONE
+job (the same unique index as ``/process``) with an audit row
 in the same transaction. v1's manual ``reconcile-quota`` is replaced by the worker's 5-minute
 ``wallet_reconcile`` / ``stuck_meetings`` tasks (ARC-08e); ``GET /admin/pipeline/schedulers``
 shows their state and flags a stale one.
@@ -29,6 +29,7 @@ from app.domain.admin_ops import (
 from app.domain.rules import can_reprocess
 from app.routers._common import SERVICE, jsonb, path_id
 from app.routers.admin._common import CurrentAdmin, write_audit
+from app.services.storage.ownership import owned_audio_path
 from app.worker.schedule import TASKS
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -40,6 +41,15 @@ _NO_AUDIO = (
 )
 _BUSY = "A job for this meeting is still queued or running."
 _UPLOADING = "This meeting is still being uploaded."
+_NOT_COPIED = "This meeting's audio has not been copied to the new storage yet."
+_NOT_OWN = "This meeting's audio key is not its own, so it cannot be reprocessed."
+_MISSING = "This meeting's audio file is missing from storage, so it cannot be reprocessed."
+# v2: a long transcription re-queues its poll for hours without touching the meeting, so a
+# meeting is stuck only without a queued or running job (the worker's stuck_meetings rule).
+_NO_ACTIVE_JOB = (
+    "NOT EXISTS (SELECT 1 FROM public.jobs sj WHERE sj.meeting_id = m.id "
+    "AND sj.status IN ('queued', 'running'))"
+)
 _QUEUE_JOB = (
     "INSERT INTO public.jobs (meeting_id, step, status, run_after, payload) "
     "VALUES (:id, 'start', 'queued', now(), '{}'::jsonb) "
@@ -60,16 +70,16 @@ async def pipeline_overview(admin: CurrentAdmin, db: Db) -> dict[str, Any]:
         row = (
             await conn.execute(
                 text(
-                    "SELECT count(*) AS total, "
+                    "SELECT count(*) AS total, "  # noqa: S608 - constant fragments
                     "count(*) FILTER (WHERE status = 'pending') AS pending, "
                     "count(*) FILTER (WHERE status = 'processing') AS processing, "
                     "count(*) FILTER (WHERE status = 'done') AS done, "
                     "count(*) FILTER (WHERE status = 'failed') AS failed, "
-                    "count(*) FILTER (WHERE status = 'processing' AND updated_at < :cut) "
-                    "AS stuck, "
+                    "count(*) FILTER (WHERE status = 'processing' AND updated_at < :cut "
+                    f"AND {_NO_ACTIVE_JOB}) AS stuck, "
                     "avg(extract(epoch FROM updated_at - created_at)) FILTER (WHERE status = "
                     "'done' AND updated_at > created_at) AS avg_secs "
-                    "FROM public.meetings"
+                    "FROM public.meetings m"
                 ),
                 {"cut": _now() - timedelta(minutes=STUCK_MINUTES)},
             )
@@ -93,7 +103,7 @@ async def pipeline_jobs(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
     where = "TRUE"
     args: dict[str, Any] = {"cut": now - timedelta(minutes=STUCK_MINUTES)}
     if status == "stuck":
-        where = "m.status = 'processing' AND m.updated_at < :cut"
+        where = f"m.status = 'processing' AND m.updated_at < :cut AND {_NO_ACTIVE_JOB}"
     elif status:
         where, args = "m.status = :st", {**args, "st": status}
     async with db.role_transaction(SERVICE) as conn:
@@ -136,19 +146,21 @@ async def pipeline_jobs(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
 
 @router.post("/pipeline/{meeting_id}/requeue")
 async def requeue(meeting_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
-    """Re-run a meeting from the start (v1): previous transcript, chunks, to-dos and calendar
-    suggestions are cleared, the meeting goes back to ``pending`` and one job is queued (a new
-    job = a new quota charge, CLAUDE.md §0.7). 409 without audio, while a job is queued or running
-    (the stuck sweep releases a stuck one) and while the upload is not confirmed."""
+    """Re-run a meeting from the start: the meeting goes back to ``pending`` and one job is
+    queued (a new job = a new quota charge for the owner, CLAUDE.md §0.7). Unlike v1 nothing is
+    cleared here: the worker replaces the transcript, chunks, to-dos, calendar, summary and notes
+    only when the new run succeeds, so a failed re-run keeps the old results. 409 unless the
+    worker can run it: own audio key stored in Drive (v1 meetings wait for ARC-18), no job queued
+    or running (the stuck sweep releases a stuck one), upload confirmed."""
     mid = path_id(meeting_id, _MEETING_NOT_FOUND)
     async with db.role_transaction(SERVICE) as conn:
         meeting = (
             await conn.execute(
                 text(
-                    "SELECT m.id, m.user_id, m.status, m.audio_path, EXISTS (SELECT 1 FROM "
-                    "public.storage_objects o WHERE o.key = m.audio_path) AS mapped, "
-                    "EXISTS (SELECT 1 FROM public.jobs j WHERE j.meeting_id = m.id AND "
-                    "j.status IN ('queued', 'running')) AS active "
+                    "SELECT m.id, m.user_id, m.status, m.audio_path, m.storage_provider, "
+                    "EXISTS (SELECT 1 FROM public.storage_objects o WHERE o.key = m.audio_path) "
+                    "AS mapped, EXISTS (SELECT 1 FROM public.jobs j WHERE j.meeting_id = m.id "
+                    "AND j.status IN ('queued', 'running')) AS active "
                     "FROM public.meetings m WHERE m.id = :id FOR NO KEY UPDATE OF m"
                 ),
                 {"id": mid},
@@ -158,19 +170,17 @@ async def requeue(meeting_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any
             raise NotFound(_MEETING_NOT_FOUND)
         if not can_reprocess(meeting.audio_path):
             raise Conflict(_NO_AUDIO)
+        if meeting.storage_provider != "gdrive":
+            raise Conflict(_NOT_COPIED)
+        if owned_audio_path(dict(meeting._mapping)) is None:
+            raise Conflict(_NOT_OWN)
         if meeting.active:
             raise Conflict(_BUSY)
-        if meeting.status == "pending" and not meeting.mapped:
-            raise Conflict(_UPLOADING)
-        for table in ("transcript_chunks", "transcript_segments", "todos", "calendar_suggestions"):
-            await conn.execute(
-                text(f"DELETE FROM public.{table} WHERE meeting_id = :id"),  # noqa: S608
-                {"id": mid},
-            )
+        if not meeting.mapped:
+            raise Conflict(_UPLOADING if meeting.status == "pending" else _MISSING)
         await conn.execute(
             text(
-                "UPDATE public.meetings SET status = 'pending', error_message = NULL, "
-                "summary = NULL, notes = NULL, language = NULL WHERE id = :id"
+                "UPDATE public.meetings SET status = 'pending', error_message = NULL WHERE id = :id"
             ),
             {"id": mid},
         )
@@ -263,7 +273,7 @@ async def ai_usage(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, A
     start, end = parse_usage_range(q.get("from"), q.get("to"), _now())
     by_operation = q.get("groupBy") == "operation"
     filters = parse_activity_filters({"userId": q.get("userId")})
-    where = "l.created_at >= :s AND l.created_at <= :e" + (
+    where = "l.created_at >= :s AND l.created_at < :e" + (
         " AND l.user_id = :u" if filters.user_id else ""
     )
     args: dict[str, Any] = {"s": start, "e": end, "u": filters.user_id}
@@ -274,9 +284,9 @@ async def ai_usage(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, A
                 text(
                     f"SELECT l.provider, l.model, {op} AS operation, l.unit, l.key_id, "  # noqa: S608
                     "k.label AS key_label, k.last4 AS key_last4, count(*) AS calls, "
-                    "sum(l.total_tokens) FILTER (WHERE l.unit = 'tokens') AS tot, "
-                    "sum(l.input_tokens) FILTER (WHERE l.unit = 'tokens') AS inp, "
-                    "sum(l.output_tokens) FILTER (WHERE l.unit = 'tokens') AS outp, "
+                    "COALESCE(sum(l.total_tokens) FILTER (WHERE l.unit = 'tokens'), 0) AS tot, "
+                    "COALESCE(sum(l.input_tokens) FILTER (WHERE l.unit = 'tokens'), 0) AS inp, "
+                    "COALESCE(sum(l.output_tokens) FILTER (WHERE l.unit = 'tokens'), 0) AS outp, "
                     "sum(l.audio_seconds) FILTER (WHERE l.unit = 'audio_seconds') AS secs, "
                     "count(*) FILTER (WHERE l.status = 'rate_limited') AS limited, "
                     "count(*) FILTER (WHERE l.status = 'error') AS errors "

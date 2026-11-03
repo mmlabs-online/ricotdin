@@ -72,13 +72,16 @@ def test_overview_and_jobs_never_show_content(
 ) -> None:
     stuck = _meeting(world, "processing", age_min=20)
     fresh = _meeting(world, "processing")
+    polling = _meeting(world, "processing", age_min=40)  # a long transcription: job still active
+    _sql(world["db"], "INSERT INTO jobs (meeting_id, step, status) VALUES (%s, 'transcribe_poll', "
+         "'queued')", polling)  # fmt: skip
     overview = client.get("/admin/pipeline/overview", headers=admin).json()
     assert overview["counts"]["stuck"] >= 1 and overview["stuck_threshold_minutes"] == 15
     assert overview["total"] >= 2
     r = client.get("/admin/pipeline/jobs?status=stuck&perPage=100", headers=admin)
     assert r.status_code == 200
     ids = {j["id"] for j in r.json()["jobs"]}
-    assert str(stuck) in ids and str(fresh) not in ids
+    assert str(stuck) in ids and str(fresh) not in ids and str(polling) not in ids
     assert all(j["is_stuck"] for j in r.json()["jobs"])
     assert "SECRET" not in r.text
     row = next(j for j in r.json()["jobs"] if j["id"] == str(stuck))
@@ -86,7 +89,7 @@ def test_overview_and_jobs_never_show_content(
     assert client.get("/admin/pipeline/jobs?status=nope", headers=admin).status_code == 400
 
 
-def test_requeue_clears_output_and_queues_one_job(
+def test_requeue_keeps_output_and_queues_one_job(
     client: TestClient, world: dict[str, Any], admin: dict[str, str]
 ) -> None:
     mid = _meeting(world, "done")
@@ -96,12 +99,13 @@ def test_requeue_clears_output_and_queues_one_job(
     r = client.post(f"/admin/pipeline/{mid}/requeue", headers=admin)
     assert r.status_code == 200, r.text
     assert r.json() == {"ok": True, "meetingId": str(mid)}
-    assert _sql(world["db"], "SELECT status, summary, notes FROM meetings WHERE id = %s", mid) == [
-        ("pending", None, None)
+    # v2: nothing is cleared here; the worker replaces the output only when the re-run succeeds
+    assert _sql(world["db"], "SELECT status, summary FROM meetings WHERE id = %s", mid) == [
+        ("pending", "SECRET SUMMARY")
     ]
     for table in ("transcript_segments", "todos"):
         assert _sql(world["db"], f"SELECT count(*) FROM {table} WHERE meeting_id = %s", mid) == [  # noqa: S608
-            (0,)
+            (1,)
         ]
     assert _sql(world["db"], "SELECT step, status FROM jobs WHERE meeting_id = %s", mid) == [
         ("start", "queued")
@@ -124,6 +128,21 @@ def test_requeue_refusals(client: TestClient, world: dict[str, Any], admin: dict
     assert r.status_code == 409 and "no audio" in _msg(r)
     uploading = _meeting(world, "pending", mapped=False)
     assert client.post(f"/admin/pipeline/{uploading}/requeue", headers=admin).status_code == 409
+    # the worker could not run these: refused before anything changes
+    missing = _meeting(world, "done", mapped=False)
+    r = client.post(f"/admin/pipeline/{missing}/requeue", headers=admin)
+    assert r.status_code == 409 and "missing from storage" in _msg(r)
+    v1 = _meeting(world, "done")
+    _sql(world["db"], "UPDATE meetings SET storage_provider = 'r2' WHERE id = %s", v1)
+    r = client.post(f"/admin/pipeline/{v1}/requeue", headers=admin)
+    assert r.status_code == 409 and "not been copied" in _msg(r)
+    forged = _meeting(world, "done")
+    _sql(world["db"], "UPDATE meetings SET audio_path = %s WHERE id = %s",
+         f"{world['c']}/{uuid.uuid4()}.webm", forged)  # fmt: skip
+    assert client.post(f"/admin/pipeline/{forged}/requeue", headers=admin).status_code == 409
+    for mid in (missing, v1, forged):
+        assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", mid) == [("done",)]
+        assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(0,)]
     assert client.post(f"/admin/pipeline/{uuid.uuid4()}/requeue",
                        headers=admin).status_code == 404  # fmt: skip
     assert client.post("/admin/pipeline/nope/requeue", headers=admin).status_code == 404
