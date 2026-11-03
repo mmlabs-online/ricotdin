@@ -389,3 +389,16 @@ def test_bug020_every_table_created_after_the_baseline_is_v2_only() -> None:
     assert {"drive_config", "storage_objects"} <= created
     assert created <= V2_ONLY_TABLES
     assert created <= NOT_COPIED_TABLES  # never copied from Supabase either
+
+
+def test_duplicate_active_jobs_block_the_run() -> None:
+    # ARC-08 migration 0005: one queued/running job per meeting. The copy would abort mid-way on
+    # the unique index, so the preflight blocks first and says how to fix v1 (review round 1).
+    from app.migration.plan import DUPLICATE_ACTIVE_JOBS_SQL, duplicate_active_jobs_problem
+
+    assert duplicate_active_jobs_problem(0) is None
+    problem = duplicate_active_jobs_problem(3)
+    assert problem is not None
+    assert problem.startswith("3 meeting(s) have more than one queued/running job in v1")
+    assert "UPDATE public.jobs" in problem and "newest" in problem
+    assert "GROUP BY meeting_id" in DUPLICATE_ACTIVE_JOBS_SQL

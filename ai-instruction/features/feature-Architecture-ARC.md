@@ -457,13 +457,13 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 ---
 
 ### ARC-08 — Processing pipeline, worker & schedulers
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation) done; 08b–08e open
 
 **User Story**  
 As a user, I want my uploaded or recorded audio processed into transcript, summary, notes, to-dos, calendar suggestions and embeddings by v2 so that results match v1.
 
 **Context**
-Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider calls go through one AI service layer; JSON mode + defensive parse; 429 backoff; long-audio chunking with ffmpeg; Files API upload; usage and activity logging; quota idempotent deduction.
+Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider calls go through one AI service layer; JSON mode + defensive parse; 429 backoff; Speechmatics transcription; usage and activity logging; quota idempotent deduction. Gemini audio transcription, Files API upload and long-audio chunking are **not ported** (owner decision 2026-11-02: that v1 code path was dead; Speechmatics transcribes).
 
 **Use Cases**
 1. 45-minute WebM upload → done with correct stitched timestamps.
@@ -474,7 +474,7 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - n/a.
 
 **Backend**
-- Worker process (same image, separate command) claiming jobs with `SKIP LOCKED`; steps ported from `lib/jobs/steps`; adapters Gemini / OpenAI / Grok / Speechmatics; ffmpeg/ffprobe; prompt read from `ai-instruction/ai-gen/`; schedulers: key health check (daily), retention purge (daily), both idempotent with no overlap.
+- Worker process (same image, separate command) claiming jobs with `SKIP LOCKED`; steps ported from `lib/jobs/steps`; adapters Gemini / OpenAI / Grok (analysis, embeddings) + Speechmatics (transcription); ffmpeg/ffprobe (validate, video → audio, transcode); prompt read from `ai-instruction/ai-gen/`; schedulers: key health check (daily), retention purge (daily), both idempotent with no overlap.
 
 **Acceptance Criteria**
 - Given the same fixture transcript JSON, v2 parsing produces the same segments/todos/suggestions as v1.
@@ -486,7 +486,7 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Usage rows keep `unit` separated (tokens vs audio_seconds).
 
 **Test Plan**
-- Ports of `chunk`, `pipeline-parse`, `processMeeting-guard`, `transcode`, `ffprobe`, `speechmatics`, `ai-*`, `aip-*`, `usage-*`, `key-healthcheck`, `retention`, `error-message` tests → pytest, using shared JSON fixtures.
+- Ports of `chunk` (RAG segment chunking), `pipeline-parse`, `processMeeting-guard`, `transcode`, `ffprobe`, `speechmatics`, `ai-*`, `aip-*`, `usage-*`, `key-healthcheck`, `retention`, `error-message` tests → pytest, using shared JSON fixtures.
 
 **Structural flags**
 - New process type (worker), ffmpeg in image, provider keys, >10 files.
@@ -501,8 +501,46 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 **Out of scope**
 - Remux-on-upload (not built in v1 either).
 
-**Key files (expected)**
-- `app/api/app/worker/**`, `app/api/app/pipeline/**`, `app/api/app/ai/**`, `app/api/app/schedulers/**`
+**Slices**
+- **08a worker foundation — done (branch `feat/ARC-08-pipeline-worker`):** `JobRunner` (claim,
+  dispatch, retry/terminal/refund, stuck sweep, per-job deadline, release on shutdown), step
+  `start` up to the transcriber submit (`Transcriber` protocol), ffprobe / extraction / transcode
+  with input guards, `python -m app.worker` (refuses extra credentials and missing steps),
+  migration `0005_worker_grants` (worker allow-list + one active job per meeting + quota
+  wrappers `pipeline_reserve/refund/settle`), `process` dedupe + 30/h limit + 409 while uploading,
+  ARC-03 preflight for duplicate active v1 jobs. Review round 1 (2026-11-02): no general quota
+  function for the worker, ffmpeg without secrets in its env and with RLIMITs, user-facing error
+  messages only. Not deployable until 08b–08d.
+- 08b Speechmatics adapter + `transcribe_poll` (settle via `pipeline_settle`, key pool per provider).
+- 08c AI service layer (Gemini / OpenAI / Grok), model lock (`lock_generation_model` hook,
+  allow-list check of `payload.preferred_*`), `analyse` + `regenerate`.
+- 08d `embed` (768 dims), `processing_done`, worker deploy target (own container, only
+  `DATABASE_URL_WORKER`).
+- 08e schedulers: key health check, retention purge (audit `meeting.audio_purged` through a
+  SECURITY DEFINER function with a forced system actor), quota reconcile with job-keyed dedup keys.
+- ARC-15: sandbox ffmpeg (separate uid, no network, seccomp); `stop_grace_period: 30s`; run the
+  ARC-18 file copy before the worker starts.
+
+**Decided 2026-11-02 (owner)**
+- Quota dedup keys per job (`gen:<job_id>:reserve|settle|refund`): a requeue / reprocess is
+  charged again (v1 keyed by meeting: free re-runs); retries of one job stay idempotent.
+- The stuck sweep refunds and logs `processing_failed` like any terminal failure (v1 did not).
+- Terminal errors (`PipelineError`: bad file, forged key, unknown step / provider / model,
+  provider rejection) are never retried.
+- Bounded run time: 12 min per step, 6 h per pipeline run (`payload.started_at`), stuck sweep at
+  15 min.
+- Key pools are kept per provider and rebuilt only when the key set changes (v1 rebuilt every 30 s).
+- One active job per meeting, enforced by a unique index; `process` limited to 30/h per user.
+- Video → audio extraction runs in the worker (moved from `/uploaded`); the extracted audio is
+  not stored (the Drive file stays the original video).
+- Gemini audio transcription / long-audio chunking not ported (dead in v1).
+
+**Key files**
+- 08a: `app/api/app/worker/{runner,start,audio,jobs,errors,backoff,messages,probe,quota,policy,__main__}.py`,
+  migration `0005_worker_grants`, `app/api/app/routers/meetings.py` (`process`)
+- Tests 08a: `test_worker_{backoff,errors,messages,probe,quota,policy,main,audio}.py`,
+  `test_worker_runner_integration.py`, `test_worker_grants_integration.py`
+- Expected later: `app/api/app/pipeline/**`, `app/api/app/ai/**`, `app/api/app/schedulers/**`
 
 ---
 

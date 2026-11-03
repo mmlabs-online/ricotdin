@@ -371,6 +371,27 @@ def test_preflight_blocks_type_drift_and_an_old_revision(dbs: tuple[str, str]) -
         assert _q(tgt, "SELECT count(*) FROM folders") == [(0,)]
 
 
+def test_preflight_blocks_duplicate_active_jobs(dbs: tuple[str, str]) -> None:
+    src, _ = dbs
+    with psycopg.connect(src, autocommit=True) as conn:
+        ids = [
+            conn.execute(
+                "INSERT INTO public.jobs (meeting_id, status) VALUES (%s, 'queued') RETURNING id",
+                (M_R2,),
+            ).fetchone()[0]  # type: ignore[index]
+            for _ in range(2)
+        ]
+    try:
+        with scratch_database("mig_jobs") as tgt:
+            alembic_upgrade(tgt)
+            report = run(src, tgt, MASTER, source_store=None, skip_storage=True)
+            assert any("more than one queued/running job" in p for p in report.blocked)
+            assert _q(tgt, "SELECT count(*) FROM folders") == [(0,)]  # nothing written
+    finally:
+        with psycopg.connect(src, autocommit=True) as conn:
+            conn.execute("DELETE FROM public.jobs WHERE id = ANY(%s)", (ids,))
+
+
 def test_unique_collision_is_reported_by_code_without_values(dbs: tuple[str, str]) -> None:
     src, _ = dbs
     with scratch_database("mig_dup") as tgt:

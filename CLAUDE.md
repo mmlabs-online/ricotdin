@@ -99,7 +99,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   only in logs. `GET /health` (no DB) and `GET /version.json`
   (`RICOTDIN_VERSION` → `BUILD_COMMIT` → `"unknown"`). Background hooks: `BACKGROUND_HOOKS` (ARC-08).
 - **DB roles after migration 0002:** `ricotdin_app` (requests), `ricotdin_service` (auth + admin),
-  `ricotdin_worker` (pipeline/schedulers; no access to `users`/`refresh_tokens`/`email_tokens`).
+  `ricotdin_worker` (pipeline/schedulers; since migration 0005 an **explicit per-table allow-list**,
+  §0.7 — no `users`/tokens, folders, shares, chat, features, `storage_config`, `quota_ledger`).
   `audit_logs`, `activity_log`, `quota_ledger` are append-only for all three; service roles have no
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN. Future migrations must GRANT to these roles explicitly.
 - **Logins** `ricotdin_api_login` / `ricotdin_service_login` / `ricotdin_worker_login` (one group each,
@@ -321,8 +322,13 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `tests/test_core_domain_integration.py`). Messages keep v1's text inside `{"error": {code, message}}`.
   Where v1 crashed (500 on `null` bodies, non-UUID ids, `folder_id: ""`) v2 answers 400/404/422.
   Kept on purpose: stranger → 403 on meeting writes but 404 on reads and on folder PATCH/DELETE;
-  share PATCH/DELETE answer 200 for a non-member; reorder always 200; `process` does not dedupe jobs
-  (`uploaded` does).
+  share PATCH/DELETE answer 200 for a non-member; reorder always 200.
+- **One active job per meeting** (ARC-08, migration 0005): unique index
+  `jobs_one_active_per_meeting` on `jobs(meeting_id) WHERE status IN ('queued','running')`;
+  `process` and `uploaded` insert with `ON CONFLICT ... DO NOTHING` (a repeat while one is active
+  queues nothing; `process` still answers 202). `POST /meetings/{id}/process`: 30 per user per hour
+  (`app.state.process_limiter`, 429); 409 "This meeting is still being uploaded." while the meeting
+  is `pending` and its file is not mapped yet (`/uploaded` queues the job).
 - **Who runs what:** meeting reads (`GET /meetings*`) run as `ricotdin_app` under RLS. Meeting /
   todo / calendar writes run as `ricotdin_service`, with the role decided **in the same transaction**
   by `app/services/access.py` + pure `app/domain/access.py` (same logic as `can_access_meeting`;
@@ -339,6 +345,92 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - Differences from v1 to know: `PATCH /profile` validates every field before the username-taken
   check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
   15 min (v1 60) because `/media` proxies Drive.
+
+### 0.7 v2 worker (ARC-08; slice 08a = foundation)
+
+- **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
+  with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
+  to start (exit 2) if `DATABASE_URL`, `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `JWT_PRIVATE_KEY`,
+  `SMTP_PASSWORD` or a Supabase / migration credential is set (`policy.worker_env_problems`), and
+  **while pipeline steps are missing**: 08a has only `start` and no transcriber, so the worker is
+  **not deployable before 08b–08d** (no deploy target yet; tests drive `JobRunner` directly).
+  Deployment (ARC-15 / OPS-05): `stop_grace_period: 30s` for the worker service.
+- **Runner** (`runner.py`, port of v1 `lib/jobs/worker.ts`): `claim_next_job` (`SKIP LOCKED`), one
+  job at a time, poll 1 s, stuck sweep every 60 s (running > 15 min). Each step runs in a private
+  temp dir `ricotdin-job-*` (removed after; leftovers older than 1 h are removed at startup) with a
+  12 min timeout (< the 15 min stuck threshold). Every job write — also the step's own payload write
+  — is guarded by `status='running' AND locked_by=<worker id>` (a job the sweeper took back is never
+  overwritten; `start` then rolls back its reserve: `JobLockLost`). Steps return
+  `Advance(step, payload, delay)` / `Done(payload, activity)` / `Fail(message, metadata)`; unknown
+  step → terminal. SIGTERM: stop claiming; after 8 s (below docker's default 10 s) a running step is
+  cancelled and its job released (queued at once, attempts unchanged). Loop errors (database down)
+  back off 1 → 30 s and reach Sentry at most once a minute.
+- **Errors** (`errors.py`): `PipelineError(message, detail=)` = terminal, never retried (bad or
+  unreadable file — also an ffprobe timeout —, forged key, audio > 6 h, unknown step / provider /
+  model, provider rejection); typed `AppError` 4xx terminal, 503/429 transient; anything else
+  transient. Transient → queued with backoff 2 s·2ⁿ⁻¹ ≤ 5 min ±25 %, until `max_attempts`.
+  Terminal / exhausted / stuck-exhausted / **deadline** (6 h from `payload.started_at`, bounds
+  re-queued polling, 08b) → job failed, **refund** (`pipeline_refund`), meeting failed (never a
+  `done` meeting), activity `processing_failed` (owner decision 2026-11-02: the stuck sweep refunds
+  too; v1 did not).
+- **Messages** (`messages.py`): `meetings.error_message` and activity metadata get only text written
+  for users (`user_message`: a `PipelineError` message, an `AppError` public message, the
+  `QUOTA_BLOCKED: …` text, else "Processing failed. Please try again or contact an
+  administrator."). The full redacted detail (stderr, driver errors) goes only to `jobs.last_error`
+  (admin) and the logs (`error_text`).
+- **Quota** (`quota.py` + SQL wrappers of migration 0005): dedup keys are **per job** —
+  `gen:<job_id>:reserve|settle|refund` (owner decision 2026-11-02; v1 used the meeting id, so a
+  requeue/reprocess was never charged again). Each process/requeue inserts a new job, so each run is
+  charged once; retries of a job stay idempotent. The worker **cannot call `quota_apply_movement`**;
+  it has three SECURITY DEFINER wrappers: `pipeline_reserve(job, seconds)` (1–86400 s, running job
+  only, user = the job's meeting owner), `pipeline_refund(job)` (exactly the reserve ledger row's
+  amount, once; nothing without a job-keyed reserve or after a settle — so migrated v1 jobs never get
+  a free refund), `pipeline_settle(job, actual)` (08b: reserved − actual, 0–86400 s, not after a
+  refund). Amounts never come from `jobs.payload`. Each wrapper first takes a per-job advisory
+  transaction lock; refund needs a `failed` job (the runner fails the job first, same transaction),
+  reserve and settle a `running` one — so a refund and a settle never both apply. The reserve and the payload's `reserve_done`
+  (true stays true) are written in one transaction. v1 `lib/quota/reconcile.ts` still looks up
+  meeting-keyed dedup keys: port it with job keys (08e).
+- **Step `start`** (`start.py`): claim meeting `pending|failed → processing` (a `processing` meeting
+  is a restart), `owned_audio_path` (forged → terminal), `storage_provider` must be `gdrive`,
+  model-lock hook (`lock_generation_model`, no-op until 08c), download (map lookup in a short
+  transaction, streaming outside it), ffprobe (audio-only; `source='video'`: video mode + `-vn` mp3
+  extraction, moved here from `/uploaded`), estimate = ceil(ffprobe) or `duration_seconds` (> 6 h →
+  terminal), reserve (insufficient → `QUOTA_BLOCKED: …`, no retry), transcode mono 16 kHz 64 kbps
+  mp3 (failure keeps the original), `Transcriber.submit` (protocol; Speechmatics is 08b) →
+  `transcribe_poll` after 5 s. The extracted audio of a video is not stored: `/media` still serves
+  the original video.
+- **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
+  `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
+  worker (or keep the worker stopped until then).
+- **ffmpeg/ffprobe on untrusted files** (`audio.py`): `-protocol_whitelist file`, `-format_whitelist`
+  of our upload demuxers (an HLS/concat playlist disguised as audio is refused), stdin `/dev/null`,
+  a minimal environment (`PATH`, `LANG`/`LC_ALL=C`: no database URL, no `KEY_ENCRYPTION_SECRET`),
+  `-threads 2`, `-t 6h`, `-fs 1 GiB`, RLIMITs (2 GiB address space, file size, CPU, no core dumps),
+  timeouts (probe 60 s, ffmpeg 8 min; the process group is killed). Gemini audio transcription and
+  long-audio chunking are **not ported** (owner decision 2026-11-02: dead code in v1).
+- **Worker grants (migration `0005_worker_grants`):** SELECT `meetings` + UPDATE of status,
+  error_message, summary, notes, language, generation_provider/model, duration_seconds, audio_path,
+  audio_purged_at; SELECT `jobs` + UPDATE of status, step, attempts, last_error, run_after, payload,
+  locked_at, locked_by (no INSERT/DELETE); SELECT/INSERT/UPDATE/DELETE `transcript_segments`,
+  `transcript_chunks`, `todos`, `calendar_suggestions`, `storage_objects`; SELECT `drive_config`,
+  `admin_config` (+ UPDATE of health_* / last_used_at), `app_config`, `app_settings`,
+  `quota_wallets`, `profiles(id, default_provider, default_model)`; INSERT only `usage_log`,
+  `activity_log` (not `audit_logs`: 08e adds a SECURITY DEFINER function for the retention purge's
+  audit row with a forced `system:` actor); explicit EXECUTE only `claim_next_job` and the three
+  `pipeline_*` wrappers (functions PUBLIC-executable since v1 — `can_access_meeting`,
+  `match_transcript_chunks`, triggers, extensions — stay so). `service_all` keeps the worker only on
+  those tables. A worker feature needing more = a new migration +
+  `tests/test_worker_grants_integration.py`. The `/media` lookup (worker) still works. Downgrade
+  restores the 0004 privileges exactly (tested).
+- **What a worker breach still exposes:** SELECT on all meeting content (transcripts, notes, chunks,
+  to-dos) of every user, DELETE on `storage_objects` (and the Drive files through the token), the
+  Drive refresh token (`drive_config` + `KEY_ENCRYPTION_SECRET`) and the decrypted provider keys.
+  **ARC-15 follow-up:** run ffmpeg/ffprobe sandboxed — separate uid, no network, seccomp / read-only
+  root (or a separate sidecar without database or key access).
+- **Data migration (§0.5):** the ARC-03 preflight blocks when v1 has more than one queued/running job
+  per meeting (the unique index would abort the copy) and prints the `UPDATE` that fails the extras
+  in Supabase (keeps the newest).
 
 ## 1. What we are building
 
