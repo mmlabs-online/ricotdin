@@ -15,18 +15,27 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
+import anyio
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.deps import client_ip, current_identity
-from app.core.errors import Conflict, Forbidden, NotFound, RateLimited, UnprocessableEntity
+from app.core.errors import (
+    AppError,
+    Conflict,
+    Forbidden,
+    NotFound,
+    RateLimited,
+    UnprocessableEntity,
+)
 from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.access import can_move_meeting, has_role
+from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
 from app.domain.uploads import (
     MAX_UPLOAD_BYTES,
@@ -59,6 +68,7 @@ from app.services.platform import Platform, get_platform
 from app.services.storage.base import StorageNotConfigured, UploadedFileMissing, UploadRejected
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_audio_key
+from app.worker.messages import quota_blocked_message
 
 router = APIRouter(tags=["meetings"])
 log = get_logger("meetings")
@@ -274,6 +284,18 @@ async def process_meeting(
 REGENERATE_PER_HOUR = 10
 _BUSY = "This meeting is still being processed."
 _NO_TRANSCRIPT = "No transcript available to analyze."
+_QUOTA_MOVE = (
+    "SELECT status, audio_remaining FROM public.quota_apply_movement(:u, :d, 0, :reason, :key, "
+    ":over, :m, :u, CAST(:md AS jsonb))"
+)
+
+
+class QuotaBlocked(AppError):
+    status = 402
+    code = "quota_blocked"
+    message = "Insufficient audio balance."
+
+
 _ACTIVE_JOB = (
     "SELECT EXISTS (SELECT 1 FROM public.jobs WHERE meeting_id = :id "
     "AND status IN ('queued', 'running'))"
@@ -304,8 +326,9 @@ async def regenerate_meeting(
             (
                 await conn.execute(
                     text(
-                        "SELECT id, user_id, status, started_at, generation_provider, "
-                        "generation_model FROM public.meetings WHERE id = :id FOR UPDATE"
+                        "SELECT id, user_id, status, started_at, duration_seconds, "
+                        "generation_provider, generation_model FROM public.meetings "
+                        "WHERE id = :id FOR UPDATE"
                     ),
                     {"id": mid},
                 )
@@ -320,7 +343,7 @@ async def regenerate_meeting(
         rows = (
             await conn.execute(
                 text(
-                    "SELECT speaker, start_ms, text FROM public.transcript_segments "
+                    "SELECT speaker, start_ms, end_ms, text FROM public.transcript_segments "
                     "WHERE meeting_id = :id ORDER BY segment_index"
                 ),
                 {"id": mid},
@@ -329,6 +352,48 @@ async def regenerate_meeting(
         if not rows:
             raise UnprocessableEntity(_NO_TRANSCRIPT)
         provider, model = await lock_model(conn, dict(meeting), {})
+        # Charged like one generation (owner decision 2026-11-03), before the AI call, committed
+        # with this transaction; refunded below if no new result is saved.
+        seconds = regenerate_charge_seconds(
+            max(r.end_ms for r in rows), meeting["duration_seconds"]
+        )
+        charge_key = f"regen:{uuid.uuid4()}"
+        charge = (
+            await conn.execute(
+                text(_QUOTA_MOVE),
+                {"u": identity.user_id, "d": -seconds, "reason": "generate",
+                 "key": f"{charge_key}:charge", "over": False, "m": mid,
+                 "md": json.dumps({"kind": "regenerate"})},
+            )
+        ).one()  # fmt: skip
+        if charge.status == "insufficient":
+            raise QuotaBlocked(quota_blocked_message(seconds, int(charge.audio_remaining or 0)))
+    try:
+        return await _regenerate(db, request, mid, meeting, rows, provider, model)
+    except BaseException:
+        with anyio.CancelScope(shield=True):
+            await _refund_regenerate(db, identity.user_id, mid, seconds, charge_key)
+        raise
+
+
+async def _refund_regenerate(
+    db: Database, user: uuid.UUID, mid: uuid.UUID, seconds: int, charge_key: str
+) -> None:
+    try:
+        async with db.role_transaction(SERVICE) as conn:
+            await conn.execute(
+                text(_QUOTA_MOVE),
+                {"u": user, "d": seconds, "reason": "refund", "key": f"{charge_key}:refund",
+                 "over": True, "m": mid, "md": json.dumps({"kind": "regenerate"})},
+            )  # fmt: skip
+    except SQLAlchemyError as exc:  # logged; the ledger shows the unmatched charge
+        log.error("regenerate refund failed (%s)", type(exc).__name__)
+
+
+async def _regenerate(
+    db: Database, request: Request, mid: uuid.UUID, meeting: Any, rows: Any, provider: str,
+    model: str,
+) -> dict[str, Any]:  # fmt: skip
     segments = [SegmentText(r.speaker, r.start_ms, r.text) for r in rows]
     started = meeting["started_at"]
     meeting_date = started.isoformat() if started is not None else None

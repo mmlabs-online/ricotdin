@@ -76,3 +76,19 @@ def resolve_generation_model(
         if candidate is not None and is_model_allowed(*candidate, allowed):
             return candidate
     return default
+
+
+MAX_CHARGE_SECONDS = 86_400
+
+
+def regenerate_charge_seconds(max_end_ms: int | None, duration_seconds: int | None) -> int:
+    """A regenerate costs what one generation costs (owner decision 2026-11-03): the transcribed
+    length in whole seconds (ceil of the last segment end, as the transcription settle), else the
+    recorded length; at least 1 s, at most a day."""
+    if max_end_ms is not None and max_end_ms > 0:
+        seconds = -(-max_end_ms // 1000)
+    elif duration_seconds is not None and duration_seconds > 0:
+        seconds = duration_seconds
+    else:
+        seconds = 1
+    return max(1, min(seconds, MAX_CHARGE_SECONDS))

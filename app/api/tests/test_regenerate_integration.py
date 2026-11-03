@@ -68,6 +68,9 @@ def _meeting(world: dict[str, Any], owner: str, status: str = "done", segments: 
         "RETURNING id",
         world[owner], status, world["f"] if folder else None,
     )[0][0]  # fmt: skip
+    _sql(world["db"], "INSERT INTO quota_wallets (user_id, audio_seconds_remaining) VALUES (%s, "
+         "1000) ON CONFLICT (user_id) DO UPDATE SET audio_seconds_remaining = 1000",
+         world[owner])  # fmt: skip
     if segments:
         _sql(world["db"], "INSERT INTO transcript_segments (meeting_id, segment_index, speaker, "
              "start_ms, end_ms, text) VALUES (%s, 0, 'Speaker 1', 0, 900, 'hello')", mid)  # fmt: skip
@@ -154,3 +157,56 @@ def test_a_queued_reprocess_is_never_ended_by_regenerate(
     resp = _post(client, "a", mid)
     assert resp.status_code == 409 and seen == []
     assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", mid) == [("failed",)]
+
+
+def _ledger(world: dict[str, Any], mid: Any) -> list[tuple[str, str, int]]:
+    rows = _sql(world["db"], "SELECT reason, dedup_key, delta_audio_seconds FROM quota_ledger "
+                "WHERE meeting_id = %s ORDER BY created_at", mid)  # fmt: skip
+    return [(r[0], r[1].rsplit(":", 1)[-1], int(r[2])) for r in rows]
+
+
+def _wallet(world: dict[str, Any], who: str) -> int:
+    return int(_sql(world["db"], "SELECT audio_seconds_remaining FROM quota_wallets "
+                    "WHERE user_id = %s", world[who])[0][0])  # fmt: skip
+
+
+def test_regenerate_is_charged_like_one_generation(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a")
+    _sql(world["db"], "INSERT INTO transcript_segments (meeting_id, segment_index, start_ms, "
+         "end_ms, text) VALUES (%s, 1, 900, 61500, 'more')", mid)  # fmt: skip
+    assert _post(client, "a", mid).status_code == 200
+    assert _ledger(world, mid) == [("generate", "charge", -62)]  # ceil(61.5 s)
+    assert _wallet(world, "a") == 1000 - 62
+
+
+def test_insufficient_balance_is_402_without_an_ai_call(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    seen = install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a")
+    _sql(world["db"], "UPDATE quota_wallets SET audio_seconds_remaining = 0 WHERE user_id = %s",
+         world["a"])  # fmt: skip
+    resp = _post(client, "a", mid)
+    assert resp.status_code == 402
+    assert _msg(resp) == "QUOTA_BLOCKED: Insufficient audio balance. Required: 1s, remaining: 0s."
+    assert seen == [] and _ledger(world, mid) == []
+
+
+def test_a_failed_regenerate_is_refunded(client: TestClient, world: dict[str, Any]) -> None:
+    install_ai(client, [httpx2.Response(503, json={})])
+    mid = _meeting(world, "a")
+    assert _post(client, "a", mid).status_code == 503
+    assert _ledger(world, mid) == [("generate", "charge", -1), ("refund", "refund", 1)]
+    assert _wallet(world, "a") == 1000
+
+
+def test_refusals_before_the_charge_cost_nothing(client: TestClient, world: dict[str, Any]) -> None:
+    install_ai(client, [openai(ANSWER)])
+    busy = _meeting(world, "a", status="processing")
+    empty = _meeting(world, "a", segments=False)
+    assert _post(client, "a", busy).status_code == 409
+    assert _post(client, "a", empty).status_code == 422
+    assert _ledger(world, busy) == [] and _ledger(world, empty) == []
