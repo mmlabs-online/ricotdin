@@ -16,6 +16,9 @@ class ProviderInfo:
     kind: str  # which adapter speaks its API
     base_url: str
     label: str
+    # Key health check (08e): when set, probe with a 1-token chat call on this model instead of
+    # listing models (xAI keys usually lack the "list models" permission, v1 §9i).
+    probe_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -44,7 +47,7 @@ PROVIDERS: dict[str, ProviderInfo] = {
             "gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "Gemini"
         ),
         ProviderInfo("openai", "openai_compat", "https://api.openai.com/v1", "OpenAI"),
-        ProviderInfo("grok", "openai_compat", "https://api.x.ai/v1", "Grok"),
+        ProviderInfo("grok", "openai_compat", "https://api.x.ai/v1", "Grok", "grok-3-mini"),
     )
 }
 
