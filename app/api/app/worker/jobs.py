@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.db.session import Database
+from app.services.ai.service import AIService
 from app.services.platform import Platform
 
 
@@ -112,6 +113,7 @@ class StepContext:
     transcriber: Transcriber | None
     now: Callable[[], datetime]
     worker_id: str  # guards the step's own job writes (locked_by)
+    ai: AIService | None = None  # generation calls (analyse)
 
 
 StepHandler = Callable[[StepContext], Awaitable[Outcome]]

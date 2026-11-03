@@ -3,7 +3,7 @@
 1. Claim the meeting atomically (``pending``/``failed`` → ``processing``); a meeting already
    ``processing`` is a restart and continues; anything else (done, deleted) ends the job.
 2. Prove the audio key belongs to the meeting (terminal if forged) and is in Google Drive.
-3. Model lock hook (ARC-08c).
+3. Lock the generation model once per meeting (``model_lock``).
 4. Download, validate streams with ffprobe (``video`` meetings: extract the audio track first;
    owner decision: extraction moved from ``/uploaded`` to the worker), estimate the duration.
 5. Reserve quota once per job (``pipeline_reserve``: the meeting owner, ``gen:<job_id>:reserve``)
@@ -26,6 +26,7 @@ from app.worker import audio
 from app.worker.errors import JobLockLost, PipelineError, TransientError
 from app.worker.jobs import Advance, Done, Fail, Outcome, StepContext
 from app.worker.messages import GENERIC_FAILURE, quota_blocked_message
+from app.worker.model_lock import lock_model
 from app.worker.policy import FIRST_POLL_DELAY_S, MAX_AUDIO_SECONDS
 from app.worker.quota import estimate_seconds
 
@@ -77,10 +78,8 @@ async def _claim_meeting(conn: AsyncConnection, ctx: StepContext) -> dict[str, A
 async def lock_generation_model(
     conn: AsyncConnection, ctx: StepContext, meeting: dict[str, Any]
 ) -> None:
-    """ARC-08c hook (AIP-03/06): write ``generation_provider/model`` once per meeting from
-    ``payload.preferred_*`` (only if on the allow-list), the profile default or the system
-    default. Intentionally does nothing until 08c lands."""
-    return None
+    """AIP-03/06: write ``generation_provider/model`` once per meeting (``model_lock``)."""
+    await lock_model(conn, meeting, ctx.job.payload)
 
 
 def source_suffix(key: str) -> str:

@@ -1,17 +1,14 @@
 """Generation models a user may pick (ARC-07; legacy lib/ai/registry + config, labels from the
-v1 preferences route). Pure. ARC-08 adds the adapters behind these names."""
+v1 preferences route). Pure. The model list lives in ``app.services.ai.catalog`` (ARC-08c)."""
 
 from typing import Any
 
+from app.services.ai.catalog import MODELS
+
 Pick = tuple[str, str]  # (provider, model)
 
-REGISTERED: tuple[Pick, ...] = (
-    ("gemini", "gemini-2.5-flash"),
-    ("openai", "gpt-4o"),
-    ("openai", "gpt-4o-mini"),
-    ("grok", "grok-4"),
-    ("grok", "grok-3-mini"),
-)
+REGISTERED: tuple[Pick, ...] = tuple((m.provider, m.model) for m in MODELS)
+_LABELS = {(m.provider, m.model): m.label for m in MODELS}
 SYSTEM_DEFAULT: Pick = ("gemini", "gemini-2.5-flash")
 FALLBACK_ALLOWED: list[Pick] = [SYSTEM_DEFAULT]
 
@@ -41,6 +38,8 @@ def is_model_allowed(provider: str, model: str, allowed: list[Pick]) -> bool:
 
 
 def model_label(provider: str, model: str) -> str:
+    if (provider, model) in _LABELS:
+        return _LABELS[(provider, model)]
     if provider == "gemini":
         return f"Gemini — {model}"
     if provider == "openai" and model == "gpt-4o":
@@ -50,3 +49,30 @@ def model_label(provider: str, model: str) -> str:
     if provider == "grok":
         return f"Grok — {model}"
     return f"{provider} — {model}"
+
+
+def parse_pick(raw: Any) -> Pick | None:
+    """``{"provider": str, "model": str}`` → (provider, model); anything else → None."""
+    if not isinstance(raw, dict):
+        return None
+    provider, model = raw.get("provider"), raw.get("model")
+    if isinstance(provider, str) and isinstance(model, str) and provider and model:
+        return provider, model
+    return None
+
+
+def system_default(raw: Any) -> Pick:
+    """``app_settings['generation.system_default']``; an unregistered value → the built-in."""
+    pick = parse_pick(raw)
+    return pick if pick is not None and pick in REGISTERED else SYSTEM_DEFAULT
+
+
+def resolve_generation_model(
+    allowed: list[Pick], default: Pick, user_pref: Pick | None, pick: Pick | None
+) -> Pick:
+    """v1 AIP-06 chain: the upload's pick, then the user's default (each only if allowed and
+    registered), then the system default."""
+    for candidate in (pick, user_pref):
+        if candidate is not None and is_model_allowed(*candidate, allowed):
+            return candidate
+    return default

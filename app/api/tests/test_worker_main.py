@@ -1,5 +1,5 @@
 """ARC-08: ``python -m app.worker`` refuses to start with credentials it must not hold or while
-pipeline steps are missing (``analyse`` / ``embed`` arrive with 08c–08d)."""
+pipeline steps are missing (``embed`` arrives with 08d)."""
 
 import pytest
 
@@ -7,10 +7,10 @@ from app.worker.__main__ import main, startup_problems
 from app.worker.steps import default_steps
 
 
-def test_not_deployable_before_analyse_and_embed() -> None:
-    assert set(default_steps()) == {"start", "transcribe_poll"}
+def test_not_deployable_before_embed() -> None:
+    assert set(default_steps()) == {"start", "transcribe_poll", "analyse"}
     problems = startup_problems({"DATABASE_URL_WORKER": "postgresql://w"}, default_steps())
-    assert problems == ["pipeline steps not implemented yet: analyse, embed"]
+    assert problems == ["pipeline steps not implemented yet: embed"]
 
 
 def test_complete_pipeline_with_only_the_worker_login_starts() -> None:

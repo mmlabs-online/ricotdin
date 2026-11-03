@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.logging import get_logger
+from app.services.ai.catalog import PROVIDERS
 from app.services.cache import TtlCache
 from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key
 from app.services.keys.pool import KeyWithMeta
@@ -24,6 +25,7 @@ FALLBACK_ENV_NAMES = frozenset(
     {"GEMINI_API_KEYS", "GEMINI_API_KEY", "SPEECHMATICS_API_KEY", "OPENAI_API_KEY", "GROK_API_KEY",
      "XAI_API_KEY"}
     | {f"GEMINI_API_KEY_{i}" for i in range(1, 21)}
+    | {f"{name.upper()}_API_KEY" for name in PROVIDERS}
 )  # fmt: skip
 FAILURE_TTL_S = 5.0  # after a failed lookup, retry the database soon
 _CONFIG_KEYS = {
@@ -61,6 +63,8 @@ def env_keys(provider: str, env: Mapping[str, str]) -> list[KeyWithMeta]:
         push(env.get("OPENAI_API_KEY"))
     elif provider == "grok":
         push((env.get("GROK_API_KEY") or "").strip() or env.get("XAI_API_KEY"))
+    elif provider in PROVIDERS:  # any later catalog provider: <NAME>_API_KEY (ARC-08c)
+        push(env.get(f"{provider.upper()}_API_KEY"))
     return out
 
 

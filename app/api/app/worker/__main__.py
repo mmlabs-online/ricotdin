@@ -3,7 +3,7 @@
 Same image as the API, its own container, and only ``DATABASE_URL_WORKER`` (plus
 ``KEY_ENCRYPTION_SECRET``): the process refuses to start when any other database URL or
 server secret is present (ARC-04 security review), and while pipeline steps are missing
-(``analyse`` / ``embed`` arrive with 08c–08d; not deployable before then). SIGTERM / SIGINT
+(``embed`` arrives with 08d; not deployable before then). SIGTERM / SIGINT
 stop the loop after the current claim; a step still running after ``SHUTDOWN_GRACE_S`` is
 cancelled and its job released (queued again at once).
 """
@@ -20,6 +20,7 @@ from app.core.sentry import init_sentry
 from app.core.settings import Settings
 from app.core.version import resolve_version
 from app.db.session import Database
+from app.services.ai.service import AIService
 from app.services.platform import Platform
 from app.worker.jobs import StepHandler
 from app.worker.policy import missing_steps, worker_env_problems
@@ -44,9 +45,11 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
     platform = Platform.from_settings(settings)
     db = await Database.start(settings)
     transcriber: SpeechmaticsTranscriber | None = None
+    ai: AIService | None = None
     try:
         transcriber = SpeechmaticsTranscriber(db, platform.keys)
-        runner = JobRunner(db, platform, steps, transcriber=transcriber)
+        ai = AIService(platform.keys)
+        runner = JobRunner(db, platform, steps, transcriber=transcriber, ai=ai)
         stop = anyio.Event()
         async with anyio.create_task_group() as tg:
 
@@ -69,6 +72,8 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
         with anyio.CancelScope(shield=True):
             if transcriber is not None:
                 await transcriber.aclose()
+            if ai is not None:
+                await ai.aclose()
             await db.close()
             await platform.aclose()
 
