@@ -6,6 +6,7 @@ the caller's visible meetings. Citations: invented ids dropped, times from the d
 one agent query per question, 402 when none left, refunded on a retrieval or AI failure."""
 
 import json
+import re
 import uuid
 from typing import Any
 
@@ -57,8 +58,7 @@ class Provider:
     def _answer(self, prompt: str) -> str:
         if self.answer is not None:
             return self.answer if isinstance(self.answer, str) else json.dumps(self.answer)
-        ids = [line.split()[0].removeprefix("chunk_id=") for line in prompt.splitlines()
-               if line.startswith("chunk_id=")]  # fmt: skip
+        ids = re.findall(r'<excerpt chunk_id="([^"]+)"', prompt)
         return json.dumps({"answer": "From the meeting.",
                            "citations": [{"chunk_id": i} for i in ids]})  # fmt: skip
 
@@ -346,3 +346,66 @@ def test_rate_limit(client: TestClient, world: dict[str, Any], ai: Provider) -> 
     )
     assert _ask(client, "b").status_code == 200
     assert _ask(client, "b").status_code == 429
+
+
+# --- review follow-ups -----------------------------------------------------------------------------
+
+
+def test_empty_folder_reply_is_listed_after_the_question(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    empty = _sql(world["db"], "INSERT INTO folders (user_id, name) VALUES (%s, %s) RETURNING id",
+                 world["d"], f"order-{uuid.uuid4().hex[:6]}")[0][0]  # fmt: skip
+    session = _ask(client, "d", folderId=str(empty)).json()["sessionId"]
+    for _ in range(4):
+        r = _ask(client, "d", folderId=str(empty), sessionId=session)
+        assert r.status_code == 200 and r.json()["sessionId"] == session
+    got = client.get(f"/chat?folderId={empty}", headers=_as(client, "d")).json()["messages"]
+    assert [m["role"] for m in got] == ["user", "assistant"] * 5
+
+
+def test_a_revoked_share_ends_the_old_session(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "c")
+    folder = _sql(world["db"], "INSERT INTO folders (user_id, name) VALUES (%s, %s) RETURNING id",
+                  world["a"], f"rev-{uuid.uuid4().hex[:6]}")[0][0]  # fmt: skip
+    _sql(world["db"], "INSERT INTO folder_shares (folder_id, user_id, role, invited_by) VALUES "
+         "(%s, %s, 'viewer', %s)", folder, world["c"], world["a"])  # fmt: skip
+    mid = _sql(world["db"], "INSERT INTO meetings (user_id, status, folder_id) VALUES (%s, "
+               "'done', %s) RETURNING id", world["a"], folder)[0][0]  # fmt: skip
+    session = _ask(client, "c", meetingId=str(mid)).json()["sessionId"]
+    _sql(world["db"], "DELETE FROM folder_shares WHERE folder_id = %s", folder)
+    assert _ask(client, "c", meetingId=str(mid), sessionId=session).status_code == 403
+    assert client.get(f"/chat?sessionId={session}", headers=_as(client, "c")).status_code == 403
+
+
+def test_an_admin_gets_no_extra_meetings(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    from app.auth.jwt import issue_access_token
+
+    _queries(world, "d")
+    _meeting(world, "a", text="ADMIN-MUST-NOT-SEE")
+    app: Any = client.app
+    token = issue_access_token(app.state.auth.keys, world["d"], "admin")
+    resp = client.post("/chat", headers={"Authorization": f"Bearer {token}"},
+                       json={"message": "anything"})  # fmt: skip
+    assert resp.status_code == 200 and "ADMIN-MUST-NOT-SEE" not in _excerpt_texts(ai)
+
+
+def test_shared_excerpts_are_labelled(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "b")
+    _meeting(world, "a", folder=True, text="FROM-A")
+    assert _ask(client, "b", folderId=str(world["f"])).status_code == 200
+    prompt = _excerpt_texts(ai)
+    assert 'source="shared">\nFROM-A' in prompt and 'source="own"' not in prompt
+
+
+def test_a_huge_body_is_refused(client: TestClient, world: dict[str, Any], ai: Provider) -> None:
+    big = json.dumps({"message": "x" * 70_000}).encode()
+    resp = client.post("/chat", headers={**_as(client, "a"), "content-type": "application/json"},
+                       content=big)  # fmt: skip
+    assert resp.status_code == 413

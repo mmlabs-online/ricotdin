@@ -25,7 +25,7 @@ from typing import Annotated, Any
 import anyio
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.auth.deps import current_identity
@@ -63,6 +63,7 @@ Db = Annotated[Database, Depends(get_database)]
 
 CHAT_PER_WINDOW = 30  # questions per user per 10 minutes (v2; v1 relied on the quota only)
 CHAT_WINDOW_S = 600
+MAX_BODY_BYTES = 64 * 1024  # a 4000-character question is well below this
 
 NO_CONTEXT_REPLY = (
     "I couldn't find relevant information in the meeting transcript to answer that question. "
@@ -229,12 +230,15 @@ async def chat_history(
 async def chat(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
     me = identity.user_id
     enforce_limit(request.app.state.chat_limiter, me)
-    req = parse_chat_request(await json_object(request))
+    req = parse_chat_request(await json_object(request, max_bytes=MAX_BODY_BYTES))
     mid, fid, sid = _ids(req.meeting_id, req.folder_id, req.session_id)
 
-    # The folder's meetings the caller can see (RLS), checked again in the service transaction.
+    # The folder's meetings the caller can see (RLS); the access check comes first and is
+    # repeated in the service transaction below.
     folder_meetings: list[uuid.UUID] | None = None
     if fid is not None:
+        async with db.role_transaction(SERVICE) as conn:
+            await _check_folder(conn, fid, me)
         async with db.app_transaction(identity) as conn:
             rows = await conn.execute(
                 text("SELECT id FROM public.meetings WHERE folder_id = :f"), {"f": fid}
@@ -263,8 +267,8 @@ async def chat(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
         history = recent_history([(r[0], r[1]) for r in history_rows])
         await conn.execute(
             text(
-                "INSERT INTO public.chat_messages (id, session_id, role, content) "
-                "VALUES (:id, :s, 'user', :c)"
+                "INSERT INTO public.chat_messages (id, session_id, role, content, created_at) "
+                "VALUES (:id, :s, 'user', :c, clock_timestamp())"
             ),
             {"id": msg_id, "s": session_id, "c": req.message},
         )
@@ -283,13 +287,15 @@ async def chat(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
             if charge.status == "insufficient":
                 raise AgentQuotaBlocked(int(charge.agent_remaining or 0))  # rolls back the question
     activity = {"sessionId": str(session_id), **({"folderId": str(fid)} if fid else {})}
-    await record_activity(db, request, me, "chat_message", mid, activity)
     if reply is not None:
+        await record_activity(db, request, me, "chat_message", mid, activity)
         return {"sessionId": session_id, "message": reply}
 
     usage = UsageContext(mid, me)
     refund_key = f"agent:{msg_id}:refund"
+    saved = False  # once the reply is committed, a late cancel never refunds it
     try:
+        await record_activity(db, request, me, "chat_message", mid, activity)
         content, citations, failed = await _answer(
             request.app.state.ai, db, identity, req.message, meeting_ids, history, pick, usage
         )
@@ -297,9 +303,11 @@ async def chat(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
             await _refund(db, me, refund_key, session_id, failed)
         async with db.role_transaction(SERVICE) as conn:
             reply = await _save_reply(conn, session_id, content, citations)
+        saved = True
     except BaseException:
-        with anyio.CancelScope(shield=True):
-            await _refund(db, me, refund_key, session_id, "request_failed")
+        if not saved:
+            with anyio.CancelScope(shield=True), anyio.move_on_after(5):
+                await _refund(db, me, refund_key, session_id, "request_failed")
         raise
     return {"sessionId": session_id, "message": reply}
 
@@ -350,8 +358,9 @@ async def _save_reply(
         row = (
             await conn.execute(
                 text(
-                    "INSERT INTO public.chat_messages (session_id, role, content, citations) "  # noqa: S608
-                    "VALUES (:s, 'assistant', :c, CAST(:cit AS jsonb)) "
+                    "INSERT INTO public.chat_messages (session_id, role, content, citations, "  # noqa: S608
+                    "created_at) VALUES (:s, 'assistant', :c, CAST(:cit AS jsonb), "
+                    "clock_timestamp()) "
                     f"RETURNING {_MESSAGE_COLUMNS}"
                 ),
                 {"s": session_id, "c": content, "cit": json.dumps(citations)},
@@ -377,7 +386,7 @@ async def _answer(
     chunks: list[RetrievedChunk] = []
     try:
         chunks = await _retrieve(ai, db, identity, question, meeting_ids, usage)
-    except (AppError, SQLAlchemyError) as exc:
+    except Exception as exc:  # noqa: BLE001 - any failure is the honest "search broke" reply (v1)
         retrieval_failed = True
         log.error("chat retrieval failed (%s)", type(exc).__name__)
     outcome = classify_outcome(retrieval_failed, len(chunks))
@@ -422,9 +431,19 @@ async def _retrieve(
                 {"e": vector_literal(vector), "n": MATCH_COUNT, "ids": meeting_ids},
             )
         ).all()
+        owners = {
+            r[0]: r[1]
+            for r in await conn.execute(
+                text(
+                    "SELECT id, user_id FROM public.meetings WHERE id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"ids": list({r.meeting_id for r in rows})},
+            )
+        }
     found = [
         RetrievedChunk(r.id, r.meeting_id, r.content or "", int(r.start_ms or 0),
-                       int(r.end_ms or 0), float(r.similarity))
+                       int(r.end_ms or 0), float(r.similarity),
+                       shared=owners.get(r.meeting_id) != identity.user_id)
         for r in rows
     ]  # fmt: skip
     return keep_chunks(found, meeting_ids)

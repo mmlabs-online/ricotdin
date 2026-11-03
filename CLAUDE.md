@@ -594,6 +594,16 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   NULL). "Nothing relevant" is charged (v1).
 - Writes (`chat_sessions`, `chat_messages`, ledger, activity `chat_message`) run as
   `ricotdin_service` after the checks; AI calls hold no database connection.
+- **Prompt:** excerpts in `<excerpt chunk_id=… source="own|shared">`, history in `<history>`,
+  the question in `<question>`; those tags are stripped from all untrusted text. A folder share
+  lets its owner put text in another user's global/folder chat (indirect prompt injection:
+  misinformation only — no tools, citations validated). **ARC-11/13 must render chat answers as
+  plain text or sanitised markdown without images or remote links** (else exfiltration).
+- Body ≤ 64 KiB (413 `payload_too_large`, `json_object(max_bytes=)`). Messages are written with
+  `clock_timestamp()` so a question always sorts before its reply. A reply that was committed is
+  never refunded. 402 body = the v2 error envelope (`error.code`), not v1's `{blocked, reason}`.
+- **Open (owner decision pending):** a refunded answer failure still costs us the provider calls,
+  so a user can farm refunds with questions the provider rejects (bounded by the rate limit).
 
 ## 1. What we are building
 

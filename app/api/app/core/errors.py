@@ -51,6 +51,12 @@ class Conflict(AppError):
     message = "This conflicts with the current state."
 
 
+class PayloadTooLarge(AppError):
+    status = 413
+    code = "payload_too_large"
+    message = "The request body is too large."
+
+
 class UnprocessableEntity(AppError):
     status = 422
     code = "unprocessable"

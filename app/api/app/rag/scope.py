@@ -41,6 +41,7 @@ class RetrievedChunk:
     start_ms: int
     end_ms: int
     similarity: float
+    shared: bool = False  # someone else's meeting (a folder share): labelled in the prompt
 
 
 @dataclass(frozen=True)
