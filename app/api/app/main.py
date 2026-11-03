@@ -20,6 +20,7 @@ from app.core.settings import Settings, get_settings
 from app.core.version import resolve_version
 from app.routers import activity as activity_router
 from app.routers import auth as auth_router
+from app.routers import chat as chat_router
 from app.routers import content as content_router
 from app.routers import folders as folders_router
 from app.routers import media as media_router
@@ -98,9 +99,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.upload_limiter = meetings_router.upload_limiter()
     app.state.process_limiter = meetings_router.process_limiter()
     app.state.regenerate_limiter = meetings_router.regenerate_limiter()
+    app.state.chat_limiter = chat_router.chat_limiter()
     app.state.regenerating = set()  # meeting ids with a regenerate in flight (this process)
     app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
-    for module in (meetings_router, content_router, folders_router, activity_router):
+    for module in (meetings_router, content_router, folders_router, activity_router, chat_router):
         app.include_router(module.router)
     app.include_router(media_router.router)
     return app

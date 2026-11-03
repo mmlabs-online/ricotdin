@@ -41,6 +41,15 @@ def can_assign_to_folder(
     return user_id == folder_owner or share_role == "editor"
 
 
+def can_view_folder(
+    user_id: uuid.UUID, *, folder_owner: uuid.UUID | None, share_role: str | None
+) -> bool:
+    """Owner or any share of the folder (v1 ``checkFolderAccess(..., 'viewer')``, ARC-09)."""
+    if folder_owner is None:
+        return False
+    return user_id == folder_owner or share_role in ("editor", "viewer")
+
+
 def can_move_meeting(user_id: uuid.UUID, *, meeting_owner: uuid.UUID) -> bool:
     """Owner decision 2026-11-02 (CWE-269 fix): only the meeting owner moves it to another
     folder. In v1 any editor could, and by moving it into their own folder became its owner."""
