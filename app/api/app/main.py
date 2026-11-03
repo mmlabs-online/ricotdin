@@ -26,6 +26,7 @@ from app.routers import folders as folders_router
 from app.routers import media as media_router
 from app.routers import meetings as meetings_router
 from app.routers import profile as profile_router
+from app.routers.admin import ops as admin_ops_router
 from app.routers.admin import users as admin_users_router
 from app.services.ai.service import AIService
 from app.services.platform import Platform
@@ -105,7 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
     for module in (
         meetings_router, content_router, folders_router, activity_router, chat_router,
-        admin_users_router,
+        admin_users_router, admin_ops_router,
     ):  # fmt: skip
         app.include_router(module.router)
     app.include_router(media_router.router)

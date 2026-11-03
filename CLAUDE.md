@@ -644,6 +644,27 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Open (owner decision pending):** a demoted admin keeps admin RLS reads in the non-admin APIs
   (all meetings, transcripts, chat retrieval) until the access token expires (≤ 15 min, §0.3);
   the admin API itself refuses at once.
+- **Operations (10b, `ops.py`, pure `domain/admin_ops.py`):** `GET /admin/pipeline/overview`
+  (counts + stuck = `processing`, not updated for 15 min and no queued/running job — a long
+  transcription re-queues its poll without touching the meeting — + average done time),
+  `GET /admin/pipeline/jobs?status=pending|processing|done|failed|stuck&page&perPage` (meeting
+  metadata, owner, latest job status/step/attempts/`last_error` ≤ 500 chars — never summary, notes
+  or transcript), `POST /admin/pipeline/{id}/requeue` (**failed or stuck meetings only**, 422
+  otherwise — v1 §9d; a `done` meeting is re-run by its owner via `/process`; meeting →
+  `pending`, ONE job via the unique index, audit `meeting.requeue`; nothing is cleared up front
+  — v1 wiped transcript/notes first — the worker replaces each part as its step completes, so a
+  re-run that fails half-way can leave a new transcript next to old notes; 409 before any change
+  unless the worker can run it: own audio key, `gdrive` (v1 meetings wait for ARC-18), file
+  mapped, no job queued/running; a new job = a new quota charge for the owner, owner decision
+  2026-11-02), `GET /admin/pipeline/schedulers` (ARC-08e tasks, `stale` = not finished for two
+  intervals), `GET /admin/usage` (meetings by status/age, Drive map totals), `GET /admin/ai-usage
+  ?from&to(≤ 400 days)&groupBy=operation&userId` (grouped in SQL, units never summed together,
+  key label + last4 only), `GET /admin/activity?userId&eventType&from&to`, `GET /admin/audit-logs
+  ?actor&action(prefix, wildcards literal)&from&to`. A date-only `to` covers the whole day (also
+  ai-usage: the v1 UI appended `T23:59:59Z`); dates outside 1970–2100 are ignored; bad uuids →
+  400 (v1 crashed). ARC-14 must render activity `metadata` as text (users write their own
+  `POST /activity` rows). v1's `POST /admin/pipeline/reconcile-quota` is not ported: the worker
+  runs `wallet_reconcile` / `stuck_meetings` every 5 min (the service role cannot run them).
 
 ## 1. What we are building
 
