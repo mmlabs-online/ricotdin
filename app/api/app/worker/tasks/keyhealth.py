@@ -102,13 +102,19 @@ async def probe(http: httpx2.AsyncClient, p: Probe) -> Verdict:
 
 
 async def run_key_health(
-    db: Database, platform: Platform, *, transport: httpx2.AsyncBaseTransport | None = None
+    db: Database,
+    platform: Platform,
+    *,
+    transport: httpx2.AsyncBaseTransport | None = None,
+    group: str = WORKER,
 ) -> Mapping[str, int]:
+    """Probe every stored key and record the verdicts. The worker runs it daily; the admin API
+    runs it on demand as ``ricotdin_service`` (``group``)."""
     if not platform.keys.has_master:
         # Every stored key would look undecryptable: never mark good keys unhealthy for that.
         log.error("KEY_ENCRYPTION_SECRET is not set: key health check skipped")
         return {"healthy": 0, "unhealthy": 0, "unknown": 0}
-    async with db.role_transaction(WORKER) as conn:
+    async with db.role_transaction(group) as conn:
         keys = await platform.keys.stored_keys(conn)
     verdicts: list[tuple[str, Verdict]] = []
     async with httpx2.AsyncClient(
@@ -122,7 +128,7 @@ async def run_key_health(
             if p is None:
                 continue
             verdicts.append((stored.id, await probe(http, p)))
-    async with db.role_transaction(WORKER) as conn:
+    async with db.role_transaction(group) as conn:
         for key_id, v in verdicts:
             await conn.execute(
                 text(

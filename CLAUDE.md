@@ -605,7 +605,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Open (owner decision pending):** a refunded answer failure still costs us the provider calls,
   so a user can farm refunds with questions the provider rejects (bounded by the rate limit).
 
-### 0.9 v2 admin API (ARC-10; 10a users)
+### 0.9 v2 admin API (ARC-10 done: 10a users, 10b operations, 10c configuration)
 
 - **Package** `app/routers/admin/` (prefix `/admin`), pure rules in `app/domain/admin.py`. Every
   route depends on `current_admin` (`_common.py`): token role `admin` **and** `users.role =
@@ -665,6 +665,25 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   400 (v1 crashed). ARC-14 must render activity `metadata` as text (users write their own
   `POST /activity` rows). v1's `POST /admin/pipeline/reconcile-quota` is not ported: the worker
   runs `wallet_reconcile` / `stuck_meetings` every 5 min (the service role cannot run them).
+- **Configuration (10c, `config.py`, pure `domain/admin_config.py`):** `GET|POST /admin/keys`,
+  `PATCH|DELETE /admin/keys/{id}` (config keys = `<catalog provider>_api_key` + Speechmatics;
+  encrypted with `KeySource.encrypt`, 503 without `KEY_ENCRYPTION_SECRET`; key 8–512 visible ASCII
+  chars; rows never carry ciphertext/IV/tag; last active key of a provider never disabled or
+  deleted — 422, rows locked `FOR NO KEY UPDATE`; `keys.invalidate(provider)` after every commit;
+  audit `admin_config.create|enable|disable|delete {configKey, label[, disabled_reason]}`),
+  `GET|POST /admin/keys/healthcheck` (POST runs `run_key_health(group=SERVICE)` now, 10/h per
+  process, audit `admin_config.healthcheck {summary}`), `GET /admin/config`,
+  `PATCH /admin/config/{key} {value}` (known keys typed: `storage.audio_retention_days` null or
+  1–3650, `user_hack_audio_render` boolean; strings ≤ 2000; `platform.config.invalidate`; audit
+  `config.update {value}`; values read as `value::text` — the jsonb codec already decodes),
+  `GET|PATCH /admin/generation-config` (v1 rules + the default must stay in the allow-list;
+  `app_settings` upsert under an advisory lock; audit `generation_config.update`),
+  `GET|POST /admin/features`, `GET|PATCH /admin/features/{id|KEY}` (keys `PREFIX-ID`, text caps,
+  409 duplicate; audit `feature.create {key, module_prefix, title}` / `feature.update {key,
+  changed_fields}`), `GET /admin/health` (database, Drive `check()`, per-provider active keys from
+  the last check — no live probe, unlike v1 — and stale worker tasks; 503 when any check fails),
+  `GET /admin/storage` (Drive health + map totals). v1's R2 `storage` config / orphans / cleanup
+  routes are not ported (storage is Drive; R2 is only the ARC-18 source).
 
 ## 1. What we are building
 

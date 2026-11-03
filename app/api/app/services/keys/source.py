@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.core.logging import get_logger
 from app.services.ai.catalog import PROVIDERS
 from app.services.cache import TtlCache
-from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key
+from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key, encrypt_with_key
 from app.services.keys.pool import KeyWithMeta
 
 log = get_logger("keys")
@@ -98,6 +98,11 @@ class KeySource:
     @property
     def has_master(self) -> bool:
         return self._master is not None
+
+    def encrypt(self, plaintext: str) -> EncryptedSecret | None:
+        """A new key encrypted with ``KEY_ENCRYPTION_SECRET`` (ARC-10 admin keys); None when
+        the secret is not set (the caller answers 503)."""
+        return encrypt_with_key(plaintext, self._master) if self._master is not None else None
 
     @property
     def env_names(self) -> list[str]:
