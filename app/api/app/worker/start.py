@@ -11,7 +11,7 @@
    Insufficient balance ends the job (``QUOTA_BLOCKED: …``). A later failure refunds from the
    ledger (``pipeline_refund``), whatever the payload says.
 6. Transcode to mono 16 kHz mp3 (failure keeps the original), submit to the transcriber and
-   continue at ``transcribe_poll`` (ARC-08b) after 5 s.
+   continue at ``transcribe_poll`` after 5 s.
 """
 
 import json
@@ -24,7 +24,7 @@ from app.core.logging import get_logger
 from app.services.storage.ownership import owned_audio_path
 from app.worker import audio
 from app.worker.errors import JobLockLost, PipelineError, TransientError
-from app.worker.jobs import Advance, Done, Fail, Outcome, StepContext, StepHandler
+from app.worker.jobs import Advance, Done, Fail, Outcome, StepContext
 from app.worker.messages import GENERIC_FAILURE, quota_blocked_message
 from app.worker.policy import FIRST_POLL_DELAY_S, MAX_AUDIO_SECONDS
 from app.worker.quota import estimate_seconds
@@ -83,7 +83,7 @@ async def lock_generation_model(
     return None
 
 
-def _source_suffix(key: str) -> str:
+def source_suffix(key: str) -> str:
     dot = key.rfind(".")
     suffix = key[dot:].lower() if dot > key.rfind("/") else ""
     return suffix if suffix in _SUFFIX_OK else ".bin"
@@ -113,7 +113,7 @@ async def run_start(ctx: StepContext) -> Outcome:
             )
         await lock_generation_model(conn, ctx, meeting)
 
-    source = ctx.workdir / f"source{_source_suffix(key)}"
+    source = ctx.workdir / f"source{source_suffix(key)}"
     size = await audio.download(ctx.db, ctx.platform, key, source)
     log.info("audio downloaded", extra={"meeting_id": str(job.meeting_id), "bytes": size})
 
@@ -176,7 +176,9 @@ async def run_start(ctx: StepContext) -> Outcome:
         raise PipelineError(GENERIC_FAILURE, detail="no transcription provider is configured")
     upload = await audio.transcode(source, ctx.workdir)
     submission = await ctx.transcriber.submit(
-        upload, language=meeting["language"], speaker_count=_speaker_count(job.payload)
+        upload,
+        language=None,
+        speaker_count=speaker_count_hint(job.payload),  # v1: auto-detect
     )
     log.info("transcription submitted", extra={"meeting_id": str(job.meeting_id)})
     return Advance(
@@ -187,12 +189,6 @@ async def run_start(ctx: StepContext) -> Outcome:
     )  # fmt: skip
 
 
-def _speaker_count(payload: dict[str, Any]) -> int | None:
+def speaker_count_hint(payload: dict[str, Any]) -> int | None:
     value = payload.get("speaker_count")
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
-
-
-def default_steps() -> dict[str, StepHandler]:
-    """The step registry. ``transcribe_poll`` / ``analyse`` / ``embed`` arrive with 08b–08d;
-    until then ``python -m app.worker`` refuses to start (``policy.missing_steps``)."""
-    return {"start": run_start}

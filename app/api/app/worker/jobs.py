@@ -1,5 +1,5 @@
 """Worker data types (ARC-08): the claimed job, what a step returns, the step context and the
-transcriber contract (the Speechmatics implementation is ARC-08b)."""
+transcriber contract (``speechmatics_client.SpeechmaticsTranscriber``)."""
 
 import json
 import uuid
@@ -86,6 +86,18 @@ class Transcriber(Protocol):
     async def submit(
         self, audio: Path, *, language: str | None, speaker_count: int | None
     ) -> Submission: ...
+
+    async def status(self, sub: Submission) -> tuple[str, list[Any]]:
+        """``running`` | ``done`` | ``rejected`` | ``deleted`` | ``unknown`` and the errors."""
+        ...
+
+    async def transcript(self, sub: Submission) -> Any:
+        """The raw json-v2 transcript of a ``done`` job (untrusted: parse defensively)."""
+        ...
+
+    def release(self, sub: Submission) -> None:
+        """The provider job is finished: free its key slot."""
+        ...
 
 
 # --- step context -------------------------------------------------------------------------------

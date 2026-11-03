@@ -3,9 +3,9 @@
 Same image as the API, its own container, and only ``DATABASE_URL_WORKER`` (plus
 ``KEY_ENCRYPTION_SECRET``): the process refuses to start when any other database URL or
 server secret is present (ARC-04 security review), and while pipeline steps are missing
-(08a ships only ``start``; it is not deployable before 08b–08d). SIGTERM / SIGINT stop the loop
-after the current claim; a step still running after ``SHUTDOWN_GRACE_S`` is cancelled and its
-job released (queued again at once).
+(``analyse`` / ``embed`` arrive with 08c–08d; not deployable before then). SIGTERM / SIGINT
+stop the loop after the current claim; a step still running after ``SHUTDOWN_GRACE_S`` is
+cancelled and its job released (queued again at once).
 """
 
 import os
@@ -21,33 +21,32 @@ from app.core.settings import Settings
 from app.core.version import resolve_version
 from app.db.session import Database
 from app.services.platform import Platform
-from app.worker.jobs import StepHandler, Transcriber
+from app.worker.jobs import StepHandler
 from app.worker.policy import missing_steps, worker_env_problems
 from app.worker.runner import JobRunner
-from app.worker.start import default_steps
+from app.worker.speechmatics_client import SpeechmaticsTranscriber
+from app.worker.steps import default_steps
 
 log = get_logger("worker")
 
 SHUTDOWN_GRACE_S = 8.0  # below docker's default 10 s stop timeout (compose: stop_grace_period 30s)
 
 
-def startup_problems(
-    env: Mapping[str, str], steps: Mapping[str, StepHandler], transcriber: Transcriber | None
-) -> list[str]:
+def startup_problems(env: Mapping[str, str], steps: Mapping[str, StepHandler]) -> list[str]:
     problems = worker_env_problems(env)
     missing = missing_steps(steps)
     if missing:
         problems.append("pipeline steps not implemented yet: " + ", ".join(missing))
-    if transcriber is None:
-        problems.append("no transcription provider (ARC-08b)")
     return problems
 
 
 async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
     platform = Platform.from_settings(settings)
     db = await Database.start(settings)
+    transcriber: SpeechmaticsTranscriber | None = None
     try:
-        runner = JobRunner(db, platform, steps)
+        transcriber = SpeechmaticsTranscriber(db, platform.keys)
+        runner = JobRunner(db, platform, steps, transcriber=transcriber)
         stop = anyio.Event()
         async with anyio.create_task_group() as tg:
 
@@ -68,6 +67,8 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
             tg.start_soon(work)
     finally:
         with anyio.CancelScope(shield=True):
+            if transcriber is not None:
+                await transcriber.aclose()
             await db.close()
             await platform.aclose()
 
@@ -78,7 +79,7 @@ def main() -> int:
     release = resolve_version(os.environ)
     init_sentry(settings.sentry_dsn.get_secret_value() if settings.sentry_dsn else None, release)
     steps = default_steps()
-    problems = startup_problems(os.environ, steps, None)
+    problems = startup_problems(os.environ, steps)
     if problems:
         for problem in problems:
             log.error("worker refused to start: %s", problem)
