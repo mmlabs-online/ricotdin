@@ -605,6 +605,32 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Open (owner decision pending):** a refunded answer failure still costs us the provider calls,
   so a user can farm refunds with questions the provider rejects (bounded by the rate limit).
 
+### 0.9 v2 admin API (ARC-10; 10a users)
+
+- **Package** `app/routers/admin/` (prefix `/admin`), pure rules in `app/domain/admin.py`. Every
+  route depends on `current_admin` (`_common.py`): token role `admin` **and** `users.role =
+  'admin'` + `disabled_at IS NULL` re-read per request, so a demoted or disabled admin loses the
+  admin API at once (non-admin APIs still follow the ≤ 15 min token rule). All SQL as
+  `ricotdin_service`.
+- **Audit:** `write_audit(conn, admin, action, target_type, target_id, metadata)` inserts the
+  `audit_logs` row **in the mutation's transaction** (v1 wrote it fire-and-forget). Metadata =
+  ids, counts, field names, the admin's grant note — never meeting content, keys or secrets.
+- **Users (10a):** `GET /admin/users?page&perPage(≤100)&search&month` (search = email or
+  username, LIKE wildcards literal; month usage keeps tokens and audio seconds apart),
+  `GET /admin/users/{id}`, `PATCH …/role {role}`, `PATCH …/status {disabled}` (disable →
+  `disabled_at` + every refresh token revoked), `POST …/reset-password` (mails a reset link,
+  `email_sent`; never returns the token), `DELETE /admin/users/{id}` (owned meeting audio +
+  avatar deleted from Drive first, each in its own step, failures → `storageWarnings`; then the
+  user row, everything cascades), `POST /admin/users/bulk {ids ≤ 50, action
+  disable|enable|set_role, role?}` (caller skipped, unknown ids in `errors`, one transaction and
+  one audit row), `GET|POST /admin/users/{id}/quota` (`admin_grant` via `quota_apply_movement`;
+  ≤ 100 000 min / 1 000 000 queries per grant, v2 cap). Guards (v1 messages, 400): no demote /
+  disable / delete of yourself or the last active admin; the admin rows are locked
+  (`lock_admin_count`) so two admins cannot remove each other concurrently.
+- Audit actions: `user.role_change {from,to}`, `user.disable`, `user.enable`,
+  `user.password_reset`, `user.delete {meetings, files, files_failed}`, `user.bulk_<action>`,
+  `quota.grant`. Admin role changes write `users.role` only (trigger mirrors `profiles.role`).
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the
