@@ -74,6 +74,8 @@ def _meeting(world: dict[str, Any], owner: str, status: str = "done", segments: 
     if segments:
         _sql(world["db"], "INSERT INTO transcript_segments (meeting_id, segment_index, speaker, "
              "start_ms, end_ms, text) VALUES (%s, 0, 'Speaker 1', 0, 900, 'hello')", mid)  # fmt: skip
+        _sql(world["db"], "INSERT INTO transcript_chunks (meeting_id, chunk_index, content, "
+             "embedding) VALUES (%s, 0, 'hello', array_fill(0, ARRAY[768])::vector)", mid)  # fmt: skip
     return mid  # type: ignore[no-any-return]
 
 
@@ -161,7 +163,8 @@ def test_a_queued_reprocess_is_never_ended_by_regenerate(
 
 def _ledger(world: dict[str, Any], mid: Any) -> list[tuple[str, str, int]]:
     rows = _sql(world["db"], "SELECT reason, dedup_key, delta_audio_seconds FROM quota_ledger "
-                "WHERE meeting_id = %s ORDER BY created_at", mid)  # fmt: skip
+                "WHERE meeting_id = %s OR metadata->>'meeting_id' = %s ORDER BY created_at",
+                mid, str(mid))  # fmt: skip
     return [(r[0], r[1].rsplit(":", 1)[-1], int(r[2])) for r in rows]
 
 
@@ -210,3 +213,50 @@ def test_refusals_before_the_charge_cost_nothing(client: TestClient, world: dict
     assert _post(client, "a", busy).status_code == 409
     assert _post(client, "a", empty).status_code == 422
     assert _ledger(world, busy) == [] and _ledger(world, empty) == []
+
+
+def test_deleting_the_meeting_during_the_ai_call_still_refunds(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    mid = _meeting(world, "a")
+
+    def delete_then_answer(request: httpx2.Request) -> httpx2.Response:
+        _sql(world["db"], "DELETE FROM meetings WHERE id = %s", mid)
+        return openai(ANSWER)
+
+    app: Any = client.app
+    install_ai(client, [openai(ANSWER)])
+    app.state.ai = FakeAI(app.state.platform.keys,
+                          transport=httpx2.MockTransport(delete_then_answer))  # fmt: skip
+    assert _post(client, "a", mid).status_code == 404
+    assert _wallet(world, "a") == 1000  # charged 1, refunded 1 (ledger row without the meeting)
+    refunds = _sql(world["db"], "SELECT delta_audio_seconds, metadata->>'meeting_id' FROM "
+                   "quota_ledger WHERE reason = 'refund' AND metadata->>'meeting_id' = %s",
+                   str(mid))  # fmt: skip
+    assert refunds == [(1, str(mid))]
+
+
+def test_a_meeting_that_failed_before_embed_is_409_and_free(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    seen = install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a", status="failed")
+    _sql(world["db"], "DELETE FROM transcript_chunks WHERE meeting_id = %s", mid)
+    resp = _post(client, "a", mid)
+    assert resp.status_code == 409
+    assert _msg(resp) == "This meeting did not finish processing. Please process it again."
+    assert seen == [] and _ledger(world, mid) == []
+
+
+def test_a_regenerate_already_in_flight_is_409(client: TestClient, world: dict[str, Any]) -> None:
+    seen = install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a")
+    app: Any = client.app
+    app.state.regenerating.add(mid)
+    try:
+        assert _post(client, "a", mid).status_code == 409
+    finally:
+        app.state.regenerating.discard(mid)
+    assert seen == [] and _ledger(world, mid) == []
+    assert _post(client, "a", mid).status_code == 200
+    assert mid not in app.state.regenerating

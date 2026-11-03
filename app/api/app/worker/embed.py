@@ -3,11 +3,16 @@
 Chunk the transcript (``chunk.py``), embed the chunks (``AIService.embed``, 768 dimensions, no DB
 connection held), then in ONE transaction guarded by this worker's lock: replace the meeting's
 ``transcript_chunks`` (a re-run never duplicates them, v1 REL-03) and mark the meeting ``done``.
-The runner then closes the job and logs ``processing_done``. A meeting that is no longer
-``processing`` (done by an earlier run, deleted, reprocessed) ends the job without work.
+The job is closed and ``processing_done`` logged in that same transaction. A meeting that is no
+longer ``processing`` (done by an earlier run, deleted, reprocessed) ends the job without work.
+A cooldown longer than the pool's 30 s wait re-queues the step, which then embeds every batch
+again (accepted: billed again, bounded by the 6 h deadline).
 """
 
+import json
+
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.logging import get_logger
 from app.services.ai.service import AIUnavailable, UsageContext
@@ -64,9 +69,12 @@ async def run_embed(ctx: StepContext) -> Outcome:
         return Advance("embed", delay_s=min(exc.retry_after, RATE_LIMIT_WAIT_MAX_S) + 1.0)
     m = {"m": job.meeting_id}
     async with ctx.db.role_transaction(WORKER) as conn:
+        # The job is closed here, with the chunks and the meeting: a crash can never leave a done
+        # meeting with a running job (which the sweeper would fail, or re-run without the event).
         mine = await conn.execute(
             text(
-                "UPDATE jobs SET payload = payload || '{\"embed_done\": true}'::jsonb "
+                "UPDATE jobs SET status = 'done', locked_at = NULL, locked_by = NULL, "
+                "payload = payload || '{\"embed_done\": true}'::jsonb "
                 "WHERE id = :id AND status = 'running' AND locked_by = :wid RETURNING id"
             ),
             {"id": job.id, "wid": ctx.worker_id},
@@ -92,5 +100,16 @@ async def run_embed(ctx: StepContext) -> Outcome:
         )
         if done.first() is None:  # changed under us: keep nothing of this run
             raise PipelineError(GENERIC_FAILURE, detail="embed: meeting left 'processing'")
+        try:  # best effort (v1 fire-and-forget): never undoes the meeting / job update
+            async with conn.begin_nested():
+                await conn.execute(
+                    text(
+                        "INSERT INTO activity_log (user_id, event_type, meeting_id, metadata) "
+                        "VALUES (:u, 'processing_done', :m, CAST(:md AS jsonb))"
+                    ),
+                    {**m, "u": meeting.user_id, "md": json.dumps({"chunks": len(chunks)})},
+                )
+        except SQLAlchemyError as exc:
+            log.warning("activity insert failed (%s)", type(exc).__name__)
     log.info("meeting done", extra={"meeting_id": str(job.meeting_id), "chunks": len(chunks)})
-    return Done({"embed_done": True}, ("processing_done", {"chunks": len(chunks)}))
+    return Done({"embed_done": True}, closed=True)

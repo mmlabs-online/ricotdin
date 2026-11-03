@@ -284,6 +284,7 @@ async def process_meeting(
 REGENERATE_PER_HOUR = 10
 _BUSY = "This meeting is still being processed."
 _NO_TRANSCRIPT = "No transcript available to analyze."
+_NOT_FINISHED = "This meeting did not finish processing. Please process it again."
 _QUOTA_MOVE = (
     "SELECT status, audio_remaining FROM public.quota_apply_movement(:u, :d, 0, :reason, :key, "
     ":over, :m, :u, CAST(:md AS jsonb))"
@@ -316,6 +317,19 @@ async def regenerate_meeting(
     user per hour. The AI call holds no database connection."""
     mid = path_id(meeting_id, _NOT_FOUND)
     enforce_limit(request.app.state.regenerate_limiter, identity.user_id)
+    running: set[uuid.UUID] = request.app.state.regenerating
+    if mid in running:  # a double click / second tab: one charge, one AI call (per process)
+        raise Conflict(_BUSY)
+    running.add(mid)
+    try:
+        return await _checked_regenerate(mid, request, identity, db)
+    finally:
+        running.discard(mid)
+
+
+async def _checked_regenerate(
+    mid: uuid.UUID, request: Request, identity: RequestIdentity, db: Database
+) -> dict[str, Any]:
     async with db.role_transaction(SERVICE) as conn:
         facts = await meeting_facts(conn, mid, identity.user_id)
         if facts is None:
@@ -351,6 +365,16 @@ async def regenerate_meeting(
         ).all()
         if not rows:
             raise UnprocessableEntity(_NO_TRANSCRIPT)
+        chunked = (
+            await conn.execute(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM public.transcript_chunks WHERE meeting_id = :id)"
+                ),
+                {"id": mid},
+            )
+        ).scalar_one()
+        if not chunked:  # failed before embed: regenerate would mark it done with no chat index
+            raise Conflict(_NOT_FINISHED)
         provider, model = await lock_model(conn, dict(meeting), {})
         # Charged like one generation (owner decision 2026-11-03), before the AI call, committed
         # with this transaction; refunded below if no new result is saved.
@@ -379,14 +403,17 @@ async def regenerate_meeting(
 async def _refund_regenerate(
     db: Database, user: uuid.UUID, mid: uuid.UUID, seconds: int, charge_key: str
 ) -> None:
+    # meeting_id NULL: the meeting may have been deleted during the AI call (ledger FK); its id is
+    # kept in the metadata.
     try:
         async with db.role_transaction(SERVICE) as conn:
             await conn.execute(
                 text(_QUOTA_MOVE),
                 {"u": user, "d": seconds, "reason": "refund", "key": f"{charge_key}:refund",
-                 "over": True, "m": mid, "md": json.dumps({"kind": "regenerate"})},
+                 "over": True, "m": None,
+                 "md": json.dumps({"kind": "regenerate", "meeting_id": str(mid)})},
             )  # fmt: skip
-    except SQLAlchemyError as exc:  # logged; the ledger shows the unmatched charge
+    except Exception as exc:  # noqa: BLE001 - never hides the original error; the ledger shows it
         log.error("regenerate refund failed (%s)", type(exc).__name__)
 
 

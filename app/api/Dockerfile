@@ -41,7 +41,8 @@ COPY app/api/scripts ./scripts
 # Runtime prompt of the analyse step / regenerate (app/services/ai/prompts.py reads /app/...).
 COPY ai-instruction/ai-gen ./ai-instruction/ai-gen
 
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin api
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin api \
+ && mkdir -p /work && chown 10001 /work  # worker job dirs (TMPDIR=/work in compose)
 USER 10001
 
 # Commit the image was built from: /version.json fallback when RICOTDIN_VERSION is unset.

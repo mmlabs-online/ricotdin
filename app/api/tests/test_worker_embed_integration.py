@@ -75,7 +75,10 @@ def test_embed_stores_chunks_and_finishes_the_meeting(world: dict[str, Any]) -> 
     assert _meeting(world, case) == ("done", None)
     row = _job_row(world, case.job)  # type: ignore[arg-type]
     assert row["status"] == "done" and row["payload"]["embed_done"] is True
-    assert ("processing_done", {"chunks": 1}) in _activity(world, case)
+    assert row["locked_by"] is None  # closed by the step itself, with the meeting
+    assert [a for a in _activity(world, case) if a[0] == "processing_done"] == [
+        ("processing_done", {"chunks": 1})
+    ]
     usage = _sql(world["db"], "SELECT provider, operation, unit, quantity::int FROM usage_log "
                  "WHERE meeting_id = %s", case.meeting)  # fmt: skip
     assert usage == [("gemini-embedding", "embed", "tokens", 1)]
@@ -151,3 +154,26 @@ def test_the_whole_pipeline_reaches_done(world: dict[str, Any]) -> None:
                  "ORDER BY provider", case.meeting)  # fmt: skip
     assert units == [("gemini", "tokens"), ("gemini-embedding", "tokens"),
                      ("speechmatics", "audio_seconds")]  # fmt: skip
+
+
+def test_a_job_taken_back_writes_nothing(world: dict[str, Any]) -> None:
+    case = _embedding(world)
+
+    def take_back(request: httpx2.Request) -> httpx2.Response:
+        _sql(world["db"], "UPDATE jobs SET locked_by = 'someone-else' WHERE id = %s", case.job)
+        return provider(request)
+
+    ai, _ = ai_with(take_back)
+    assert _once(world, ai)
+    assert _chunks(world, case) == [] and _meeting(world, case)[0] == "processing"
+
+
+def test_rate_limited_embedding_requeues_without_an_attempt(world: dict[str, Any]) -> None:
+    case = _embedding(world)
+    body = {"error": {"status": "RESOURCE_EXHAUSTED", "details": [{"retryDelay": "40s"}]}}
+    ai, _ = ai_with(lambda r: httpx2.Response(429, json=body))
+    assert _once(world, ai)
+    row = _job_row(world, case.job)  # type: ignore[arg-type]
+    assert (row["step"], row["status"], row["attempts"], row["later"]) == (
+        "embed", "queued", 0, True,
+    )  # fmt: skip

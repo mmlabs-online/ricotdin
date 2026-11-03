@@ -418,7 +418,8 @@ def test_embeddings_are_batched_at_100_with_768_dimensions() -> None:
 @pytest.mark.parametrize(
     "answer",
     [vectors(1), vectors(2, dims=767), (200, {"embeddings": [{"values": ["x"] * 768}] * 2}),
-     (200, {})],
+     (200, {}), (200, {"embeddings": [{"values": [10**400] + [0.1] * 767}] * 2}),
+     (200, {"embeddings": [{"values": [5e38] + [0.1] * 767}] * 2})],
 )  # fmt: skip
 def test_wrong_embeddings_are_bad_output_without_rotating(answer: Any) -> None:
     server = Server(answer)

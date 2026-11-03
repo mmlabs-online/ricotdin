@@ -45,7 +45,8 @@ log = get_logger("ai")
 
 # provider kind → adapter. A provider with its own API (e.g. Anthropic) adds one entry here.
 ADAPTERS: dict[str, Adapter] = {"gemini": GeminiAdapter(), "openai_compat": OpenAICompatAdapter()}
-EMBED_BATCH = 100  # Gemini batchEmbedContents limit (v1)
+EMBED_BATCH = 100
+EMBED_MAX_ABS = 1e3  # Gemini batchEmbedContents limit (v1)
 # v1 defaults (GEMINI_* / OPENAI_* env knobs were never set in production).
 POOL_CONFIG = PoolConfig(
     default_cooldown_s=60.0, base_backoff_s=0.5, max_backoff_s=8.0, max_attempts=0,
@@ -340,12 +341,22 @@ def valid_vectors(result: Embeddings, count: int, dimensions: int) -> list[list[
         raise ParseFailed(f"expected {count} embeddings, got {len(result.vectors)}")
     out: list[list[float]] = []
     for v in result.vectors:
-        if len(v) != dimensions or not all(
-            isinstance(x, int | float) and not isinstance(x, bool) and math.isfinite(x) for x in v
-        ):
+        if len(v) != dimensions or not all(_component(x) for x in v):
             raise ParseFailed(f"embedding of the wrong shape (dimension {len(v)})")
         out.append([float(x) for x in v])
     return out
+
+
+def _component(x: object) -> bool:
+    """A finite number within ±1e3 (embeddings are normalised to about ±1; pgvector stores float4,
+    so a huge value would fail the INSERT instead of the parse)."""
+    if isinstance(x, bool) or not isinstance(x, int | float):
+        return False
+    try:
+        value = float(x)
+    except OverflowError:  # an int beyond float range
+        return False
+    return math.isfinite(value) and abs(value) <= EMBED_MAX_ABS
 
 
 def _uuid(value: str | None) -> uuid.UUID | None:

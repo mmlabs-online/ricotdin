@@ -98,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.upload_limiter = meetings_router.upload_limiter()
     app.state.process_limiter = meetings_router.process_limiter()
     app.state.regenerate_limiter = meetings_router.regenerate_limiter()
+    app.state.regenerating = set()  # meeting ids with a regenerate in flight (this process)
     app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
     for module in (meetings_router, content_router, folders_router, activity_router):
         app.include_router(module.router)

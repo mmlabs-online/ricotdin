@@ -356,8 +356,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   while a pipeline step is missing (all four are registered since 08d: start → transcribe_poll →
   analyse → embed). **Deploy target (08d):** the same image with `command: python -m app.worker`,
   reference `app/api/deploy/compose.example.yml` (own env file with only the worker values, no ports,
-  `stop_grace_period: 30s`, read-only root + `/tmp` tmpfs 4 GiB for job dirs, health check
-  `python -m app.worker.health` = heartbeat file touched every 30 s, fails after 90 s). ARC-15 moves
+  `stop_grace_period: 30s`, read-only root, `TMPDIR=/work` on a disk volume — not tmpfs, which is
+  RAM — `cap_drop: ALL`, `no-new-privileges`, health check `python -m app.worker.health` =
+  heartbeat file touched every 30 s, fails after 90 s; a write error is logged, never fatal;
+  compose does not restart an unhealthy container — ARC-15 adds autoheal). The worker needs a
+  Gemini key even when analysis uses OpenAI/Grok (embeddings are pinned to Gemini). ARC-15 moves
   it into the deployment repo. **Image build context is the repo root:**
   `docker build -f app/api/Dockerfile .` (ignore rules `app/api/Dockerfile.dockerignore`; the image
   carries `ai-instruction/ai-gen/` at `/app/ai-instruction/ai-gen`). CI checks the prompt is in the
@@ -477,15 +480,21 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `gemini-embedding-001`, 768 dims, pinned: changing it means re-embedding every meeting),
   `batchEmbedContents` batches of 100, each through the pool; wrong count/dimension/non-finite →
   `AIBadOutput`; usage provider `gemini-embedding` (v1 label), quantity = tokens or the batch size.
-  Then ONE transaction guarded by `locked_by`: chunks replaced (`CAST(:e AS vector)`), meeting
-  `processing → done` (`error_message` cleared) → `Done` + activity `processing_done`. A meeting not
+  Components must be finite and within ±1e3 (float4 column). Then ONE transaction guarded by
+  `locked_by`: the job closed (`Done(closed=True)`: the runner writes nothing), chunks replaced
+  (`CAST(:e AS vector)`), meeting `processing → done` (`error_message` cleared), activity
+  `processing_done` — so a crash never leaves a done meeting with a running job. A meeting not
   `processing` ends the job without work; rate-limited keys re-queue `embed` without an attempt.
 - **Regenerate quota (owner decision 2026-11-03):** charged like one generation —
   `regenerate_charge_seconds` = ceil(last segment `end_ms`) else `duration_seconds`, 1–86 400 s —
   via `quota_apply_movement` (service role, reason `generate`, key `regen:<uuid>:charge`, no
   overdraw) in the same transaction as the checks, BEFORE the AI call; short balance → 402
   `QUOTA_BLOCKED: …`; any failure after the charge (AI error, 409/404 at save, cancel) refunds it
-  (`regen:<uuid>:refund`, shielded). 409/422 refusals happen before the charge (free).
+  (`regen:<uuid>:refund`, shielded, ledger `meeting_id` NULL + id in metadata: the meeting may be
+  gone). 409/422 refusals happen before the charge (free): also 409 "did not finish processing"
+  when the meeting has no `transcript_chunks`, and 409 while a regenerate of the same meeting is
+  in flight in this process (`app.state.regenerating`). Accepted: a cancel exactly at a commit can
+  refund a saved result or keep a charge; 08e's quota reconcile must ignore `regen:*` keys.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).

@@ -69,7 +69,10 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
 
             async def heartbeat() -> None:  # container health check (app.worker.health)
                 while True:
-                    await anyio.to_thread.run_sync(health.beat)
+                    try:
+                        await anyio.to_thread.run_sync(health.beat)
+                    except OSError as exc:  # the health check fails; the worker keeps going
+                        log.error("heartbeat write failed (%s)", type(exc).__name__)
                     await anyio.sleep(health.HEARTBEAT_INTERVAL_S)
 
             tg.start_soon(watch_signals)

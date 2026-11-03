@@ -197,6 +197,8 @@ class JobRunner:
                 )  # fmt: skip
                 if done.first() is None:
                     self._lost(job)
+            elif isinstance(outcome, Done) and outcome.closed:
+                pass
             elif isinstance(outcome, Done):
                 done = await conn.execute(
                     text(

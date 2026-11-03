@@ -60,6 +60,9 @@ class Done:
 
     payload: dict[str, Any] = field(default_factory=dict)
     activity: tuple[str, dict[str, Any]] | None = None
+    # The step already closed the job (and logged its activity) in its own guarded transaction,
+    # together with its last writes: the runner then writes nothing.
+    closed: bool = False
 
 
 @dataclass(frozen=True)
