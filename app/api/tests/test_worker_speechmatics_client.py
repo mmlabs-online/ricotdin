@@ -100,9 +100,9 @@ def test_submit_sends_the_file_and_config_with_the_least_busy_key(mp3: Path) -> 
     assert b"audio/mpeg" in body
     assert b'"language": "auto"' in body and b'"max_speakers": 2' in body
     t.release(subs[0])
-    t.release(subs[0])
-    t.release(subs[0])  # never below zero
-    assert t.in_flight(key_ref(K1)) == 0
+    t.release(subs[0])  # a second release of the same job does nothing
+    t.release(Submission("someone-elses-job", key_ref(K1)))
+    assert t.in_flight(key_ref(K1)) == 1
 
 
 def test_submit_with_language_en(mp3: Path) -> None:
@@ -120,11 +120,23 @@ def test_429_and_5xx_and_network_errors_are_retried(mp3: Path) -> None:
     assert all(b"ID3fake-audio" in r.content for r in server.requests)  # file re-sent each time
 
 
-def test_retries_exhausted_is_transient_and_frees_the_key(mp3: Path) -> None:
+def test_a_get_is_retried_until_exhausted_then_transient() -> None:
     t = T(Server((500, {})), [K1])
     with pytest.raises(TransientError, match="HTTP 500 after retries") as exc:
-        run(lambda: t.submit(mp3, language=None, speaker_count=None))
+        run(lambda: t.status(Submission("j", key_ref(K1))))
     assert len(t.sleeps) == sc.MAX_ATTEMPTS - 1
+    assert "sm-key" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "answer", [(500, {}), (502, {}), httpx2.ReadTimeout("lost"), httpx2.RemoteProtocolError("x")]
+)
+def test_a_post_that_may_have_created_a_job_is_not_retried(mp3: Path, answer: Any) -> None:
+    server = Server(answer, (201, {"id": "dup"}))
+    t = T(server, [K1])
+    with pytest.raises(TransientError) as exc:
+        run(lambda: t.submit(mp3, language=None, speaker_count=None))
+    assert len(server.requests) == 1 and t.sleeps == []
     assert "sm-key" not in str(exc.value)
     assert t.in_flight(key_ref(K1)) == 0
 
@@ -179,9 +191,9 @@ def test_status_and_transcript_use_the_job_key() -> None:
     assert server.requests[1].url.params["format"] == "json-v2"
 
 
-def test_a_job_whose_key_is_gone_is_terminal() -> None:
-    t = T(Server((200, {})), [K1])
-    with pytest.raises(PipelineError):
+def test_a_job_whose_key_is_not_usable_now_is_retried() -> None:
+    t = T(Server((200, {})), [K1])  # e.g. admin_config read failed: env keys only for 5 s
+    with pytest.raises(TransientError):
         run(lambda: t.status(Submission("j", "id:00000000-0000-0000-0000-00000000dead")))
 
 

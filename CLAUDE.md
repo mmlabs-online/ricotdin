@@ -406,9 +406,15 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   - One key per provider job: `payload.transcriber_key_ref` = `id:<admin_config id>` or
     `env:<sha256[:16]>` (never the key). New jobs take the key with the fewest jobs in flight in
     this process (counts kept per ref, survive key reloads). 401 → `KeySource.mark_invalid`
-    (submit retried with another key; a poll whose key is gone is terminal). 429/5xx/network →
-    8 tries, 0.6 → 10 s, then transient. Other 4xx → terminal "could not process". Transcript
-    ≤ 64 MiB, status ≤ 1 MiB; job ids `[A-Za-z0-9_-]{1,64}` (URL path).
+    (submit retried with another key; a poll whose key is not usable now is retried, bounded by
+    attempts + the 6 h deadline). GET: 429/5xx/network → 8 tries, 0.6 → 10 s, then transient.
+    POST (creates a billed job): retried only on connect errors, 429, 503. Other 4xx → terminal
+    "could not process". Transcript ≤ 32 MiB, status ≤ 1 MiB; job ids `[A-Za-z0-9_-]{1,64}`.
+    Slot counts are per provider job (release is idempotent; terminal poll errors release).
+  - Known, accepted: a crash/timeout between a provider submit and the committed `Advance` (start
+    or the language retry) leaves an orphan provider job (billed at Speechmatics, not to quota);
+    step retries count against the job's `max_attempts` across steps; failed provider calls
+    write no `usage_log` row yet.
   - Poll: `running` → again in 5 s (no attempt); `done` → no speech = terminal + full refund
     (spec; v1 job path marked done); else ONE transaction guarded by `locked_by`:
     `transcription_settled` in the payload, `pipeline_settle(job, ceil(seconds))`, replace

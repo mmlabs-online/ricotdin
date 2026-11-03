@@ -189,6 +189,12 @@ async def run_start(ctx: StepContext) -> Outcome:
     )  # fmt: skip
 
 
+MAX_SPEAKERS = 20
+
+
 def speaker_count_hint(payload: dict[str, Any]) -> int | None:
+    """``max_speakers`` for the diarizer: 2–20 (Speechmatics rejects < 2), else none."""
     value = payload.get("speaker_count")
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 2:
+        return None
+    return min(value, MAX_SPEAKERS)

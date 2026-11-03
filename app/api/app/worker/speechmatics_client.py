@@ -26,7 +26,6 @@ from app.services.keys.pool import KeyWithMeta
 from app.services.keys.source import KeySource
 from app.worker.errors import PipelineError, TransientError
 from app.worker.jobs import Submission
-from app.worker.messages import GENERIC_FAILURE
 from app.worker.speechmatics import (
     MAX_TRANSCRIPT_BYTES,
     build_job_config,
@@ -84,7 +83,8 @@ class SpeechmaticsTranscriber:
             timeout=httpx2.Timeout(30.0, read=120.0, write=600.0),
             follow_redirects=False,
         )
-        self._in_flight: dict[str, int] = {}
+        self._pending: dict[str, int] = {}  # submits in progress, per key_ref
+        self._jobs: dict[str, str] = {}  # provider job id → key_ref, until released
 
     def __repr__(self) -> str:
         return "SpeechmaticsTranscriber()"
@@ -102,28 +102,30 @@ class SpeechmaticsTranscriber:
         keys = await self._usable()
         if not keys:
             raise TransientError("no usable Speechmatics API key (admin keys or env)")
-        chosen = min(keys, key=lambda k: self._in_flight.get(key_ref(k), 0))
+        chosen = min(keys, key=lambda k: self.in_flight(key_ref(k)))
         ref = key_ref(chosen)
-        self._in_flight[ref] = self._in_flight.get(ref, 0) + 1
+        self._pending[ref] = self._pending.get(ref, 0) + 1
         return chosen
+
+    def _unpend(self, ref: str) -> None:
+        if self._pending.get(ref, 0) > 0:
+            self._pending[ref] -= 1
 
     async def _key_for(self, sub: Submission) -> KeyWithMeta:
         for key in await self._usable():
             if key_ref(key) == sub.key_ref:
                 return key
-        raise PipelineError(
-            GENERIC_FAILURE, detail="the Speechmatics key that holds this job is no longer usable"
-        )
+        # Transient: a short admin_config read failure falls back to env keys (KeySource), and a
+        # disabled key may be enabled again. The runner's attempts and the 6 h deadline bound it.
+        raise TransientError("the Speechmatics key that holds this job is not usable right now")
 
     def release(self, sub: Submission) -> None:
-        """The provider job is finished (or abandoned): free its key slot."""
-        if sub.key_ref and self._in_flight.get(sub.key_ref, 0) > 0:
-            self._in_flight[sub.key_ref] -= 1
+        """The provider job is finished (or abandoned): free its key slot. Only jobs submitted by
+        this process count; a second release of the same job does nothing."""
+        self._jobs.pop(sub.job_id, None)
 
     def in_flight(self, ref: str) -> int:
-        return self._in_flight.get(ref, 0)
-
-    # --- HTTP -----------------------------------------------------------------------------------
+        return self._pending.get(ref, 0) + sum(1 for r in self._jobs.values() if r == ref)
 
     async def _request(
         self,
@@ -134,7 +136,11 @@ class SpeechmaticsTranscriber:
         limit: int,
         build: Callable[[], dict[str, Any]] | None = None,
     ) -> Any:
-        """One authorised call with retry; returns the parsed JSON body (at most ``limit``)."""
+        """One authorised call with retry; returns the parsed JSON body (at most ``limit``).
+
+        A POST creates a billed provider job, so it is retried only when the request surely did
+        not create one: connection failures, 429 and 503."""
+        post = method == "POST"
         what = f"Speechmatics {method} {path.split('?', 1)[0]}"
         for attempt in range(1, MAX_ATTEMPTS + 1):
             last = attempt == MAX_ATTEMPTS
@@ -145,7 +151,8 @@ class SpeechmaticsTranscriber:
                     headers={"Authorization": f"Bearer {key.key}"}, **extra,
                 ) as resp:  # fmt: skip
                     status = resp.status_code
-                    if status == 429 or status >= 500:
+                    retryable = status in (429, 503) if post else status == 429 or status >= 500
+                    if retryable:
                         if last:
                             raise TransientError(f"{what}: HTTP {status} after retries")
                         await self._sleep(backoff_s(attempt))
@@ -154,6 +161,8 @@ class SpeechmaticsTranscriber:
                         self._keys.mark_invalid(key)
                         log.warning("Speechmatics key rejected (401): disabled until reload")
                         raise SpeechmaticsKeyRejected(f"{what}: HTTP 401")
+                    if status >= 500:
+                        raise TransientError(f"{what}: HTTP {status}")
                     if status >= 400:
                         raise PipelineError(PROVIDER_REJECTED, detail=f"{what}: HTTP {status}")
                     body = bytearray()
@@ -164,6 +173,8 @@ class SpeechmaticsTranscriber:
                                 PROVIDER_REJECTED, detail=f"{what}: response over {limit} bytes"
                             )
             except httpx2.TransportError as exc:
+                if post and not isinstance(exc, httpx2.ConnectError | httpx2.ConnectTimeout):
+                    raise TransientError(f"{what}: {type(exc).__name__}") from None
                 if last:
                     raise TransientError(f"{what}: {type(exc).__name__} after retries") from None
                 await self._sleep(backoff_s(attempt))
@@ -182,7 +193,6 @@ class SpeechmaticsTranscriber:
         key = await self._acquire()
         ref = key_ref(key)
         config = json.dumps(build_job_config(speaker_count, language))
-        handed_off = False
 
         def build() -> dict[str, Any]:  # a fresh file handle per attempt
             fh = audio.open("rb")
@@ -200,14 +210,13 @@ class SpeechmaticsTranscriber:
             job_id = safe_job_id(body.get("id") if isinstance(body, dict) else None)
             if job_id is None:
                 raise TransientError("Speechmatics POST /v2/jobs: no job id in the response")
-            handed_off = True
+            self._jobs[job_id] = ref
             log.info("speechmatics job created")
             return Submission(job_id, ref)
         finally:
             for fh in opened:
                 fh.close()
-            if not handed_off:
-                self.release(Submission("", ref))
+            self._unpend(ref)
 
     async def status(self, sub: Submission) -> tuple[str, list[Any]]:
         key = await self._key_for(sub)

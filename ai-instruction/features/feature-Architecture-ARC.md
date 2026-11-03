@@ -514,7 +514,8 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - **08b Speechmatics transcription — done (branch `feat/ARC-08b-transcription`):** json-v2 parse
   (40 v1 tests ported, defensive against malformed input), `SpeechmaticsTranscriber` (one key
   per provider job, least-busy key by jobs in flight per `key_ref`, retry 429/5xx/network 8×,
-  401 disables the key, other 4xx terminal, 64 MiB transcript cap), step `transcribe_poll`
+  401 disables the key, other 4xx terminal, POST retried only when no job can exist, 32 MiB
+  transcript cap), step `transcribe_poll`
   (poll every 5 s; done → settle + segments + language + usage in one lock-guarded transaction,
   re-run skips to `analyse`; language-detect rejection → one resubmit with `en`). Submit uses
   auto-detect like v1 (08a passed `meetings.language`).

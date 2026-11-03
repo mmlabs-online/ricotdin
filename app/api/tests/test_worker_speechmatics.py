@@ -312,4 +312,19 @@ def test_unsafe_job_id(value: Any) -> None:
 
 
 def test_transcript_cap() -> None:
-    assert MAX_TRANSCRIPT_BYTES == 64 * 1024 * 1024
+    assert MAX_TRANSCRIPT_BYTES == 32 * 1024 * 1024
+
+
+def test_huge_timestamps_are_capped_not_overflowing() -> None:
+    s = segs([w(1e306, 1e306, "A")])
+    assert (s[0].start_ms, s[0].end_ms) == (2**31 - 1, 2**31 - 1)
+
+
+@pytest.mark.parametrize(
+    ("value", "hint"),
+    [(None, None), (True, None), (1, None), (2, 2), (7, 7), (500, 20), ("3", None)],
+)
+def test_speaker_count_hint_is_2_to_20(value: Any, hint: int | None) -> None:
+    from app.worker.start import speaker_count_hint
+
+    assert speaker_count_hint({"speaker_count": value}) == hint

@@ -17,7 +17,7 @@ from app.services.keys.pool import KeyWithMeta
 PAUSE_SPLIT_THRESHOLD_S = 3.0
 # v1 rejection text when automatic language detection is not confident; retried once with 'en'.
 LANG_DETECT_FAIL = "Language identification could not identify"
-MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024  # 6 h of words is far below this
+MAX_TRANSCRIPT_BYTES = 32 * 1024 * 1024  # 6 h of words is ~10-20 MB of json-v2
 MAX_SPEAKER_LEN = 64
 _MAX_MS = 2**31 - 1  # transcript_segments.start_ms / end_ms are integer
 _LANGUAGE = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,2}")
@@ -81,7 +81,7 @@ def _number(value: object) -> float | None:
 
 
 def _ms(seconds: float) -> int:
-    return min(round(seconds * 1000), _MAX_MS)
+    return round(min(seconds, _MAX_MS / 1000) * 1000)  # cap first: 1e306 * 1000 is inf
 
 
 def _alternative(result: dict[str, Any]) -> dict[str, Any]:

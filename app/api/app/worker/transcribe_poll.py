@@ -86,6 +86,15 @@ async def run_transcribe_poll(ctx: StepContext) -> Outcome:
     if transcriber is None:
         raise PipelineError(GENERIC_FAILURE, detail="no transcription provider is configured")
     sub = _submission(payload)
+    try:
+        return await _poll(ctx, transcriber, sub)
+    except PipelineError:
+        transcriber.release(sub)  # terminal: the provider job is abandoned
+        raise
+
+
+async def _poll(ctx: StepContext, transcriber: Transcriber, sub: Submission) -> Outcome:
+    payload = ctx.job.payload
     status, errors = await _provider(transcriber.status(sub))
     log.info("transcription status %s", status, extra={"meeting_id": str(ctx.job.meeting_id)})
     if status == "running":

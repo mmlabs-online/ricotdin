@@ -170,7 +170,7 @@ def test_no_speech_fails_the_meeting_with_a_full_refund(world: dict[str, Any]) -
     assert [k for k, _ in _ledger(world, case)] == [
         f"gen:{case.job}:reserve", f"gen:{case.job}:refund",
     ]  # fmt: skip
-    assert _segments(world, case) == [] and len(fake.released) == 1
+    assert _segments(world, case) == [] and fake.released  # release is idempotent
 
 
 def test_language_detection_is_retried_once_with_en(world: dict[str, Any]) -> None:
