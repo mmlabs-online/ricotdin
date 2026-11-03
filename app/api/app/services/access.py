@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.domain.access import Role, can_assign_to_folder, meeting_role
+from app.domain.access import Role, can_assign_to_folder, can_view_folder, meeting_role
 
 
 @dataclass(frozen=True)
@@ -60,9 +60,9 @@ async def meeting_facts(
     )
 
 
-async def folder_assignable(
+async def _folder_facts(
     conn: AsyncConnection, folder_id: uuid.UUID, user_id: uuid.UUID
-) -> bool:
+) -> tuple[uuid.UUID | None, str | None]:
     row = (
         await conn.execute(
             text(
@@ -73,6 +73,16 @@ async def folder_assignable(
             {"fid": folder_id, "uid": user_id},
         )
     ).first()
-    if row is None:
-        return False
-    return can_assign_to_folder(user_id, folder_owner=row[0], share_role=row[1])
+    return (None, None) if row is None else (row[0], row[1])
+
+
+async def folder_assignable(
+    conn: AsyncConnection, folder_id: uuid.UUID, user_id: uuid.UUID
+) -> bool:
+    owner, share = await _folder_facts(conn, folder_id, user_id)
+    return can_assign_to_folder(user_id, folder_owner=owner, share_role=share)
+
+
+async def folder_viewable(conn: AsyncConnection, folder_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+    owner, share = await _folder_facts(conn, folder_id, user_id)
+    return can_view_folder(user_id, folder_owner=owner, share_role=share)

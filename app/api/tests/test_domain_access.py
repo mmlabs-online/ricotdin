@@ -4,7 +4,7 @@ import uuid
 
 import pytest
 
-from app.domain.access import can_assign_to_folder, has_role, meeting_role
+from app.domain.access import can_assign_to_folder, can_view_folder, has_role, meeting_role
 
 ME = uuid.uuid4()
 OTHER = uuid.uuid4()
@@ -68,3 +68,11 @@ def test_can_assign_to_folder() -> None:
     assert not can_assign_to_folder(ME, folder_owner=OTHER, share_role="viewer")
     assert not can_assign_to_folder(ME, folder_owner=OTHER, share_role=None)
     assert not can_assign_to_folder(ME, folder_owner=None, share_role=None)  # folder missing
+
+
+def test_can_view_folder() -> None:  # ARC-09; v1 checkFolderAccess(…, 'viewer')
+    assert can_view_folder(ME, folder_owner=ME, share_role=None)
+    assert can_view_folder(ME, folder_owner=OTHER, share_role="editor")
+    assert can_view_folder(ME, folder_owner=OTHER, share_role="viewer")
+    assert not can_view_folder(ME, folder_owner=OTHER, share_role=None)
+    assert not can_view_folder(ME, folder_owner=None, share_role=None)  # folder missing

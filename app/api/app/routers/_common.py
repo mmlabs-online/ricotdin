@@ -10,7 +10,7 @@ from fastapi import Request
 from sqlalchemy import Row
 from sqlalchemy.exc import IntegrityError
 
-from app.core.errors import BadRequest, NotFound, RateLimited
+from app.core.errors import BadRequest, NotFound, PayloadTooLarge, RateLimited
 from app.core.ratelimit import RateLimiter
 from app.domain.rules import parse_uuid
 
@@ -18,10 +18,23 @@ SERVICE = "ricotdin_service"
 UNIQUE_VIOLATION = "23505"
 
 
-async def json_object(request: Request, invalid: str = "Invalid JSON body.") -> dict[str, Any]:
+async def json_object(
+    request: Request, invalid: str = "Invalid JSON body.", *, max_bytes: int | None = None
+) -> dict[str, Any]:
     """The request body as a JSON object. Bad JSON and non-objects get v1's 400 message (v1
-    crashed with a 500 on ``null``, arrays and scalars)."""
-    return json_body(await request.body(), invalid)
+    crashed with a 500 on ``null``, arrays and scalars). With ``max_bytes`` a larger body is
+    refused (413) without reading it all."""
+    if max_bytes is None:
+        return json_body(await request.body(), invalid)
+    declared = request.headers.get("content-length")
+    if declared is not None and (not declared.isdigit() or int(declared) > max_bytes):
+        raise PayloadTooLarge()
+    raw = bytearray()
+    async for part in request.stream():
+        raw += part
+        if len(raw) > max_bytes:
+            raise PayloadTooLarge()
+    return json_body(bytes(raw), invalid)
 
 
 def json_body(raw: bytes, invalid: str = "Invalid JSON body.") -> dict[str, Any]:

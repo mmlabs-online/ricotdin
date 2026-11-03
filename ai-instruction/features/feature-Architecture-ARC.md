@@ -578,7 +578,7 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 ---
 
 ### ARC-09 — Chat / RAG API
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want to ask questions about one meeting, a folder or all my meetings and get grounded answers with timestamp citations from v2.
@@ -614,7 +614,7 @@ Ports RAG-01..04 and AIP-04 chat model rule. Retrieval must stay scoped to meeti
 - New retrieval features (hybrid search, re-ranking).
 
 **Key files (expected)**
-- `app/api/app/routers/chat.py`, `app/api/app/rag/**`
+- `app/api/app/routers/chat.py`, `app/api/app/rag/{scope,answer}.py`, `app/api/app/services/access.py` (`folder_viewable`); tests `app/api/tests/test_rag.py`, `test_chat_integration.py`
 
 ---
 
