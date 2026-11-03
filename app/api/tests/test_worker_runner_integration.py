@@ -520,12 +520,12 @@ def test_transient_errors_back_off_then_fail_with_one_refund(world: dict[str, An
 def test_unknown_step_is_terminal_and_refunds(world: dict[str, Any]) -> None:
     case = _seed(world, balance=10)
     payload = {"reserve_done": True, "estimate_seconds": 4, "user_id": str(case.user)}
-    job = _job(world, case, step="analyse", payload=payload)
+    job = _job(world, case, step="embed", payload=payload)  # not registered until 08d
     _reserved(world, case, job, 4)
     _once(world, FakeTranscriber())
     row = _job_row(world, job)
     assert (row["status"], row["attempts"], row["last_error"]) == (
-        "failed", 1, f"{GENERIC_FAILURE} — Unknown job step: analyse",
+        "failed", 1, f"{GENERIC_FAILURE} — Unknown job step: embed",
     )  # fmt: skip
     assert _meeting(world, case) == ("failed", GENERIC_FAILURE)
     assert _balance(world, case) == 10  # the reserve came back

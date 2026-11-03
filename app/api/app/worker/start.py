@@ -21,12 +21,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.logging import get_logger
+from app.services.ai.model_lock import lock_model
 from app.services.storage.ownership import owned_audio_path
 from app.worker import audio
 from app.worker.errors import JobLockLost, PipelineError, TransientError
 from app.worker.jobs import Advance, Done, Fail, Outcome, StepContext
 from app.worker.messages import GENERIC_FAILURE, quota_blocked_message
-from app.worker.model_lock import lock_model
 from app.worker.policy import FIRST_POLL_DELAY_S, MAX_AUDIO_SECONDS
 from app.worker.quota import estimate_seconds
 

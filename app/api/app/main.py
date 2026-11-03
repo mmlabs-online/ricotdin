@@ -25,6 +25,7 @@ from app.routers import folders as folders_router
 from app.routers import media as media_router
 from app.routers import meetings as meetings_router
 from app.routers import profile as profile_router
+from app.services.ai.service import AIService
 from app.services.platform import Platform
 
 log = get_logger("app")
@@ -67,6 +68,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         async with AsyncExitStack() as stack:
             stack.push_async_callback(app.state.platform.aclose)  # Drive HTTP client
+            stack.push_async_callback(app.state.ai.aclose)  # AI provider HTTP client
             app.state.db = await Database.start(s)
             stack.push_async_callback(app.state.db.close)
             for hook in BACKGROUND_HOOKS:  # each started hook is stopped even if a later one fails
@@ -95,6 +97,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.lookup_limiter = folders_router.lookup_limiter()
     app.state.upload_limiter = meetings_router.upload_limiter()
     app.state.process_limiter = meetings_router.process_limiter()
+    app.state.regenerate_limiter = meetings_router.regenerate_limiter()
+    app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
     for module in (meetings_router, content_router, folders_router, activity_router):
         app.include_router(module.router)
     app.include_router(media_router.router)

@@ -8,14 +8,14 @@ from typing import Any
 import pytest
 
 from app.domain.models import parse_pick, resolve_generation_model, system_default
-from app.services.ai.service import ParseFailed
-from app.worker.analysis import (
+from app.services.ai.analysis import (
     ANALYSIS_SCHEMA,
     LIMITS,
     SegmentText,
     build_user_content,
     parse_analysis,
 )
+from app.services.ai.service import ParseFailed
 
 GOOD: dict[str, Any] = {
     "summary": "Short meeting about roadmap.",

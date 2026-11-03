@@ -14,13 +14,18 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core.logging import get_logger
+from app.services.ai.analysis import (
+    ANALYSIS_SCHEMA,
+    SegmentText,
+    build_user_content,
+    parse_analysis,
+)
+from app.services.ai.model_lock import lock_model
 from app.services.ai.prompts import load_prompt
 from app.services.ai.service import UsageContext
-from app.worker.analysis import ANALYSIS_SCHEMA, SegmentText, build_user_content, parse_analysis
 from app.worker.errors import JobLockLost, PipelineError
 from app.worker.jobs import Advance, Done, Outcome, StepContext
 from app.worker.messages import GENERIC_FAILURE
-from app.worker.model_lock import lock_model
 
 log = get_logger("worker.analyse")
 

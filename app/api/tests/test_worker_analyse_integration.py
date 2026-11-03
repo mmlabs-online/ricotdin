@@ -14,10 +14,10 @@ import pytest
 
 from app.core.settings import Settings
 from app.db.session import Database
+from app.services.ai.model_lock import lock_model
 from app.services.ai.service import AIService
 from app.services.keys.pool import KeyWithMeta
 from app.services.keys.source import KeySource
-from app.worker.model_lock import lock_model
 from app.worker.runner import JobRunner
 from app.worker.steps import default_steps
 from tests.conftest import requires_db
@@ -161,9 +161,9 @@ def test_model_lock_is_written_once(
                    "WHERE id = %s", case)  # fmt: skip
     assert stored == [expected]
     # Locked: a later run with another preference keeps it.
-    assert _lock(world, case, {"preferred_provider": "openai", "preferred_model": "gpt-4o-mini"}) == (
-        expected
-    )
+    assert _lock(
+        world, case, {"preferred_provider": "openai", "preferred_model": "gpt-4o-mini"}
+    ) == (expected)
 
 
 # --- analyse ------------------------------------------------------------------------------------
@@ -187,7 +187,11 @@ def test_analyse_stores_results_and_advances_to_embed(world: dict[str, Any]) -> 
         ("Demo", "2026-11-12T02:00:00", "Thursday 9")
     ]
     row = _job_row(world, case.job)  # type: ignore[arg-type]
-    assert (row["step"], row["status"], row["payload"]["analysis_done"]) == ("embed", "queued", True)
+    assert (row["step"], row["status"], row["payload"]["analysis_done"]) == (
+        "embed",
+        "queued",
+        True,
+    )
     assert _meeting(world, case)[0] == "processing"  # done after embed (08d)
     prompt = seen[0]["contents"][0]["parts"][0]["text"]
     assert prompt.startswith("MEETING_DATE: 2026-11-02T08:00:00+00:00")
@@ -219,7 +223,9 @@ def test_an_unusable_answer_twice_fails_with_a_refund(world: dict[str, Any]) -> 
     ai, seen = ai_with(lambda r: gemini("not json at all"))
     assert _once(world, ai)
     assert len(seen) == 2  # strict retry once
-    assert seen[1]["contents"][0]["parts"][0]["text"].endswith("No markdown fences, no explanation.")
+    assert seen[1]["contents"][0]["parts"][0]["text"].endswith(
+        "No markdown fences, no explanation."
+    )
     assert _meeting(world, case) == (
         "failed", "The AI service returned an unusable answer. Please try again.",
     )  # fmt: skip
@@ -243,7 +249,9 @@ def test_a_job_from_before_the_lock_locks_the_model_now(world: dict[str, Any]) -
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.url.host == "api.openai.com"
-        return httpx2.Response(200, json={"choices": [{"message": {"content": json.dumps(ANSWER)}}]})
+        return httpx2.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(ANSWER)}}]}
+        )
 
     ai, _ = ai_with(handler)
     assert _once(world, ai)
