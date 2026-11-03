@@ -46,6 +46,15 @@ from app.routers._common import (
     path_id,
 )
 from app.services.access import folder_assignable, meeting_facts
+from app.services.ai.analysis import (
+    ANALYSIS_SCHEMA,
+    SegmentText,
+    build_user_content,
+    parse_analysis,
+)
+from app.services.ai.model_lock import lock_model
+from app.services.ai.prompts import load_prompt
+from app.services.ai.service import AIService, UsageContext
 from app.services.platform import Platform, get_platform
 from app.services.storage.base import StorageNotConfigured, UploadedFileMissing, UploadRejected
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
@@ -258,6 +267,104 @@ async def process_meeting(
     return JSONResponse(
         status_code=202, content={"ok": True, "meetingId": str(mid), "status": "processing"}
     )
+
+
+# --- regenerate (ARC-08c; v1 POST /api/meetings/:id/regenerate) ----------------------------------
+
+REGENERATE_PER_HOUR = 10
+_BUSY = "This meeting is still being processed."
+_NO_TRANSCRIPT = "No transcript available to analyze."
+_ACTIVE_JOB = (
+    "SELECT EXISTS (SELECT 1 FROM public.jobs WHERE meeting_id = :id "
+    "AND status IN ('queued', 'running'))"
+)
+
+
+def regenerate_limiter() -> RateLimiter:
+    return RateLimiter(capacity=REGENERATE_PER_HOUR, refill_per_second=REGENERATE_PER_HOUR / 3600)
+
+
+@router.post("/meetings/{meeting_id}/regenerate")
+async def regenerate_meeting(
+    meeting_id: str, request: Request, identity: Identity, db: Db
+) -> dict[str, Any]:
+    """Meeting owner only: re-run the analysis on the stored transcript with the meeting's
+    locked model and overwrite summary + notes (to-dos and calendar stay, v1). 409 while the
+    meeting is pending or processing (the worker owns it); 422 without a transcript. 10 per
+    user per hour. The AI call holds no database connection."""
+    mid = path_id(meeting_id, _NOT_FOUND)
+    enforce_limit(request.app.state.regenerate_limiter, identity.user_id)
+    async with db.role_transaction(SERVICE) as conn:
+        facts = await meeting_facts(conn, mid, identity.user_id)
+        if facts is None:
+            raise NotFound(_NOT_FOUND)
+        if not facts.is_meeting_owner(identity.user_id):
+            raise Forbidden("Forbidden.")
+        meeting = (
+            (
+                await conn.execute(
+                    text(
+                        "SELECT id, user_id, status, started_at, generation_provider, "
+                        "generation_model FROM public.meetings WHERE id = :id FOR UPDATE"
+                    ),
+                    {"id": mid},
+                )
+            )
+            .mappings()
+            .one()
+        )
+        active_job = (await conn.execute(text(_ACTIVE_JOB), {"id": mid})).scalar_one()
+        if meeting["status"] in ("pending", "processing") or active_job:
+            raise Conflict(_BUSY)  # a queued reprocess would otherwise be ended by our 'done'
+
+        rows = (
+            await conn.execute(
+                text(
+                    "SELECT speaker, start_ms, text FROM public.transcript_segments "
+                    "WHERE meeting_id = :id ORDER BY segment_index"
+                ),
+                {"id": mid},
+            )
+        ).all()
+        if not rows:
+            raise UnprocessableEntity(_NO_TRANSCRIPT)
+        provider, model = await lock_model(conn, dict(meeting), {})
+    segments = [SegmentText(r.speaker, r.start_ms, r.text) for r in rows]
+    started = meeting["started_at"]
+    meeting_date = started.isoformat() if started is not None else None
+    ai: AIService = request.app.state.ai
+    analysis = await ai.generate_json(
+        db, SERVICE, provider, model,
+        system=load_prompt(),
+        user=build_user_content(segments, strict=False, meeting_date=meeting_date),
+        retry_user=build_user_content(segments, strict=True, meeting_date=meeting_date),
+        schema=ANALYSIS_SCHEMA, schema_name="meeting_analysis", operation="analyze",
+        parse=lambda raw: parse_analysis(raw, len(segments)),
+        usage=UsageContext(mid, meeting["user_id"]),
+    )  # fmt: skip
+    async with db.role_transaction(SERVICE) as conn:
+        saved = (
+            await conn.execute(
+                text(
+                    "UPDATE public.meetings m SET summary = :s, notes = :n, status = 'done', "
+                    "error_message = NULL WHERE m.id = :id "
+                    "AND m.status NOT IN ('pending', 'processing') AND NOT EXISTS (SELECT 1 FROM "
+                    "public.jobs j WHERE j.meeting_id = m.id "
+                    "AND j.status IN ('queued', 'running')) "
+                    "RETURNING m.id"
+                ),
+                {"id": mid, "s": analysis.summary, "n": analysis.notes},
+            )
+        ).first()
+    if saved is None:  # reprocessed or deleted while the AI was answering
+        async with db.role_transaction(SERVICE) as conn:
+            exists = (
+                await conn.execute(
+                    text("SELECT 1 FROM public.meetings WHERE id = :id"), {"id": mid}
+                )
+            ).first()
+        raise Conflict(_BUSY) if exists else NotFound(_NOT_FOUND)
+    return {"ok": True, "summary": analysis.summary, "notes": analysis.notes}
 
 
 # --- part 2: files (ARC-07 part 2, Google Drive) ----------------------------------------------

@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.core.logging import get_logger
 from app.core.sentry import capture_unhandled
 from app.db.session import Database
+from app.services.ai.service import AIService
 from app.services.platform import Platform
 from app.worker.backoff import jittered_backoff
 from app.worker.errors import PipelineError, is_terminal
@@ -104,6 +105,7 @@ class JobRunner:
     platform: Platform
     steps: Mapping[str, StepHandler]
     transcriber: Transcriber | None = None
+    ai: AIService | None = None
     worker_id: str = field(default_factory=new_worker_id)
     step_timeout_s: float = STEP_TIMEOUT_S
     stuck_threshold_s: float = STUCK_THRESHOLD_S
@@ -161,7 +163,14 @@ class JobRunner:
         workdir = Path(tempfile.mkdtemp(prefix=WORKDIR_PREFIX, dir=self.tmp_root))
         try:
             ctx = StepContext(
-                self.db, self.platform, job, workdir, self.transcriber, self.now, self.worker_id
+                self.db,
+                self.platform,
+                job,
+                workdir,
+                self.transcriber,
+                self.now,
+                self.worker_id,
+                self.ai,
             )
             with anyio.fail_after(self.step_timeout_s):
                 return await handler(ctx)

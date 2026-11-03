@@ -228,6 +228,11 @@ class KeyPool[C]:
         healthy = [k for k in self._keys if not k.disabled and k.cooldown_until <= now]
         return min(healthy, key=lambda k: k.last_used_at) if healthy else None
 
+    def ready_in(self) -> float | None:
+        """Seconds until the soonest cooling-down key is usable again (None: none cooling)."""
+        soonest = self._soonest()
+        return None if soonest is None else max(0.0, soonest - self._clock())
+
     def _soonest(self) -> float | None:
         now = self._clock()
         cooling = [
