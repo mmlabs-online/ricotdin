@@ -457,7 +457,7 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 ---
 
 ### ARC-08 — Processing pipeline, worker & schedulers
-**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation) done; 08b–08e open
+**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation) and 08b (transcription) done; 08c–08e open
 
 **User Story**  
 As a user, I want my uploaded or recorded audio processed into transcript, summary, notes, to-dos, calendar suggestions and embeddings by v2 so that results match v1.
@@ -511,7 +511,14 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
   ARC-03 preflight for duplicate active v1 jobs. Review round 1 (2026-11-02): no general quota
   function for the worker, ffmpeg without secrets in its env and with RLIMITs, user-facing error
   messages only. Not deployable until 08b–08d.
-- 08b Speechmatics adapter + `transcribe_poll` (settle via `pipeline_settle`, key pool per provider).
+- **08b Speechmatics transcription — done (branch `feat/ARC-08b-transcription`):** json-v2 parse
+  (40 v1 tests ported, defensive against malformed input), `SpeechmaticsTranscriber` (one key
+  per provider job, least-busy key by jobs in flight per `key_ref`, retry 429/5xx/network 8×,
+  401 disables the key, other 4xx terminal, POST retried only when no job can exist, 32 MiB
+  transcript cap), step `transcribe_poll`
+  (poll every 5 s; done → settle + segments + language + usage in one lock-guarded transaction,
+  re-run skips to `analyse`; language-detect rejection → one resubmit with `en`). Submit uses
+  auto-detect like v1 (08a passed `meetings.language`).
 - 08c AI service layer (Gemini / OpenAI / Grok), model lock (`lock_generation_model` hook,
   allow-list check of `payload.preferred_*`), `analyse` + `regenerate`.
 - 08d `embed` (768 dims), `processing_done`, worker deploy target (own container, only
@@ -534,10 +541,13 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Video → audio extraction runs in the worker (moved from `/uploaded`); the extracted audio is
   not stored (the Drive file stays the original video).
 - Gemini audio transcription / long-audio chunking not ported (dead in v1).
+- 08b (2026-11-03): a transcript with no speech fails the meeting with a full refund (spec
+  acceptance criterion; v1's job path marked it `done` with "No speech detected").
 
 **Key files**
 - 08a: `app/api/app/worker/{runner,start,audio,jobs,errors,backoff,messages,probe,quota,policy,__main__}.py`,
   migration `0005_worker_grants`, `app/api/app/routers/meetings.py` (`process`)
+- 08b: `app/api/app/worker/{speechmatics,speechmatics_client,transcribe_poll,steps}.py`
 - Tests 08a: `test_worker_{backoff,errors,messages,probe,quota,policy,main,audio}.py`,
   `test_worker_runner_integration.py`, `test_worker_grants_integration.py`
 - Expected later: `app/api/app/pipeline/**`, `app/api/app/ai/**`, `app/api/app/schedulers/**`

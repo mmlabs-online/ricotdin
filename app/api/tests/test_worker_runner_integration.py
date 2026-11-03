@@ -28,7 +28,7 @@ from app.worker.errors import TransientError
 from app.worker.jobs import Done, Outcome, StepContext, StepHandler, Submission
 from app.worker.messages import DEADLINE_EXCEEDED, GENERIC_FAILURE, MEETING_TIMED_OUT
 from app.worker.runner import JobRunner
-from app.worker.start import default_steps
+from app.worker.steps import default_steps
 from tests.conftest import alembic_upgrade, requires_db
 from tests.fake_drive import CONFIG, ROOT, FakeDrive, FakeFile
 
