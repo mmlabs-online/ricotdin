@@ -31,6 +31,7 @@
 | BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
 | BUG-019 | migrate_from_supabase crashes printing the report on a Windows console (cp1252) and exits 1 even on PASS | S3 | fixed | dev | ARC-03 | bugfix | dev | fix/BUG-019-migrate-console-encoding, PR #39 |
 | BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
+| BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 
 ---
 
@@ -433,3 +434,15 @@ Both tables added to `V2_ONLY_TABLES`; `migrate_tables` now skips `NOT_COPIED_TA
 `test_bug020_every_table_created_after_the_baseline_is_v2_only`: every table created by a v2-only migration
 (`migrations/sql/0002+`, not `_down`) must be in both sets, so a future migration that forgets this fails in the pure
 suite. Verified against `pgvector/pgvector:pg18`: full `pytest -q` 819 passed (8 failures before).
+
+
+## BUG-021 — v1 wallet reconcile never closes a drift
+
+- **Where:** `legacy/lib/quota/reconcileWallets.ts` (QUO-04, every 5 min in the worker loop).
+- **Root cause:** on a drift (`ledger_sum − wallet`) it calls `applyQuotaMovement(delta = drift)`,
+  which adds `drift` to the wallet AND inserts a ledger row of `drift`. Both sides move by the
+  same amount, so the drift stays; the next run (new run id, new dedup key) adds it again. The
+  balance keeps moving by `drift` every 5 minutes (free credit or a drained wallet).
+- **Status:** v1 is frozen to hotfixes and v1.1.1 is not deployed, so no hotfix is planned unless
+  v1 goes live again. Found while porting it to v2 (ARC-08e, 2026-11-03), where the ledger stays
+  the source of truth and the wallet is SET to the ledger sum, with a zero-delta audit row.

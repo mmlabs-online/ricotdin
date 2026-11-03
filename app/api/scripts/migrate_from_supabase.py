@@ -67,7 +67,14 @@ from app.services.storage.r2 import r2_client
 
 API_ROOT = Path(__file__).resolve().parents[1]
 # Tables with no v1 counterpart: never read from Supabase (auth tables; ARC-17 Drive storage).
-V2_ONLY_TABLES = {"users", "refresh_tokens", "email_tokens", "drive_config", "storage_objects"}
+V2_ONLY_TABLES = {
+    "users",
+    "refresh_tokens",
+    "email_tokens",
+    "drive_config",
+    "storage_objects",
+    "scheduler_runs",
+}
 # v2-only tables with nothing to copy (``users`` is filled from Supabase ``auth.users``).
 NOT_COPIED_TABLES = V2_ONLY_TABLES - {"users"}
 LEGACY_BUCKET = "recordings"

@@ -196,7 +196,8 @@ def test_worker_is_granted_only_the_pipeline_functions(db: str) -> None:
             "unnest(ARRAY['ricotdin_app', 'ricotdin_service']) r "
             "WHERE p.proname LIKE 'pipeline\\_%%'"
         ).fetchone()
-    assert granted == {"claim_next_job", "pipeline_reserve", "pipeline_refund", "pipeline_settle"}
+    assert granted == {"claim_next_job", "pipeline_reserve", "pipeline_refund", "pipeline_settle",
+                       "quota_reconcile_wallets", "retention_purge_audit", "legacy_reserve_refund"}  # fmt: skip  # 0006
     assert movement == (False,)  # the worker cannot move any user's quota
     assert wrappers_public == (False,)
 
@@ -437,6 +438,7 @@ def test_worker_policies_cover_only_kept_tables(db: str) -> None:
         "meetings", "jobs", "transcript_segments", "transcript_chunks", "todos",
         "calendar_suggestions", "storage_objects", "drive_config", "admin_config", "app_config",
         "app_settings", "quota_wallets", "profiles", "usage_log", "activity_log",
+        "scheduler_runs",  # 0006
     }  # fmt: skip
 
 

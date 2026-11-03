@@ -8,6 +8,7 @@ only in memory; a row that fails to decrypt is logged by id only.
 
 import hashlib
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -68,6 +69,13 @@ def env_keys(provider: str, env: Mapping[str, str]) -> list[KeyWithMeta]:
     return out
 
 
+@dataclass(frozen=True)
+class StoredKey:
+    id: str
+    config_key: str
+    key: str | None = field(repr=False)
+
+
 class KeySource:
     def __init__(
         self,
@@ -86,6 +94,10 @@ class KeySource:
             TtlCache(FAILURE_TTL_S, clock) if clock else TtlCache(FAILURE_TTL_S)
         )
         self._invalid: set[str] = set()  # sha-256 of keys a provider rejected (401)
+
+    @property
+    def has_master(self) -> bool:
+        return self._master is not None
 
     @property
     def env_names(self) -> list[str]:
@@ -131,6 +143,31 @@ class KeySource:
         keys = loaded or env_keys(provider, self._env)
         self._cache.put(config_key, keys)
         return self.usable(keys)
+
+    async def stored_keys(self, conn: AsyncConnection) -> list["StoredKey"]:
+        """Every provider key row (active and disabled) for the health check (ARC-08e); ``key``
+        is None when it does not decrypt. Not cached; never logged."""
+        rows = (
+            await conn.execute(
+                text(
+                    "SELECT id, config_key, value_ciphertext, value_iv, value_auth_tag "
+                    "FROM admin_config WHERE config_key LIKE '%\\_api\\_key' ORDER BY created_at"
+                )
+            )
+        ).all()
+        out: list[StoredKey] = []
+        for row in rows:
+            plain: str | None = None
+            if self._master is not None:
+                try:
+                    plain = decrypt_with_key(
+                        EncryptedSecret(row.value_ciphertext, row.value_iv, row.value_auth_tag),
+                        self._master,
+                    )
+                except DecryptError:
+                    plain = None
+            out.append(StoredKey(str(row.id), row.config_key, plain))
+        return out
 
     async def _load(self, conn: AsyncConnection, config_key: str) -> list[KeyWithMeta]:
         rows = (

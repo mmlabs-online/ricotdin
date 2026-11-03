@@ -26,6 +26,7 @@ from app.worker import health
 from app.worker.jobs import StepHandler
 from app.worker.policy import missing_steps, worker_env_problems
 from app.worker.runner import JobRunner
+from app.worker.schedule import Scheduler
 from app.worker.speechmatics_client import SpeechmaticsTranscriber
 from app.worker.steps import default_steps
 
@@ -51,6 +52,7 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
         transcriber = SpeechmaticsTranscriber(db, platform.keys)
         ai = AIService(platform.keys)
         runner = JobRunner(db, platform, steps, transcriber=transcriber, ai=ai)
+        scheduler = Scheduler(db, platform, runner.worker_id)  # key health, purge, reconcile
         stop = anyio.Event()
         async with anyio.create_task_group() as tg:
 
@@ -77,6 +79,7 @@ async def _serve(settings: Settings, steps: Mapping[str, StepHandler]) -> None:
 
             tg.start_soon(watch_signals)
             tg.start_soon(work)
+            tg.start_soon(scheduler.run_forever, stop)
             tg.start_soon(heartbeat)
     finally:
         with anyio.CancelScope(shield=True):

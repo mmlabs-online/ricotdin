@@ -347,7 +347,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
   15 min (v1 60) because `/media` proxies Drive.
 
-### 0.7 v2 worker (ARC-08; 08a foundation, 08b transcription, 08c AI + analyse, 08d embed + deploy)
+### 0.7 v2 worker (ARC-08 done: 08a foundation, 08b transcription, 08c AI + analyse, 08d embed + deploy, 08e schedulers)
 
 - **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
   with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
@@ -399,8 +399,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   refund). Amounts never come from `jobs.payload`. Each wrapper first takes a per-job advisory
   transaction lock; refund needs a `failed` job (the runner fails the job first, same transaction),
   reserve and settle a `running` one — so a refund and a settle never both apply. The reserve and the payload's `reserve_done`
-  (true stays true) are written in one transaction. v1 `lib/quota/reconcile.ts` still looks up
-  meeting-keyed dedup keys: port it with job keys (08e).
+  (true stays true) are written in one transaction. v1's `reconcile.ts` (refund stuck reservations)
+  is not ported: the runner's stuck sweep refunds by job key; 08e only fails orphaned meetings.
 - **Step `start`** (`start.py`): claim meeting `pending|failed → processing` (a `processing` meeting
   is a restart), `owned_audio_path` (forged → terminal), `storage_provider` must be `gdrive`,
   model-lock hook (`lock_generation_model`, no-op until 08c), download (map lookup in a short
@@ -495,6 +495,43 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   when the meeting has no `transcript_chunks`, and 409 while a regenerate of the same meeting is
   in flight in this process (`app.state.regenerating`). Accepted: a cancel exactly at a commit can
   refund a saved result or keep a charge; 08e's quota reconcile must ignore `regen:*` keys.
+- **Schedulers (08e, `schedule.py` + `tasks/`, run by every worker next to the job loop):** each
+  task has a `scheduler_runs` row (migration `0006`); a worker runs it only after a compare-and-set
+  lease (no live lease AND last start older than the interval), so several workers never run the
+  same task and "due" survives restarts; 15 min timeout < 20 min lease; checked every 30 s;
+  `last_status` ok/error + short detail (error = type name only).
+  - `key_health` (24 h, v1 §9i): every `admin_config` `*_api_key` row, active and disabled
+    (`KeySource.stored_keys`), probed by catalog `kind` (Gemini `GET /models` with the
+    `x-goog-api-key` header, OpenAI-compatible `GET /models` Bearer, `probe_model` set → 1-token
+    chat POST: Grok; Speechmatics `GET /v2/jobs?limit=1`): 2xx/429 healthy, 401/403 unhealthy,
+    else / network unknown, undecryptable → unhealthy → `health_*` columns. Unlike v1 no key ever
+    goes in a URL; details never carry bodies or keys. Keys are not auto-disabled (v1).
+  - `retention_purge` (24 h, v1 §9m): off unless `storage.audio_retention_days` is 1–3650; `done`
+    meetings created strictly before the cutoff with no queued/running job, oldest first,
+    ≤ 500/run; own key and Drive only — both filtered in SQL, so v1 `r2`/`supabase` meetings
+    (waiting for ARC-18) never fill the batch; the row is re-read (`FOR UPDATE`) right before the
+    delete (its own step), then CAS `audio_path = NULL, audio_purged_at = now()` +
+    `retention_purge_audit` (SECURITY DEFINER, forced `system:retention`; only a `done` meeting
+    purged in the last hour, its own key no longer mapped, days 1–3650, one row per meeting).
+    Accepted: a reprocess queued between the committed Drive delete and the CAS leaves
+    `audio_path` pointing at a deleted file (that job fails terminally). Runs at the first worker
+    start (no 60 s delay as in v1): **ARC-15:** set `storage.audio_retention_days` only after the
+    ARC-18 copy.
+  - `wallet_reconcile` (5 min, v1 QUO-04): `quota_reconcile_wallets(run)` (SECURITY DEFINER; a run
+    already going → returns at once; candidates found without locks, then each re-checked under
+    `FOR UPDATE SKIP LOCKED` — never all wallets locked): a wallet ≠ its ledger sum is SET to the
+    sum with a zero-delta `adjustment` row (`reconcile:<user>:<run>`, before/after in metadata).
+    v1 added the drift to both sides, so it never closed and moved the balance every run
+    (BUG-021, v1 only). **ARC-15:** the first run after the data migration rewrites any v1 drift:
+    count drifted wallets on the rehearsal data first.
+  - `stuck_meetings` (5 min): `processing` for > 30 min (`updated_at`) with no queued/running job
+    → `failed` + the timeout message + `processing_failed`, and `legacy_reserve_refund` (SECURITY
+    DEFINER) returns a v1 meeting-keyed reserve (`gen:<meeting>:reserve`, no settle/refund, once,
+    failed meetings only; v1 QUO-02). Stuck jobs are failed and refunded by the runner.
+  - `scheduler_runs.lease_until` ≤ `last_started_at + 1 h` (CHECK) — a compromised worker can still
+    push `last_started_at` into the future (ARC-10's admin view should flag a stale
+    `last_finished_at`); each stuck meeting is handled in its own savepoint; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
+    run when `KEY_ENCRYPTION_SECRET` is unset; one bad key is `unknown`, never fatal.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).
@@ -511,9 +548,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `transcript_chunks`, `todos`, `calendar_suggestions`, `storage_objects`; SELECT `drive_config`,
   `admin_config` (+ UPDATE of health_* / last_used_at), `app_config`, `app_settings`,
   `quota_wallets`, `profiles(id, default_provider, default_model)`; INSERT only `usage_log`,
-  `activity_log` (not `audit_logs`: 08e adds a SECURITY DEFINER function for the retention purge's
-  audit row with a forced `system:` actor); explicit EXECUTE only `claim_next_job` and the three
-  `pipeline_*` wrappers (functions PUBLIC-executable since v1 — `can_access_meeting`,
+  `activity_log` (never `audit_logs` / `quota_ledger`); SELECT + UPDATE `scheduler_runs` (0006);
+  explicit EXECUTE only `claim_next_job`, the three `pipeline_*` wrappers and (0006)
+  `quota_reconcile_wallets` + `retention_purge_audit` (functions PUBLIC-executable since v1 — `can_access_meeting`,
   `match_transcript_chunks`, triggers, extensions — stay so). `service_all` keeps the worker only on
   those tables. A worker feature needing more = a new migration +
   `tests/test_worker_grants_integration.py`. The `/media` lookup (worker) still works. Downgrade
@@ -521,6 +558,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **What a worker breach still exposes:** SELECT on all meeting content (transcripts, notes, chunks,
   to-dos) of every user, DELETE on `storage_objects` (and the Drive files through the token), the
   Drive refresh token (`drive_config` + `KEY_ENCRYPTION_SECRET`) and the decrypted provider keys.
+  Since 0006 also: one bounded `system:retention` audit row per meeting it first empties (it can
+  UPDATE `audio_path`), running the wallet reconcile (sets wallets to the ledger sum, cannot move
+  balances), refunding a failed v1 meeting's own reserve, and delaying schedulers ≤ 1 h per lease.
   **ARC-15 follow-up:** run ffmpeg/ffprobe sandboxed — separate uid, no network, seccomp / read-only
   root (or a separate sidecar without database or key access).
 - **Data migration (§0.5):** the ARC-03 preflight blocks when v1 has more than one queued/running job
