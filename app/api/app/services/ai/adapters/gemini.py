@@ -13,6 +13,7 @@ from app.services.ai.catalog import ProviderInfo
 from app.services.ai.schema import to_gemini_schema
 from app.services.ai.types import (
     Completion,
+    Embeddings,
     JsonRequest,
     ModelRefused,
     post_json,
@@ -81,6 +82,27 @@ def parse_response(body: dict[str, Any]) -> Completion:
     )
 
 
+def embed_body(model: str, texts: list[str], dimensions: int) -> dict[str, Any]:
+    return {
+        "requests": [
+            {"model": f"models/{model}", "content": {"parts": [{"text": t}]},
+             "outputDimensionality": dimensions}
+            for t in texts
+        ]
+    }  # fmt: skip
+
+
+def parse_embeddings(body: dict[str, Any]) -> Embeddings:
+    items = body.get("embeddings")
+    vectors = [
+        e.get("values") if isinstance(e, dict) else None
+        for e in (items if isinstance(items, list) else [])
+    ]
+    usage = body.get("usageMetadata")
+    total = token_count(usage.get("totalTokenCount")) if isinstance(usage, dict) else None
+    return Embeddings([v if isinstance(v, list) else [] for v in vectors], total)
+
+
 class GeminiAdapter:
     async def complete_json(
         self, http: httpx2.AsyncClient, provider: ProviderInfo, key: str, req: JsonRequest
@@ -90,3 +112,13 @@ class GeminiAdapter:
             {"x-goog-api-key": key}, request_body(req), error_code, retry_delay,
         )  # fmt: skip
         return parse_response(body)
+
+    async def embed(
+        self, http: httpx2.AsyncClient, provider: ProviderInfo, key: str, model: str,
+        texts: list[str], dimensions: int,
+    ) -> Embeddings:  # fmt: skip
+        body = await post_json(
+            http, provider.name, f"{provider.base_url}/models/{model}:batchEmbedContents",
+            {"x-goog-api-key": key}, embed_body(model, texts, dimensions), error_code, retry_delay,
+        )  # fmt: skip
+        return parse_embeddings(body)

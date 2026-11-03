@@ -520,9 +520,10 @@ def test_transient_errors_back_off_then_fail_with_one_refund(world: dict[str, An
 def test_unknown_step_is_terminal_and_refunds(world: dict[str, Any]) -> None:
     case = _seed(world, balance=10)
     payload = {"reserve_done": True, "estimate_seconds": 4, "user_id": str(case.user)}
-    job = _job(world, case, step="embed", payload=payload)  # not registered until 08d
+    job = _job(world, case, step="embed", payload=payload)
     _reserved(world, case, job, 4)
-    _once(world, FakeTranscriber())
+    steps = {k: v for k, v in default_steps().items() if k != "embed"}  # a step the worker lacks
+    _once(world, FakeTranscriber(), steps=steps)
     row = _job_row(world, job)
     assert (row["status"], row["attempts"], row["last_error"]) == (
         "failed", 1, f"{GENERIC_FAILURE} — Unknown job step: embed",
