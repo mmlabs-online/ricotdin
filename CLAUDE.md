@@ -672,7 +672,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   deleted — 422, rows locked `FOR NO KEY UPDATE`; `keys.invalidate(provider)` after every commit;
   audit `admin_config.create|enable|disable|delete {configKey, label[, disabled_reason]}`),
   `GET|POST /admin/keys/healthcheck` (POST runs `run_key_health(group=SERVICE)` now, 10/h per
-  process, audit `admin_config.healthcheck {summary}`), `GET /admin/config`,
+  process for all admins, audit `admin_config.healthcheck {summary}`), `GET /admin/config`,
   `PATCH /admin/config/{key} {value}` (known keys typed: `storage.audio_retention_days` null or
   1–3650, `user_hack_audio_render` boolean; strings ≤ 2000; `platform.config.invalidate`; audit
   `config.update {value}`; values read as `value::text` — the jsonb codec already decodes),
@@ -684,6 +684,16 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   the last check — no live probe, unlike v1 — and stale worker tasks; 503 when any check fails),
   `GET /admin/storage` (Drive health + map totals). v1's R2 `storage` config / orphans / cleanup
   routes are not ported (storage is Drive; R2 is only the ARC-18 source).
+- 10c review follow-ups: key changes take a per-provider advisory lock first (two admins
+  disabling two keys of one provider no longer deadlock); a provider's 401 marks expire after
+  1 h (`INVALID_TTL_S`: the worker never sees the API's `invalidate`, so a topped-up key comes
+  back on its own — revoke a leaked key at the provider, disabling is not revocation); NaN /
+  Infinity config values → 422; feature arrays must be lists; feature bodies ≤ 1 MiB, list
+  ≤ 200 per page; the key check limiter is one bucket for all admins; `/admin/health` adds
+  `key_encryption` and failing worker tasks, and only providers in use (Gemini, Speechmatics,
+  the allow-list) can be an error — others are a `warning`; it answers 503 until the worker has
+  run every task once. ARC-14: render key labels, reasons and feature text as text; confirm
+  before setting `storage.audio_retention_days` (irreversible on the next worker run).
 
 ## 1. What we are building
 

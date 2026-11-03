@@ -5,6 +5,7 @@ v2 additions: provider keys are bounded and header-safe; known ``app_config`` ke
 wrong type would silently flip a flag); feature keys follow ``PREFIX-ID``; text sizes are capped.
 """
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -118,6 +119,8 @@ def parse_config_value(key: str, body: Mapping[str, Any]) -> bool | int | float 
         if not isinstance(value, bool):
             raise UnprocessableEntity(f"{key} must be true or false.")
         return value
+    if isinstance(value, float) and not math.isfinite(value):
+        raise UnprocessableEntity("value must be a finite number.")
     if value is not None and not isinstance(value, bool | int | float | str):
         raise UnprocessableEntity(
             "value must be a JSON primitive (boolean, number, string, or null)."
@@ -184,9 +187,11 @@ def _text(name: str, value: Any) -> str | None:
     return value.replace("\x00", "")
 
 
-def _array(value: Any) -> list[str]:
-    if not isinstance(value, list):
+def _array(name: str, value: Any) -> list[str]:
+    if value is None:
         return []
+    if not isinstance(value, list):
+        raise UnprocessableEntity(f"{name} must be a list of strings.")
     items = [x.replace("\x00", "")[:MAX_ARRAY_ITEM_CHARS] for x in value if isinstance(x, str)]
     return items[:MAX_ARRAY_ITEMS]
 
@@ -225,7 +230,7 @@ def parse_feature_create(body: Mapping[str, Any]) -> dict[str, Any]:
         "content": _text("content", body.get("content")) or None,
         "status": _status(body.get("status", "not_started")),
         "priority": _priority(body.get("priority")),
-        **{name: _array(body.get(name)) for name in FEATURE_ARRAYS},
+        **{name: _array(name, body.get(name)) for name in FEATURE_ARRAYS},
     }
 
 
@@ -240,7 +245,7 @@ def parse_feature_update(body: Mapping[str, Any]) -> dict[str, Any]:
         elif name == "priority":
             fields[name] = _priority(value)
         elif name in FEATURE_ARRAYS:
-            fields[name] = _array(value)
+            fields[name] = _array(name, value)
         else:
             fields[name] = _text(name, value)
             if name == "title" and not (fields[name] or "").strip():

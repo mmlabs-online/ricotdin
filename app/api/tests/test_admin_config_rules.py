@@ -86,12 +86,14 @@ def test_config_values() -> None:
     assert _invalid(parse_config_value, "k", {}) == 'Request body must include a "value" field.'
     assert _invalid(parse_config_value, "k", {"value": [1]}).startswith("value must be a JSON")
     assert _invalid(parse_config_value, "k", {"value": "s" * 2001}).startswith("value is too long")
+    for bad in (float("nan"), float("inf")):  # json.loads accepts NaN / Infinity / 1e400
+        assert _invalid(parse_config_value, "k", {"value": bad}) == "value must be a finite number."
     # known keys are typed (v2): a wrong type would silently turn a feature off / on
     assert parse_config_value("storage.audio_retention_days", {"value": 30}) == 30
     assert parse_config_value("storage.audio_retention_days", {"value": None}) is None
-    for bad in (0, 3651, 1.5, "30", True):
+    for wrong in (0, 3651, 1.5, "30", True):
         assert _invalid(
-            parse_config_value, "storage.audio_retention_days", {"value": bad}
+            parse_config_value, "storage.audio_retention_days", {"value": wrong}
         ).startswith("storage.audio_retention_days must be")
     assert parse_config_value("user_hack_audio_render", {"value": False}) is False
     assert _invalid(parse_config_value, "user_hack_audio_render", {"value": "true"}).startswith(
@@ -141,7 +143,7 @@ def test_feature_create() -> None:
     assert (f["key"], f["module_prefix"], f["status"], f["priority"]) == (
         "ARC-99", "ARC", "not_started", "high",
     )  # fmt: skip
-    assert f["note_tags"] == ["a"] and f["depends_on"] == []
+    assert f["note_tags"] == ["a"] and f["depends_on"] == []  # non-strings dropped
     base = {"key": "ARC-1", "module_prefix": "ARC", "module_name": "A", "title": "T"}
     for missing in ("key", "module_prefix", "module_name", "title"):
         assert _invalid(parse_feature_create, {**base, missing: ""}) == f"{missing} is required."
@@ -166,6 +168,10 @@ def test_feature_update() -> None:
         "content is too long"
     )
     assert parse_feature_update({"priority": None}) == {"priority": None}
+    assert _invalid(parse_feature_update, {"note_tags": "a,b"}) == (
+        "note_tags must be a list of strings."
+    )  # never silently wiped
+    assert parse_feature_update({"note_tags": None}) == {"note_tags": []}
 
 
 # --- health -----------------------------------------------------------------------------------------

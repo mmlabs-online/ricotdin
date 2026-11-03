@@ -243,3 +243,63 @@ def test_health_and_storage(
     storage = client.get("/admin/storage", headers=admin)
     assert storage.status_code == 200
     assert set(storage.json()) == {"drive", "objects"} and "refresh" not in storage.text.lower()
+
+
+# --- review follow-ups ------------------------------------------------------------------------------
+
+
+def test_two_admins_disabling_two_keys_never_get_a_500(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    import threading
+
+    a = _add_key(client, admin, "openai_api_key", "sk-race-AAAAAAAA", "a")
+    b = _add_key(client, admin, "openai_api_key", "sk-race-BBBBBBBB", "b")
+    _sql(world["db"], "UPDATE admin_config SET status = 'disabled' WHERE config_key = "
+         "'openai_api_key' AND id NOT IN (%s, %s)", a["id"], b["id"])  # fmt: skip
+    codes: list[int] = []
+
+    def disable(entry: str) -> None:
+        r = client.patch(f"/admin/keys/{entry}", headers=admin, json={"status": "disabled"})
+        codes.append(r.status_code)
+
+    threads = [threading.Thread(target=disable, args=(e,)) for e in (a["id"], b["id"])]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+    assert sorted(codes) == [200, 422]  # one wins, the other keeps the last active key
+    assert _sql(world["db"], "SELECT count(*) FROM admin_config WHERE config_key = "
+                "'openai_api_key' AND status = 'active'") == [(1,)]  # fmt: skip
+
+
+def test_a_non_finite_config_value_is_a_422(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    r = client.patch("/admin/config/user_hack_audio_render",
+                     headers={**admin, "content-type": "application/json"},
+                     content=b'{"value": NaN}')  # fmt: skip
+    assert r.status_code == 422
+
+
+def test_health_only_errors_for_providers_in_use(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    _sql(world["db"], "UPDATE admin_config SET status = 'disabled' WHERE config_key = "
+         "'grok_api_key'")  # fmt: skip
+    _sql(world["db"], "INSERT INTO admin_config (config_key, label, value_ciphertext, value_iv, "
+         "value_auth_tag, last4, status) VALUES ('grok_api_key', 'old', 'x', 'x', 'x', '0000', "
+         "'disabled')")  # fmt: skip
+    _sql(world["db"], "UPDATE scheduler_runs SET last_status = 'error', last_finished_at = now() "
+         "WHERE task = 'stuck_meetings'")  # fmt: skip
+    body = client.get("/admin/health", headers=admin).json()
+    assert body["checks"]["keys:grok_api_key"]["status"] == "warning"  # grok is not allowed
+    assert body["checks"]["key_encryption"] == {"status": "ok"}
+    assert "stuck_meetings" in body["checks"]["worker"]["message"]
+
+
+def test_post_dates_are_iso_like_get(
+    client: TestClient, world: dict[str, Any], admin: dict[str, str]
+) -> None:
+    row = _add_key(client, admin, "gemini_api_key", "AIzaIsoDateCheck1")
+    assert "T" in row["created_at"]

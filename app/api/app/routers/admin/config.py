@@ -9,10 +9,12 @@ after every commit so the pools see the change (CLAUDE.md §0.4). Storage is Goo
 """
 
 import json
+import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -56,6 +58,9 @@ _KEY_COLUMNS = (
     "last_used_at, health_status, health_checked_at, health_detail"
 )
 _ENTRY_NOT_FOUND = "Config entry not found."
+_ALL_ADMINS = uuid.UUID(int=0)  # one shared rate-limit bucket
+_FEATURE_BODY_BYTES = 1024 * 1024
+_ALWAYS_USED = ("gemini", "speechmatics")  # embeddings + transcription
 _FEATURE_NOT_FOUND = "Feature not found."
 
 
@@ -109,41 +114,49 @@ async def add_key(request: Request, admin: CurrentAdmin, db: Db, platform: Plat)
         await write_audit(conn, admin, "admin_config.create", "admin_config", str(row.id),
                           {"configKey": new.config_key, "label": new.label})  # fmt: skip
     _invalidate(platform, new.config_key)
-    return JSONResponse(status_code=201, content=_jsonable({"key": dict(row._mapping)}))
-
-
-def _jsonable(value: Any) -> Any:
-    return json.loads(json.dumps(value, default=str))
+    return JSONResponse(status_code=201, content=jsonable_encoder({"key": dict(row._mapping)}))
 
 
 async def _entry(conn: AsyncConnection, entry_id: str) -> tuple[Any, int]:
-    """The key row and its provider's active-key count, all of them locked."""
+    """The key row and its provider's active-key count. One advisory lock per provider first,
+    so two admins changing two keys of one provider queue instead of deadlocking on each
+    other's rows; the rows are then read under that lock."""
     eid = parse_uuid(entry_id)
     if eid is None:
         raise NotFound(_ENTRY_NOT_FOUND)
-    row = (
+    found = (
         await conn.execute(
             text(
-                "SELECT id, config_key, label, status FROM public.admin_config WHERE id = :id "
-                "FOR NO KEY UPDATE"
+                "SELECT config_key FROM public.admin_config WHERE id = :id "
+                "AND config_key = ANY(:keys)"
             ),
+            {"id": eid, "keys": list(KEY_CONFIG_KEYS)},
+        )
+    ).first()
+    if found is None:
+        raise NotFound(_ENTRY_NOT_FOUND)
+    await conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext('admin_config:' || :k))"),
+        {"k": found.config_key},
+    )
+    row = (
+        await conn.execute(
+            text("SELECT id, config_key, label, status FROM public.admin_config WHERE id = :id"),
             {"id": eid},
         )
     ).first()
-    if row is None:
+    if row is None:  # deleted while we waited
         raise NotFound(_ENTRY_NOT_FOUND)
-    active = len(
-        (
-            await conn.execute(
-                text(
-                    "SELECT id FROM public.admin_config WHERE config_key = :k AND status = "
-                    "'active' ORDER BY id FOR NO KEY UPDATE"
-                ),
-                {"k": row.config_key},
-            )
-        ).all()
-    )
-    return row, active
+    active = (
+        await conn.execute(
+            text(
+                "SELECT count(*) FROM public.admin_config WHERE config_key = :k "
+                "AND status = 'active'"
+            ),
+            {"k": row.config_key},
+        )
+    ).scalar_one()
+    return row, int(active)
 
 
 @router.patch("/keys/{entry_id}")
@@ -199,9 +212,10 @@ async def last_key_check(admin: CurrentAdmin, db: Db) -> dict[str, Any]:
 async def run_key_check(
     request: Request, admin: CurrentAdmin, db: Db, platform: Plat
 ) -> dict[str, Any]:
-    """Probe every stored key now (the worker does it daily, §9i). 10 runs per hour per process.
-    Keys never travel in a URL and never come back."""
-    enforce_limit(request.app.state.key_check_limiter, admin.user_id)
+    """Probe every stored key now (the worker does it daily, §9i). 10 runs per hour per process
+    for all admins together (each run calls every provider with every key). Keys never travel
+    in a URL and never come back."""
+    enforce_limit(request.app.state.key_check_limiter, _ALL_ADMINS)
     if not platform.keys.has_master:
         raise ServiceUnavailable(
             "Key storage is not configured. Set KEY_ENCRYPTION_SECRET on the server."
@@ -356,7 +370,7 @@ async def list_features(request: Request, admin: CurrentAdmin, db: Db) -> dict[s
     q = request.query_params
     paging = parse_list_params(q)
     raw = q.get("perPage", "200").strip()
-    per_page = min(500, max(1, int(raw))) if raw.isdigit() and len(raw) < 6 else 200
+    per_page = min(200, max(1, int(raw))) if raw.isdigit() and len(raw) < 6 else 200
     clauses: list[str] = []
     args: dict[str, Any] = {}
     if q.get("module_prefix"):
@@ -401,7 +415,7 @@ async def _find_feature(conn: AsyncConnection, ref: str) -> Any:
 
 @router.post("/features", status_code=201)
 async def create_feature(request: Request, admin: CurrentAdmin, db: Db) -> Any:
-    fields = parse_feature_create(await json_object(request))
+    fields = parse_feature_create(await json_object(request, max_bytes=_FEATURE_BODY_BYTES))
     cols = list(fields)  # fixed names from parse_feature_create, never from the request
     try:
         async with db.role_transaction(SERVICE) as conn:
@@ -422,7 +436,7 @@ async def create_feature(request: Request, admin: CurrentAdmin, db: Db) -> Any:
         if is_unique_violation(exc):
             raise Conflict(f'Feature key "{fields["key"]}" already exists.') from None
         raise
-    return JSONResponse(status_code=201, content=_jsonable({"feature": _feature(row)}))
+    return JSONResponse(status_code=201, content=jsonable_encoder({"feature": _feature(row)}))
 
 
 @router.get("/features/{ref}")
@@ -433,7 +447,7 @@ async def get_feature(ref: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
 
 @router.patch("/features/{ref}")
 async def update_feature(ref: str, request: Request, admin: CurrentAdmin, db: Db) -> Any:
-    fields = parse_feature_update(await json_object(request))
+    fields = parse_feature_update(await json_object(request, max_bytes=_FEATURE_BODY_BYTES))
     sets = ", ".join(f"{c} = :{c}" for c in fields)
     async with db.role_transaction(SERVICE) as conn:
         found = await _find_feature(conn, ref)
@@ -488,29 +502,42 @@ async def health(admin: CurrentAdmin, db: Db, platform: Plat) -> JSONResponse:
                 )
             ).all()
             tasks = (
-                await conn.execute(text("SELECT task, last_finished_at FROM public.scheduler_runs"))
+                await conn.execute(
+                    text("SELECT task, last_finished_at, last_status FROM public.scheduler_runs")
+                )
             ).all()
+            allowed, default = await _generation(conn)
         checks["database"] = {"status": "ok"}
     except Exception as exc:  # noqa: BLE001 - a health page reports, it does not crash
         checks["database"] = {"status": "error", "message": type(exc).__name__}
-        keys, tasks = [], []
+        keys, tasks, allowed, default = [], [], [], ("", "")
     drive = await _drive(db, platform)
     checks["storage"] = (
         {"status": "ok"} if drive["ok"] else {"status": "error", "message": drive["problem"]}
     )
+    checks["key_encryption"] = (
+        {"status": "ok"} if platform.keys.has_master
+        else {"status": "error", "message": "KEY_ENCRYPTION_SECRET is not set"}
+    )  # fmt: skip
+    # Only providers in use can break processing: the rest are reported, never an error.
+    in_use = {*_ALWAYS_USED, default[0], *(p for p, _ in allowed)}
     for r in keys:
         name = f"keys:{r.config_key}"
+        problem = None
         if r.active == 0:
-            checks[name] = {"status": "error", "message": "no active key"}
+            problem = "no active key"
         elif r.unhealthy == r.active:
-            checks[name] = {"status": "error", "message": "every active key failed its check"}
-        else:
+            problem = "every active key failed its check"
+        if problem is None:
             checks[name] = {"status": "ok", "active": int(r.active)}
+        else:
+            used = provider_of(r.config_key) in in_use
+            checks[name] = {"status": "error" if used else "warning", "message": problem}
     now = datetime.now(UTC)
-    stale = [t.task for t in tasks if is_stale_task(t.last_finished_at, TASKS.get(t.task, 3600),
-                                                   now)]  # fmt: skip
+    stale = [t.task for t in tasks if t.last_status == "error" or is_stale_task(
+        t.last_finished_at, TASKS.get(t.task, 3600), now)]  # fmt: skip
     checks["worker"] = (
-        {"status": "error", "message": f"stale tasks: {', '.join(sorted(stale))}"}
+        {"status": "error", "message": f"stale or failing tasks: {', '.join(sorted(stale))}"}
         if stale else {"status": "ok"}
     )  # fmt: skip
     report = build_health_report(checks, now.isoformat())
