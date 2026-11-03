@@ -97,6 +97,7 @@ class Scheduler:
                 log.warning("scheduler lease failed (%s)", type(exc).__name__)
                 return ran
             ran.append(task)
+            status, detail = "error", "cancelled"  # shutdown: still release the lease below
             try:
                 with anyio.fail_after(TASK_TIMEOUT_S):
                     result = await runner()
@@ -104,11 +105,12 @@ class Scheduler:
             except Exception as exc:  # noqa: BLE001 - one task never stops the others
                 log.error("scheduled task %s failed (%s)", task, type(exc).__name__)
                 status, detail = "error", type(exc).__name__
-            try:
-                with anyio.CancelScope(shield=True):
-                    await self._finish(task, status, detail)
-            except Exception as exc:  # noqa: BLE001 - the lease expires on its own
-                log.warning("scheduler finish failed (%s)", type(exc).__name__)
+            finally:
+                with anyio.CancelScope(shield=True), anyio.move_on_after(5):
+                    try:
+                        await self._finish(task, status, detail)
+                    except Exception as exc:  # noqa: BLE001 - the lease expires on its own
+                        log.warning("scheduler finish failed (%s)", type(exc).__name__)
         return ran
 
     async def run_forever(self, stop: anyio.Event) -> None:

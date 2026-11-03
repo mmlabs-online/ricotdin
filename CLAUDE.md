@@ -507,16 +507,26 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     else / network unknown, undecryptable → unhealthy → `health_*` columns. Unlike v1 no key ever
     goes in a URL; details never carry bodies or keys. Keys are not auto-disabled (v1).
   - `retention_purge` (24 h, v1 §9m): off unless `storage.audio_retention_days` is 1–3650; `done`
-    meetings created strictly before the cutoff, oldest first, ≤ 500/run, own key only, Drive
-    only (v1 `r2`/`supabase` skipped until ARC-18); delete in its own step, then CAS
-    `audio_path = NULL, audio_purged_at = now()` + `retention_purge_audit` (SECURITY DEFINER,
-    forced `system:retention`, only for a meeting purged in the last hour) in one transaction.
-  - `wallet_reconcile` (5 min, v1 QUO-04): `quota_reconcile_wallets(run)` (SECURITY DEFINER, one at
-    a time, wallet rows locked): a wallet ≠ its ledger sum is SET to the sum with a zero-delta
-    `adjustment` row (`reconcile:<user>:<run>`, before/after in metadata). v1 added the drift to
-    both sides, so it never closed and moved the balance every run (BUG-021, v1 only).
+    meetings created strictly before the cutoff with no queued/running job, oldest first,
+    ≤ 500/run; own key and Drive only — both filtered in SQL, so v1 `r2`/`supabase` meetings
+    (waiting for ARC-18) never fill the batch; the row is re-read (`FOR UPDATE`) right before the
+    delete (its own step), then CAS `audio_path = NULL, audio_purged_at = now()` +
+    `retention_purge_audit` (SECURITY DEFINER, forced `system:retention`; only a `done` meeting
+    purged in the last hour, its own key no longer mapped, days 1–3650, one row per meeting).
+  - `wallet_reconcile` (5 min, v1 QUO-04): `quota_reconcile_wallets(run)` (SECURITY DEFINER; a run
+    already going → returns at once; candidates found without locks, then each re-checked under
+    `FOR UPDATE SKIP LOCKED` — never all wallets locked): a wallet ≠ its ledger sum is SET to the
+    sum with a zero-delta `adjustment` row (`reconcile:<user>:<run>`, before/after in metadata).
+    v1 added the drift to both sides, so it never closed and moved the balance every run
+    (BUG-021, v1 only). **ARC-15:** the first run after the data migration rewrites any v1 drift:
+    count drifted wallets on the rehearsal data first.
   - `stuck_meetings` (5 min): `processing` for > 30 min (`updated_at`) with no queued/running job
-    → `failed` + the timeout message (stuck jobs are failed and refunded by the runner).
+    → `failed` + the timeout message + `processing_failed`, and `legacy_reserve_refund` (SECURITY
+    DEFINER) returns a v1 meeting-keyed reserve (`gen:<meeting>:reserve`, no settle/refund, once,
+    failed meetings only; v1 QUO-02). Stuck jobs are failed and refunded by the runner.
+  - `scheduler_runs.lease_until` ≤ `last_started_at + 1 h` (CHECK): a poisoned lease cannot stop a
+    task for good; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
+    run when `KEY_ENCRYPTION_SECRET` is unset; one bad key is `unknown`, never fatal.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).
@@ -543,6 +553,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **What a worker breach still exposes:** SELECT on all meeting content (transcripts, notes, chunks,
   to-dos) of every user, DELETE on `storage_objects` (and the Drive files through the token), the
   Drive refresh token (`drive_config` + `KEY_ENCRYPTION_SECRET`) and the decrypted provider keys.
+  Since 0006 also: one bounded `system:retention` audit row per meeting it first empties (it can
+  UPDATE `audio_path`), running the wallet reconcile (sets wallets to the ledger sum, cannot move
+  balances), refunding a failed v1 meeting's own reserve, and delaying schedulers ≤ 1 h per lease.
   **ARC-15 follow-up:** run ffmpeg/ffprobe sandboxed — separate uid, no network, seccomp / read-only
   root (or a separate sidecar without database or key access).
 - **Data migration (§0.5):** the ARC-03 preflight blocks when v1 has more than one queued/running job

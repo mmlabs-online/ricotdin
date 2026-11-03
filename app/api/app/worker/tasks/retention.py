@@ -23,6 +23,11 @@ from app.services.storage.ownership import owned_audio_path
 log = get_logger("worker.retention")
 
 WORKER = "ricotdin_worker"
+# Never purge a meeting a job is working on (a reprocess / requeue needs the audio).
+_NO_ACTIVE_JOB = (
+    "AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.meeting_id = m.id "
+    "AND j.status IN ('queued', 'running')) "
+)
 RETENTION_SETTING_KEY = "storage.audio_retention_days"
 PURGE_BATCH_LIMIT = 500
 MAX_RETENTION_DAYS = 3650
@@ -64,9 +69,13 @@ async def run_retention_purge(db: Database, platform: Platform, now: datetime) -
             (
                 await conn.execute(
                     text(
-                        "SELECT id, user_id, status, audio_path, storage_provider, created_at "
-                        "FROM meetings WHERE status = 'done' AND audio_path IS NOT NULL "
-                        "AND created_at < :cutoff ORDER BY created_at LIMIT :n"
+                        "SELECT m.id, m.user_id, m.status, m.audio_path, m.storage_provider, "  # noqa: S608 - constant SQL fragments only
+                        "m.created_at FROM meetings m WHERE m.status = 'done' "
+                        "AND m.audio_path IS NOT NULL AND m.storage_provider = 'gdrive' "
+                        "AND m.audio_path LIKE m.user_id::text || '/' || m.id::text || '%' "
+                        "AND m.created_at < :cutoff "
+                        + _NO_ACTIVE_JOB
+                        + "ORDER BY m.created_at LIMIT :n"
                     ),
                     {"cutoff": cutoff, "n": PURGE_BATCH_LIMIT},
                 )
@@ -86,6 +95,17 @@ async def run_retention_purge(db: Database, platform: Platform, now: datetime) -
             continue
         try:
             async with db.role_transaction(WORKER) as conn:
+                # Re-read right before the delete (v1): still done, same key, no job started since.
+                still = await conn.execute(
+                    text(
+                        "SELECT m.id FROM meetings m WHERE m.id = :id AND m.status = 'done' "  # noqa: S608 - constant SQL fragments only
+                        "AND m.audio_path = :key " + _NO_ACTIVE_JOB + "FOR UPDATE OF m"
+                    ),
+                    {"id": meeting["id"], "key": key},
+                )
+                if still.first() is None:
+                    counts["skipped"] += 1
+                    continue
                 storage = await platform.storage(conn)
                 await storage.delete(key)
         except Exception as exc:  # noqa: BLE001 - row untouched, retried by the next run (v1)
@@ -95,8 +115,10 @@ async def run_retention_purge(db: Database, platform: Platform, now: datetime) -
         async with db.role_transaction(WORKER) as conn:
             done = await conn.execute(
                 text(
-                    "UPDATE meetings SET audio_path = NULL, audio_purged_at = now() "
-                    "WHERE id = :id AND status = 'done' AND audio_path = :key RETURNING id"
+                    "UPDATE meetings m SET audio_path = NULL, audio_purged_at = now() "  # noqa: S608 - constant SQL fragments only
+                    "WHERE m.id = :id AND m.status = 'done' AND m.audio_path = :key "
+                    + _NO_ACTIVE_JOB
+                    + "RETURNING m.id"
                 ),
                 {"id": meeting["id"], "key": key},
             )

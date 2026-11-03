@@ -96,7 +96,7 @@ def summarize(verdicts: list[Verdict]) -> dict[str, int]:
 async def probe(http: httpx2.AsyncClient, p: Probe) -> Verdict:
     try:
         resp = await http.request(p.method, p.url, headers=p.headers, json=p.body)
-    except httpx2.HTTPError as exc:
+    except Exception as exc:  # noqa: BLE001 - network, or a key that is not a valid header
         return classify_error(exc)
     return classify_status(resp.status_code)
 
@@ -104,6 +104,10 @@ async def probe(http: httpx2.AsyncClient, p: Probe) -> Verdict:
 async def run_key_health(
     db: Database, platform: Platform, *, transport: httpx2.AsyncBaseTransport | None = None
 ) -> Mapping[str, int]:
+    if not platform.keys.has_master:
+        # Every stored key would look undecryptable: never mark good keys unhealthy for that.
+        log.error("KEY_ENCRYPTION_SECRET is not set: key health check skipped")
+        return {"healthy": 0, "unhealthy": 0, "unknown": 0}
     async with db.role_transaction(WORKER) as conn:
         keys = await platform.keys.stored_keys(conn)
     verdicts: list[tuple[str, Verdict]] = []

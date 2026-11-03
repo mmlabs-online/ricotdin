@@ -4,7 +4,8 @@
   differs from its ledger sum is set to it, with a zero-delta audit row (BUG-021 fixed by design).
 * ``run_stuck_meetings`` (v1 QUO-02 sweep, reduced): the runner's stuck sweep already fails and
   refunds stuck JOBS; this ends MEETINGS left ``processing`` for over 30 min with no queued or
-  running job (e.g. migrated from v1 mid-run), with the user-facing timeout message.
+  running job (e.g. migrated from v1 mid-run), with the user-facing timeout message, a v1
+  meeting-keyed reserve refunded (``legacy_reserve_refund``) and ``processing_failed`` logged.
 """
 
 import uuid
@@ -50,6 +51,24 @@ async def run_stuck_meetings(db: Database) -> Mapping[str, int]:
                 {"msg": MEETING_TIMED_OUT, "mins": STUCK_MEETING_MINUTES},
             )
         ).all()
+        refunded = 0
+        for (meeting_id,) in rows:
+            # v1 meetings migrated mid-run hold a meeting-keyed reserve (v1 QUO-02): give it back.
+            got = (
+                await conn.execute(
+                    text("SELECT status FROM legacy_reserve_refund(:m)"), {"m": meeting_id}
+                )
+            ).first()
+            if got is not None and got.status == "applied":
+                refunded += 1
+            await conn.execute(
+                text(
+                    "INSERT INTO activity_log (user_id, event_type, meeting_id, metadata) "
+                    "SELECT m.user_id, 'processing_failed', m.id, CAST(:md AS jsonb) "
+                    "FROM meetings m WHERE m.id = :m"
+                ),
+                {"m": meeting_id, "md": '{"reason": "stuck_meeting"}'},
+            )
     if rows:
-        log.warning("stuck meetings failed", extra={"count": len(rows)})
-    return {"failed": len(rows)}
+        log.warning("stuck meetings failed", extra={"count": len(rows), "refunded": refunded})
+    return {"failed": len(rows), "refunded": refunded}

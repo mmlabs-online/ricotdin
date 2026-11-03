@@ -99,23 +99,78 @@ def test_purge_audit_only_for_a_meeting_just_purged(db: str) -> None:
     uid = _user(db)
     mid = _q(db, "INSERT INTO meetings (user_id, status, audio_path, storage_provider) VALUES "
              "(%s, 'done', %s, 'gdrive') RETURNING id", uid, f"{uid}/x.webm")[0][0]  # fmt: skip
+    key = f"{uid}/{mid}.webm"
     with pytest.raises(psycopg.errors.InvalidParameterValue):  # still has audio
-        _as_worker(db, "SELECT retention_purge_audit(%s, 'k', 30)", mid)
+        _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, key)
     _q(db, "UPDATE meetings SET audio_path = NULL, audio_purged_at = now() WHERE id = %s", mid)
-    _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, f"{uid}/{mid}.webm")
+    for bad_key, days in ((f"{uid}/{uuid.uuid4()}.webm", 30), ("anything", 30), (key, 0),
+                          (key, 99999)):  # fmt: skip
+        with pytest.raises(psycopg.errors.InvalidParameterValue):
+            _as_worker(db, "SELECT retention_purge_audit(%s, %s, %s)", mid, bad_key, days)
+    _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, key)
+    _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, key)  # idempotent
     rows = _q(db, "SELECT actor_id, actor_email, action, target_id, metadata->>'retention_days' "
               "FROM audit_logs WHERE target_id = %s", str(mid))  # fmt: skip
     assert rows == [(None, "system:retention", "meeting.audio_purged", str(mid), "30")]
     _q(db, "UPDATE meetings SET audio_purged_at = now() - interval '2 hours' WHERE id = %s", mid)
-    with pytest.raises(psycopg.errors.InvalidParameterValue):  # an old purge: no more audit rows
-        _as_worker(db, "SELECT retention_purge_audit(%s, 'k', 30)", mid)
+    with pytest.raises(psycopg.errors.InvalidParameterValue):  # an old purge
+        _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, key)
+
+
+def test_a_key_still_stored_is_not_purged(db: str) -> None:
+    uid = _user(db)
+    mid = _q(db, "INSERT INTO meetings (user_id, status, storage_provider, audio_purged_at) "
+             "VALUES (%s, 'done', 'gdrive', now()) RETURNING id", uid)[0][0]  # fmt: skip
+    key = f"{uid}/{mid}.webm"
+    _q(db, "INSERT INTO storage_objects (key, file_id, size_bytes, content_type) VALUES "
+       "(%s, 'fileid000001', 1, 'audio/webm')", key)  # fmt: skip
+    with pytest.raises(psycopg.errors.InvalidParameterValue):
+        _as_worker(db, "SELECT retention_purge_audit(%s, %s, 30)", mid, key)
+
+
+def test_lease_is_bounded(db: str) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _as_worker(db, "UPDATE scheduler_runs SET lease_until = 'infinity', last_started_at = now() "
+                   "WHERE task = 'key_health'")  # fmt: skip
+    with pytest.raises(psycopg.errors.CheckViolation):
+        _as_worker(db, "UPDATE scheduler_runs SET lease_until = now(), last_started_at = NULL "
+                   "WHERE task = 'key_health'")  # fmt: skip
+
+
+def test_reconcile_never_waits_for_another_run(db: str) -> None:
+    with psycopg.connect(db) as holder:
+        holder.execute("SELECT pg_advisory_xact_lock(hashtext('quota_reconcile_wallets'))")
+        assert _as_worker(db, "SELECT * FROM quota_reconcile_wallets(%s)", uuid.uuid4()) == [(0, 0)]
+        holder.rollback()
+
+
+def test_legacy_reserve_refund(db: str) -> None:
+    uid = _user(db, 100)
+    mid = _q(db, "INSERT INTO meetings (user_id, status) VALUES (%s, 'processing') RETURNING id",
+             uid)[0][0]  # fmt: skip
+    _q(db, "SELECT * FROM quota_apply_movement(%s, -40, 0, 'generate', %s, false, %s, NULL, '{}')",
+       uid, f"gen:{mid}:reserve", mid)  # fmt: skip
+    with pytest.raises(psycopg.errors.InvalidParameterValue):  # not failed yet
+        _as_worker(db, "SELECT * FROM legacy_reserve_refund(%s)", mid)
+    _q(db, "UPDATE meetings SET status = 'failed' WHERE id = %s", mid)
+    assert _as_worker(db, "SELECT * FROM legacy_reserve_refund(%s)", mid) == [("applied", 40)]
+    assert _as_worker(db, "SELECT * FROM legacy_reserve_refund(%s)", mid) == [("closed", 0)]
+    assert _q(db, "SELECT audio_seconds_remaining FROM quota_wallets WHERE user_id = %s", uid) == [
+        (100,)
+    ]
+    other = _q(db, "INSERT INTO meetings (user_id, status) VALUES (%s, 'failed') RETURNING id",
+               uid)[0][0]  # fmt: skip
+    assert _as_worker(db, "SELECT * FROM legacy_reserve_refund(%s)", other) == [
+        ("nothing_reserved", 0)
+    ]
 
 
 def test_functions_are_not_public(db: str) -> None:
     rows = _q(db, "SELECT r, has_function_privilege(r, 'quota_reconcile_wallets(uuid)', 'EXECUTE'),"
-              " has_function_privilege(r, 'retention_purge_audit(uuid,text,integer)', 'EXECUTE') "
+              " has_function_privilege(r, 'retention_purge_audit(uuid,text,integer)', 'EXECUTE'), "
+              "has_function_privilege(r, 'legacy_reserve_refund(uuid)', 'EXECUTE') "
               "FROM unnest(ARRAY['ricotdin_app', 'ricotdin_service', 'public']) r")  # fmt: skip
-    assert all(not a and not b for _, a, b in rows)
+    assert all(not a and not b and not c for _, a, b, c in rows)
 
 
 def test_downgrade_removes_0006() -> None:

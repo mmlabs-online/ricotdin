@@ -188,7 +188,7 @@ def test_retention_purges_only_old_done_owned_drive_audio(world: dict[str, Any])
     finally:
         _sql(world["db"], "UPDATE app_config SET value = 'null' "
              "WHERE key = 'storage.audio_retention_days'")  # fmt: skip
-    assert counts["purged"] >= 1 and counts["skipped"] >= 2
+    assert counts["purged"] >= 1
     assert _sql(world["db"], "SELECT audio_path, audio_purged_at IS NOT NULL FROM meetings "
                 "WHERE id = %s", old.meeting) == [(None, True)]  # fmt: skip
     assert file_id not in world["drive"].files
@@ -219,6 +219,37 @@ def test_wallet_reconcile_fixes_a_drift(world: dict[str, Any]) -> None:
                 case.user) == [(100,)]  # fmt: skip
 
 
+def test_v1_meetings_never_starve_the_purge(world: dict[str, Any]) -> None:
+    _sql(
+        world["db"], "UPDATE app_config SET value = '30' WHERE key = 'storage.audio_retention_days'"
+    )
+    v1_rows = [_seed(world, status="done", provider="r2", mapped=False) for _ in range(3)]
+    target = _seed(world, status="done")
+    busy = _seed(world, status="done")
+    _job(world, busy, step="start")  # a reprocess is queued: its audio is needed
+    for case in [*v1_rows, target, busy]:
+        _sql(world["db"], "UPDATE meetings SET created_at = now() - interval '400 days' "
+             "WHERE id = %s", case.meeting)  # fmt: skip
+    try:
+        import app.worker.tasks.retention as retention
+
+        old = retention.PURGE_BATCH_LIMIT
+        retention.PURGE_BATCH_LIMIT = 1  # a batch the v1 rows would fill if they were selected
+        try:
+            counts = _with(world, lambda db, p: run_retention_purge(db, p, datetime.now(UTC)))
+        finally:
+            retention.PURGE_BATCH_LIMIT = old
+    finally:
+        _sql(world["db"], "UPDATE app_config SET value = 'null' "
+             "WHERE key = 'storage.audio_retention_days'")  # fmt: skip
+    assert counts["purged"] == 1
+    assert _sql(world["db"], "SELECT audio_path FROM meetings WHERE id = %s", target.meeting) == [
+        (None,)
+    ]
+    assert _sql(world["db"], "SELECT audio_path IS NOT NULL FROM meetings WHERE id = %s",
+                busy.meeting) == [(True,)]  # fmt: skip
+
+
 def test_stuck_meetings_without_a_job_fail(world: dict[str, Any]) -> None:
     orphan = _seed(world, status="processing")
     busy = _seed(world, status="processing")
@@ -236,4 +267,7 @@ def test_stuck_meetings_without_a_job_fail(world: dict[str, Any]) -> None:
                        orphan.meeting, busy.meeting, fresh.meeting))  # fmt: skip
     assert status == {orphan.meeting: "failed", busy.meeting: "processing",
                       fresh.meeting: "processing"}  # fmt: skip
+    events = _sql(world["db"], "SELECT event_type, metadata->>'reason' FROM activity_log "
+                  "WHERE meeting_id = %s", orphan.meeting)  # fmt: skip
+    assert events == [("processing_failed", "stuck_meeting")]
     assert json.dumps(counts)

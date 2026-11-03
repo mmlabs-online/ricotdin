@@ -197,7 +197,7 @@ def test_worker_is_granted_only_the_pipeline_functions(db: str) -> None:
             "WHERE p.proname LIKE 'pipeline\\_%%'"
         ).fetchone()
     assert granted == {"claim_next_job", "pipeline_reserve", "pipeline_refund", "pipeline_settle",
-                       "quota_reconcile_wallets", "retention_purge_audit"}  # fmt: skip  # 0006
+                       "quota_reconcile_wallets", "retention_purge_audit", "legacy_reserve_refund"}  # fmt: skip  # 0006
     assert movement == (False,)  # the worker cannot move any user's quota
     assert wrappers_public == (False,)
 

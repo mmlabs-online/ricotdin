@@ -96,6 +96,10 @@ class KeySource:
         self._invalid: set[str] = set()  # sha-256 of keys a provider rejected (401)
 
     @property
+    def has_master(self) -> bool:
+        return self._master is not None
+
+    @property
     def env_names(self) -> list[str]:
         return sorted(self._env)
 
