@@ -4,6 +4,10 @@ An adapter turns one JSON-mode request into one HTTP call to its provider and th
 ``Completion``. It is stateless: keys, rotation, retries and usage logging are ``AIService``'s.
 Error messages carry the provider, HTTP status and a short error code — never a key, a URL query
 or a response body.
+
+Rules for a new adapter (the pool classifies by message first, then status — ``keys/pool.py``):
+map "invalid / revoked key" and "out of credits" answers to a 401 (key disabled), never put
+"quota" in a code unless it is a rate limit, and raise ``ModelRefused`` for refusals/safety blocks.
 """
 
 import re
@@ -86,6 +90,7 @@ async def post_json(
     headers: dict[str, str],
     body: dict[str, Any],
     error_code: Any,
+    retry_hint: Any = None,
 ) -> Any:
     """POST JSON, read at most ``MAX_RESPONSE_BYTES``; ``error_code(body) -> str | None`` picks a
     short code out of an error body. Raises ``ProviderHTTPError`` / ``ProviderTransportError``."""
@@ -105,7 +110,10 @@ async def post_json(
         parsed = None
     if status >= 400:
         code = safe_code(error_code(parsed)) if parsed is not None else None
-        raise ProviderHTTPError(provider, status, code, retry_after(hdrs))
+        wait = retry_after(hdrs)
+        if wait is None and retry_hint is not None and parsed is not None:
+            wait = retry_hint(parsed)
+        raise ProviderHTTPError(provider, status, code, wait)
     if not isinstance(parsed, dict):
         raise ProviderHTTPError(provider, 502, "not_json")
     return parsed

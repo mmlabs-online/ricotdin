@@ -53,6 +53,9 @@ POOL_CONFIG = PoolConfig(
 class AIUnavailable(ServiceUnavailable):
     code = "ai_unavailable"
     message = "The AI service is not available right now. Please try again later."
+    # Seconds until a cooling-down key is usable (every key was only rate-limited): the worker
+    # waits that long without using an attempt.
+    retry_after: float | None = None
 
 
 class AIRejected(AppError):
@@ -124,7 +127,8 @@ class AIService:
         if self._http is None:
             self._http = httpx2.AsyncClient(
                 transport=self.transport,
-                timeout=httpx2.Timeout(30.0, read=180.0),
+                # Long transcripts: the provider answers only when the whole JSON is written.
+                timeout=httpx2.Timeout(30.0, read=300.0),
                 follow_redirects=False,
             )
         return self._http
@@ -205,27 +209,37 @@ class AIService:
             req = JsonRequest(model, system, prompt, schema, schema_name)
             try:
                 c = await adapter.complete_json(self.http, info, key, req)
-            except Exception as exc:
+            except BaseException as exc:  # also a cancelled call: it may still be billed
                 status, code = _usage_status(exc)
                 calls.append(_Call(status, code, key_id))
                 raise
             calls.append(_Call("ok", None, key_id, c))
             return c
 
+        def checked(raw: str) -> T:
+            try:
+                return parse(raw)
+            except ParseFailed:
+                raise
+            except Exception as exc:  # a parser bug on odd output must not rotate keys
+                raise ParseFailed(f"parser error {type(exc).__name__}") from None
+
         async def attempt(key: str, key_id: str | None) -> T:
             first = await one(key, key_id, user)
             try:
-                return parse(first.text)
+                return checked(first.text)
             except ParseFailed:
                 if retry_user is None:
                     raise
                 log.warning("%s answer unusable; retrying with the strict prompt", info.name)
-            return parse((await one(key, key_id, retry_user)).text)  # same key (v1)
+            return checked((await one(key, key_id, retry_user)).text)  # same key (v1)
 
         try:
             return await pool.call(attempt)
         except AllKeysExhausted as exc:
-            raise AIUnavailable(detail=str(exc)) from None
+            unavailable = AIUnavailable(detail=str(exc))
+            unavailable.retry_after = pool.ready_in()
+            raise unavailable from None
         except ModelRefused as exc:
             raise AIRejected(
                 "The AI model declined to process this meeting.", detail=str(exc)
@@ -235,7 +249,7 @@ class AIService:
         except ProviderHTTPError as exc:  # 400 / 404 / 413 / 422: the request itself
             raise AIRejected(detail=str(exc)) from None
         finally:
-            await self._write_usage(db, group, [
+            rows = [
                 {"provider": info.name, "model": model, "operation": operation,
                  "inp": c.completion.input_tokens if c.completion else None,
                  "out": c.completion.output_tokens if c.completion else None,
@@ -245,7 +259,11 @@ class AIService:
                  "meeting": usage.meeting_id, "user": usage.user_id,
                  "key": _uuid(c.key_id)}
                 for c in calls
-            ])  # fmt: skip
+            ]  # fmt: skip
+            # Shielded: a cancelled call (step timeout, shutdown, client gone) still records the
+            # requests it made, bounded so shutdown is not held up.
+            with anyio.CancelScope(shield=True), anyio.move_on_after(5):
+                await self._write_usage(db, group, rows)
 
 
 def _uuid(value: str | None) -> uuid.UUID | None:

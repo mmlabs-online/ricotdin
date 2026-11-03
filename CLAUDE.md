@@ -435,24 +435,37 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     429 → cooldown + rotate, 401 / API_KEY_INVALID / OpenAI `insufficient_quota` → key disabled
     process-wide; refusal, safety block, 400/404/413/422 → `AIRejected` (422, terminal, not
     rotated); `ParseFailed` → one strict retry on the SAME key, then `AIBadOutput` (502, terminal);
-    exhausted / network / no key → 503 (worker retries). A `usage_log` row per provider request
+    exhausted / network / no key → 503 (worker retries; when every key is only cooling down,
+    `AIUnavailable.retry_after` is set and `analyse` re-queues itself after it without using an
+    attempt). A parser exception other than `ParseFailed` counts as `ParseFailed` (never rotates).
+    Gemini `RetryInfo.retryDelay` sets the cooldown; xAI's 400 "Incorrect API key" → key disabled.
+    A `usage_log` row per provider request, also for cancelled calls (shielded write, ≤ 5 s)
     (`tokens`, `ok` / `rate_limited` / `error`, `key_id` only if the admin key exists), best effort.
+    New adapters: map bad-key and out-of-credits answers to 401 (`types.py` docstring). Read timeout
+    300 s.
   - Model lock (`model_lock.py`): stored pair wins; else upload pick (`payload.preferred_*`) →
     `profiles.default_*` → `generation.system_default` (each only if allowed + registered), written
     once (`WHERE generation_provider IS NULL`) at `start` (or at `analyse` / `regenerate` for older
     meetings).
   - Analysis (`analysis.py`): v1 prompt format (`[N] Speaker (s.s): text`, MEETING_DATE), prompt
-    text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: a parent dir of the code or
-    `/app`; the image copy is 08d). Untrusted output: fields fall back one by one, bad items
+    text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: only the repository root —
+    five levels above the module — or `/app`; never a walk up the tree; the image copy is 08d). Untrusted output: fields fall back one by one, bad items
     dropped, `due_date` must be a real `YYYY-MM-DD`, `proposed_at` an ISO date-time (no offset =
-    UTC), text bounded and NUL-free, no summary and no notes → `ParseFailed`.
+    UTC), dates only 1970–2100, text bounded without NUL / lone surrogates, no summary and no
+    notes → `ParseFailed` (its detail never quotes the answer: meeting content).
   - Step `analyse`: meeting not `processing` → job done; no segments → terminal; AI call outside any
     transaction; then ONE transaction guarded by `locked_by`: `payload.analysis_done`, summary +
     notes, to-dos + calendar replaced → `embed`. A re-run with `analysis_done` skips the AI.
   - `POST /meetings/{id}/regenerate` (owner only; editor/viewer/stranger 403 like other meeting
-    writes; 404 unknown): 409 while `pending`/`processing`, 422 without transcript, 10 per user per
+    writes; 404 unknown): 409 while `pending`/`processing` or while a job is queued/running (also
+    re-checked in the final UPDATE, so a queued reprocess is never ended by our `done`), 422 without
+    transcript, 10 per user per
     hour (`app.state.regenerate_limiter`), the locked model, overwrites summary + notes and sets
     `done` (v1); to-dos/calendar untouched. `app.state.ai` is the API's `AIService`.
+  - Open / accepted: regenerate is not charged to quota (v1 did not charge it either) and its
+    limiter is per process; a stored model lock is not re-checked against the allow-list (v1
+    AIP-03); a provider error during the strict retry rotates and starts the attempt again; a key
+    pool rebuild (key set changed, e.g. after a 401) forgets the other keys' cooldowns.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).

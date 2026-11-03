@@ -142,3 +142,15 @@ def test_rate_limited(client: TestClient, world: dict[str, Any]) -> None:
     mid = _meeting(world, "d")
     codes = [_post(client, "d", mid).status_code for _ in range(11)]
     assert codes[:10] == [200] * 10 and codes[10] == 429
+
+
+def test_a_queued_reprocess_is_never_ended_by_regenerate(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    seen = install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a", status="failed")
+    _sql(world["db"], "INSERT INTO jobs (meeting_id, step, status) VALUES (%s, 'start', 'queued')",
+         mid)  # fmt: skip
+    resp = _post(client, "a", mid)
+    assert resp.status_code == 409 and seen == []
+    assert _sql(world["db"], "SELECT status FROM meetings WHERE id = %s", mid) == [("failed",)]

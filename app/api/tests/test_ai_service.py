@@ -317,3 +317,63 @@ def test_a_new_provider_plugs_in_without_touching_the_service(
 def test_repr_hides_keys() -> None:
     svc = Svc(Server(gemini_ok("{}")), [K1])
     assert repr(svc) == "AIService()"
+
+
+# --- review round 1 ------------------------------------------------------------------------------
+
+
+def test_xai_bad_key_400_disables_the_key() -> None:
+    bad = (400, {"code": "Client specified an invalid argument",
+                 "error": "Incorrect API key provided: xa***. You can obtain an API key"})  # fmt: skip
+    server = Server(bad, openai_ok('{"x": "a"}'))
+    svc = Svc(server, [K1, K2])
+    assert call(svc, "grok", "grok-4") == {"x": "a"}
+    assert svc.keys.usable([K1]) == [] and len(server.requests) == 2
+
+
+def test_one_rate_limited_key_reports_when_it_is_ready() -> None:
+    body = {"error": {"status": "RESOURCE_EXHAUSTED",
+                      "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo",
+                                   "retryDelay": "42s"}]}}  # fmt: skip
+    svc = Svc(Server((429, body)), [K1])
+    with pytest.raises(AIUnavailable) as exc:
+        call(svc)
+    assert exc.value.retry_after is not None and 40 <= exc.value.retry_after <= 42
+
+
+def test_network_failure_has_no_ready_hint() -> None:
+    with pytest.raises(AIUnavailable) as exc:
+        call(Svc(Server(httpx2.ConnectError("x")), [K1]))
+    assert exc.value.retry_after is None
+
+
+def test_a_parser_bug_is_bad_output_not_a_key_rotation() -> None:
+    def broken(raw: str) -> Any:
+        raise OverflowError("date value out of range")
+
+    server = Server(gemini_ok("{}"))
+    svc = Svc(server, [K1, K2])
+    with pytest.raises(AIBadOutput):
+        call(svc, parse=broken)
+    assert len(server.requests) == 2 and svc.sleeps == []  # first + strict, same key
+
+
+def test_a_cancelled_call_still_records_usage() -> None:
+    class Slow:
+        async def complete_json(self, *a: Any) -> Completion:
+            await anyio.sleep(10)
+            raise AssertionError("unreachable")
+
+    svc = Svc(Server(gemini_ok("{}")), [K1], adapters={"gemini": Slow()})
+
+    async def go() -> None:
+        with anyio.move_on_after(0.05):
+            await svc.generate_json(
+                None,  # type: ignore[arg-type]
+                "ricotdin_worker", "gemini", "gemini-2.5-flash", system="S", user="U",
+                retry_user=None, schema=SCHEMA, schema_name="n", operation="analyze",
+                parse=parse_json, usage=UsageContext(),
+            )  # fmt: skip
+
+    anyio.run(go)
+    assert [u["status"] for u in svc.usage] == ["error"]

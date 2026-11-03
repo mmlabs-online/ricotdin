@@ -3,7 +3,8 @@
 1. Load the transcript and the meeting (a meeting that is no longer ``processing`` ends the job).
 2. Use the meeting's locked model (lock it now for a job that started before 08c).
 3. One JSON-mode call through ``AIService`` (no DB connection held while it runs), parsed
-   defensively; an unusable answer is retried once with the strict prompt, then terminal.
+   defensively; an unusable answer is retried once with the strict prompt, then terminal. When
+   every key is only rate-limited, the step is queued again after the cooldown (no attempt used).
 4. In ONE transaction guarded by this worker's lock: ``payload.analysis_done``, summary + notes,
    the meeting's to-dos and calendar suggestions replaced (a re-run never duplicates them, v1
    REL-03). A re-run after that commit goes straight to ``embed`` without a second AI call.
@@ -22,7 +23,7 @@ from app.services.ai.analysis import (
 )
 from app.services.ai.model_lock import lock_model
 from app.services.ai.prompts import load_prompt
-from app.services.ai.service import UsageContext
+from app.services.ai.service import AIUnavailable, UsageContext
 from app.worker.errors import JobLockLost, PipelineError
 from app.worker.jobs import Advance, Done, Outcome, StepContext
 from app.worker.messages import GENERIC_FAILURE
@@ -30,6 +31,7 @@ from app.worker.messages import GENERIC_FAILURE
 log = get_logger("worker.analyse")
 
 WORKER = "ricotdin_worker"
+RATE_LIMIT_WAIT_MAX_S = 15 * 60
 
 
 async def run_analyse(ctx: StepContext) -> Outcome:
@@ -70,15 +72,23 @@ async def run_analyse(ctx: StepContext) -> Outcome:
     segments = [SegmentText(r.speaker, r.start_ms, r.text) for r in rows]
     started = meeting["started_at"]
     meeting_date = started.isoformat() if started is not None else None
-    analysis = await ctx.ai.generate_json(
-        ctx.db, WORKER, provider, model,
-        system=load_prompt(),
-        user=build_user_content(segments, strict=False, meeting_date=meeting_date),
-        retry_user=build_user_content(segments, strict=True, meeting_date=meeting_date),
-        schema=ANALYSIS_SCHEMA, schema_name="meeting_analysis", operation="analyze",
-        parse=lambda raw: parse_analysis(raw, len(segments)),
-        usage=UsageContext(job.meeting_id, meeting["user_id"]),
-    )  # fmt: skip
+    try:
+        analysis = await ctx.ai.generate_json(
+            ctx.db, WORKER, provider, model,
+            system=load_prompt(),
+            user=build_user_content(segments, strict=False, meeting_date=meeting_date),
+            retry_user=build_user_content(segments, strict=True, meeting_date=meeting_date),
+            schema=ANALYSIS_SCHEMA, schema_name="meeting_analysis", operation="analyze",
+            parse=lambda raw: parse_analysis(raw, len(segments)),
+            usage=UsageContext(job.meeting_id, meeting["user_id"]),
+        )  # fmt: skip
+    except AIUnavailable as exc:
+        if exc.retry_after is None:
+            raise  # no key / network: retried with backoff, counts an attempt
+        # Every key is only rate-limited: wait for the soonest one without using an attempt
+        # (like a transcription poll; the 6 h deadline still bounds it).
+        log.info("all %s keys cooling down; analyse again in %.0f s", provider, exc.retry_after)
+        return Advance("analyse", delay_s=min(exc.retry_after, RATE_LIMIT_WAIT_MAX_S) + 1.0)
     ids = [r.id for r in rows]  # segment_index order = the prompt's [N]
 
     def seg(index: int | None) -> Any:

@@ -11,8 +11,10 @@ from pathlib import Path
 from app.core.errors import AppError
 
 ANALYSIS_PROMPT = ("ai-instruction", "ai-gen", "generate-meeting.md")
-# The repository root (any parent of this file: local runs, tests) and the image root.
-_ROOTS = (*Path(__file__).resolve().parents, Path("/app"))
+_HERE = Path(__file__).resolve()
+# Only two fixed places, never a walk up the tree: the repository root (app/api/app/services/ai
+# → five levels up; local runs, tests) and the image root.
+_ROOTS = (*([_HERE.parents[5]] if len(_HERE.parents) > 5 else []), Path("/app"))
 
 
 class PromptUnavailable(AppError):

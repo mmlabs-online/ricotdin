@@ -271,3 +271,16 @@ def test_a_meeting_that_is_no_longer_processing_ends_the_job(world: dict[str, An
 def test_registry_has_analyse() -> None:
     assert "analyse" in default_steps()
     assert uuid.UUID(int=0)  # keep uuid import used for type clarity
+
+
+def test_rate_limited_keys_requeue_analyse_without_an_attempt(world: dict[str, Any]) -> None:
+    case = _analysing(world)
+    body = {"error": {"status": "RESOURCE_EXHAUSTED",
+                      "details": [{"retryDelay": "40s"}]}}  # fmt: skip
+    ai, _ = ai_with(lambda r: gemini(body, 429))
+    assert _once(world, ai)
+    row = _job_row(world, case.job)  # type: ignore[arg-type]
+    assert (row["step"], row["status"], row["attempts"], row["later"]) == (
+        "analyse", "queued", 0, True,
+    )  # fmt: skip
+    assert _meeting(world, case)[0] == "processing"

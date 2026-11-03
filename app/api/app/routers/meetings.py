@@ -274,6 +274,10 @@ async def process_meeting(
 REGENERATE_PER_HOUR = 10
 _BUSY = "This meeting is still being processed."
 _NO_TRANSCRIPT = "No transcript available to analyze."
+_ACTIVE_JOB = (
+    "SELECT EXISTS (SELECT 1 FROM public.jobs WHERE meeting_id = :id "
+    "AND status IN ('queued', 'running'))"
+)
 
 
 def regenerate_limiter() -> RateLimiter:
@@ -309,8 +313,10 @@ async def regenerate_meeting(
             .mappings()
             .one()
         )
-        if meeting["status"] in ("pending", "processing"):
-            raise Conflict(_BUSY)
+        active_job = (await conn.execute(text(_ACTIVE_JOB), {"id": mid})).scalar_one()
+        if meeting["status"] in ("pending", "processing") or active_job:
+            raise Conflict(_BUSY)  # a queued reprocess would otherwise be ended by our 'done'
+
         rows = (
             await conn.execute(
                 text(
@@ -340,15 +346,24 @@ async def regenerate_meeting(
         saved = (
             await conn.execute(
                 text(
-                    "UPDATE public.meetings SET summary = :s, notes = :n, status = 'done', "
-                    "error_message = NULL WHERE id = :id "
-                    "AND status NOT IN ('pending', 'processing') RETURNING id"
+                    "UPDATE public.meetings m SET summary = :s, notes = :n, status = 'done', "
+                    "error_message = NULL WHERE m.id = :id "
+                    "AND m.status NOT IN ('pending', 'processing') AND NOT EXISTS (SELECT 1 FROM "
+                    "public.jobs j WHERE j.meeting_id = m.id "
+                    "AND j.status IN ('queued', 'running')) "
+                    "RETURNING m.id"
                 ),
                 {"id": mid, "s": analysis.summary, "n": analysis.notes},
             )
         ).first()
     if saved is None:  # reprocessed or deleted while the AI was answering
-        raise Conflict(_BUSY)
+        async with db.role_transaction(SERVICE) as conn:
+            exists = (
+                await conn.execute(
+                    text("SELECT 1 FROM public.meetings WHERE id = :id"), {"id": mid}
+                )
+            ).first()
+        raise Conflict(_BUSY) if exists else NotFound(_NOT_FOUND)
     return {"ok": True, "summary": analysis.summary, "notes": analysis.notes}
 
 

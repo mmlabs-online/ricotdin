@@ -4,6 +4,7 @@ The key travels in the ``x-goog-api-key`` header, never in the URL. A safety blo
 candidate) is a ``ModelRefused``.
 """
 
+import re
 from typing import Any
 
 import httpx2
@@ -45,6 +46,16 @@ def error_code(body: Any) -> str | None:
     return status if isinstance(status, str) else None
 
 
+def retry_delay(body: Any) -> float | None:
+    """``RetryInfo.retryDelay`` ("37s", "1.5s") of a 429 body."""
+    err = body.get("error") if isinstance(body, dict) else None
+    for detail in (err.get("details") or []) if isinstance(err, dict) else []:
+        delay = detail.get("retryDelay") if isinstance(detail, dict) else None
+        if isinstance(delay, str) and re.fullmatch(r"\d{1,5}(?:\.\d+)?s", delay):
+            return min(float(delay[:-1]), 3600.0)
+    return None
+
+
 def parse_response(body: dict[str, Any]) -> Completion:
     feedback = body.get("promptFeedback")
     if isinstance(feedback, dict) and feedback.get("blockReason"):
@@ -76,6 +87,6 @@ class GeminiAdapter:
     ) -> Completion:
         body = await post_json(
             http, provider.name, f"{provider.base_url}/models/{req.model}:generateContent",
-            {"x-goog-api-key": key}, request_body(req), error_code,
+            {"x-goog-api-key": key}, request_body(req), error_code, retry_delay,
         )  # fmt: skip
         return parse_response(body)

@@ -181,3 +181,34 @@ def test_resolve_generation_model(
     allowed: list[tuple[str, str]], pref: Any, pick: Any, expected: tuple[str, str]
 ) -> None:
     assert resolve_generation_model(allowed, GEMINI, pref, pick) == expected
+
+
+# --- review round 1 ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0001-01-01T00:00:00+05:00", "9999-12-31T23:59:59-05:00", "1900-01-01T00:00:00Z",
+     "2200-01-01T00:00:00Z"],
+)  # fmt: skip
+def test_out_of_range_instants_are_dropped_not_raised(value: str) -> None:
+    a = parse({**GOOD, "calendar_suggestions": [{"title": "T", "proposed_at": value}]})
+    assert a.calendar[0].proposed_at is None
+
+
+def test_out_of_range_days_are_dropped() -> None:
+    a = parse({**GOOD, "todos": [{"content": "x", "due_date": "0001-01-01"}]})
+    assert a.todos[0].due_date is None
+
+
+def test_lone_surrogates_are_removed() -> None:
+    a = parse('{"summary": "a\\ud800b", "notes_markdown": "n\\udfff", "todos": [], '
+              '"calendar_suggestions": []}')  # fmt: skip
+    assert (a.summary, a.notes) == ("ab", "n")
+    a.summary.encode("utf-8")
+
+
+def test_unparseable_detail_has_no_meeting_content() -> None:
+    with pytest.raises(ParseFailed) as exc:
+        parse("Secret roadmap: acquire Acme")
+    assert "Acme" not in str(exc.value)

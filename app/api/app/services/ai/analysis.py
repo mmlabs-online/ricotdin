@@ -145,8 +145,11 @@ def build_user_content(
     return body + STRICT_SUFFIX if strict else body
 
 
+_UNSAFE = re.compile("[\x00\ud800-\udfff]")  # NUL and lone surrogates: Postgres / UTF-8 reject
+
+
 def _text(value: Any, limit: int) -> str:
-    return value.replace("\x00", "")[:limit] if isinstance(value, str) else ""
+    return _UNSAFE.sub("", value)[:limit] if isinstance(value, str) else ""
 
 
 def _opt_text(value: Any, limit: int) -> str | None:
@@ -163,9 +166,10 @@ def _day(value: Any) -> date | None:
     if not isinstance(value, str) or not _DAY.fullmatch(value):
         return None
     try:
-        return date.fromisoformat(value)
+        day = date.fromisoformat(value)
     except ValueError:
         return None
+    return day if 1970 <= day.year <= 2100 else None
 
 
 def _instant(value: Any) -> datetime | None:
@@ -174,9 +178,11 @@ def _instant(value: Any) -> datetime | None:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if not 1970 <= parsed.year <= 2100:
+            return None
+        return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).astimezone(UTC)
+    except (ValueError, OverflowError):
         return None
-    return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).astimezone(UTC)
 
 
 def _items(value: Any) -> list[dict[str, Any]]:
@@ -190,7 +196,7 @@ def parse_analysis(raw: str, segment_count: int) -> Analysis:
     try:
         data = json.loads(cleaned)
     except ValueError:
-        raise ParseFailed(f"analysis is not JSON (first chars: {raw[:80]!r})") from None
+        raise ParseFailed(f"analysis is not JSON ({len(raw)} chars)") from None  # no content
     if not isinstance(data, dict):
         raise ParseFailed("analysis is not a JSON object")
     # Some models encode newlines as a literal backslash + n (v1).
