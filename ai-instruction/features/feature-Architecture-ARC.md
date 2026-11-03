@@ -457,7 +457,7 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 ---
 
 ### ARC-08 — Processing pipeline, worker & schedulers
-**Priority:** High | **Status:** ⚠️ Partial — 08a–08d done (worker foundation, transcription, AI layer + analyse, embed + deploy target); 08e open
+**Priority:** High | **Status:** ✅ Done — 08a–08e (worker foundation, transcription, AI layer + analyse, embed + deploy target, schedulers)
 
 **User Story**  
 As a user, I want my uploaded or recorded audio processed into transcript, summary, notes, to-dos, calendar suggestions and embeddings by v2 so that results match v1.
@@ -532,8 +532,11 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
   transaction, `processing_done`; image built from the repo root with the runtime prompt; worker
   heartbeat health check; `app/api/deploy/compose.example.yml` (API + worker, worker env only
   `DATABASE_URL_WORKER`). Regenerate charged like one generation (owner decision 2026-11-03).
-- 08e schedulers: key health check, retention purge (audit `meeting.audio_purged` through a
-  SECURITY DEFINER function with a forced system actor), quota reconcile with job-keyed dedup keys.
+- **08e schedulers — done (branch `feat/ARC-08e-schedulers`):** migration `0006`
+  (`scheduler_runs` leases, `quota_reconcile_wallets`, `retention_purge_audit`), worker tasks
+  `key_health` (24 h), `retention_purge` (24 h), `wallet_reconcile` (5 min), `stuck_meetings`
+  (5 min). The v1 wallet reconcile never closed a drift (BUG-021); v2 sets the wallet to the
+  ledger sum. v1's stuck-reservation refund is not ported (the runner's stuck sweep refunds).
 - ARC-15: sandbox ffmpeg (separate uid, no network, seccomp); `stop_grace_period: 30s`; run the
   ARC-18 file copy before the worker starts.
 
@@ -564,6 +567,8 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - 08c: `app/api/app/services/ai/{catalog,schema,types,service,prompts,model_lock,analysis}.py`,
   `adapters/{gemini,openai_compat}.py`, `app/api/app/worker/analyse.py`, `routers/meetings.py`
   (`regenerate`)
+- 08e: migration `0006_worker_schedulers`, `app/api/app/worker/schedule.py`,
+  `app/api/app/worker/tasks/{keyhealth,retention,maintenance}.py`
 - 08d: `app/api/app/worker/{chunk,embed,health}.py`, `app/api/Dockerfile` +
   `Dockerfile.dockerignore`, `app/api/deploy/compose.example.yml`, `.github/workflows/ci-api.yml`
 - Tests 08a: `test_worker_{backoff,errors,messages,probe,quota,policy,main,audio}.py`,
