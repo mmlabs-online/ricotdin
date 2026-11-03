@@ -513,6 +513,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     delete (its own step), then CAS `audio_path = NULL, audio_purged_at = now()` +
     `retention_purge_audit` (SECURITY DEFINER, forced `system:retention`; only a `done` meeting
     purged in the last hour, its own key no longer mapped, days 1–3650, one row per meeting).
+    Accepted: a reprocess queued between the committed Drive delete and the CAS leaves
+    `audio_path` pointing at a deleted file (that job fails terminally). Runs at the first worker
+    start (no 60 s delay as in v1): **ARC-15:** set `storage.audio_retention_days` only after the
+    ARC-18 copy.
   - `wallet_reconcile` (5 min, v1 QUO-04): `quota_reconcile_wallets(run)` (SECURITY DEFINER; a run
     already going → returns at once; candidates found without locks, then each re-checked under
     `FOR UPDATE SKIP LOCKED` — never all wallets locked): a wallet ≠ its ledger sum is SET to the
@@ -524,8 +528,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     → `failed` + the timeout message + `processing_failed`, and `legacy_reserve_refund` (SECURITY
     DEFINER) returns a v1 meeting-keyed reserve (`gen:<meeting>:reserve`, no settle/refund, once,
     failed meetings only; v1 QUO-02). Stuck jobs are failed and refunded by the runner.
-  - `scheduler_runs.lease_until` ≤ `last_started_at + 1 h` (CHECK): a poisoned lease cannot stop a
-    task for good; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
+  - `scheduler_runs.lease_until` ≤ `last_started_at + 1 h` (CHECK) — a compromised worker can still
+    push `last_started_at` into the future (ARC-10's admin view should flag a stale
+    `last_finished_at`); each stuck meeting is handled in its own savepoint; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
     run when `KEY_ENCRYPTION_SECRET` is unset; one bad key is `unknown`, never fatal.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
