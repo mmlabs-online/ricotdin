@@ -409,3 +409,15 @@ def test_a_huge_body_is_refused(client: TestClient, world: dict[str, Any], ai: P
     resp = client.post("/chat", headers={**_as(client, "a"), "content-type": "application/json"},
                        content=big)  # fmt: skip
     assert resp.status_code == 413
+
+
+def test_a_meeting_without_a_locked_model_uses_the_system_default(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "a")
+    mid = _meeting(world, "a", locked=False)
+    assert _ask(client, "a", meetingId=str(mid)).status_code == 200
+    assert ai.models == ["gemini:gemini-2.5-flash"]
+    assert _sql(world["db"], "SELECT generation_provider FROM meetings WHERE id = %s", mid) == [
+        (None,)
+    ]  # chat never locks a model
