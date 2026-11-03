@@ -346,13 +346,13 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   check (v1 checked taken first). Transcript `confidence` is returned as a number. Playback links live
   15 min (v1 60) because `/media` proxies Drive.
 
-### 0.7 v2 worker (ARC-08; slices 08a foundation, 08b transcription)
+### 0.7 v2 worker (ARC-08; slices 08a foundation, 08b transcription, 08c AI + analyse)
 
 - **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
   with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
   to start (exit 2) if `DATABASE_URL`, `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `JWT_PRIVATE_KEY`,
   `SMTP_PASSWORD` or a Supabase / migration credential is set (`policy.worker_env_problems`), and
-  **while pipeline steps are missing**: `analyse` / `embed` come with 08c–08d, so the worker is
+  **while pipeline steps are missing**: `embed` comes with 08d, so the worker is
   **not deployable before then** (no deploy target yet; tests drive `JobRunner` directly).
   Deployment (ARC-15 / OPS-05): `stop_grace_period: 30s` for the worker service.
 - **Runner** (`runner.py`, port of v1 `lib/jobs/worker.ts`): `claim_next_job` (`SKIP LOCKED`), one
@@ -421,6 +421,38 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     segments (and old chunks), `meetings.language`, `usage_log` (`audio_seconds`, `key_id` only if
     the admin key still exists) → `analyse`. A re-run with `transcription_settled` skips to
     `analyse`. Language-detect rejection (first time) → re-download, transcode, resubmit `en`.
+- **AI layer (08c, `app/services/ai/`; also used by the API's `regenerate`):**
+  - `catalog.py` = providers (`name`, `kind`, `base_url`) + models (the only model list;
+    `domain/models.REGISTERED` derives from it). **Adding a provider:** OpenAI-compatible (DeepSeek,
+    Mistral, …) = catalog rows only; its own API (Anthropic/Claude) = `adapters/<x>.py` + an
+    `ADAPTERS` entry in `service.py` + catalog rows. Keys: admin key `<name>_api_key` or env
+    `<NAME>_API_KEY` (generic fallback in `keys/source.py`). Users only get a model after an admin
+    adds it to `generation.allowed_models`.
+  - Adapters are stateless REST (no SDK): Gemini key in the `x-goog-api-key` header (never the
+    URL), OpenAI-compatible Bearer + Structured Outputs `strict`. Schemas are written once,
+    neutral (`schema.py`), converted per provider. Errors carry provider + status + short code only.
+  - `AIService.generate_json`: one `KeyPool` per provider, rebuilt only when the key set changes;
+    429 → cooldown + rotate, 401 / API_KEY_INVALID / OpenAI `insufficient_quota` → key disabled
+    process-wide; refusal, safety block, 400/404/413/422 → `AIRejected` (422, terminal, not
+    rotated); `ParseFailed` → one strict retry on the SAME key, then `AIBadOutput` (502, terminal);
+    exhausted / network / no key → 503 (worker retries). A `usage_log` row per provider request
+    (`tokens`, `ok` / `rate_limited` / `error`, `key_id` only if the admin key exists), best effort.
+  - Model lock (`model_lock.py`): stored pair wins; else upload pick (`payload.preferred_*`) →
+    `profiles.default_*` → `generation.system_default` (each only if allowed + registered), written
+    once (`WHERE generation_provider IS NULL`) at `start` (or at `analyse` / `regenerate` for older
+    meetings).
+  - Analysis (`analysis.py`): v1 prompt format (`[N] Speaker (s.s): text`, MEETING_DATE), prompt
+    text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: a parent dir of the code or
+    `/app`; the image copy is 08d). Untrusted output: fields fall back one by one, bad items
+    dropped, `due_date` must be a real `YYYY-MM-DD`, `proposed_at` an ISO date-time (no offset =
+    UTC), text bounded and NUL-free, no summary and no notes → `ParseFailed`.
+  - Step `analyse`: meeting not `processing` → job done; no segments → terminal; AI call outside any
+    transaction; then ONE transaction guarded by `locked_by`: `payload.analysis_done`, summary +
+    notes, to-dos + calendar replaced → `embed`. A re-run with `analysis_done` skips the AI.
+  - `POST /meetings/{id}/regenerate` (owner only; editor/viewer/stranger 403 like other meeting
+    writes; 404 unknown): 409 while `pending`/`processing`, 422 without transcript, 10 per user per
+    hour (`app.state.regenerate_limiter`), the locked model, overwrites summary + notes and sets
+    `done` (v1); to-dos/calendar untouched. `app.state.ai` is the API's `AIService`.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
   `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
   worker (or keep the worker stopped until then).

@@ -457,7 +457,7 @@ Ports MMG, MTD, CAL, PRF (done parts), folder sharing (Phase 12), QUO. Delete ru
 ---
 
 ### ARC-08 — Processing pipeline, worker & schedulers
-**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation) and 08b (transcription) done; 08c–08e open
+**Priority:** High | **Status:** ⚠️ Partial — 08a (worker foundation), 08b (transcription) and 08c (AI layer + analyse) done; 08d–08e open
 
 **User Story**  
 As a user, I want my uploaded or recorded audio processed into transcript, summary, notes, to-dos, calendar suggestions and embeddings by v2 so that results match v1.
@@ -519,8 +519,14 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
   (poll every 5 s; done → settle + segments + language + usage in one lock-guarded transaction,
   re-run skips to `analyse`; language-detect rejection → one resubmit with `en`). Submit uses
   auto-detect like v1 (08a passed `meetings.language`).
-- 08c AI service layer (Gemini / OpenAI / Grok), model lock (`lock_generation_model` hook,
-  allow-list check of `payload.preferred_*`), `analyse` + `regenerate`.
+- **08c AI layer — done (branch `feat/ARC-08c-ai-analyse`):** `app/services/ai/` — catalog
+  (providers + models, pure data), neutral response schema converted per provider, adapters over
+  REST (Gemini; OpenAI-compatible: OpenAI, Grok), `AIService` (one key pool per provider, same-key
+  strict retry, usage row per call incl. failures), per-meeting model lock (pick → user default →
+  system default, allow-listed only), step `analyse`, `POST /meetings/{id}/regenerate` (owner,
+  409 while processing, 10/h). Adding Claude later = `adapters/anthropic.py` + `ADAPTERS` entry +
+  catalog rows + `ANTHROPIC_API_KEY` (or an admin key); an OpenAI-compatible provider = catalog
+  rows only.
 - 08d `embed` (768 dims), `processing_done`, worker deploy target (own container, only
   `DATABASE_URL_WORKER`).
 - 08e schedulers: key health check, retention purge (audit `meeting.audio_purged` through a
@@ -541,6 +547,8 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - Video → audio extraction runs in the worker (moved from `/uploaded`); the extracted audio is
   not stored (the Drive file stays the original video).
 - Gemini audio transcription / long-audio chunking not ported (dead in v1).
+- 08c (2026-11-03): design for more AI providers later (Claude etc.): adapter per API kind,
+  catalog of providers/models; Claude itself not built yet.
 - 08b (2026-11-03): a transcript with no speech fails the meeting with a full refund (spec
   acceptance criterion; v1's job path marked it `done` with "No speech detected").
 
@@ -548,6 +556,9 @@ Highest-risk port (PRP, AIP, REL, PRV-02, §7, §9e, §9i, §9m). All provider c
 - 08a: `app/api/app/worker/{runner,start,audio,jobs,errors,backoff,messages,probe,quota,policy,__main__}.py`,
   migration `0005_worker_grants`, `app/api/app/routers/meetings.py` (`process`)
 - 08b: `app/api/app/worker/{speechmatics,speechmatics_client,transcribe_poll,steps}.py`
+- 08c: `app/api/app/services/ai/{catalog,schema,types,service,prompts,model_lock,analysis}.py`,
+  `adapters/{gemini,openai_compat}.py`, `app/api/app/worker/analyse.py`, `routers/meetings.py`
+  (`regenerate`)
 - Tests 08a: `test_worker_{backoff,errors,messages,probe,quota,policy,main,audio}.py`,
   `test_worker_runner_integration.py`, `test_worker_grants_integration.py`
 - Expected later: `app/api/app/pipeline/**`, `app/api/app/ai/**`, `app/api/app/schedulers/**`
