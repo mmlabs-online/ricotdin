@@ -806,10 +806,15 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `actionErrorKey`), `lib/chat/chat.ts` (untrusted chat answers: malformed citations dropped).
   **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
   `lib/markdown.ts`:** headings, lists, bold/italic/code; links and images become their text, HTML
-  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`. Regenerate and
-  "process again" (both charge quota) ask first; a failed meeting's "Process again" does not.
-  After `/process` the page shows `processing` until polling brings the worker's status (no
-  immediate refetch). The `/media` link (`useApiUrl()` + path) is refetched when the player
+  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`; its regex parts
+  are length-bounded (no quadratic scan). Regenerate (owner, `done`) and "Process again" (owner,
+  **`failed` only**: the worker claims only `pending`/`failed` meetings, so `/process` on a `done`
+  meeting queues a job that ends without work — **API follow-up** before offering it) both charge
+  quota and ask first. After `/process` the meeting stays `failed` until a worker claims it: the
+  page shows it as queued (`isQueued`: same `updated_at` as when queued) and polls up to 20 min.
+  Optimistic edits undo only their own change (`restoreRow`); notices use `mutateAsync` (a
+  `mutate()` callback is skipped when another edit started since). A failed background refetch
+  keeps the page; only 403/404 or no data replaces it. The `/media` link (`useApiUrl()` + path) is refetched when the player
   errors (at most every 30 s). `?t=<s>` opens the transcript tab and seeks once transcript + player
   are ready. A delete from the detail page returns to `/meetings` with router state
   `{notice: 'deleted'|'warning'}` (cleared so a reload does not repeat it).
