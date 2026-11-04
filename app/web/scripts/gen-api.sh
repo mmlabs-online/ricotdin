@@ -6,5 +6,5 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 spec="$(mktemp -d)/openapi.json"
 (cd "$here/../api" && uv run python -m scripts.dump_openapi "$spec" >/dev/null)
-npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 \
+npm_config_ignore_scripts=true npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 \
   openapi-typescript "$spec" -o "$here/src/api/schema.d.ts"

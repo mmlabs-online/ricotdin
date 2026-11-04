@@ -10,7 +10,7 @@ export type RuntimeConfig = {
 
 export class ConfigError extends Error {}
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']) // same as deploy/15-ricotdin-config.envsh
 
 function parseOrigin(name: string, raw: unknown): string {
   if (typeof raw !== 'string' || raw.trim() !== raw || raw === '') {

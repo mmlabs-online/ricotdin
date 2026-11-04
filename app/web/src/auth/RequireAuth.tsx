@@ -17,7 +17,7 @@ export function RequireRole({ role, children }: { role: Role; children: ReactNod
     case 'wait':
       return <FullPageLoading />
     case 'signIn':
-      return <Navigate to={signInPath(location.pathname, location.search, location.hash)} replace />
+      return <Navigate to={signInPath(location.pathname, location.search)} replace />
     case 'forbidden':
       return <ForbiddenPage />
     case 'allow':

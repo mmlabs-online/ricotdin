@@ -78,10 +78,20 @@ describe('AuthSession', () => {
     const f = fakeDeps([json(200, tokenBody('t1')), () => new Response(null, { status: 204 })])
     const s = new AuthSession('https://api.example.com', f.deps)
     await s.start()
-    await s.signOut()
+    expect(await s.signOut()).toBe(true)
     expect(s.getState()).toEqual({ status: 'signedOut' })
     expect(s.accessToken).toBeNull()
     expect(f.posted.at(-1)).toEqual({ type: 'signedOut' })
+  })
+
+  it('reports a sign-out the server did not confirm (the cookie may still be valid)', async () => {
+    for (const answer of [json(500, {}), json(403, {}), () => { throw new TypeError('offline') }]) {
+      const f = fakeDeps([json(200, tokenBody('t1')), answer])
+      const s = new AuthSession('https://api.example.com', f.deps)
+      await s.start()
+      expect(await s.signOut()).toBe(false)
+      expect(s.getState()).toEqual({ status: 'signedOut' }) // this browser forgets it anyway
+    }
   })
 
   it('surfaces sign-in errors with the API code', async () => {

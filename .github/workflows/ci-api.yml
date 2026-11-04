@@ -65,6 +65,8 @@ jobs:
         run: uv run python -m scripts.dump_openapi openapi.json
 
       - name: Web API types match the API (app/web/scripts/gen-api.sh)
+        env:
+          npm_config_ignore_scripts: 'true'
         run: |
           npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 \
             openapi-typescript openapi.json -o ../web/src/api/schema.d.ts

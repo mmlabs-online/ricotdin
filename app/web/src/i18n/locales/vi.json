@@ -60,18 +60,51 @@
       "rate_limited": "Bạn thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
       "generic": "Đăng nhập thất bại. Vui lòng thử lại."
-    }
+    },
+    "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt."
   },
   "page": {
     "workspace": "Không gian làm việc",
     "comingSoon": "Màn hình này đang được kết nối với hệ thống mới.",
-    "meetings": { "title": "Cuộc họp", "subtitle": "Tìm kiếm, xem lại và đặt câu hỏi về mọi cuộc trò chuyện." },
-    "meetingDetail": { "title": "Cuộc họp", "subtitle": "Tóm tắt, ghi chú, việc cần làm và bản ghi.", "back": "Quay lại danh sách cuộc họp" },
-    "record": { "eyebrow": "Cuộc họp mới", "title": "Ghi âm hoặc tải tệp lên", "subtitle": "Ghi lại cuộc trò chuyện. Ricotdin sẽ xử lý phần còn lại." },
-    "chat": { "title": "Hỏi về các cuộc họp", "subtitle": "Câu trả lời có liên kết về nguồn." },
-    "profile": { "eyebrow": "Tài khoản", "title": "Hồ sơ & tùy chọn", "subtitle": "Quản lý tài khoản, giao diện và mức sử dụng." },
-    "notFound": { "title": "Không tìm thấy trang", "subtitle": "Trang bạn tìm không tồn tại.", "home": "Về danh sách cuộc họp" },
-    "forbidden": { "title": "Không có quyền truy cập", "subtitle": "Bạn cần quyền quản trị để mở trang này.", "home": "Về danh sách cuộc họp" }
+    "meetings": {
+      "title": "Cuộc họp",
+      "subtitle": "Tìm kiếm, xem lại và đặt câu hỏi về mọi cuộc trò chuyện."
+    },
+    "meetingDetail": {
+      "title": "Cuộc họp",
+      "subtitle": "Tóm tắt, ghi chú, việc cần làm và bản ghi.",
+      "back": "Quay lại danh sách cuộc họp"
+    },
+    "record": {
+      "eyebrow": "Cuộc họp mới",
+      "title": "Ghi âm hoặc tải tệp lên",
+      "subtitle": "Ghi lại cuộc trò chuyện. Ricotdin sẽ xử lý phần còn lại."
+    },
+    "chat": {
+      "title": "Hỏi về các cuộc họp",
+      "subtitle": "Câu trả lời có liên kết về nguồn."
+    },
+    "profile": {
+      "eyebrow": "Tài khoản",
+      "title": "Hồ sơ & tùy chọn",
+      "subtitle": "Quản lý tài khoản, giao diện và mức sử dụng."
+    },
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "subtitle": "Trang bạn tìm không tồn tại.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "forbidden": {
+      "title": "Không có quyền truy cập",
+      "subtitle": "Bạn cần quyền quản trị để mở trang này.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "verifyEmail": {
+      "title": "Xác minh email"
+    },
+    "resetPassword": {
+      "title": "Đặt lại mật khẩu"
+    }
   },
   "admin": {
     "brand": "Quản trị",

@@ -13,8 +13,11 @@ function withToken(request: Request, token: string | null): Request {
   return next
 }
 
-export function authFetch(session: AuthSession, fetchFn: typeof fetch = fetch) {
+/** The access token goes only to the API origin; any other URL is fetched as-is. */
+export function authFetch(session: AuthSession, apiUrl: string, fetchFn: typeof fetch = (...a) => fetch(...a)) {
+  const apiOrigin = new URL(apiUrl).origin
   return async (input: Request): Promise<Response> => {
+    if (new URL(input.url).origin !== apiOrigin) return fetchFn(input)
     const retry = input.clone() // the body can be read only once
     const token = await session.getToken()
     const first = await fetchFn(withToken(input, token))
@@ -25,5 +28,5 @@ export function authFetch(session: AuthSession, fetchFn: typeof fetch = fetch) {
 }
 
 export function createApiClient(apiUrl: string, session: AuthSession): ApiClient {
-  return createClient<paths>({ baseUrl: apiUrl, fetch: authFetch(session) })
+  return createClient<paths>({ baseUrl: apiUrl, fetch: authFetch(session, apiUrl) })
 }

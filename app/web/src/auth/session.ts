@@ -119,14 +119,18 @@ export class AuthSession {
     return msg.user
   }
 
-  async signOut(): Promise<void> {
+  /** Always forgets the session in this browser. false = the API did not confirm the logout, so
+   * the refresh cookie may still work (shared computer: the caller must tell the user). */
+  async signOut(): Promise<boolean> {
+    let confirmed = false
     try {
-      await this.post('/auth/logout')
+      confirmed = (await this.post('/auth/logout')).ok
     } catch {
-      // offline: the cookie stays until it expires, but this browser forgets the session
+      // offline
     }
     this.clear()
     this.broadcast({ type: 'signedOut' })
+    return confirmed
   }
 
   close(): void {

@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
-import { Navigate, useNavigate, useSearchParams } from 'react-router'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Languages } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
@@ -15,6 +15,7 @@ export function SignInPage() {
   const { state, session } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
+  const signOutFailed = (useLocation().state as { signOutFailed?: boolean } | null)?.signOutFailed === true
   const next = safeReturnTo(params.get('next'))
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -68,6 +69,11 @@ export function SignInPage() {
           <span className="eyebrow">{t('auth.welcome')}</span>
           <h1>{t('auth.title')}</h1>
           <p>{t('auth.subtitle')}</p>
+          {signOutFailed && (
+            <p className="auth-error" role="alert">
+              {t('auth.signOutFailed')}
+            </p>
+          )}
           <label>
             {t('auth.identifier')}
             <input

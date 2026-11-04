@@ -4,6 +4,7 @@ import { ErrorScreen } from '../components/ErrorScreen'
 import { AdminSectionPage } from '../routes/AdminSectionPage'
 import { MeetingDetailPage } from '../routes/MeetingDetailPage'
 import { PlaceholderPage } from '../routes/PlaceholderPage'
+import { PublicPlaceholderPage } from '../routes/PublicPlaceholderPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
 import { ADMIN_SECTIONS } from './adminSections'
@@ -13,6 +14,9 @@ import { AppShell } from './AppShell'
 export function createRouter() {
   return createBrowserRouter([
     { path: '/sign-in', element: <SignInPage />, errorElement: <ErrorScreen /> },
+    // Email-link targets (#token=…) stay public: never redirect them through /sign-in.
+    { path: '/verify-email', element: <PublicPlaceholderPage titleKey="page.verifyEmail.title" />, errorElement: <ErrorScreen /> },
+    { path: '/reset-password', element: <PublicPlaceholderPage titleKey="page.resetPassword.title" />, errorElement: <ErrorScreen /> },
     {
       path: '/admin',
       element: (

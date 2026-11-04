@@ -1,5 +1,9 @@
 # ARC-11 SPA server. Rendered by the nginx image from /etc/nginx/templates (RICOTDIN_* only).
+# Access log without query strings or fragments-turned-queries: $uri, never $request.
+log_format ricotdin_web '$remote_addr [$time_local] "$request_method $uri" $status $body_bytes_sent';
+
 server {
+  access_log /dev/stdout ricotdin_web;
   listen 8080;
   server_name _;
   root /usr/share/nginx/html;

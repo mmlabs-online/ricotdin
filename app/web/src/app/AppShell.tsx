@@ -69,8 +69,8 @@ export function AppShell() {
 
   const signOut = async () => {
     setMenuOpen(false)
-    await session.signOut()
-    navigate('/sign-in', { replace: true })
+    const confirmed = await session.signOut()
+    navigate('/sign-in', { replace: true, state: confirmed ? null : { signOutFailed: true } })
   }
 
   return (

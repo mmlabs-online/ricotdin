@@ -14,8 +14,10 @@ export function guardDecision(session: SessionView, needs: Role): Decision {
   return 'allow'
 }
 
-/** Only an in-app path is a valid place to return to after sign-in (no open redirect). */
-export function safeReturnTo(raw: string | null | undefined): string {
+/** Only an in-app path is a valid place to return to after sign-in (no open redirect).
+ * The fragment is dropped: email links carry their token there, and it must never reach a query. */
+export function safeReturnTo(rawWithHash: string | null | undefined): string {
+  const raw = rawWithHash?.split('#')[0]
   if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return HOME_PATH
   if ([...raw].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) return HOME_PATH
   const path = raw.split(/[?#]/)[0] ?? ''
@@ -23,8 +25,8 @@ export function safeReturnTo(raw: string | null | undefined): string {
   return raw
 }
 
-export function signInPath(pathname: string, search: string, hash: string): string {
-  const target = `${pathname}${search}${hash}`
+export function signInPath(pathname: string, search: string): string {
+  const target = `${pathname}${search}`
   if (target === '/' || target === HOME_PATH) return SIGN_IN_PATH
   return `${SIGN_IN_PATH}?next=${encodeURIComponent(target)}`
 }

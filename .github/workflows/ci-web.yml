@@ -59,9 +59,11 @@ jobs:
 
       - name: Refuses to start without a valid API origin
         run: |
-          if docker run --rm -e RICOTDIN_API_URL='https://x.test/;evil' ricotdin-web:ci; then
-            echo "started with a bad RICOTDIN_API_URL"; exit 1
-          fi
+          for bad in 'https://x.test/;evil' 'http://api.example.test' "$(printf 'https://a.test\n;evil')" ''; do
+            if docker run --rm -e RICOTDIN_API_URL="$bad" ricotdin-web:ci; then
+              echo "started with a bad RICOTDIN_API_URL: $bad"; exit 1
+            fi
+          done
 
       - name: Serves the app, its runtime config and the security headers
         run: |

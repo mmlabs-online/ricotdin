@@ -17,8 +17,12 @@ describe('guardDecision', () => {
 })
 
 describe('safeReturnTo', () => {
-  it('keeps same-app paths with query and hash', () => {
-    expect(safeReturnTo('/meetings/abc?tab=notes#t=12')).toBe('/meetings/abc?tab=notes#t=12')
+  it('keeps same-app paths with their query', () => {
+    expect(safeReturnTo('/meetings/abc?tab=notes')).toBe('/meetings/abc?tab=notes')
+  })
+  it('drops the fragment (email-link tokens live there and must never reach a URL query)', () => {
+    expect(safeReturnTo('/reset-password#token=abc')).toBe('/reset-password')
+    expect(safeReturnTo('/meetings/abc?x=1#t=12')).toBe('/meetings/abc?x=1')
   })
   it('refuses anything that could leave the app', () => {
     for (const raw of [null, '', 'meetings', '//evil.com', '/\\evil.com', 'https://evil.com', '/sign-in', '/sign-in?next=/x', ' /x', '/x\n']) {
@@ -28,10 +32,10 @@ describe('safeReturnTo', () => {
 })
 
 describe('signInPath', () => {
-  it('encodes the place to return to', () => {
-    expect(signInPath('/meetings/a b', '?x=1', '#h')).toBe('/sign-in?next=%2Fmeetings%2Fa%20b%3Fx%3D1%23h')
+  it('encodes the place to return to, without the fragment', () => {
+    expect(signInPath('/meetings/a b', '?x=1')).toBe('/sign-in?next=%2Fmeetings%2Fa%20b%3Fx%3D1')
   })
   it('omits next for the default page', () => {
-    expect(signInPath('/', '', '')).toBe('/sign-in')
+    expect(signInPath('/', '')).toBe('/sign-in')
   })
 })

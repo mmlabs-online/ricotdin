@@ -16,6 +16,8 @@ describe('parseRuntimeConfig', () => {
     expect(parseRuntimeConfig({ apiUrl: 'http://localhost:8000' }).apiUrl).toBe('http://localhost:8000')
     expect(parseRuntimeConfig({ apiUrl: 'http://127.0.0.1:8000' }).apiUrl).toBe('http://127.0.0.1:8000')
     expect(() => parseRuntimeConfig({ apiUrl: 'http://api.example.com' })).toThrow(ConfigError)
+    // same rule as deploy/15-ricotdin-config.envsh
+    expect(() => parseRuntimeConfig({ apiUrl: 'http://[::1]:8000' })).toThrow(ConfigError)
   })
 
   it('rejects anything that is not an origin', () => {
