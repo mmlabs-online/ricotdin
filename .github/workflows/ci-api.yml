@@ -5,10 +5,10 @@ on:
   push:
     branches: [main, dev, 'release/**']
     # legacy schema/migrations feed the v1↔v2 parity test (ARC-02).
-    paths: ['app/api/**', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
   pull_request:
     branches: [main, dev, 'release/**']
-    paths: ['app/api/**', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
 
 permissions:
   contents: read
@@ -63,6 +63,15 @@ jobs:
 
       - name: OpenAPI document
         run: uv run python -m scripts.dump_openapi openapi.json
+
+      - name: Web API types match the API (app/web/scripts/gen-api.sh)
+        env:
+          npm_config_ignore_scripts: 'true'
+        run: |
+          npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 \
+            openapi-typescript openapi.json -o ../web/src/api/schema.d.ts
+          git diff --exit-code -- ../web/src/api/schema.d.ts \
+            || { echo "::error::app/web/src/api/schema.d.ts is stale: run app/web/scripts/gen-api.sh"; exit 1; }
 
       - name: Upload openapi.json
         uses: actions/upload-artifact@v4

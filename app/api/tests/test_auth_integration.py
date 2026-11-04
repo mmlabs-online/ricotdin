@@ -350,7 +350,11 @@ def test_refresh_rotates_and_reuse_revokes_the_family(api: Any, env: Any) -> Non
     assert second and second != first
     # Right after rotation the old token is a race (second tab / retry): 401, family intact.
     client.cookies.set(REFRESH_COOKIE, first, domain="api.ricotdin.test", path="/auth")
-    assert _refresh(client).status_code == 401
+    raced = _refresh(client)
+    assert raced.status_code == 401
+    # ARC-11: the race answer must not delete the cookie — in a browser the jar is shared, so
+    # clearing it would wipe the token the winning tab just received.
+    assert "set-cookie" not in raced.headers
     client.cookies.set(REFRESH_COOKIE, second, domain="api.ricotdin.test", path="/auth")
     r = _refresh(client)
     assert r.status_code == 200

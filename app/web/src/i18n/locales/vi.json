@@ -1,0 +1,137 @@
+{
+  "app": {
+    "name": "Ricotdin",
+    "loading": "Đang tải…",
+    "privacy": "Cuộc họp của bạn là riêng tư"
+  },
+  "nav": {
+    "main": "Điều hướng chính",
+    "mobile": "Điều hướng trên di động",
+    "meetings": "Cuộc họp",
+    "record": "Ghi âm",
+    "chat": "Trò chuyện",
+    "profile": "Hồ sơ",
+    "admin": "Quản trị",
+    "collapse": "Thu gọn thanh bên",
+    "expand": "Mở rộng thanh bên"
+  },
+  "menu": {
+    "language": "Ngôn ngữ",
+    "colorTheme": "Màu giao diện",
+    "lightMode": "Giao diện sáng",
+    "darkMode": "Giao diện tối",
+    "signOut": "Đăng xuất",
+    "useTheme": "Dùng giao diện {{name}}",
+    "openFor": "Menu tài khoản của {{name}}"
+  },
+  "theme": {
+    "rose": "Hồng",
+    "sage": "Xanh xô thơm",
+    "plum": "Mận",
+    "ocean": "Đại dương"
+  },
+  "language": {
+    "label": "Ngôn ngữ",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "enShort": "EN",
+    "viShort": "VI"
+  },
+  "auth": {
+    "welcome": "Chào mừng trở lại",
+    "title": "Đăng nhập vào Ricotdin",
+    "subtitle": "Tiếp tục đến các cuộc họp, ghi chú và trợ lý của bạn.",
+    "identifier": "Email hoặc tên người dùng",
+    "identifierPlaceholder": "Nhập email hoặc tên người dùng",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Mật khẩu của bạn",
+    "forgot": "Quên mật khẩu?",
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập…",
+    "newHere": "Chưa có tài khoản?",
+    "createAccount": "Tạo tài khoản",
+    "comingSoon": "Trang này chưa sẵn sàng.",
+    "errors": {
+      "missing": "Nhập email hoặc tên người dùng và mật khẩu.",
+      "invalid_credentials": "Email, tên người dùng hoặc mật khẩu không đúng.",
+      "email_not_verified": "Vui lòng xác minh email trước. Hãy kiểm tra hộp thư để lấy liên kết.",
+      "account_disabled": "Tài khoản này đã bị vô hiệu hóa. Hãy liên hệ quản trị viên.",
+      "rate_limited": "Bạn thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đăng nhập thất bại. Vui lòng thử lại."
+    },
+    "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt."
+  },
+  "page": {
+    "workspace": "Không gian làm việc",
+    "comingSoon": "Màn hình này đang được kết nối với hệ thống mới.",
+    "meetings": {
+      "title": "Cuộc họp",
+      "subtitle": "Tìm kiếm, xem lại và đặt câu hỏi về mọi cuộc trò chuyện."
+    },
+    "meetingDetail": {
+      "title": "Cuộc họp",
+      "subtitle": "Tóm tắt, ghi chú, việc cần làm và bản ghi.",
+      "back": "Quay lại danh sách cuộc họp"
+    },
+    "record": {
+      "eyebrow": "Cuộc họp mới",
+      "title": "Ghi âm hoặc tải tệp lên",
+      "subtitle": "Ghi lại cuộc trò chuyện. Ricotdin sẽ xử lý phần còn lại."
+    },
+    "chat": {
+      "title": "Hỏi về các cuộc họp",
+      "subtitle": "Câu trả lời có liên kết về nguồn."
+    },
+    "profile": {
+      "eyebrow": "Tài khoản",
+      "title": "Hồ sơ & tùy chọn",
+      "subtitle": "Quản lý tài khoản, giao diện và mức sử dụng."
+    },
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "subtitle": "Trang bạn tìm không tồn tại.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "forbidden": {
+      "title": "Không có quyền truy cập",
+      "subtitle": "Bạn cần quyền quản trị để mở trang này.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "verifyEmail": {
+      "title": "Xác minh email"
+    },
+    "resetPassword": {
+      "title": "Đặt lại mật khẩu"
+    }
+  },
+  "admin": {
+    "brand": "Quản trị",
+    "eyebrow": "Quản trị",
+    "subtitle": "Quản lý hạ tầng, quyền truy cập và vận hành của hệ thống.",
+    "sections": "Mục quản trị",
+    "returnToApp": "Quay lại không gian làm việc",
+    "tabs": {
+      "overview": "Tổng quan",
+      "users": "Người dùng",
+      "pipeline": "Pipeline",
+      "usage": "Mức sử dụng",
+      "keys": "Khóa API",
+      "storage": "Lưu trữ",
+      "config": "Cấu hình",
+      "activity": "Hoạt động",
+      "audit": "Nhật ký kiểm tra",
+      "features": "Tính năng",
+      "health": "Tình trạng",
+      "docs": "Tài liệu API"
+    }
+  },
+  "error": {
+    "title": "Đã xảy ra lỗi",
+    "body": "Trang gặp lỗi không mong muốn. Hãy tải lại để thử lại.",
+    "reload": "Tải lại",
+    "config": "Ứng dụng chưa được cấu hình đúng. Hãy liên hệ quản trị viên.",
+    "unavailable": "Hiện không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    "retry": "Thử lại"
+  }
+}
