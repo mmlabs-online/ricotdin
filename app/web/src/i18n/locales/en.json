@@ -574,7 +574,10 @@
     "placeholder": "Ask about decisions, action items, or past discussions…",
     "hint": "Enter sends, Shift+Enter adds a line. Ricotdin answers only from meetings you can access.",
     "citation": "{{title}} · {{time}}",
-    "citationUnknown": "Meeting · {{time}}"
+    "citationUnknown": "Meeting · {{time}}",
+    "switch": "Show",
+    "notReady": "The conversation is still loading. Try again in a moment.",
+    "separator": ", "
   },
   "profile": {
     "details": {

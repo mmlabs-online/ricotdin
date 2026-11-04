@@ -190,6 +190,8 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     const ms = initialSeek.current
     if (ms === null || !transcript.isSuccess || !audioSettled) return
     initialSeek.current = null
+    // arriving from a citation: focus the line it points to, not <body> (2.4.3)
+    focusAfter.current = ['.transcript-row.active button', '#transcript-title']
     setActiveSeg(nearestSegment(segments, ms)?.id ?? null)
     player.current?.seekTo(ms)
   }, [transcript.isSuccess, audioSettled, segments])

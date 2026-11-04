@@ -66,6 +66,16 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
   const folder = scope.kind === 'folder' ? folderList.find((f) => f.id === scope.folderId) : undefined
   const titles = useMemo(() => new Map((meetings.data ?? []).map((m) => [m.id, displayText(m.title)])), [meetings.data])
   const unknownFolder = scope.kind === 'folder' && folders.isSuccess && !folder
+  const location = useLocation()
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const [pick, setPick] = useState(scope.kind === 'folder' ? scope.folderId : '')
+  // the view is rebuilt for every scope: put focus on its heading when the user switched (2.4.3)
+  const switched = (location.state as { scopeSwitch?: unknown } | null)?.scopeSwitch === true
+  useEffect(() => {
+    if (switched) headingRef.current?.focus()
+  }, [switched])
+  const go = (folderId: string) =>
+    void navigate(folderId ? `/chat?folder=${encodeURIComponent(folderId)}` : '/chat', { state: { scopeSwitch: true } })
 
   // a stored "all meetings" session that is gone (deleted, or not ours) is forgotten
   const gone = chat.data?.gone === true
@@ -81,20 +91,18 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
   function send(e?: FormEvent) {
     e?.preventDefault()
     // only once the conversation is loaded: a question sent before would start a new session
-    if (ask.isPending || unknownFolder || !chat.isSuccess) return
+    if (ask.isPending || unknownFolder) return
+    if (!chat.isSuccess) return showError('chatPage.notReady')
     const problem = questionProblem(draft)
-    if (problem) {
-      setError(problem === 'empty' ? 'chat.errors.empty' : 'chat.errors.tooLong')
-      return
-    }
+    if (problem) return showError(problem === 'empty' ? 'chat.errors.empty' : 'chat.errors.tooLong')
     const message = draft.trim()
     setError(null)
     setAsked(message)
+    setDraft('') // cleared now, so text typed while waiting is kept; restored on failure
     setAnnounce(t('chat.thinking'))
     ask
       .mutateAsync({ message, sessionId, prior: messages })
       .then((res) => {
-        setDraft('')
         setAnnounce(t('chat.answered'))
         if (typeof res.sessionId === 'string') {
           setSession(res.sessionId)
@@ -102,10 +110,18 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
         }
       })
       .catch((err: unknown) => {
-        setError(chatErrorKey(err))
-        setAnnounce('')
+        setDraft((now) => (now ? now : message))
+        showError(chatErrorKey(err))
       })
       .finally(() => setAsked(null))
+  }
+
+  // the same message again is announced again: the alert is a new node each time (4.1.3)
+  const [errorN, setErrorN] = useState(0)
+  function showError(key: string) {
+    setError(key)
+    setErrorN((n) => n + 1)
+    setAnnounce('')
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -135,7 +151,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
 
   return (
     <div className="chat-layout">
-      <aside className="chat-history" aria-label={t('chatPage.scopes')}>
+      <div className="chat-history">
         <Button variant="primary" className="full" onClick={newChat} aria-disabled={ask.isPending}>
           <Plus size={16} aria-hidden="true" /> {t('chatPage.new')}
         </Button>
@@ -143,7 +159,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
         <nav aria-label={t('chatPage.scopes')}>
           <ul className="chat-scope-list">
             <li>
-              <Link to="/chat" className={scope.kind === 'all' ? 'chat-link active' : 'chat-link'} aria-current={scope.kind === 'all' ? 'page' : undefined}>
+              <Link to="/chat" state={{ scopeSwitch: true }} className={scope.kind === 'all' ? 'chat-link active' : 'chat-link'} aria-current={scope.kind === 'all' ? 'page' : undefined}>
                 {t('chatPage.all')}
               </Link>
             </li>
@@ -153,30 +169,42 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
                 <li key={f.id}>
                   <Link
                     to={`/chat?folder=${encodeURIComponent(f.id)}`}
+                    state={{ scopeSwitch: true }}
                     className={active ? 'chat-link active folder-name' : 'chat-link folder-name'}
                     aria-current={active ? 'page' : undefined}
                   >
                     {displayText(f.name)}
-                    {f.myRole !== 'owner' && <span className="badge">{t('meetings.folders.shared')}</span>}
+                    {f.myRole !== 'owner' && (
+                      <>
+                        <span className="sr-only">{t('chatPage.separator')}</span>
+                        <span className="badge">{t('meetings.folders.shared')}</span>
+                      </>
+                    )}
                   </Link>
                 </li>
               )
             })}
           </ul>
         </nav>
-      </aside>
+      </div>
       <section className="conversation" aria-labelledby={scopeId}>
         <div className="chat-head">
           <div>
-            <h1 id={scopeId}>{t('page.chat.title')}</h1>
+            <h1 id={scopeId} ref={headingRef} tabIndex={-1}>
+              {t('page.chat.title')}
+            </h1>
             <p>{t('chatPage.scopeLine', { scope: scopeName })}</p>
           </div>
-          <label className="chat-scope-select">
-            <span className="sr-only">{t('chatPage.askAbout')}</span>
-            <select
-              value={scope.kind === 'folder' ? scope.folderId : ''}
-              onChange={(e) => void navigate(e.target.value ? `/chat?folder=${encodeURIComponent(e.target.value)}` : '/chat')}
-            >
+          {/* changing the scope is a separate step (3.2.2): arrowing through the list does nothing */}
+          <form
+            className="chat-scope-select"
+            onSubmit={(e) => {
+              e.preventDefault()
+              go(pick)
+            }}
+          >
+            <label htmlFor={`${scopeId}-select`}>{t('chatPage.askAbout')}</label>
+            <select id={`${scopeId}-select`} value={pick} onChange={(e) => setPick(e.target.value)}>
               <option value="">{t('chatPage.all')}</option>
               {scope.kind === 'folder' && !folder && <option value={scope.folderId}>{t('chatPage.folderUnknown')}</option>}
               {folderList.map((f) => (
@@ -185,7 +213,8 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
                 </option>
               ))}
             </select>
-          </label>
+            <Button type="submit">{t('chatPage.switch')}</Button>
+          </form>
         </div>
         <p className="sr-only" role="status">
           {announce}
@@ -216,7 +245,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
           )}
         </div>
         {error && (
-          <p className="field-error chat-error" role="alert" id={`${inputId}-error`}>
+          <p key={errorN} className="field-error chat-error" role="alert" id={`${inputId}-error`}>
             {t(error)}
           </p>
         )}

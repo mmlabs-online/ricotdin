@@ -47,3 +47,12 @@ export function profileErrorKey(form: ProfileForm, err: unknown): string {
   if (form === 'model' && err.status === 400) return 'profile.errors.modelNotAllowed'
   return 'profile.errors.generic'
 }
+
+/** The password field an error message belongs to (marked invalid and described by it), or null
+ * for errors about the form as a whole. */
+export function passwordField(key: string): 'current' | 'next' | 'confirm' | null {
+  if (key === 'profile.password.currentRequired' || key === 'profile.errors.wrongPassword') return 'current'
+  if (key.startsWith('auth.validation.') || key === 'profile.errors.passwordRejected' || key === 'profile.password.same') return 'next'
+  if (key === 'profile.password.mismatch') return 'confirm'
+  return null
+}

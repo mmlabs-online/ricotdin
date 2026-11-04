@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
-import { modelValue, parseModelValue, passwordProblem, profileErrorKey, quotaParts } from './profile'
+import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from './profile'
 
 describe('quotaParts', () => {
   it('hours and minutes, never negative (the raw balance may be)', () => {
@@ -44,5 +44,17 @@ describe('profileErrorKey', () => {
     expect(profileErrorKey('details', e(0, 'network'))).toBe('profile.errors.network')
     expect(profileErrorKey('details', e(500))).toBe('profile.errors.generic')
     expect(profileErrorKey('details', new Error('x'))).toBe('profile.errors.generic')
+  })
+})
+
+describe('passwordField', () => {
+  it('names the field each error belongs to', () => {
+    expect(passwordField('profile.password.currentRequired')).toBe('current')
+    expect(passwordField('profile.errors.wrongPassword')).toBe('current')
+    expect(passwordField('auth.validation.passwordShort')).toBe('next')
+    expect(passwordField('profile.errors.passwordRejected')).toBe('next')
+    expect(passwordField('profile.password.same')).toBe('next')
+    expect(passwordField('profile.password.mismatch')).toBe('confirm')
+    expect(passwordField('profile.errors.network')).toBeNull()
   })
 })

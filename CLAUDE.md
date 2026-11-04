@@ -841,6 +841,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `ricotdin_test_*` scratch DB with in-memory storage (the browser's Drive PUT is intercepted),
   canned AI and a stand-in worker; test-only, never deployed. `npm run e2e` needs `DATABASE_URL`
   and a build; CI job `e2e` in `ci-web.yml`.
+  A11y (13c review): a scope change focuses the Chat page `h1` (router state `scopeSwitch`); the
+  scope select changes only with its "Show" button (3.2.2); arriving at a meeting by a citation
+  focuses the active transcript line; form results are a fresh node each time (`useNote`, keyed
+  alerts) so the same message is announced again; each password error marks only its own field
+  (`passwordField`). Open: `--border-strong` field borders are below 3:1 app-wide (1.4.11).
 
 ## 1. What we are building
 

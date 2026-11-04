@@ -295,3 +295,14 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .usage-list dt { color: var(--muted); font-size: 12px; }
 .usage-list dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 767px) { .theme-choice-grid { grid-template-columns: repeat(2, 1fr); } }
+/* ARC-13c accessibility review */
+.form-note:empty { display: block; margin: 0; } /* the empty alert stays rendered (4.1.3) */
+.theme-grid button { position: relative; }
+.mode-check { position: absolute; top: 12px; right: 12px; }
+.chat-scope-select { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chat-scope-select label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.chat-scope-select .button { min-height: 36px; }
+.chat-head { height: auto; min-height: 76px; gap: 12px; flex-wrap: wrap; }
+.chat-head h1:focus { outline: none; }
+.chat-head h1:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+@media (max-width: 767px) { html { scroll-padding-bottom: 120px; } }

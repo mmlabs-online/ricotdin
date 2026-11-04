@@ -19,14 +19,21 @@ import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { mediaSrc } from '../lib/meetings/detail'
-import { modelValue, parseModelValue, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
+import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
 import { AVATAR_TYPES, uploadErrorKey } from '../lib/upload/upload'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { COLOR_THEMES } from '../theme/theme'
 import { useTheme } from '../theme/ThemeProvider'
 
-type Note = { key: string; ok: boolean } | null
+type Note = { key: string; ok: boolean; n: number } | null
+
+/** A note setter that makes even the same message a new node, so it is announced again (4.1.3). */
+function useNote(): [Note, (key: string | null, ok?: boolean) => void] {
+  const [note, setNote] = useState<Note>(null)
+  const set = (key: string | null, ok = false) => setNote((prev) => (key ? { key, ok, n: (prev?.n ?? 0) + 1 } : null))
+  return [note, set]
+}
 
 /** A form's result line: success is a status, an error an alert, both kept in the DOM. */
 function FormNote({ note, id }: { note: Note; id?: string }) {
@@ -36,7 +43,7 @@ function FormNote({ note, id }: { note: Note; id?: string }) {
       <p className="sr-only" role="status">
         {note?.ok ? t(note.key) : ''}
       </p>
-      <p id={id} className={note && !note.ok ? 'form-note error' : 'form-note'} role="alert">
+      <p key={note?.n ?? 0} id={id} className={note && !note.ok ? 'form-note error' : 'form-note'} role="alert">
         {note && !note.ok ? t(note.key) : ''}
       </p>
       {note?.ok && (
@@ -101,13 +108,16 @@ function DetailsSection({ profile }: { profile: Profile }) {
   const avatar = useUploadAvatar()
   const [username, setUsername] = useState(profile.username ?? '')
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
-  const [note, setNote] = useState<Note>(null)
-  const [avatarNote, setAvatarNote] = useState<Note>(null)
+  const [note, setNote] = useNote()
+  const [avatarNote, setAvatarNote] = useNote()
   const [progress, setProgress] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const ids = { user: useId(), name: useId(), email: useId(), err: useId() }
+  const ids = { user: useId(), name: useId(), email: useId(), err: useId(), hint: useId(), avatarErr: useId() }
   const src = mediaSrc(apiUrl, profile.avatar_url)
-  const usernameError = note && !note.ok && note.key.startsWith('auth.validation') ? note.key : null
+  const usernameError =
+    note && !note.ok && (note.key.startsWith('auth.validation') || note.key === 'profile.errors.usernameTaken' || note.key === 'profile.errors.invalid')
+      ? note.key
+      : null
 
   function save(e: FormEvent) {
     e.preventDefault()
@@ -116,17 +126,17 @@ function DetailsSection({ profile }: { profile: Profile }) {
     const u = normalizeUsername(username)
     if (u !== (profile.username ?? '')) {
       const bad = validateUsername(u)
-      if (bad) return setNote({ key: bad, ok: false })
+      if (bad) return setNote(bad)
       changes.username = u
     }
     const name = displayName.trim()
     if (name !== (profile.display_name ?? '')) changes.display_name = name || null
-    if (Object.keys(changes).length === 0) return setNote({ key: 'profile.details.unchanged', ok: true })
+    if (Object.keys(changes).length === 0) return setNote('profile.details.unchanged', true)
     setNote(null)
     update
       .mutateAsync(changes)
-      .then(() => setNote({ key: 'profile.details.saved', ok: true }))
-      .catch((err: unknown) => setNote({ key: profileErrorKey('details', err), ok: false }))
+      .then(() => setNote('profile.details.saved', true))
+      .catch((err: unknown) => setNote(profileErrorKey('details', err)))
   }
 
   function pick(file: File | undefined) {
@@ -135,8 +145,8 @@ function DetailsSection({ profile }: { profile: Profile }) {
     setProgress(0)
     avatar
       .mutateAsync({ file, onProgress: setProgress })
-      .then(() => setAvatarNote({ key: 'profile.avatar.saved', ok: true }))
-      .catch((err: unknown) => setAvatarNote({ key: uploadErrorKey(err), ok: false }))
+      .then(() => setAvatarNote('profile.avatar.saved', true))
+      .catch((err: unknown) => setAvatarNote(uploadErrorKey(err)))
       .finally(() => {
         setProgress(null)
         if (fileRef.current) fileRef.current.value = ''
@@ -163,11 +173,16 @@ function DetailsSection({ profile }: { profile: Profile }) {
             aria-hidden="true"
             onChange={(e) => pick(e.target.files?.[0])}
           />
-          <Button onClick={() => fileRef.current?.click()} aria-disabled={avatar.isPending} aria-busy={avatar.isPending}>
+          <Button
+            onClick={() => !avatar.isPending && fileRef.current?.click()}
+            aria-disabled={avatar.isPending}
+            aria-busy={avatar.isPending}
+            aria-describedby={avatarNote && !avatarNote.ok ? `${ids.hint} ${ids.avatarErr}` : ids.hint}
+          >
             {avatar.isPending ? t('profile.avatar.uploading', { percent: Math.round((progress ?? 0) * 100) }) : t('profile.avatar.upload')}
           </Button>
-          <small>{t('profile.avatar.hint')}</small>
-          <FormNote note={avatarNote} />
+          <small id={ids.hint}>{t('profile.avatar.hint')}</small>
+          <FormNote note={avatarNote} id={ids.avatarErr} />
         </div>
       </div>
       <form onSubmit={save} noValidate>
@@ -176,7 +191,10 @@ function DetailsSection({ profile }: { profile: Profile }) {
           <input
             id={ids.user}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value)
+              setNote(null)
+            }}
             autoComplete="username"
             maxLength={30}
             aria-invalid={usernameError !== null}
@@ -185,7 +203,13 @@ function DetailsSection({ profile }: { profile: Profile }) {
         </div>
         <div className="field-row">
           <label htmlFor={ids.name}>{t('profile.details.displayName')}</label>
-          <input id={ids.name} value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoComplete="name" maxLength={100} />
+          <input
+            id={ids.name}
+            value={displayName}
+            onChange={(e) => {
+              setDisplayName(e.target.value)
+              setNote(null)
+            }} autoComplete="name" maxLength={100} />
         </div>
         <div className="field-row">
           <label htmlFor={ids.email}>{t('profile.details.email')}</label>
@@ -206,15 +230,15 @@ function PasswordSection() {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [note, setNote] = useState<Note>(null)
+  const [note, setNote] = useNote()
   const ids = { current: useId(), next: useId(), confirm: useId(), err: useId() }
-  const invalid = note !== null && !note.ok
+  const field = note && !note.ok ? passwordField(note.key) : null
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (change.isPending) return
     const problem = passwordProblem(current, next, confirm)
-    if (problem) return setNote({ key: problem, ok: false })
+    if (problem) return setNote(problem)
     setNote(null)
     change
       .mutateAsync({ current, next })
@@ -222,26 +246,33 @@ function PasswordSection() {
         setCurrent('')
         setNext('')
         setConfirm('')
-        setNote({ key: 'profile.password.changed', ok: true })
+        setNote('profile.password.changed', true)
       })
-      .catch((err: unknown) => setNote({ key: profileErrorKey('password', err), ok: false }))
+      .catch((err: unknown) => setNote(profileErrorKey('password', err)))
   }
 
-  const describedBy = invalid ? ids.err : undefined
+  const mark = (f: 'current' | 'next' | 'confirm') => ({
+    'aria-invalid': field === f,
+    'aria-describedby': field === f ? ids.err : undefined,
+  })
+  const edit = (set: (v: string) => void) => (e: { target: { value: string } }) => {
+    set(e.target.value)
+    if (note?.ok) setNote(null)
+  }
   return (
     <Section title={t('profile.password.title')} body={t('profile.password.body')}>
       <form onSubmit={submit} noValidate>
         <div className="field-row">
           <label htmlFor={ids.current}>{t('profile.password.current')}</label>
-          <input id={ids.current} type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" aria-invalid={invalid} aria-describedby={describedBy} />
+          <input id={ids.current} type="password" value={current} onChange={edit(setCurrent)} autoComplete="current-password" {...mark('current')} />
         </div>
         <div className="field-row">
           <label htmlFor={ids.next}>{t('profile.password.new')}</label>
-          <input id={ids.next} type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" aria-invalid={invalid} aria-describedby={describedBy} />
+          <input id={ids.next} type="password" value={next} onChange={edit(setNext)} autoComplete="new-password" {...mark('next')} />
         </div>
         <div className="field-row">
           <label htmlFor={ids.confirm}>{t('profile.password.confirm')}</label>
-          <input id={ids.confirm} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" aria-invalid={invalid} aria-describedby={describedBy} />
+          <input id={ids.confirm} type="password" value={confirm} onChange={edit(setConfirm)} autoComplete="new-password" {...mark('confirm')} />
         </div>
         <FormNote note={note} id={ids.err} />
         <Button type="submit" variant="primary" aria-disabled={change.isPending} aria-busy={change.isPending}>
@@ -262,11 +293,13 @@ function AppearanceSection() {
           <Sun size={20} aria-hidden="true" />
           <strong>{t('profile.appearance.light')}</strong>
           <span>{t('profile.appearance.lightHint')}</span>
+          {!dark && <Check size={16} aria-hidden="true" className="mode-check" />}
         </button>
         <button type="button" className={dark ? 'selected' : ''} aria-pressed={dark} onClick={() => setDark(true)}>
           <Moon size={20} aria-hidden="true" />
           <strong>{t('profile.appearance.dark')}</strong>
           <span>{t('profile.appearance.darkHint')}</span>
+          {dark && <Check size={16} aria-hidden="true" className="mode-check" />}
         </button>
       </div>
       <h3 className="subhead">{t('profile.appearance.color')}</h3>
@@ -313,7 +346,7 @@ function ModelForm({ prefs }: { prefs: Preferences }) {
   const allowed = prefs.allowedModels.map((m) => modelValue(m.provider, m.model))
   // a personal default the admin has since removed is not offered any more
   const [value, setValue] = useState(allowed.includes(saved) ? saved : '')
-  const [note, setNote] = useState<Note>(null)
+  const [note, setNote] = useNote()
   const id = useId()
 
   function submit(e: FormEvent) {
@@ -322,15 +355,22 @@ function ModelForm({ prefs }: { prefs: Preferences }) {
     setNote(null)
     save
       .mutateAsync(parseModelValue(value))
-      .then(() => setNote({ key: 'profile.model.saved', ok: true }))
-      .catch((err: unknown) => setNote({ key: profileErrorKey('model', err), ok: false }))
+      .then(() => setNote('profile.model.saved', true))
+      .catch((err: unknown) => setNote(profileErrorKey('model', err)))
   }
 
   return (
     <form onSubmit={submit}>
       <div className="field-row">
         <label htmlFor={id}>{t('profile.model.label')}</label>
-        <select id={id} value={value} onChange={(e) => setValue(e.target.value)}>
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setNote(null)
+          }}
+        >
           <option value="">{t('profile.model.systemDefault')}</option>
           {prefs.allowedModels.map((m) => (
             <option key={modelValue(m.provider, m.model)} value={modelValue(m.provider, m.model)}>

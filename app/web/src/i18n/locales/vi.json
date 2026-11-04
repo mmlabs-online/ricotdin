@@ -574,7 +574,10 @@
     "placeholder": "Hỏi về quyết định, việc cần làm hoặc nội dung đã bàn…",
     "hint": "Enter để gửi, Shift+Enter để xuống dòng. Ricotdin chỉ trả lời từ các cuộc họp bạn được xem.",
     "citation": "{{title}} · {{time}}",
-    "citationUnknown": "Cuộc họp · {{time}}"
+    "citationUnknown": "Cuộc họp · {{time}}",
+    "switch": "Xem",
+    "notReady": "Cuộc trò chuyện đang tải. Hãy thử lại sau giây lát.",
+    "separator": ", "
   },
   "profile": {
     "details": {
