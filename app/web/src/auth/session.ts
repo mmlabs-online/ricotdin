@@ -171,6 +171,24 @@ export class AuthSession {
     return body
   }
 
+  /** A signed-in call whose answer replaces the refresh cookie (`/profile/change-password` ends
+   * every session and starts a new one for this browser). It must carry the cookie jar, and it
+   * runs under the cross-tab refresh lock so no refresh presents the old cookie meanwhile. The
+   * token is made fresh BEFORE the lock (a refresh inside it would wait for itself), and the call
+   * is not retried. Network errors reject. */
+  async postWithCookie(url: string, json: unknown): Promise<Response> {
+    const token = await this.getToken()
+    const run = () =>
+      this.deps.fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(json),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+      })
+    return this.deps.locks ? this.deps.locks.request(REFRESH_LOCK, run) : run()
+  }
+
   close(): void {
     this.deps.channel?.close()
   }

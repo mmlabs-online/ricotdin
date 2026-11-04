@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
-import { chatErrorKey, normalizeChat, normalizeMessage, questionProblem, MAX_QUESTION } from './chat'
+import { chatErrorKey, chatScope, normalizeChat, normalizeMessage, questionProblem, readStoredSession, MAX_QUESTION } from './chat'
 
 const raw = (over: Record<string, unknown> = {}) => ({
   id: 'msg1',
@@ -82,5 +82,23 @@ describe('chatErrorKey', () => {
     expect(chatErrorKey(e(404))).toBe('chat.errors.forbidden')
     expect(chatErrorKey(e(0, 'network'))).toBe('chat.errors.network')
     expect(chatErrorKey(e(500))).toBe('chat.errors.generic')
+  })
+})
+
+describe('chatScope', () => {
+  it('a folder from ?folder=, else all meetings', () => {
+    expect(chatScope('?folder=f1')).toEqual({ kind: 'folder', folderId: 'f1' })
+    expect(chatScope('')).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=')).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=' + 'x'.repeat(100))).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=a/b')).toEqual({ kind: 'all' })
+  })
+})
+
+describe('readStoredSession', () => {
+  it('accepts only a uuid-shaped id', () => {
+    expect(readStoredSession('0f8fad5b-d9cb-469f-a165-70867728950e')).toBe('0f8fad5b-d9cb-469f-a165-70867728950e')
+    expect(readStoredSession(null)).toBeNull()
+    expect(readStoredSession('../x')).toBeNull()
   })
 })

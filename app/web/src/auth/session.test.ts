@@ -152,4 +152,31 @@ describe('AuthSession', () => {
     await expect(s.signIn('a@b.c', 'pw')).rejects.toMatchObject({ code: 'email_not_verified', status: 403 })
     expect(JSON.parse(String(f.calls[0]?.init?.body))).toEqual({ identifier: 'a@b.c', password: 'pw' })
   })
+
+  it('sends a cookie-changing API call with the cookie, the token and under the refresh lock', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1')), json(200, { changed: true })])
+    const order: string[] = []
+    f.deps.locks = { request: async (name, cb) => { order.push(`lock:${name}`); return cb() } }
+    const s = new AuthSession('https://api.example.com', f.deps)
+    await s.start()
+    order.length = 0
+    const res = await s.postWithCookie('https://api.example.com/profile/change-password', { a: 1 })
+    expect(res.status).toBe(200)
+    expect(order).toEqual(['lock:ricotdin-auth-refresh'])
+    const call = f.calls[1]
+    expect(call?.url).toBe('https://api.example.com/profile/change-password')
+    expect(call?.init?.credentials).toBe('include')
+    expect(new Headers(call?.init?.headers).get('Authorization')).toBe('Bearer t1')
+    expect(call?.init?.body).toBe(JSON.stringify({ a: 1 }))
+  })
+
+  it('refreshes an expiring token before taking the lock (no refresh inside it)', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1')), json(200, tokenBody('t2')), json(200, { changed: true })])
+    const s = new AuthSession('https://api.example.com', f.deps)
+    await s.start()
+    f.clock.t += 899_000
+    await s.postWithCookie('https://api.example.com/profile/change-password', {})
+    expect(f.calls.map((c) => c.url.replace('https://api.example.com', ''))).toEqual(['/auth/refresh', '/auth/refresh', '/profile/change-password'])
+    expect(new Headers(f.calls[2]?.init?.headers).get('Authorization')).toBe('Bearer t2')
+  })
 })

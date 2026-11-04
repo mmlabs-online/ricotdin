@@ -557,5 +557,94 @@
       "network": "Không kết nối được máy chủ. Câu hỏi chưa được gửi.",
       "generic": "Không trả lời được câu hỏi. Vui lòng thử lại."
     }
+  },
+  "chatPage": {
+    "new": "Cuộc trò chuyện mới",
+    "newStarted": "Đã bắt đầu cuộc trò chuyện mới.",
+    "askAbout": "Hỏi về",
+    "scopes": "Phạm vi hỏi",
+    "all": "Mọi cuộc họp",
+    "folderUnknown": "Thư mục không còn",
+    "folderUnknownBody": "Thư mục này đã bị xóa hoặc không còn được chia sẻ với bạn. Hãy chọn phạm vi khác.",
+    "scopeLine": "Câu trả lời lấy từ {{scope}} và dẫn về đúng nguồn.",
+    "emptyTitle": "Bạn muốn biết điều gì?",
+    "emptyAll": "Hỏi về quyết định, việc cần làm hay nội dung đã bàn trong bất kỳ cuộc họp nào bạn mở được.",
+    "emptyFolder": "Hỏi về các cuộc họp trong thư mục này.",
+    "inputLabel": "Câu hỏi của bạn",
+    "placeholder": "Hỏi về quyết định, việc cần làm hoặc nội dung đã bàn…",
+    "hint": "Enter để gửi, Shift+Enter để xuống dòng. Ricotdin chỉ trả lời từ các cuộc họp bạn được xem.",
+    "citation": "{{title}} · {{time}}",
+    "citationUnknown": "Cuộc họp · {{time}}"
+  },
+  "profile": {
+    "details": {
+      "title": "Thông tin cá nhân",
+      "body": "Danh tính của bạn trong không gian làm việc.",
+      "username": "Tên người dùng",
+      "displayName": "Tên hiển thị",
+      "email": "Email",
+      "save": "Lưu thay đổi",
+      "saved": "Đã lưu thông tin.",
+      "unchanged": "Không có gì để lưu."
+    },
+    "avatar": {
+      "upload": "Tải ảnh lên",
+      "uploading": "Đang tải… {{percent}}%",
+      "hint": "JPEG, PNG hoặc WebP, tối đa 2 MB.",
+      "saved": "Đã cập nhật ảnh đại diện.",
+      "alt": "Ảnh đại diện của bạn"
+    },
+    "password": {
+      "title": "Mật khẩu",
+      "body": "Đổi mật khẩu sẽ đăng xuất bạn trên mọi thiết bị khác.",
+      "current": "Mật khẩu hiện tại",
+      "new": "Mật khẩu mới",
+      "confirm": "Nhập lại mật khẩu mới",
+      "submit": "Đổi mật khẩu",
+      "changed": "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất.",
+      "currentRequired": "Hãy nhập mật khẩu hiện tại.",
+      "mismatch": "Hai mật khẩu mới không khớp.",
+      "same": "Mật khẩu mới phải khác mật khẩu hiện tại."
+    },
+    "appearance": {
+      "title": "Giao diện",
+      "body": "Chọn cách Ricotdin hiển thị trên thiết bị này.",
+      "mode": "Sáng hoặc tối",
+      "light": "Sáng",
+      "lightHint": "Sáng sủa, rõ ràng",
+      "dark": "Tối",
+      "darkHint": "Dịu mắt",
+      "color": "Bảng màu"
+    },
+    "model": {
+      "title": "Mô hình AI",
+      "body": "Dùng cho các cuộc họp mới bạn tải lên. Quản trị viên quyết định có những mô hình nào.",
+      "label": "Mô hình mặc định",
+      "systemDefault": "Mặc định của hệ thống",
+      "save": "Lưu mô hình",
+      "saved": "Đã lưu mô hình mặc định."
+    },
+    "usage": {
+      "title": "Số dư",
+      "body": "Phần bạn còn dùng được. Hãy nhờ quản trị viên nạp thêm.",
+      "audio": "Số phút âm thanh còn lại",
+      "audioValue": "{{h}} giờ {{m}} phút",
+      "questions": "Lượt hỏi còn lại",
+      "questionsValue_one": "{{count}} lượt",
+      "questionsValue_other": "{{count}} lượt",
+      "meetings": "Cuộc họp của bạn",
+      "folders": "Thư mục của bạn"
+    },
+    "errors": {
+      "usernameTaken": "Tên người dùng đã có người dùng. Hãy chọn tên khác.",
+      "invalid": "Hãy kiểm tra lại các ô rồi thử lại.",
+      "wrongPassword": "Mật khẩu hiện tại không đúng.",
+      "passwordChanged": "Mật khẩu vừa được đổi ở nơi khác. Hãy thử lại.",
+      "passwordRejected": "Mật khẩu mới không được chấp nhận. Hãy chọn mật khẩu dài hơn.",
+      "modelNotAllowed": "Mô hình này không còn dùng được. Hãy chọn mô hình khác.",
+      "rateLimited": "Thử quá nhiều lần. Hãy chờ vài phút rồi thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
   }
 }

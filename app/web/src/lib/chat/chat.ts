@@ -77,3 +77,21 @@ export function chatErrorKey(err: unknown): string {
   if (err.status === 403 || err.status === 404) return 'chat.errors.forbidden'
   return 'chat.errors.generic'
 }
+
+export type ChatScope = { kind: 'all' } | { kind: 'folder'; folderId: string }
+
+const ID = /^[A-Za-z0-9-]{1,64}$/
+
+/** The Chat page scope from its query string (`?folder=<id>`; anything else = all meetings). */
+export function chatScope(search: string): ChatScope {
+  const folder = new URLSearchParams(search).get('folder')
+  return folder && ID.test(folder) ? { kind: 'folder', folderId: folder } : { kind: 'all' }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The "all meetings" chat has no API lookup (`GET /chat` without a scope returns nothing, v1):
+ * the tab keeps its session id in sessionStorage. Only a uuid is accepted back. */
+export function readStoredSession(raw: string | null): string | null {
+  return raw && UUID.test(raw) ? raw : null
+}
