@@ -49,11 +49,61 @@ export function parseInline(source: string): Inline[] {
   return out
 }
 
-const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/
-const BULLET = /^(\s*)[-*+]\s+(.*)$/
-const ORDERED = /^(\s*)\d{1,9}[.)]\s+(.*)$/
-const RULE = /^\s*([-*_])(\s*\1){2,}\s*$/
-const FENCE = /^\s*(```|~~~)/
+const MAX_LINE = 20_000
+const SPACE = (c: string | undefined) => c === ' ' || c === '\t'
+
+// Line rules are read with plain loops, not regexes: a heading like `# a` + 20 000 spaces + `b`
+// made `^(#{1,6})\s+(.*?)\s*#*\s*$` backtrack cubically (security review, CWE-1333).
+
+function indentOf(line: string): number {
+  let i = 0
+  while (SPACE(line[i])) i++
+  return i
+}
+
+function readHeading(line: string): { level: number; text: string } | null {
+  const start = indentOf(line)
+  let i = start
+  while (line[i] === '#' && i - start < 7) i++
+  const level = i - start
+  if (level < 1 || level > 6 || !SPACE(line[i])) return null
+  let text = line.slice(i).trim()
+  let end = text.length
+  while (end > 0 && text[end - 1] === '#') end--
+  if (end === 0 || SPACE(text[end - 1])) text = text.slice(0, end).trimEnd() // closing hashes
+  return { level, text }
+}
+
+function readItem(line: string): { indent: number; ordered: boolean; text: string } | null {
+  const indent = indentOf(line)
+  let i = indent
+  const c = line[i]
+  if (c === '-' || c === '*' || c === '+') {
+    i++
+    if (!SPACE(line[i])) return null
+    return { indent, ordered: false, text: line.slice(i).trim() }
+  }
+  const digits = i
+  while (i - digits < 10 && line[i] !== undefined && line[i]! >= '0' && line[i]! <= '9') i++
+  if (i === digits || i - digits > 9 || (line[i] !== '.' && line[i] !== ')')) return null
+  i++
+  if (!SPACE(line[i])) return null
+  return { indent, ordered: true, text: line.slice(i).trim() }
+}
+
+function isRule(line: string): boolean {
+  const bare = line.replace(/[ \t]/g, '')
+  if (bare.length < 3) return false
+  const c = bare[0]
+  if (c !== '-' && c !== '*' && c !== '_') return false
+  for (const x of bare) if (x !== c) return false
+  return true
+}
+
+function fenceOf(line: string): string | null {
+  const t = line.trimStart()
+  return t.startsWith('```') ? '```' : t.startsWith('~~~') ? '~~~' : null
+}
 
 export function parseMarkdown(source: string): Block[] {
   const lines = source.slice(0, MAX_INPUT).replace(/\r\n?/g, '\n').split('\n')
@@ -68,42 +118,39 @@ export function parseMarkdown(source: string): Block[] {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? ''
-    const fence = FENCE.exec(line)
-    if (fence) {
+    const line = (lines[i] ?? '').slice(0, MAX_LINE)
+    const marker = fenceOf(line)
+    if (marker) {
       flush()
       const body: string[] = []
-      const marker = fence[1] ?? '```'
       for (i++; i < lines.length && !(lines[i] ?? '').trimStart().startsWith(marker); i++) body.push(lines[i] ?? '')
       blocks.push({ kind: 'code', text: body.join('\n') })
       continue
     }
-    if (!line.trim() || RULE.test(line)) {
+    if (!line.trim() || isRule(line)) {
       flush()
       continue
     }
-    const heading = HEADING.exec(line.trim())
+    const heading = readHeading(line)
     if (heading) {
       flush()
-      blocks.push({ kind: 'heading', level: (heading[1] ?? '').length <= 2 ? 3 : 4, inlines: parseInline(heading[2] ?? '') })
+      blocks.push({ kind: 'heading', level: heading.level <= 2 ? 3 : 4, inlines: parseInline(heading.text) })
       continue
     }
-    const bullet = BULLET.exec(line)
-    const ordered = bullet ? null : ORDERED.exec(line)
-    const item = bullet ?? ordered
+    const item = readItem(line)
     if (item) {
       if (paragraph.length) flush()
-      const isOrdered = ordered !== null
-      if (!list || list.ordered !== isOrdered) {
-        list = { kind: 'list', ordered: isOrdered, items: [] }
+      if (!list || list.ordered !== item.ordered) {
+        list = { kind: 'list', ordered: item.ordered, items: [] }
         blocks.push(list)
       }
-      const depth = Math.min(MAX_DEPTH, Math.floor((item[1] ?? '').replace(/\t/g, '  ').length / 2))
-      list.items.push({ depth, inlines: parseInline(item[2] ?? '') })
+      const width = line.slice(0, item.indent).replace(/\t/g, '  ').length
+      list.items.push({ depth: Math.min(MAX_DEPTH, Math.floor(width / 2)), inlines: parseInline(item.text) })
       continue
     }
     list = null
-    paragraph.push(line.trim().replace(/^>\s?/, ''))
+    const text = line.trim()
+    paragraph.push(text.startsWith('>') ? text.slice(1).trimStart() : text)
   }
   flush()
   return blocks

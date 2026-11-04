@@ -131,6 +131,32 @@ describe('parseMarkdown', () => {
     }
   })
 
+  it('stays fast on hostile lines (whitespace runs in headings, rules, lists)', () => {
+    const lines = [
+      '# a' + ' '.repeat(20_000) + 'b',
+      '#' + ' '.repeat(20_000) + '#'.repeat(5) + ' x',
+      '-' + ' -'.repeat(20_000) + ' x',
+      ' '.repeat(20_000) + '- x',
+      '1.' + ' '.repeat(20_000) + 'x',
+      '>' + ' '.repeat(20_000) + 'x',
+    ]
+    for (const line of lines) {
+      const started = performance.now()
+      parseMarkdown(line)
+      expect(performance.now() - started).toBeLessThan(200)
+    }
+  })
+
+  it('a full-size note of stray markers stays fast', () => {
+    const started = performance.now()
+    parseMarkdown(('**a [b]( ~~c ' + '#'.repeat(3) + '\n').repeat(15_000))
+    expect(performance.now() - started).toBeLessThan(1500)
+  })
+
+  it('strips closing hashes from headings', () => {
+    expect(parseMarkdown('## Title ##')).toEqual([{ kind: 'heading', level: 3, inlines: [{ kind: 'text', text: 'Title' }] }])
+  })
+
   it('a link with a space in its target stays text with its brackets', () => {
     expect(parseInline('[a](b c)')).toEqual([{ kind: 'text', text: '[a](b c)' }])
   })

@@ -7,6 +7,7 @@ import {
   canRegenerate,
   canReprocess,
   isQueued,
+  mediaSrc,
   restoreRow,
   failureKind,
   filterSegments,
@@ -204,5 +205,18 @@ describe('restoreRow', () => {
   it('a missing row changes nothing', () => {
     const list = [todo('1')]
     expect(restoreRow(list, todo('9'))).toEqual(list)
+  })
+})
+
+describe('mediaSrc', () => {
+  const api = 'https://api.example.com'
+  it('accepts only a /media link on the API origin', () => {
+    expect(mediaSrc(api, '/media?t=abc.def')).toBe('https://api.example.com/media?t=abc.def')
+  })
+  it('refuses anything that would leave the API or its /media path', () => {
+    for (const bad of ['.evil.com/media?t=x', '@evil.com/media?t=x', ':8443/media?t=x', '//evil.com/media?t=x',
+      'https://evil.com/media?t=x', '/other?t=x', '/media/../x?t=1', 'media?t=x', 42, null]) {
+      expect(mediaSrc(api, bad)).toBeNull()
+    }
   })
 })

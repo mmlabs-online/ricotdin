@@ -43,6 +43,7 @@ import {
   canReprocess,
   failureKind,
   isQueued,
+  mediaSrc,
   modelLabel,
   visibleTodos,
   type CalendarSuggestion,
@@ -57,6 +58,7 @@ const TABS = ['summary', 'notes', 'todos', 'calendar', 'transcript'] as const
 type Tab = (typeof TABS)[number]
 type Notice = { key: string; kind: 'error' | 'warning' | 'success' }
 const AUDIO_RETRY_MS = 30_000
+const AUDIO_MAX_RETRIES = 3
 
 export function MeetingDetailPage() {
   const { t } = useTranslation()
@@ -118,6 +120,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const todos = useTodos(id, done)
   const suggestions = useSuggestions(id, done)
   const audioUrl = useAudioUrl(id, wantAudio)
+  const src = audioUrl.isSuccess ? mediaSrc(apiUrl, audioUrl.data.url) : null
   const segments = useMemo(() => transcript.data ?? [], [transcript.data])
 
   const todoStatus = useTodoStatus(id)
@@ -185,11 +188,14 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     player.current?.seekTo(ms)
   }, [transcript.isSuccess, audioSettled, segments])
 
-  const lastAudioRetry = useRef(0)
+  // An expired link gets a new one; a file that keeps failing stops after a few tries (the
+  // "Try again" button still works).
+  const audioRetries = useRef({ at: 0, count: 0 })
   function audioFailed() {
+    const r = audioRetries.current
     const now = Date.now()
-    if (now - lastAudioRetry.current < AUDIO_RETRY_MS) return
-    lastAudioRetry.current = now
+    if (now - r.at < AUDIO_RETRY_MS || r.count >= AUDIO_MAX_RETRIES) return
+    audioRetries.current = { at: now, count: r.count + 1 }
     void audioUrl.refetch()
   }
 
@@ -331,9 +337,6 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
           <div>
             <strong>{t(failureKind(meeting.error_message) === 'quota' ? 'detail.failed.quotaTitle' : 'detail.failed.title')}</strong>
             <p>{t(failureKind(meeting.error_message) === 'quota' ? 'detail.failed.quotaBody' : 'detail.failed.body')}</p>
-            {failureKind(meeting.error_message) === 'failed' && meeting.error_message && (
-              <p className="state-detail">{displayText(meeting.error_message)}</p>
-            )}
           </div>
           {canReprocess(meeting, role) && (
             <Button variant="primary" onClick={() => !process.isPending && setDialog('reprocess')} aria-disabled={process.isPending} aria-busy={process.isPending}>
@@ -347,16 +350,16 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
       {audio === 'purged' && <p className="audio-note">{t('detail.audio.purged')}</p>}
       {wantAudio && (
         <div className="audio-player">
-          {audioUrl.isSuccess ? (
+          {src ? (
             <AudioPlayer
               ref={player}
-              src={`${apiUrl}${audioUrl.data.url}`}
-              hackAudioRender={audioUrl.data.hackAudioRender}
+              src={src}
+              hackAudioRender={audioUrl.data?.hackAudioRender === true}
               fallbackSeconds={meeting.duration_seconds}
               label={t('detail.audio.label', { title })}
               onError={audioFailed}
             />
-          ) : audioUrl.isError ? (
+          ) : audioUrl.isError || audioUrl.isSuccess ? (
             <>
               <span>{t('detail.audio.error')}</span>
               <Button onClick={() => void audioUrl.refetch()}>{t('common.tryAgain')}</Button>
@@ -426,7 +429,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   segments={segments}
                   state={state3(transcript)}
                   onRetry={() => void transcript.refetch()}
-                  canSeek={audioUrl.isSuccess}
+                  canSeek={src !== null}
                   activeId={activeSeg}
                   seekNonce={seekNonce}
                   onSeek={(s) => seek(s.start_ms)}

@@ -151,6 +151,19 @@ export function isQueued(m: { status: string; updated_at: string }, queuedAt: st
   return queuedAt !== null && m.status === 'failed' && m.updated_at === queuedAt
 }
 
+/** The playback link from `/audio-url` as an absolute URL, only if it is the API's own `/media`
+ * (a malformed answer such as `.evil.com/…` or `@evil.com/…` must not move the request elsewhere). */
+export function mediaSrc(apiUrl: string, path: unknown): string | null {
+  if (typeof path !== 'string' || !path.startsWith('/media?')) return null
+  try {
+    const base = new URL(apiUrl)
+    const url = new URL(path, base)
+    return url.origin === base.origin && url.pathname === '/media' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 /** Undo one optimistic row change, leaving other rows' in-flight edits alone. */
 export function restoreRow<T extends { id: string }>(list: readonly T[], prev: T): T[] {
   return list.map((x) => (x.id === prev.id ? prev : x))

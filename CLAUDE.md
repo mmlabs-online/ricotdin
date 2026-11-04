@@ -806,8 +806,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `actionErrorKey`), `lib/chat/chat.ts` (untrusted chat answers: malformed citations dropped).
   **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
   `lib/markdown.ts`:** headings, lists, bold/italic/code; links and images become their text, HTML
-  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`; its regex parts
-  are length-bounded (no quadratic scan). Regenerate (owner, `done`) and "Process again" (owner,
+  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`. Line rules are
+  plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep
+  the timing tests. The `/media` src goes through `mediaSrc` (API origin + `/media` only); the
+  failed card shows only localized text, not `error_message`. Regenerate (owner, `done`) and "Process again" (owner,
   **`failed` only**: the worker claims only `pending`/`failed` meetings, so `/process` on a `done`
   meeting queues a job that ends without work — **API follow-up** before offering it) both charge
   quota and ask first. After `/process` the meeting stays `failed` until a worker claims it: the
