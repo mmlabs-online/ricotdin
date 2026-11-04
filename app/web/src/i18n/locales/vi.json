@@ -187,10 +187,12 @@
     "cancel": "Hủy",
     "tryAgain": "Thử lại",
     "save": "Lưu",
-    "dismiss": "Đóng thông báo"
+    "dismiss": "Đóng thông báo",
+    "loading": "Đang tải…"
   },
   "player": {
-    "scanning": "Đang chuẩn bị phát…"
+    "scanning": "Đang chuẩn bị phát…",
+    "loading": "Đang tải bản ghi âm…"
   },
   "record": {
     "start": "Bắt đầu ghi âm",
@@ -405,5 +407,155 @@
     "shareLabel": "Chia sẻ {{name}}",
     "moved": "Đã chuyển {{name}} tới vị trí {{pos}}/{{total}}.",
     "deleted": "Đã xóa thư mục {{name}}."
+  },
+  "detail": {
+    "loadError": "Không tải được nội dung. Kiểm tra kết nối rồi thử lại.",
+    "notFound": {
+      "title": "Không tìm thấy cuộc họp",
+      "body": "Cuộc họp có thể đã bị xóa, hoặc bạn không còn quyền truy cập."
+    },
+    "status": {
+      "pending": "Đang tải lên",
+      "queued": "Đang chờ"
+    },
+    "state": {
+      "pendingTitle": "Đang chờ tải lên",
+      "pendingBody": "Việc xử lý bắt đầu ngay khi tệp tải lên được xác nhận.",
+      "processingTitle": "Đang xử lý cuộc họp",
+      "processingBody": "Đang chép lời và viết ghi chú. Thường mất vài phút; trang này tự cập nhật.",
+      "queuedTitle": "Đang chờ đến lượt xử lý",
+      "queuedBody": "Việc xử lý đã được xếp hàng và bắt đầu ngay khi có máy rảnh. Trang này tự cập nhật.",
+      "doneAnnounce": "Đã xử lý xong. Kết quả đã sẵn sàng.",
+      "failedAnnounce": "Xử lý thất bại."
+    },
+    "failed": {
+      "title": "Xử lý thất bại",
+      "body": "Hãy chạy lại, hoặc nhờ quản trị viên nếu vẫn lỗi.",
+      "quotaTitle": "Không đủ số phút âm thanh",
+      "quotaBody": "Không thể xử lý bản ghi này vì số dư phút âm thanh của bạn quá thấp. Hãy nhờ quản trị viên nạp thêm rồi chạy lại."
+    },
+    "reprocess": {
+      "action": "Xử lý lại",
+      "busy": "Đang bắt đầu…",
+      "started": "Đã bắt đầu xử lý.",
+      "confirmTitle": "Xử lý lại cuộc họp này?",
+      "confirmBody": "Bản ghi sẽ được chép lời và phân tích lại. Việc này dùng số phút âm thanh trong số dư của bạn.",
+      "confirm": "Xử lý lại"
+    },
+    "regenerate": {
+      "action": "Tạo lại tóm tắt",
+      "busy": "Đang tạo lại…",
+      "done": "Đã tạo lại tóm tắt và ghi chú.",
+      "confirmTitle": "Tạo lại tóm tắt và ghi chú?",
+      "confirmBody": "AI sẽ viết lại tóm tắt và ghi chú từ bản ghi lời. Việc này dùng số phút âm thanh trong số dư của bạn. Việc cần làm và đề xuất lịch giữ nguyên.",
+      "confirm": "Tạo lại"
+    },
+    "audio": {
+      "purged": "Bản ghi âm đã bị xóa theo chính sách lưu trữ. Bản ghi lời và ghi chú vẫn được giữ.",
+      "label": "Bản ghi âm của {{title}}",
+      "error": "Không tải được bản ghi âm."
+    },
+    "tabsLabel": "Kết quả cuộc họp",
+    "tabs": {
+      "summary": "Tóm tắt",
+      "notes": "Ghi chú",
+      "todos": "Việc cần làm",
+      "calendar": "Lịch",
+      "transcript": "Bản ghi lời",
+      "openCount_one": "{{count}} việc chưa xong",
+      "openCount_other": "{{count}} việc chưa xong"
+    },
+    "export": "Xuất bản ghi lời (.{{format}})",
+    "rename": {
+      "title": "Đổi tên cuộc họp",
+      "empty": "Hãy nhập tên."
+    },
+    "summary": {
+      "label": "Tóm tắt do AI tạo",
+      "empty": "Cuộc họp này chưa có tóm tắt.",
+      "model": "Viết bởi {{model}}"
+    },
+    "notes": {
+      "label": "Ghi chú cuộc họp",
+      "copy": "Sao chép ghi chú",
+      "copied": "Đã sao chép ghi chú.",
+      "copyFailed": "Không sao chép được ghi chú.",
+      "empty": "Cuộc họp này chưa có ghi chú."
+    },
+    "todos": {
+      "label": "Việc cần làm",
+      "empty": "Không tìm thấy việc cần làm nào trong cuộc họp này.",
+      "markOpen": "Đánh dấu “{{item}}” là chưa xong",
+      "markDone": "Đánh dấu “{{item}}” là đã xong",
+      "overdue": "Quá hạn · {{date}}",
+      "due": "Hạn {{date}}",
+      "noDue": "Không có hạn",
+      "dismiss": "Bỏ qua “{{item}}”"
+    },
+    "source": "Đến nguồn · {{time}}",
+    "calendar": {
+      "label": "Đề xuất lịch",
+      "empty": "Cuộc họp này không nhắc đến sự kiện nào.",
+      "noTime": "Không có ngày giờ cụ thể.",
+      "mention": "Được nhắc là: “{{text}}”",
+      "ics": "Tải tệp .ics",
+      "manual": "Hãy tự thêm vào lịch của bạn.",
+      "dismiss": "Bỏ qua “{{title}}”",
+      "noSync": "Ricotdin không đồng bộ với lịch của bạn: hãy tải tệp và mở bằng ứng dụng lịch."
+    },
+    "transcript": {
+      "label": "Bản ghi lời cuộc họp",
+      "search": "Tìm trong bản ghi lời",
+      "searchPlaceholder": "Tìm trong bản ghi lời…",
+      "matches_one": "{{count}} dòng khớp",
+      "matches_other": "{{count}} dòng khớp",
+      "empty": "Cuộc họp này không có bản ghi lời.",
+      "noMatch": "Không có dòng nào khớp.",
+      "unknownSpeaker": "Người nói",
+      "playFrom": "Phát từ {{time}} ({{speaker}})"
+    },
+    "chat": {
+      "title": "Hỏi về cuộc họp này",
+      "notReady": "Bạn có thể đặt câu hỏi khi xử lý xong.",
+      "loadError": "Không tải được cuộc trò chuyện.",
+      "emptyTitle": "Bạn muốn biết điều gì?",
+      "emptyBody": "Câu trả lời lấy từ cuộc họp này và dẫn nguồn theo thời điểm.",
+      "history": "Cuộc trò chuyện",
+      "inputLabel": "Câu hỏi của bạn về cuộc họp này",
+      "placeholder": "Đặt câu hỏi về cuộc họp…",
+      "hint": "Enter để gửi, Shift+Enter để xuống dòng. Câu trả lời chỉ dùng cuộc họp này."
+    },
+    "errors": {
+      "quota": "Không còn đủ số phút âm thanh. Hãy nhờ quản trị viên nạp thêm.",
+      "busy": "Cuộc họp đang được xử lý. Hãy thử lại khi xong.",
+      "noTranscript": "Cuộc họp này không có bản ghi lời để dùng.",
+      "aiUnavailable": "Dịch vụ AI tạm thời không khả dụng. Hãy thử lại sau vài phút.",
+      "cannotProcess": "Chưa thể xử lý cuộc họp này: bản ghi âm bị thiếu hoặc vẫn đang tải lên.",
+      "icsNoTime": "Sự kiện này không có ngày giờ cụ thể nên không tạo được tệp lịch.",
+      "icsFailed": "Không tải được tệp lịch.",
+      "saveFailed": "Không lưu được thay đổi, đã hoàn tác.",
+      "rateLimited": "Quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.",
+      "forbidden": "Bạn không có quyền làm việc này.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  },
+  "chat": {
+    "thinking": "Đang suy nghĩ…",
+    "answered": "Đã có câu trả lời.",
+    "you": "Bạn:",
+    "assistant": "Ricotdin:",
+    "sources": "Nguồn",
+    "playFrom": "Phát bản ghi âm từ {{time}}",
+    "send": "Gửi câu hỏi",
+    "errors": {
+      "empty": "Hãy nhập câu hỏi trước.",
+      "tooLong": "Câu hỏi quá dài (tối đa 4000 ký tự).",
+      "noQuota": "Bạn đã hết lượt hỏi. Hãy nhờ quản trị viên nạp thêm.",
+      "rateLimited": "Bạn hỏi quá nhiều trong thời gian ngắn. Hãy chờ vài phút rồi thử lại.",
+      "forbidden": "Bạn không còn quyền truy cập cuộc trò chuyện này.",
+      "network": "Không kết nối được máy chủ. Câu hỏi chưa được gửi.",
+      "generic": "Không trả lời được câu hỏi. Vui lòng thử lại."
+    }
   }
 }

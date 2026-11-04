@@ -798,6 +798,32 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   (no polling while one is in flight, per-row rollback, refetch after the last one settles);
   controls that disappear hand focus to a stable one (`data-*` targets, `aria-disabled` instead
   of `disabled` on buttons that keep focus); `Modal` traps also `select` / `textarea`.
+  13b: `/meetings/:id` = `MeetingDetailPage` (Make MeetingDetail) + `components/meeting/{DetailPanels,
+  MeetingChat}.tsx`, data in `src/api/meetingDetail.ts` (keys `['meeting', id, …]`; meeting polled
+  every 5 s while pending/processing, never while an edit with key `['meeting','edit']` is in flight;
+  children load once the meeting is `done` and reload when it turns `done`). Pure rules:
+  `lib/meetings/detail.ts` (audio state, quota failure, speaker groups, past due, owner actions,
+  `actionErrorKey`), `lib/chat/chat.ts` (untrusted chat answers: malformed citations dropped).
+  **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
+  `lib/markdown.ts`:** headings, lists, bold/italic/code; links and images become their text, HTML
+  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`. Line rules are
+  plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep
+  the timing tests. The `/media` src goes through `mediaSrc` (API origin + `/media` only); the
+  failed card shows only localized text, not `error_message`. Regenerate (owner, `done`) and "Process again" (owner,
+  **`failed` only**: the worker claims only `pending`/`failed` meetings, so `/process` on a `done`
+  meeting queues a job that ends without work — **API follow-up** before offering it) both charge
+  quota and ask first. After `/process` the meeting stays `failed` until a worker claims it: the
+  page shows it as queued (`isQueued`: same `updated_at` as when queued) and polls up to 20 min.
+  Optimistic edits undo only their own change (`restoreRow`); notices use `mutateAsync` (a
+  `mutate()` callback is skipped when another edit started since). A failed background refetch
+  keeps the page; only 403/404 or no data replaces it.
+  A11y (13b review): `html` has `scroll-padding-top/bottom` for the sticky top bar + player and the
+  mobile nav (2.4.11); a status change is announced (derived from the first status, no effect);
+  the tabpanel carries the meeting's `lang` (`contentLang`); confirm dialogs pass `describedBy`;
+  `.button[aria-disabled="true"]` is styled. The `/media` link (`useApiUrl()` + path) is refetched when the player
+  errors (at most every 30 s). `?t=<s>` opens the transcript tab and seeks once transcript + player
+  are ready. A delete from the detail page returns to `/meetings` with router state
+  `{notice: 'deleted'|'warning'}` (cleared so a reload does not repeat it).
 
 ## 1. What we are building
 

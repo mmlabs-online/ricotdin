@@ -14,8 +14,15 @@ export interface AudioPlayerHandle {
 
 export const AudioPlayer = forwardRef<
   AudioPlayerHandle,
-  { src: string | null; hackAudioRender: boolean; fallbackSeconds?: number | null; label: string }
->(function AudioPlayer({ src, hackAudioRender, fallbackSeconds = null, label }, ref) {
+  {
+    src: string | null
+    hackAudioRender: boolean
+    fallbackSeconds?: number | null
+    label: string
+    /** The link expired or failed: the caller fetches a new one. */
+    onError?: () => void
+  }
+>(function AudioPlayer({ src, hackAudioRender, fallbackSeconds = null, label, onError }, ref) {
   const { t } = useTranslation()
   const audioRef = useRef<HTMLAudioElement>(null)
   const { scanning, duration } = useAudioDurationFix(audioRef, hackAudioRender, src)
@@ -47,8 +54,8 @@ export const AudioPlayer = forwardRef<
   if (!src) return null
   return (
     <div className="audio-native">
-      <audio ref={audioRef} src={src} controls preload="metadata" aria-label={label} />
-      <span className="audio-meta" aria-live="polite">
+      <audio ref={audioRef} src={src} controls preload="metadata" aria-label={label} onError={onError} />
+      <span className="audio-meta" role="status">
         {scanning ? t('player.scanning') : shown !== null ? formatClock(shown) : ''}
       </span>
     </div>

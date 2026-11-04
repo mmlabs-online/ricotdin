@@ -53,7 +53,7 @@ async function boot(): Promise<void> {
         <ErrorBoundary>
           <ThemeProvider>
             <QueryClientProvider client={queryClient}>
-              <AuthProvider session={session} api={api} fetchApi={fetchApi}>
+              <AuthProvider session={session} api={api} fetchApi={fetchApi} apiUrl={config.apiUrl}>
                 <RouterProvider router={router} />
               </AuthProvider>
             </QueryClientProvider>
