@@ -6,26 +6,27 @@ import { ArrowUpRight, Play, Plus, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAskScope, useScopeChat, type SessionRef } from '../api/chat'
 import { useFolders, useMeetings } from '../api/meetings'
+import { useAuth } from '../auth/AuthProvider'
 import { ChatMessages } from '../components/chat/ChatMessages'
 import { Button } from '../components/ui/Button'
-import { chatErrorKey, chatScope, MAX_QUESTION, questionProblem, readStoredSession, type ChatScope, type Citation } from '../lib/chat/chat'
+import { chatErrorKey, chatScope, MAX_QUESTION, questionProblem, readStoredSession, storedSessionValue, type ChatScope, type Citation } from '../lib/chat/chat'
 import { formatClock, meetingSeekPath } from '../lib/media/seek'
 import { displayText } from '../lib/text'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 const ALL_SESSION_KEY = 'ricotdin-chat-all'
 
-function storedAllSession(): string | null {
+function storedAllSession(userId: string): string | null {
   try {
-    return readStoredSession(sessionStorage.getItem(ALL_SESSION_KEY))
+    return readStoredSession(sessionStorage.getItem(ALL_SESSION_KEY), userId)
   } catch {
     return null
   }
 }
 
-function storeAllSession(id: string | null): void {
+function storeAllSession(userId: string, id: string | null): void {
   try {
-    if (id) sessionStorage.setItem(ALL_SESSION_KEY, id)
+    if (id) sessionStorage.setItem(ALL_SESSION_KEY, storedSessionValue(userId, id))
     else sessionStorage.removeItem(ALL_SESSION_KEY)
   } catch {
     // storage blocked: the chat simply starts fresh next time
@@ -45,7 +46,9 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
   const navigate = useNavigate()
   const folders = useFolders()
   const meetings = useMeetings()
-  const [session, setSession] = useState<SessionRef>(() => (scope.kind === 'folder' ? 'latest' : storedAllSession()))
+  const { state } = useAuth()
+  const me = state.status === 'signedIn' ? state.user.id : ''
+  const [session, setSession] = useState<SessionRef>(() => (scope.kind === 'folder' ? 'latest' : storedAllSession(me)))
   const chat = useScopeChat(scope, session)
   const ask = useAskScope(scope)
   const [draft, setDraft] = useState('')
@@ -64,6 +67,12 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
   const titles = useMemo(() => new Map((meetings.data ?? []).map((m) => [m.id, displayText(m.title)])), [meetings.data])
   const unknownFolder = scope.kind === 'folder' && folders.isSuccess && !folder
 
+  // a stored "all meetings" session that is gone (deleted, or not ours) is forgotten
+  const gone = chat.data?.gone === true
+  useEffect(() => {
+    if (gone && scope.kind === 'all') storeAllSession(me, null)
+  }, [gone, scope.kind, me])
+
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -71,7 +80,8 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
 
   function send(e?: FormEvent) {
     e?.preventDefault()
-    if (ask.isPending || unknownFolder) return
+    // only once the conversation is loaded: a question sent before would start a new session
+    if (ask.isPending || unknownFolder || !chat.isSuccess) return
     const problem = questionProblem(draft)
     if (problem) {
       setError(problem === 'empty' ? 'chat.errors.empty' : 'chat.errors.tooLong')
@@ -88,7 +98,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
         setAnnounce(t('chat.answered'))
         if (typeof res.sessionId === 'string') {
           setSession(res.sessionId)
-          if (scope.kind === 'all') storeAllSession(res.sessionId)
+          if (scope.kind === 'all') storeAllSession(me, res.sessionId)
         }
       })
       .catch((err: unknown) => {
@@ -105,7 +115,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
   function newChat() {
     if (ask.isPending) return
     setSession(null)
-    if (scope.kind === 'all') storeAllSession(null)
+    if (scope.kind === 'all') storeAllSession(me, null)
     setError(null)
     setAnnounce(t('chatPage.newStarted'))
     inputRef.current?.focus()
@@ -229,7 +239,7 @@ function ScopeChatView({ scope }: { scope: ChatScope }) {
             aria-invalid={error === 'chat.errors.empty' || error === 'chat.errors.tooLong'}
             disabled={unknownFolder}
           />
-          <Button type="submit" variant="primary" aria-label={t('chat.send')} aria-disabled={ask.isPending || unknownFolder} aria-busy={ask.isPending}>
+          <Button type="submit" variant="primary" aria-label={t('chat.send')} aria-disabled={ask.isPending || unknownFolder || !chat.isSuccess} aria-busy={ask.isPending}>
             <ArrowUpRight size={18} aria-hidden="true" />
           </Button>
           <small id={hintId}>{t('chatPage.hint')}</small>

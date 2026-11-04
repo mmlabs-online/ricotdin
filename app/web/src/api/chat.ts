@@ -3,11 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFetchApi } from '../auth/AuthProvider'
 import { normalizeChat, normalizeMessage, type ChatMessage, type ChatScope } from '../lib/chat/chat'
+import { ApiError } from './errors'
 import { apiJson } from './json'
 
 export interface ScopeChat {
   sessionId: string | null
   messages: ChatMessage[]
+  /** The asked-for session no longer answers (403/404): the view starts a new chat. */
+  gone?: boolean
 }
 
 const enc = encodeURIComponent
@@ -30,7 +33,14 @@ export function useScopeChat(scope: ChatScope, session: SessionRef) {
     initialData: session === null || (session === 'latest' && scope.kind !== 'folder') ? EMPTY : undefined,
     queryFn: async (): Promise<ScopeChat> => {
       if (session === null) return EMPTY
-      if (session !== 'latest') return normalizeChat(await apiJson<unknown>(fetchApi, `/chat?sessionId=${enc(session)}`))
+      if (session !== 'latest') {
+        try {
+          return normalizeChat(await apiJson<unknown>(fetchApi, `/chat?sessionId=${enc(session)}`))
+        } catch (err) {
+          if (err instanceof ApiError && (err.status === 403 || err.status === 404)) return { ...EMPTY, gone: true }
+          throw err
+        }
+      }
       if (scope.kind !== 'folder') return EMPTY // "all meetings" has no latest-session lookup (v1)
       return normalizeChat(await apiJson<unknown>(fetchApi, `/chat?folderId=${enc(scope.folderId)}`))
     },
@@ -50,14 +60,16 @@ export function useAskScope(scope: ChatScope) {
           ...(sessionId ? { sessionId } : {}),
         },
       }),
-    onMutate: () => qc.cancelQueries({ queryKey: ['chat', scopeKey(scope)] }),
     onSuccess: (res, { message, prior }) => {
       if (typeof res.sessionId !== 'string') return
       const reply = normalizeMessage(res.message)
       const question: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, citations: [], createdAt: '' }
-      const key = chatKey(scope, res.sessionId)
-      qc.setQueryData<ScopeChat>(key, { sessionId: res.sessionId, messages: [...prior, question, ...(reply ? [reply] : [])] })
-      void qc.invalidateQueries({ queryKey: key, exact: true })
+      const data: ScopeChat = { sessionId: res.sessionId, messages: [...prior, question, ...(reply ? [reply] : [])] }
+      qc.setQueryData<ScopeChat>(chatKey(scope, res.sessionId), data)
+      // coming back to a folder opens its latest session: that is this one now
+      if (scope.kind === 'folder') qc.setQueryData<ScopeChat>(chatKey(scope, 'latest'), data)
+      void qc.invalidateQueries({ queryKey: ['chat', scopeKey(scope)] })
+      void qc.invalidateQueries({ queryKey: ['profile'], exact: true }) // questions left
     },
   })
 }

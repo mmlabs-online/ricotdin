@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
-import { chatErrorKey, chatScope, normalizeChat, normalizeMessage, questionProblem, readStoredSession, MAX_QUESTION } from './chat'
+import { chatErrorKey, chatScope, normalizeChat, normalizeMessage, questionProblem, readStoredSession, storedSessionValue, MAX_QUESTION } from './chat'
 
 const raw = (over: Record<string, unknown> = {}) => ({
   id: 'msg1',
@@ -95,10 +95,15 @@ describe('chatScope', () => {
   })
 })
 
-describe('readStoredSession', () => {
-  it('accepts only a uuid-shaped id', () => {
-    expect(readStoredSession('0f8fad5b-d9cb-469f-a165-70867728950e')).toBe('0f8fad5b-d9cb-469f-a165-70867728950e')
-    expect(readStoredSession(null)).toBeNull()
-    expect(readStoredSession('../x')).toBeNull()
+describe('stored "all meetings" session', () => {
+  const sid = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  it('is read back only for the same user and a uuid', () => {
+    const raw = storedSessionValue('u1', sid)
+    expect(readStoredSession(raw, 'u1')).toBe(sid)
+    expect(readStoredSession(raw, 'u2')).toBeNull() // another account signed in in this tab
+    expect(readStoredSession(null, 'u1')).toBeNull()
+    expect(readStoredSession(JSON.stringify({ u: 'u1', s: '../x' }), 'u1')).toBeNull()
+    expect(readStoredSession(sid, 'u1')).toBeNull() // old format
+    expect(readStoredSession('{bad json', 'u1')).toBeNull()
   })
 })

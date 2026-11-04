@@ -1,6 +1,6 @@
 // Profile data (ARC-13c: PRF-01..04, AIP-06 default model, quota display).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useApiUrl, useAuth, useFetchApi } from '../auth/AuthProvider'
+import { useAuth, useFetchApi } from '../auth/AuthProvider'
 import { putToDrive, uploadAvatar } from '../lib/upload/upload'
 import { ApiError, apiErrorFrom } from './errors'
 import { apiJson } from './json'
@@ -67,15 +67,14 @@ export function useUploadAvatar() {
 }
 
 /** `POST /profile/change-password`: the answer replaces the refresh cookie, so it goes through
- * the session (cookie jar + cross-tab refresh lock). Throws ApiError. */
+ * the session to the auth origin (cookie jar + cross-tab refresh lock). Throws ApiError. */
 export function useChangePassword() {
   const { session } = useAuth()
-  const apiUrl = useApiUrl()
   return useMutation({
     mutationFn: async ({ current, next }: { current: string; next: string }) => {
       let res: Response
       try {
-        res = await session.postWithCookie(`${apiUrl}/profile/change-password`, { current_password: current, new_password: next })
+        res = await session.postWithCookie('/profile/change-password', { current_password: current, new_password: next })
       } catch {
         throw new ApiError(0, 'network', '')
       }

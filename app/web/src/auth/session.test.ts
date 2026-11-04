@@ -160,7 +160,7 @@ describe('AuthSession', () => {
     const s = new AuthSession('https://api.example.com', f.deps)
     await s.start()
     order.length = 0
-    const res = await s.postWithCookie('https://api.example.com/profile/change-password', { a: 1 })
+    const res = await s.postWithCookie('/profile/change-password', { a: 1 })
     expect(res.status).toBe(200)
     expect(order).toEqual(['lock:ricotdin-auth-refresh'])
     const call = f.calls[1]
@@ -175,8 +175,18 @@ describe('AuthSession', () => {
     const s = new AuthSession('https://api.example.com', f.deps)
     await s.start()
     f.clock.t += 899_000
-    await s.postWithCookie('https://api.example.com/profile/change-password', {})
+    await s.postWithCookie('/profile/change-password', {})
     expect(f.calls.map((c) => c.url.replace('https://api.example.com', ''))).toEqual(['/auth/refresh', '/auth/refresh', '/profile/change-password'])
     expect(new Headers(f.calls[2]?.init?.headers).get('Authorization')).toBe('Bearer t2')
+  })
+
+  it('posts only to a path on the auth origin (where the refresh cookie lives)', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1'))])
+    const s = new AuthSession('https://auth.example.com', f.deps)
+    await s.start()
+    for (const bad of ['https://evil.example/x', '//evil.example/x', 'profile/x', '/\\evil.example']) {
+      await expect(s.postWithCookie(bad, {})).rejects.toThrow()
+    }
+    expect(f.calls).toHaveLength(1)
   })
 })

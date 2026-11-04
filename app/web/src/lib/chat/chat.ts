@@ -91,7 +91,20 @@ export function chatScope(search: string): ChatScope {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** The "all meetings" chat has no API lookup (`GET /chat` without a scope returns nothing, v1):
- * the tab keeps its session id in sessionStorage. Only a uuid is accepted back. */
-export function readStoredSession(raw: string | null): string | null {
-  return raw && UUID.test(raw) ? raw : null
+ * the tab keeps its session id in sessionStorage, tied to the user (another account signing in
+ * in the same tab does not pick it up). Only a uuid is accepted back. */
+export function storedSessionValue(userId: string, sessionId: string): string {
+  return JSON.stringify({ u: userId, s: sessionId })
+}
+
+export function readStoredSession(raw: string | null, userId: string): string | null {
+  if (!raw) return null
+  try {
+    const v: unknown = JSON.parse(raw)
+    if (typeof v !== 'object' || v === null) return null
+    const { u, s } = v as { u?: unknown; s?: unknown }
+    return u === userId && typeof s === 'string' && UUID.test(s) ? s : null
+  } catch {
+    return null
+  }
 }

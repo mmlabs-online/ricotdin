@@ -4,10 +4,10 @@ name: CI (web)
 on:
   push:
     branches: [main, dev, 'release/**']
-    paths: ['app/web/**', 'app/api/scripts/e2e_server.py', '.github/workflows/ci-web.yml']
+    paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
   pull_request:
     branches: [main, dev, 'release/**']
-    paths: ['app/web/**', 'app/api/scripts/e2e_server.py', '.github/workflows/ci-web.yml']
+    paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      # scratch databases only (app/api/scripts/e2e_server.py drops its own on exit)
+      # scratch databases only (app/api/tests/e2e_server.py drops its own on exit)
       DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/postgres
     defaults:
       run:

@@ -1,4 +1,5 @@
-"""Test-only API for the web end-to-end suite (ARC-13c, `app/web/e2e`). Never a deployment target.
+"""Test-only API for the web end-to-end suite (ARC-13c, `app/web/e2e`). Never a deployment target:
+it lives in tests/, which the API image does not contain.
 
 It runs the real FastAPI app on a scratch database (`ricotdin_test_*` on the `DATABASE_URL`
 server, dropped on exit) with three stand-ins, so the core flow runs without Google or AI keys:
@@ -8,7 +9,7 @@ server, dropped on exit) with three stand-ins, so the core flow runs without Goo
 - AI: embeddings and answers are canned; chat answers cite the retrieved chunks;
 - worker: a queued job turns its meeting `done` with a fixed transcript, notes, to-do and event.
 
-Run from app/api: `uv run python -m scripts.e2e_server` (env: DATABASE_URL, optional
+Run from app/api: `uv run python -m tests.e2e_server` (env: DATABASE_URL, optional
 E2E_WEB_ORIGIN = the web origin, default http://localhost:4173, and E2E_PORT, default 8000).
 """
 
@@ -20,6 +21,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import uuid
 import wave
 from collections.abc import Callable
@@ -184,7 +186,10 @@ def finish_queued_jobs(url: str) -> None:
 
 async def fake_worker(url: str) -> None:
     while True:
-        await asyncio.to_thread(finish_queued_jobs, url)
+        try:
+            await asyncio.to_thread(finish_queued_jobs, url)
+        except Exception as exc:  # noqa: BLE001 - keep serving; the next poll tries again
+            print(f"e2e fake worker: {type(exc).__name__}", flush=True)
         await asyncio.sleep(0.5)
 
 
@@ -206,6 +211,10 @@ def seed(url: str) -> None:
                 "'{}'::jsonb)",
                 (uid[0], f"e2e:{uuid.uuid4()}"),
             )
+
+
+def _exit_on_term(signum: int, frame: object) -> None:
+    raise SystemExit(0)
 
 
 def main() -> None:
@@ -249,6 +258,9 @@ def main() -> None:
                 finally:
                     worker.cancel()
 
+            # uvicorn re-raises the signal it caught once it has stopped: turn SIGTERM into a normal
+            # exit so the finally blocks drop the scratch database and the logins
+            signal.signal(signal.SIGTERM, _exit_on_term)
             print(f"e2e api on http://127.0.0.1:{port} (web {web})", flush=True)
             asyncio.run(serve())
         finally:

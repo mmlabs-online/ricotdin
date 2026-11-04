@@ -826,16 +826,18 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `{notice: 'deleted'|'warning'}` (cleared so a reload does not repeat it).
   13c: `/chat` = `ChatPage` (`src/api/chat.ts`): scope "all meetings" or `?folder=<id>` (`chatScope`);
   a folder loads its latest session (`GET /chat?folderId=`), "all meetings" has no API lookup, so the
-  tab keeps that session id in sessionStorage `ricotdin-chat-all` (uuid-checked); "New chat" = no
+  tab keeps that session id in sessionStorage `ricotdin-chat-all` (uuid + user checked); "New chat" = no
   session (the next POST creates one). Messages render through the shared
   `components/chat/ChatMessages.tsx` (also the meeting chat). `/profile` = `ProfilePage`
   (`src/api/profile.ts`). **Change password** replaces the refresh cookie (the API revokes every
   session and sets a new one), so it goes through `AuthSession.postWithCookie`: cookie jar
   (`credentials: 'include'`), token fetched before the cross-tab refresh lock, the request under
-  it (never refresh inside it: the lock is not re-entrant), no retry; it assumes `authUrl` =
-  `apiUrl` origin (the cookie is host-only). Theme stays per device (`theme_preference` is v1's
+  it (never refresh inside it: the lock is not re-entrant), no retry, 60 s timeout. It takes a
+  PATH and posts to the **auth origin** (the host-only cookie lives there; that host serves the
+  same API app). The "all meetings" chat session is stored as `{u: userId, s: sessionId}` and
+  ignored for another account. Theme stays per device (`theme_preference` is v1's
   unused theme names). **E2E:** `app/web/playwright.config.ts` + `e2e/core-flow.spec.ts` (EN + VI)
-  run `vite preview` on :4173 against `app/api/scripts/e2e_server.py` on :8000 — the real app on a
+  run `vite preview` on :4173 against `app/api/tests/e2e_server.py` on :8000 — the real app on a
   `ricotdin_test_*` scratch DB with in-memory storage (the browser's Drive PUT is intercepted),
   canned AI and a stand-in worker; test-only, never deployed. `npm run e2e` needs `DATABASE_URL`
   and a build; CI job `e2e` in `ci-web.yml`.
