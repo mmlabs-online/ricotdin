@@ -298,7 +298,8 @@
       "all": "All meetings",
       "none": "No folder",
       "shared": "Shared",
-      "manage": "Manage"
+      "manage": "Manage",
+      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown."
     },
     "empty": {
       "first": "No meetings yet",

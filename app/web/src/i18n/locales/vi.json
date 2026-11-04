@@ -298,7 +298,8 @@
       "all": "Tất cả cuộc họp",
       "none": "Không có thư mục",
       "shared": "Chia sẻ",
-      "manage": "Quản lý thư mục"
+      "manage": "Quản lý thư mục",
+      "loadError": "Không tải được thư mục nên tên thư mục và quyền biên tập chia sẻ chưa hiển thị."
     },
     "empty": {
       "first": "Chưa có cuộc họp nào",

@@ -10,6 +10,7 @@ import {
   useMeetings,
   useMoveMeeting,
   usePinMeeting,
+  usePinsInFlight,
   useRenameMeeting,
   type Meeting,
 } from '../api/meetings'
@@ -43,6 +44,7 @@ export function MeetingsPage() {
   const meetings = useMeetings()
   const folders = useFolders()
   const pin = usePinMeeting()
+  const pinsInFlight = usePinsInFlight()
   const rename = useRenameMeeting()
   const move = useMoveMeeting()
   const del = useDeleteMeeting()
@@ -55,9 +57,16 @@ export function MeetingsPage() {
 
   const folderList = useMemo(() => folders.data ?? [], [folders.data])
   const byId = useMemo(() => new Map(folderList.map((f) => [f.id, f])), [folderList])
-  const list = useMemo(() => filterMeetings(meetings.data ?? [], { search, folder }), [meetings.data, search, folder])
+  // A deleted or unshared folder must not keep the list filtered on nothing.
+  const activeFolder: FolderFilter =
+    folder === 'all' || folder === 'none' || !folders.data || byId.has(folder) ? folder : 'all'
+  const list = useMemo(
+    () => filterMeetings(meetings.data ?? [], { search, folder: activeFolder }),
+    [meetings.data, search, activeFolder],
+  )
   const doneCount = (meetings.data ?? []).filter((m) => m.status === 'done').length
   const fail = (err: unknown) => setNotice({ key: errorKey(err), kind: 'error' })
+
 
   if (meetings.isPending) return <FullPageLoading />
 
@@ -103,6 +112,15 @@ export function MeetingsPage() {
         </div>
       )}
 
+      {folders.isError && (
+        <div className="notice-banner warning" role="status">
+          <span>{t('meetings.folders.loadError')}</span>
+          <Button variant="ghost" onClick={() => void folders.refetch()}>
+            {t('common.tryAgain')}
+          </Button>
+        </div>
+      )}
+
       <div className="toolbar">
         <label className="search">
           <Search size={18} aria-hidden="true" />
@@ -123,8 +141,8 @@ export function MeetingsPage() {
             <button
               key={f.id}
               type="button"
-              className={folder === f.id ? 'active' : ''}
-              aria-pressed={folder === f.id}
+              className={activeFolder === f.id ? 'active' : ''}
+              aria-pressed={activeFolder === f.id}
               onClick={() => setFolder(f.id)}
             >
               {f.name}
@@ -166,7 +184,7 @@ export function MeetingsPage() {
                   meeting={m}
                   role={getMeetingRole(m, me, folderList)}
                   folderName={m.folder_id ? (byId.get(m.folder_id)?.name ?? null) : null}
-                  pinBusy={pin.isPending && pin.variables?.id === m.id}
+                  pinBusy={pinsInFlight.has(m.id)}
                   onPin={() => pin.mutate({ id: m.id, pinned: m.pinned_at === null }, { onError: fail })}
                   onRename={(title) => rename.mutate({ id: m.id, title }, { onError: fail })}
                   onMove={() => setMoving(m)}

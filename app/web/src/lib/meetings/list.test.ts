@@ -71,9 +71,12 @@ describe('status', () => {
     expect(statusKind('weird')).toBe('processing')
   })
   it('polls only while something is still being processed', () => {
-    expect(needsPolling([m('a'), m('b', { status: 'failed' })])).toBe(false)
-    expect(needsPolling([m('a'), m('b', { status: 'processing' })])).toBe(true)
-    expect(needsPolling([m('a', { status: 'pending' })])).toBe(true)
+    const now = Date.parse('2026-11-04T12:00:00Z')
+    expect(needsPolling([m('a'), m('b', { status: 'failed' })], now)).toBe(false)
+    expect(needsPolling([m('a'), m('b', { status: 'processing' })], now)).toBe(true)
+    expect(needsPolling([m('a', { status: 'pending', created_at: '2026-11-04T11:30:00Z' })], now)).toBe(true)
+    // an upload abandoned hours ago stays pending forever: no endless polling for it
+    expect(needsPolling([m('a', { status: 'pending', created_at: '2026-11-04T08:00:00Z' })], now)).toBe(false)
   })
   it('duration parts', () => {
     expect(durationParts(42 * 60 + 10)).toEqual({ hours: 0, minutes: 42 })

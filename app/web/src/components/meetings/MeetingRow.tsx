@@ -33,9 +33,13 @@ export function MeetingRow({
   const [draft, setDraft] = useState(meeting.title)
   const inputRef = useRef<HTMLInputElement>(null)
   const menuWrap = useRef<HTMLDivElement>(null)
+  // One editing session ends once: Enter, blur (also the blur caused by moving focus) or Escape.
+  const doneRef = useRef(false)
 
   useEffect(() => {
-    if (editing) inputRef.current?.select()
+    if (!editing) return
+    doneRef.current = false // a new editing session
+    inputRef.current?.select()
   }, [editing])
 
   const when = new Date(meeting.started_at ?? meeting.created_at)
@@ -54,6 +58,8 @@ export function MeetingRow({
 
   const finishEdit = (e?: FormEvent) => {
     e?.preventDefault()
+    if (doneRef.current) return
+    doneRef.current = true
     const title = draft.trim()
     setEditing(false)
     if (title && title !== meeting.title) onRename(title)
@@ -61,16 +67,13 @@ export function MeetingRow({
     menuWrap.current?.querySelector('button')?.focus()
   }
 
+  function startRename() {
+    setDraft(meeting.title)
+    setEditing(true)
+  }
+
   const items: MenuItem[] = []
-  if (canRename(role))
-    items.push({
-      key: 'rename',
-      label: t('meetings.actions.rename'),
-      onSelect: () => {
-        setDraft(meeting.title)
-        setEditing(true)
-      },
-    })
+  if (canRename(role)) items.push({ key: 'rename', label: t('meetings.actions.rename'), onSelect: startRename })
   if (canMove(role)) items.push({ key: 'move', label: t('meetings.actions.move'), onSelect: onMove })
   if (canDelete(role)) items.push({ key: 'delete', label: t('meetings.actions.delete'), onSelect: onDelete, danger: true })
 
@@ -109,8 +112,10 @@ export function MeetingRow({
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   e.preventDefault()
+                  doneRef.current = true // the blur that follows must not save
                   setDraft(meeting.title)
                   setEditing(false)
+                  menuWrap.current?.querySelector('button')?.focus()
                 }
               }}
             />

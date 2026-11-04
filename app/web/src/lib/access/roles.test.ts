@@ -16,6 +16,9 @@ describe('getMeetingRole', () => {
     expect(getMeetingRole({ user_id: 'u-y', folder_id: 'f-view' }, me, folders)).toBe('viewer')
     expect(getMeetingRole({ user_id: 'u-z', folder_id: null }, me, folders)).toBe('viewer') // admin read
     expect(getMeetingRole({ user_id: 'u-z', folder_id: 'f-unknown' }, me, folders)).toBe('viewer')
+    // someone else's meeting in MY folder: the API gives the folder owner owner-level access,
+    // but pin / move / delete stay with the meeting owner → treat as editor in the UI
+    expect(getMeetingRole({ user_id: 'u-x', folder_id: 'f-own' }, me, folders)).toBe('editor')
   })
 })
 

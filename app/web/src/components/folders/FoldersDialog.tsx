@@ -84,7 +84,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
     const counts = folderDeleteCounts(meetings, deleting.id, me)
     const chat = folderDeleteChatNotice(deleting.memberCount)
     return (
-      <Modal title={t('folders.delete.title', { name: displayText(deleting.name) })} onClose={() => setDeleting(null)}>
+      <Modal key="delete" title={t('folders.delete.title', { name: displayText(deleting.name) })} onClose={() => setDeleting(null)}>
         <p className="modal-copy">{t(chat.key, { count: chat.count })}</p>
         {counts.total > 0 && (
           <label className="check-row">
@@ -123,7 +123,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
   }
 
   return (
-    <Modal title={t('folders.title')} onClose={onClose}>
+    <Modal key="list" title={t('folders.title')} onClose={onClose}>
       {errorKey && (
         <p className="notice-banner error" role="alert">
           {t(errorKey)}

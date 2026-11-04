@@ -12,7 +12,9 @@ export function getMeetingRole(
   if (meeting.user_id === currentUserId) return 'owner'
   if (!meeting.folder_id) return 'viewer'
   const role = folders.find((f) => f.id === meeting.folder_id)?.myRole
-  return role === 'editor' ? 'editor' : 'viewer'
+  // Someone else's meeting in my own folder: the API lets the folder owner rename it, but pin,
+  // move and delete stay with the meeting owner — 'editor' gives exactly that in the UI.
+  return role === 'editor' || role === 'owner' ? 'editor' : 'viewer'
 }
 
 export const canRename = (role: MeetingRole): boolean => role === 'owner' || role === 'editor'

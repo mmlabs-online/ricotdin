@@ -54,8 +54,13 @@ export function withTitle<T extends MeetingRow>(list: readonly T[], id: string, 
   return list.map((m) => (m.id === id ? { ...m, title } : m))
 }
 
-export function needsPolling(list: readonly MeetingRow[]): boolean {
-  return list.some((m) => m.status === 'pending' || m.status === 'processing')
+/** A `pending` meeting older than this is an abandoned upload (never confirmed): not worth polling. */
+const PENDING_POLL_MS = 2 * 3600 * 1000
+
+export function needsPolling(list: readonly MeetingRow[], now = Date.now()): boolean {
+  return list.some(
+    (m) => m.status === 'processing' || (m.status === 'pending' && now - time(m.created_at) < PENDING_POLL_MS),
+  )
 }
 
 export function statusKind(status: string): 'success' | 'processing' | 'danger' {

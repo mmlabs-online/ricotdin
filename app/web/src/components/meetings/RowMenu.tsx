@@ -62,6 +62,8 @@ export function RowMenu({ label, items }: { label: string; items: MenuItem[] }):
               className={item.danger ? 'danger' : ''}
               onClick={() => {
                 setOpen(false)
+                // focus the trigger first: a dialog opened by onSelect returns focus there
+                triggerRef.current?.focus()
                 item.onSelect()
               }}
             >

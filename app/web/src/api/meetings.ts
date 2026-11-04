@@ -1,7 +1,7 @@
 // Meetings + folders data (ARC-13a). Optimistic pin / rename / move revert on error (spec).
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFetchApi } from '../auth/AuthProvider'
-import { needsPolling, withPin, withTitle, type MeetingRow } from '../lib/meetings/list'
+import { needsPolling, sortMeetings, withPin, withTitle, type MeetingRow } from '../lib/meetings/list'
 import { meetingsAfterFolderDelete } from '../lib/folders/deleteNotice'
 import { apiJson } from './json'
 
@@ -42,13 +42,18 @@ export const keys = {
 
 const POLL_MS = 5000
 
+export const MEETING_EDIT = ['meetings', 'edit'] as const
+
 export function useMeetings() {
   const fetchApi = useFetchApi()
+  const qc = useQueryClient()
   return useQuery({
     queryKey: keys.meetings,
     queryFn: async () => (await apiJson<{ meetings: Meeting[] }>(fetchApi, '/meetings')).meetings,
-    // Keep the status fresh while something is uploading or processing (PRP-07).
-    refetchInterval: (q) => (q.state.data && needsPolling(q.state.data) ? POLL_MS : false),
+    // Keep the status fresh while something is uploading or processing (PRP-07), but never while
+    // an edit is in flight: an older server list would briefly undo the optimistic change.
+    refetchInterval: (q) =>
+      q.state.data && needsPolling(q.state.data) && qc.isMutating({ mutationKey: MEETING_EDIT }) === 0 ? POLL_MS : false,
   })
 }
 
@@ -60,36 +65,67 @@ export function useFolders() {
   })
 }
 
-/** Optimistic change of the cached list, rolled back if the request fails. */
-function useListMutation<V>(request: (v: V) => Promise<unknown>, apply: (list: Meeting[], v: V) => Meeting[]) {
+/** Optimistic change of one meeting, rolled back for THAT meeting only if the request fails
+ * (other rows may have their own edits in flight). The list is refetched once the last edit settles. */
+function useRowMutation<V extends { id: string }, R>(
+  kind: string,
+  request: (v: V) => Promise<R>,
+  apply: (list: Meeting[], v: V) => Meeting[],
+  onServer?: (list: Meeting[], v: V, result: R) => Meeting[],
+) {
   const qc = useQueryClient()
   return useMutation({
+    mutationKey: [...MEETING_EDIT, kind],
     mutationFn: request,
     onMutate: async (v: V) => {
       await qc.cancelQueries({ queryKey: keys.meetings })
-      const before = qc.getQueryData<Meeting[]>(keys.meetings)
-      if (before) qc.setQueryData(keys.meetings, apply(before, v))
+      const before = qc.getQueryData<Meeting[]>(keys.meetings)?.find((m) => m.id === v.id)
+      qc.setQueryData<Meeting[]>(keys.meetings, (list) => (list ? apply(list, v) : list))
       return { before }
     },
-    onError: (_err, _v, ctx) => {
-      if (ctx?.before) qc.setQueryData(keys.meetings, ctx.before)
+    onSuccess: (result, v) => {
+      if (onServer) qc.setQueryData<Meeting[]>(keys.meetings, (list) => (list ? onServer(list, v, result) : list))
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.meetings }),
+    onError: (_err, v, ctx) => {
+      const prev = ctx?.before
+      if (prev) {
+        qc.setQueryData<Meeting[]>(keys.meetings, (list) =>
+          list ? sortMeetings(list.map((m) => (m.id === v.id ? prev : m))) : list,
+        )
+      }
+    },
+    onSettled: () => {
+      // isMutating still counts this mutation while onSettled runs
+      if (qc.isMutating({ mutationKey: MEETING_EDIT }) <= 1) void qc.invalidateQueries({ queryKey: keys.meetings })
+    },
   })
 }
 
 export function usePinMeeting() {
   const fetchApi = useFetchApi()
-  return useListMutation<{ id: string; pinned: boolean }>(
-    // The API toggles (no body): callers disable the button while a pin request is in flight.
+  return useRowMutation<{ id: string; pinned: boolean }, { pinned_at?: string | null }>(
+    'pin',
+    // The API toggles (no body): callers disable the row's button while its pin is in flight.
     ({ id }) => apiJson(fetchApi, `/meetings/${encodeURIComponent(id)}/pin`, { method: 'PATCH' }),
     (list, { id, pinned }) => withPin(list, id, pinned ? new Date().toISOString() : null),
+    // the toggle's real result wins over our guess
+    (list, { id }, res) => (res && 'pinned_at' in res ? withPin(list, id, res.pinned_at ?? null) : list),
   )
+}
+
+/** Meeting ids whose pin request is in flight (each row disables its own button). */
+export function usePinsInFlight(): Set<string> {
+  const pending = useMutationState({
+    filters: { mutationKey: [...MEETING_EDIT, 'pin'], status: 'pending' },
+    select: (m) => (m.state.variables as { id?: string } | undefined)?.id,
+  })
+  return new Set(pending.filter((id): id is string => typeof id === 'string'))
 }
 
 export function useRenameMeeting() {
   const fetchApi = useFetchApi()
-  return useListMutation<{ id: string; title: string }>(
+  return useRowMutation<{ id: string; title: string }, unknown>(
+    'rename',
     ({ id, title }) => apiJson(fetchApi, `/meetings/${encodeURIComponent(id)}`, { method: 'PATCH', body: { title } }),
     (list, { id, title }) => withTitle(list, id, title),
   )
@@ -97,14 +133,14 @@ export function useRenameMeeting() {
 
 export function useMoveMeeting() {
   const fetchApi = useFetchApi()
-  return useListMutation<{ id: string; folderId: string | null }>(
+  return useRowMutation<{ id: string; folderId: string | null }, unknown>(
+    'move',
     ({ id, folderId }) =>
       apiJson(fetchApi, `/meetings/${encodeURIComponent(id)}`, { method: 'PATCH', body: { folder_id: folderId } }),
     (list, { id, folderId }) => list.map((m) => (m.id === id ? { ...m, folder_id: folderId } : m)),
   )
 }
 
-/** Not optimistic: the API deletes the audio first and may answer with a storage warning. */
 export function useDeleteMeeting() {
   const fetchApi = useFetchApi()
   const qc = useQueryClient()
