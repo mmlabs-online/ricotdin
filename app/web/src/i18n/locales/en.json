@@ -1,0 +1,103 @@
+{
+  "app": {
+    "name": "Ricotdin",
+    "loading": "Loading…",
+    "privacy": "Your meetings are private"
+  },
+  "nav": {
+    "main": "Main navigation",
+    "mobile": "Mobile navigation",
+    "meetings": "Meetings",
+    "record": "Record",
+    "chat": "Chat",
+    "profile": "Profile",
+    "admin": "Admin",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  },
+  "menu": {
+    "open": "Account menu",
+    "language": "Language",
+    "colorTheme": "Color theme",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "toggleTheme": "Toggle light and dark mode",
+    "signOut": "Sign out",
+    "useTheme": "Use the {{name}} theme"
+  },
+  "theme": {
+    "rose": "Rose",
+    "sage": "Sage",
+    "plum": "Plum",
+    "ocean": "Ocean"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "enShort": "EN",
+    "viShort": "VI"
+  },
+  "auth": {
+    "welcome": "Welcome back",
+    "title": "Sign in to Ricotdin",
+    "subtitle": "Continue to your meetings, notes, and assistant.",
+    "identifier": "Email or username",
+    "identifierPlaceholder": "Enter your email or username",
+    "password": "Password",
+    "passwordPlaceholder": "Your password",
+    "forgot": "Forgot password?",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "newHere": "New to Ricotdin?",
+    "createAccount": "Create an account",
+    "comingSoon": "This page is not available yet.",
+    "errors": {
+      "missing": "Enter your email or username and your password.",
+      "invalid_credentials": "That email, username or password is not right.",
+      "email_not_verified": "Please verify your email first. Check your inbox for the link.",
+      "account_disabled": "This account has been disabled. Contact an administrator.",
+      "rate_limited": "Too many attempts. Wait a few minutes and try again.",
+      "network": "Cannot reach the server. Check your connection and try again.",
+      "generic": "Sign-in failed. Please try again."
+    }
+  },
+  "page": {
+    "workspace": "Workspace",
+    "comingSoon": "This screen is being connected to the new backend.",
+    "meetings": { "title": "Meetings", "subtitle": "Search, revisit, and ask questions across every conversation." },
+    "meetingDetail": { "title": "Meeting", "subtitle": "Summary, notes, to-dos and transcript.", "back": "Back to meetings" },
+    "record": { "eyebrow": "New meeting", "title": "Record or upload", "subtitle": "Capture the conversation. Ricotdin will handle the rest." },
+    "chat": { "title": "Ask your meetings", "subtitle": "Answers include links back to the source." },
+    "profile": { "eyebrow": "Account", "title": "Profile & preferences", "subtitle": "Manage your account, appearance, and usage." },
+    "notFound": { "title": "Page not found", "subtitle": "The page you are looking for does not exist.", "home": "Go to meetings" },
+    "forbidden": { "title": "No access", "subtitle": "You need administrator rights to open this page.", "home": "Go to meetings" }
+  },
+  "admin": {
+    "brand": "Administration",
+    "eyebrow": "Administration",
+    "subtitle": "Manage your workspace infrastructure, access, and operations.",
+    "sections": "Admin sections",
+    "returnToApp": "Return to workspace",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "pipeline": "Pipeline",
+      "usage": "Usage",
+      "keys": "API keys",
+      "storage": "Storage",
+      "config": "Config",
+      "activity": "Activity",
+      "audit": "Audit log",
+      "features": "Features",
+      "health": "Health",
+      "docs": "API docs"
+    }
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "The page hit an unexpected error. Reload to try again.",
+    "reload": "Reload",
+    "config": "The app is not configured correctly. Contact an administrator."
+  }
+}

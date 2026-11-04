@@ -1,0 +1,36 @@
+# ARC-11 SPA server. Rendered by the nginx image from /etc/nginx/templates (RICOTDIN_* only).
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+  server_tokens off;
+  charset utf-8;
+
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # Runtime config: one image for staging and production.
+  location = /config.json {
+    include /etc/nginx/conf.d/security-headers.inc;
+    add_header Cache-Control "no-store" always;
+    default_type application/json;
+    return 200 '{"apiUrl":"${RICOTDIN_API_URL}","authUrl":"${RICOTDIN_AUTH_URL}"}';
+  }
+
+  # Hashed build output: cache forever.
+  location /assets/ {
+    include /etc/nginx/conf.d/security-headers.inc;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri =404;
+  }
+
+  # Every other path is a client-side route: serve index.html, never cached.
+  location / {
+    include /etc/nginx/conf.d/security-headers.inc;
+    add_header Cache-Control "no-store" always;
+    try_files $uri /index.html;
+  }
+}

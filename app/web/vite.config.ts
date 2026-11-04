@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
-// ARC-00 skeleton. Replaced/extended by the Figma Make import in ARC-11.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  build: { sourcemap: false },
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },

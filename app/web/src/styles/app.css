@@ -1,0 +1,29 @@
+/* Additions to the Figma Make stylesheet (index.css stays as imported). */
+.full-page-state {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+.full-page-state h1 { margin: 0; font-size: var(--text-lg); }
+.full-page-state p { margin: 0; color: var(--muted); font-size: var(--text-md); max-width: 420px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.auth-card .auth-error {
+  margin: 0 0 15px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.auth-card button:disabled { cursor: not-allowed; opacity: .6; }
+a.nav-item, a.side-link, .mobile-nav a, .admin-nav a, a.button { text-decoration: none; }

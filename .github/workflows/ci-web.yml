@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   web:
-    name: typecheck · test · build
+    name: typecheck · lint · test · build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,8 +37,47 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      - name: Lint (incl. no hard-coded user-facing strings)
+        run: npm run lint
+
       - name: Test
         run: npm test
 
       - name: Build
         run: npm run build
+
+  image:
+    name: nginx image
+    runs-on: ubuntu-latest
+    needs: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t ricotdin-web:ci app/web
+
+      - name: Refuses to start without a valid API origin
+        run: |
+          if docker run --rm -e RICOTDIN_API_URL='https://x.test/;evil' ricotdin-web:ci; then
+            echo "started with a bad RICOTDIN_API_URL"; exit 1
+          fi
+
+      - name: Serves the app, its runtime config and the security headers
+        run: |
+          docker run -d --name web -p 8080:8080 -e RICOTDIN_API_URL=https://api.example.test ricotdin-web:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/config.json | tee /dev/stderr \
+            | grep -qx '{"apiUrl":"https://api.example.test","authUrl":"https://api.example.test"}'
+          curl -fsS http://127.0.0.1:8080/meetings/abc | grep -q '<div id="root">'
+          headers="$(curl -fsSI http://127.0.0.1:8080/)"
+          echo "$headers"
+          echo "$headers" | grep -qi "^content-security-policy: default-src 'none'; script-src 'self'"
+          echo "$headers" | grep -qi "connect-src 'self' https://api.example.test"
+          echo "$headers" | grep -qi '^cache-control: no-store'
+          echo "$headers" | grep -qi '^x-content-type-options: nosniff'
+          [ "$(docker exec web id -u)" != "0" ]
+
+      - name: Logs on failure
+        if: failure()
+        run: docker logs web || true
