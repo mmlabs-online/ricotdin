@@ -221,3 +221,13 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 | Supabase custom access token hook, `anon` / `authenticated` grants | replaced by own JWT + app DB roles (ARC-02, ARC-05) |
 | Legacy Supabase Storage reads (`storage_provider = 'supabase'`) | objects copied to R2 in ARC-03 |
 | `legacy/lib/paths/shared.ts` (+ `shared-path` test) | v1-only path helper for the `legacy/` layout (ARC-00) |
+
+## Open follow-ups from ARC-13 reviews
+
+| Item | Area | Where it came from | Status |
+|---|---|---|---|
+| Reprocess a `done` meeting: `/process` queues a job but the worker claims only `pending`/`failed` meetings, so it ends without work. Needs an API path (e.g. move to `pending`) before the UI offers it | API (worker / meetings) | 13b code review | todo |
+| Drive orphan sweeper for upload sessions that are never confirmed (before go-live) | API (storage) | ARC-12 | todo |
+| API rejects bidi / zero-width characters in folder names and meeting titles (`parse_folder_name`, `parse_meeting_patch`) | API | 13a security review | todo |
+| Route code splitting (bundle > 500 kB) | web | build warning | todo |
+| Minor a11y: debounce the transcript match-count announcement; persistent `role=alert` node for error banners; chat messages as a list | web | 13b a11y review | todo |
