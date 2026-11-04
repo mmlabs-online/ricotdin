@@ -59,3 +59,33 @@ a.nav-item, a.side-link, .mobile-nav a, .admin-nav a, a.button { text-decoration
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* --- Record / upload (ARC-12) --- */
+.record-orb.live { background: var(--danger); }
+.record-timer { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); margin: 6px auto 18px; }
+.record-preview { width: min(440px, 100%); margin: 0 auto 16px; display: block; }
+.record-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+.notice-banner { display: flex; gap: 8px; align-items: flex-start; text-align: left; max-width: 520px; margin: 0 auto 16px; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.5; }
+.notice-banner.warning { background: var(--warning-soft); color: var(--warning); }
+.notice-banner.error { background: var(--danger-soft); color: var(--danger); margin-top: 12px; }
+.notice-banner svg { flex: none; margin-top: 2px; }
+.missing-list { text-align: left; display: inline-block; margin: 0 auto; color: var(--muted); font-size: 13px; }
+.dropzone.dragging { border-color: var(--primary); background: var(--primary-soft); }
+.file-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 13px; }
+.file-row .file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row .file-size { color: var(--muted); }
+.upload-status { margin: 16px auto 0; max-width: 520px; text-align: center; font-size: 13px; }
+.upload-status label { display: flex; flex-direction: column; gap: 8px; }
+.upload-status progress { width: 100%; height: 8px; accent-color: var(--primary); }
+.upload-status.success p { color: var(--success); }
+.upload-status.error p { color: var(--danger); }
+.audio-native { display: flex; align-items: center; gap: 12px; }
+.audio-native audio { flex: 1; min-width: 0; }
+.audio-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* ARC-12 accessibility review */
+:root:not(.dark) .notice-banner.warning { color: #8a5b17; } /* 4.49:1 → ~5:1 on --warning-soft */
+.dark .record-orb { color: #2b1825; }
+.dropzone { padding: 18px 16px; }
+.capture-list, .dropzone p, .date-row p { font-size: 12px; }
+.upload-status { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.upload-status progress:focus-visible { outline-offset: 4px; }

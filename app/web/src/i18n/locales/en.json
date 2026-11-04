@@ -133,5 +133,95 @@
     "config": "The app is not configured correctly. Contact an administrator.",
     "unavailable": "Cannot reach the server right now. Check your connection, then try again.",
     "retry": "Try again"
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "tryAgain": "Try again"
+  },
+  "player": {
+    "scanning": "Preparing playback…"
+  },
+  "record": {
+    "start": "Start recording",
+    "waiting": "Waiting for permission…",
+    "stop": "Stop recording",
+    "elapsed": "Recording time",
+    "preview": "Recording preview",
+    "discard": "Discard",
+    "upload": "Upload and process",
+    "another": "Record another meeting",
+    "stopped": "Recorded {{time}} ({{size}}). Listen back, then upload it for processing.",
+    "noTabAudio": "No tab or system audio is being recorded — only your microphone. To include the other participants, stop, start again and tick \"Share tab audio\" in the sharing dialog.",
+    "noTabAudioAfter": "This recording has only your microphone: tab or system audio was not shared.",
+    "card": {
+      "title": "Record this meeting",
+      "body": "Capture your microphone and tab or system audio securely in your browser."
+    },
+    "capture": {
+      "mic": "Microphone audio",
+      "tab": "Tab or system audio",
+      "secure": "Encrypted upload"
+    },
+    "notice": {
+      "title": "Before you record",
+      "body": "This app will record and transcribe the meeting. Everyone taking part should know about the recording and agree to it before you start. Recording laws vary by location.",
+      "scriptLabel": "Suggested opening",
+      "script": "“Before we begin: I'm going to record this meeting so I can transcribe it and take notes. Please let me know now if you don't want to be recorded.”",
+      "confirm": "I understand — start recording"
+    },
+    "unsupported": {
+      "title": "This browser cannot record meetings",
+      "body": "Use a recent Chrome or Edge on a computer. You can still upload a recording below. Missing:"
+    },
+    "missing": {
+      "browser": "A browser environment",
+      "display": "Screen or tab capture",
+      "mic": "Microphone access",
+      "recorder": "Media recording",
+      "codec": "A supported audio format (WebM, Ogg or MP4)"
+    },
+    "errors": {
+      "denied": "Permission denied — allow microphone and screen access, then try again.",
+      "noMic": "No microphone found — connect a microphone and try again.",
+      "cancelled": "Screen sharing was cancelled.",
+      "state": "The recorder stopped unexpectedly — try again.",
+      "generic": "Recording could not start. Try again."
+    },
+    "leaveConfirm": "You have a recording or upload in progress. Leave this page and lose it?",
+    "startedAnnounce": "Recording started.",
+    "stoppedAnnounce": "Recording stopped after {{time}}."
+  },
+  "upload": {
+    "or": "or upload a file",
+    "drop": "Drop an audio or video file here",
+    "choose": "Choose file",
+    "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM or video (MP4, MOV, AVI, MKV, M4V) · max {{max}}",
+    "date": "Meeting date",
+    "dateHelp": "Used to organise your timeline.",
+    "start": "Upload and process",
+    "uploading": "Uploading… {{pct}}%",
+    "done": "Uploaded. Processing has started — it usually takes a few minutes.",
+    "openMeeting": "Open meeting",
+    "errors": {
+      "type": "Unsupported file type “{{ext}}”. Use an audio or video file.",
+      "size": "The file is too large. The maximum is {{max}}.",
+      "empty": "The file is empty.",
+      "network": "Upload interrupted — check your connection and try again.",
+      "aborted": "Upload cancelled.",
+      "tooMany": "Too many uploads right now. Wait a while, or delete unfinished uploads, then try again.",
+      "rejected": "The server refused this file.",
+      "unavailable": "Storage is not available right now. Try again later.",
+      "drive": "The file could not be stored. Try again.",
+      "confirm": "The file was uploaded but could not be checked. Open your meetings list, or try again.",
+      "generic": "Upload failed. Try again.",
+      "avatarType": "Use a JPEG, PNG or WebP image.",
+      "avatarSize": "The image must be smaller than 2 MB."
+    },
+    "title": "Upload a file",
+    "selected": "Selected {{name}}, {{size}}",
+    "removeNamed": "Remove {{name}}",
+    "started": "Uploading…",
+    "progressLabel": "Upload progress"
   }
 }

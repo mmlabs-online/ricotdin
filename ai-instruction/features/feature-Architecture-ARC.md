@@ -711,7 +711,7 @@ Figma Make output is a prototype: mock data, state-based navigation, hard-coded 
 ---
 
 ### ARC-12 — Port browser-only logic
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (2026-11-04; Record screen + building blocks; upload cap 500 MB, owner decision). Done check (2 min Chrome recording processed in staging) deferred to ARC-15 staging.
 
 **User Story**  
 As a user, I want recording, the recording notice, uploads and audio playback to behave exactly as in v1 inside the new UI.
@@ -720,7 +720,7 @@ As a user, I want recording, the recording notice, uploads and audio playback to
 These features have no server equivalent and are not in the Figma Make output: REC-01..05, COM-01, MTD-02, §9j, §9n.
 
 **Use Cases**
-1. Start recording → notice → tab + mic mixed → upload to R2 → processing.
+1. Start recording → notice → tab + mic mixed → upload to Google Drive (ARC-17) → processing.
 2. Click a transcript timestamp → player seeks.
 
 **Frontend**

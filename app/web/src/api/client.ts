@@ -33,3 +33,11 @@ export function authFetch(session: AuthSession, apiUrl: string, fetchFn: typeof 
 export function createApiClient(apiUrl: string, session: AuthSession): ApiClient {
   return createClient<paths>({ baseUrl: apiUrl, fetch: authFetch(session, apiUrl) })
 }
+
+/** Authenticated request to an API path (bodies the typed client does not describe, uploads). */
+export type FetchApi = (path: string, init?: RequestInit) => Promise<Response>
+
+export function createFetchApi(apiUrl: string, session: AuthSession): FetchApi {
+  const run = authFetch(session, apiUrl)
+  return (path, init) => run(new Request(`${apiUrl}${path}`, init))
+}

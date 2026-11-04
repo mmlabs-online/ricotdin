@@ -26,7 +26,7 @@ import anyio
 
 from app.core.logging import get_logger
 from app.db.session import Database
-from app.domain.uploads import MAX_UPLOAD_BYTES
+from app.domain.uploads import MAX_STORED_AUDIO_BYTES
 from app.services.platform import Platform
 from app.services.storage.gdrive import DriveStorage, MemoryObjectMap
 from app.worker.errors import PipelineError
@@ -195,4 +195,4 @@ async def download(db: Database, platform: Platform, key: str, target: Path) -> 
     reader = DriveStorage(
         storage.client, MemoryObjectMap({key: obj}), storage.signer, storage.web_origin
     )
-    return await reader.download_to_file(key, target, max_bytes=MAX_UPLOAD_BYTES)
+    return await reader.download_to_file(key, target, max_bytes=MAX_STORED_AUDIO_BYTES)
