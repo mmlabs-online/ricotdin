@@ -25,23 +25,23 @@
 | PRP-01 | Audio upload | ARC-07 | `POST /meetings` (presigned R2 PUT), `POST /meetings/{id}/uploaded` | todo | Record | todo | storage-config | browser → R2 direct |
 | PRP-02 | Format transcoding | ARC-08 | — (worker) | done | — | n/a | transcode, ffprobe | ffmpeg mono 16 kHz (08a, `app/worker/audio.py`; input guards); Gemini long-audio chunking not ported (owner 2026-11-02) |
 | PRP-03 | Transcript generation | ARC-08 | — (worker) | todo | — | n/a | speechmatics, pipeline-parse | |
-| PRP-04 | Summary & meeting notes | ARC-08 | — (worker), `POST /meetings/{id}/regenerate` | todo | Meeting detail | todo | pipeline-parse | prompt `ai-instruction/ai-gen/` |
+| PRP-04 | Summary & meeting notes | ARC-08 | — (worker), `POST /meetings/{id}/regenerate` | todo | Meeting detail | done (13b) | pipeline-parse | prompt `ai-instruction/ai-gen/` |
 | PRP-05 | Extract to-dos & calendar mentions | ARC-08 | — (worker) | todo | — | n/a | pipeline-parse | |
 | PRP-06 | RAG embeddings | ARC-08 | — (worker) | todo | — | n/a | chunk | 768 dims |
-| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | in_progress | Meetings list, Meeting detail | todo | processMeeting-guard, error-message | API: status + queueing done (ARC-07); `process` queues at most one active job, 30/h per user (ARC-08a); the worker is ARC-08; 0-segment guard |
+| PRP-07 | Processing status & retry | ARC-07, ARC-08 | `GET /meetings/{id}` (status), `POST /meetings/{id}/process` | in_progress | Meetings list, Meeting detail | done (list 13a, detail 13b) | processMeeting-guard, error-message | API: status + queueing done (ARC-07); `process` queues at most one active job, 30/h per user (ARC-08a); the worker is ARC-08; 0-segment guard |
 | PRP-08 | Long-meeting support | ARC-08 | — (worker) | todo | — | n/a | chunk, transcode | |
-| MTD-01 | Meeting detail page | ARC-07, ARC-13 | `GET /meetings/{id}`, `GET /meetings/{id}/transcript`, `GET /meetings/{id}/todos`, `GET /meetings/{id}/calendar-suggestions` *(proposed)* | done | Meeting detail | todo | transcript-export | replaces direct Supabase reads (table d) |
-| MTD-02 | Audio player | ARC-07, ARC-12 | `GET /meetings/{id}/audio-url` | todo | Meeting detail | todo | audio-duration-fix | `hackAudioRender` flag in response |
-| MTD-03 | To-do interaction | ARC-07 | `PATCH /todos/{id}` | done | Meeting detail | todo | — | jump to source segment |
-| RAG-01 | Q&A scope | ARC-09 | `POST /chat` (meeting / folder / global scope) | todo | Chat, Meeting detail | todo | rag | |
+| MTD-01 | Meeting detail page | ARC-07, ARC-13 | `GET /meetings/{id}`, `GET /meetings/{id}/transcript`, `GET /meetings/{id}/todos`, `GET /meetings/{id}/calendar-suggestions` *(proposed)* | done | Meeting detail | done (13b) | transcript-export | replaces direct Supabase reads (table d) |
+| MTD-02 | Audio player | ARC-07, ARC-12 | `GET /meetings/{id}/audio-url` | todo | Meeting detail | done (13b) | audio-duration-fix | `hackAudioRender` flag in response |
+| MTD-03 | To-do interaction | ARC-07 | `PATCH /todos/{id}` | done | Meeting detail | done (13b) | — | jump to source segment |
+| RAG-01 | Q&A scope | ARC-09 | `POST /chat` (meeting / folder / global scope) | todo | Chat, Meeting detail | meeting chat done (13b), Chat page 13c | rag | |
 | RAG-02 | Grounded answers | ARC-09 | `POST /chat` | todo | Chat | todo | rag | "not found" answer |
-| RAG-03 | Citations & history | ARC-09 | `POST /chat`, `GET /chat?meetingId=&folderId=` | todo | Chat, Meeting detail | todo | rag | invented chunk ids dropped |
+| RAG-03 | Citations & history | ARC-09 | `POST /chat`, `GET /chat?meetingId=&folderId=` | todo | Chat, Meeting detail | meeting chat done (13b), Chat page 13c | rag | invented chunk ids dropped |
 | RAG-04 | Folder-scoped chat | ARC-09 | `POST /chat` (folderId) | todo | Folder view | todo | rag-folder | access-filtered retrieval |
-| CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | done | Meeting detail | todo | ics | |
-| CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | done | Meeting detail | todo | ics | |
-| CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | done | Meeting detail | todo | — | |
+| CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | done | Meeting detail | done (13b) | ics | |
+| CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | done | Meeting detail | done (13b) | ics | |
+| CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | done | Meeting detail | done (13b) | — | |
 | MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | done | Meetings list | done (13a) | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
-| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | done | Meetings list, Meeting detail | list done (13a), detail 13b | — | |
+| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | done | Meetings list, Meeting detail | done (list 13a, detail 13b) | — | |
 | MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | done | Meetings list | done (13a) | — | |
 | MMG-04 | Delete meeting | ARC-07 | `DELETE /meetings/{id}` | done | Meetings list | done (13a) | retention | audio deleted first, `warning` on failure |
 | AUT-01 | Sign up | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | done | Register, Verify email | done (13a) | auth-validate | |
@@ -67,7 +67,7 @@
 | REL-01 | Durable job queue/worker | ARC-08 | — (worker, Postgres `SKIP LOCKED`) | in_progress | — | n/a | processMeeting-guard | 08a: `JobRunner` + step `start`, one active job per meeting (migration 0005); steps transcribe_poll/analyse/embed in 08b–08d |
 | REL-02 | Stuck-job recovery | ARC-08, ARC-10 | — (worker), `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | todo | admin-pipeline | |
 | REL-03 | Idempotent retries | ARC-08 | — (worker) | in_progress | — | n/a | processMeeting-guard | 08a: backoff + terminal errors, guarded job writes, restart-safe `start`; later steps 08b–08d |
-| PRV-02 | Retention & deletion policy | ARC-08 | — (scheduler) | todo | Meeting detail ("audio deleted") | todo | retention | 409 on reprocess without audio |
+| PRV-02 | Retention & deletion policy | ARC-08 | — (scheduler) | todo | Meeting detail ("audio deleted") | done (13b) | retention | 409 on reprocess without audio |
 | PRV-03 | Encrypt & purge audio after processing | ARC-08 | — (superseded by PRV-02) | n/a | — | n/a | retention | carried by PRV-02 |
 | OBS-01 | Error tracking | ARC-04, ARC-11 | — (Sentry in api, body stripped) | todo | — (Sentry in web) | todo | — | |
 | OBS-02 | Structured logging | ARC-04 | — (core logging, secret redaction) | todo | — | n/a | — | |
@@ -83,13 +83,13 @@
 | COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | done | Record (notice dialog) | done | recording-notice, activity-log | 12 h ack per tab |
 | COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | in_progress | Meetings list, Manage folders | done (13a) | folder-shares, folder-delete-notice | all routes done except `DELETE /folders/{id}?deleteMeetings=true` (503 until ARC-07 part 2); moving a meeting = `PATCH /meetings/{id}` |
 | QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | done | Profile | todo | quota | balance stays in `GET /profile` for parity |
-| QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
+| QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | done (13b) | quota | |
 | QUO-03 | Ask-agent enforcement | ARC-09 | `POST /chat` (pre-check + deduct) | todo | Chat | todo | quota | |
 | QUO-04 | Idempotent deduction | ARC-08 | — (worker, same transaction as usage) | in_progress | — | n/a | quota, quota-integration | 08a: reserve + refund keyed per job (`gen:<job_id>:…`, owner 2026-11-02); settle 08b, reconcile 08e |
 | QUO-05 | Top-up & balance display | ARC-07, ARC-10 | `GET /profile` (balance), `GET/POST /admin/users/{id}/quota` | in_progress | Profile, Admin › User detail | todo | quota | user balance done (ARC-07); admin top-up is ARC-10 |
 | AIP-01 | Provider interface & registry | ARC-08 | — (AI service layer) | todo | — | n/a | ai-registry | |
 | AIP-02 | OpenAI adapter | ARC-08 | — (AI service layer) | todo | — | n/a | ai-openai-adapter, ai-gemini-adapter | also the Grok (xAI) adapter, `legacy/lib/grok` |
-| AIP-03 | Per-meeting model lock | ARC-08 | — (worker) | todo | Meeting detail (model label) | todo | aip-model-lock, model-label | |
+| AIP-03 | Per-meeting model lock | ARC-08 | — (worker) | todo | Meeting detail (model label) | done (13b) | aip-model-lock, model-label | |
 | AIP-04 | Cross-meeting RAG model rule | ARC-09 | `POST /chat` | todo | — | n/a | aip04-chat-model | |
 | AIP-05 | Provider-aware key pool | ARC-06 | — (key pool service) | todo | — | n/a | key-pool-base, key-pool-speechmatics, key-healthcheck | |
 | AIP-06 | Control plane | ARC-07, ARC-10 | `GET/PATCH /admin/generation-config`, `GET/PATCH /profile/preferences` | in_progress | Admin › Config, Profile | todo | aip-control-plane | `/profile/preferences` done (ARC-07); admin config is ARC-10 |
@@ -178,7 +178,7 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 | Client role helpers (canPin / canEdit / canDelete / canManageShares) | `legacy/lib/access/roles.ts` | `app/web/src/lib/access/` | ARC-13 | todo | folder-shares |
 | Avatar upload (presigned PUT to R2, then confirm) | `legacy/app/(routes)/profile/page.tsx` | Profile | ARC-12 | done (`uploadAvatar`; Profile screen ARC-13) | avatar-key |
 | Model label | `legacy/lib/ai/modelLabel.ts` | `app/web/src/lib/` | ARC-13 | todo | model-label |
-| Audio state ("purged") display | `legacy/lib/retention/policy.ts` (`audioState`) | Meeting detail | ARC-13 | todo | retention |
+| Audio state ("purged") display | `legacy/lib/retention/policy.ts` (`audioState`) | Meeting detail | ARC-13 | done (13b, `audioState` in `lib/meetings/detail.ts`) | retention |
 | Admin usage / health / config view helpers | `legacy/lib/admin/usage.ts`, `health.ts`, `config.ts` | `app/web/src/lib/admin/` | ARC-14 | todo | usage-by-user, admin-ext |
 | Session handling (getSession / onAuthStateChange / signOut) | `legacy/lib/supabase/auth.ts`, `browser.ts` (`legacy/components/AuthBootstrap.tsx` is a dead stub — not ported) | `app/web/src/lib/auth/` (in-memory access token + silent refresh) | ARC-11 | todo | — |
 | Theme | `legacy/lib/theme`, `legacy/hooks/useTheme.ts`, `ThemeProvider.tsx`, `ThemeSwitcher.tsx` | light/dark only (3 legacy themes dropped) | ARC-11 | todo | — |

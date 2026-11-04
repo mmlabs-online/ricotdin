@@ -798,6 +798,21 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   (no polling while one is in flight, per-row rollback, refetch after the last one settles);
   controls that disappear hand focus to a stable one (`data-*` targets, `aria-disabled` instead
   of `disabled` on buttons that keep focus); `Modal` traps also `select` / `textarea`.
+  13b: `/meetings/:id` = `MeetingDetailPage` (Make MeetingDetail) + `components/meeting/{DetailPanels,
+  MeetingChat}.tsx`, data in `src/api/meetingDetail.ts` (keys `['meeting', id, …]`; meeting polled
+  every 5 s while pending/processing, never while an edit with key `['meeting','edit']` is in flight;
+  children load once the meeting is `done` and reload when it turns `done`). Pure rules:
+  `lib/meetings/detail.ts` (audio state, quota failure, speaker groups, past due, owner actions,
+  `actionErrorKey`), `lib/chat/chat.ts` (untrusted chat answers: malformed citations dropped).
+  **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
+  `lib/markdown.ts`:** headings, lists, bold/italic/code; links and images become their text, HTML
+  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`. Regenerate and
+  "process again" (both charge quota) ask first; a failed meeting's "Process again" does not.
+  After `/process` the page shows `processing` until polling brings the worker's status (no
+  immediate refetch). The `/media` link (`useApiUrl()` + path) is refetched when the player
+  errors (at most every 30 s). `?t=<s>` opens the transcript tab and seeks once transcript + player
+  are ready. A delete from the detail page returns to `/meetings` with router state
+  `{notice: 'deleted'|'warning'}` (cleared so a reload does not repeat it).
 
 ## 1. What we are building
 
