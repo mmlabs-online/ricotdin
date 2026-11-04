@@ -230,5 +230,6 @@ read needs an endpoint (all *(proposed)*, finalised in ARC-07 / ARC-05).
 | Drive orphan sweeper for upload sessions that are never confirmed (before go-live) | API (storage) | ARC-12 | todo |
 | API rejects bidi / zero-width characters in folder names and meeting titles (`parse_folder_name`, `parse_meeting_patch`) | API | 13a security review | todo |
 | Route code splitting (bundle > 500 kB) | web | build warning | todo |
+| ARC-15 deploy: when `RICOTDIN_AUTH_URL` ≠ `RICOTDIN_API_URL`, the auth host must serve the whole API app (change-password posts `/profile/change-password` to the auth origin, where the refresh cookie lives) | deploy | 13c review | todo |
 | Field borders (`--border-strong`) below 3:1 contrast app-wide (WCAG 1.4.11): darker token in light and dark | web | 13c a11y review | todo |
 | Minor a11y: debounce the transcript match-count announcement; persistent `role=alert` node for error banners; chat messages as a list | web | 13b a11y review | todo |
