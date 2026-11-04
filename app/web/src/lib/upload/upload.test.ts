@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UploadError, parseDriveFileId, uploadAvatar, uploadErrorKey, uploadMeeting, type UploadDeps } from './upload'
+import { UploadError, confirmMeetingUpload, parseDriveFileId, uploadAvatar, uploadErrorKey, uploadMeeting, type UploadDeps } from './upload'
 import en from '../../i18n/locales/en.json'
 
 const DRIVE = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=abc'
@@ -44,7 +44,12 @@ describe('uploadMeeting', () => {
   })
 
   it('never PUTs the file anywhere but the Drive upload host', async () => {
-    for (const uploadUrl of ['https://evil.example/upload', 'http://www.googleapis.com/upload/x', 'https://www.googleapis.com/drive/v3/files']) {
+    for (const uploadUrl of [
+      'https://evil.example/upload',
+      'http://www.googleapis.com/upload/drive/v3/files?upload_id=x',
+      'https://www.googleapis.com/drive/v3/files',
+      'https://www.googleapis.com/upload/storage/v1/b/x/o?upload_id=x', // not Drive: CSP allows only the Drive path
+    ]) {
       const { d, puts } = deps({
         'POST /meetings': ok({ meetingId: 'm-1', uploadUrl, contentType: 'audio/mpeg' }),
         'DELETE /meetings/m-1': ok({}),
@@ -68,6 +73,22 @@ describe('uploadMeeting', () => {
     }
     await expect(uploadMeeting(d, blob, meta)).rejects.toMatchObject({ step: 'upload' })
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /meetings', 'DELETE /meetings/m-1'])
+  })
+
+  it('a confirm failure keeps the meeting and carries what a confirm-only retry needs', async () => {
+    const { d } = deps({ 'POST /meetings': created, 'POST /meetings/m-1/uploaded': () => new Response('', { status: 502 }) })
+    const err = (await uploadMeeting(d, blob, meta).catch((e: unknown) => e)) as UploadError
+    expect(err).toMatchObject({ step: 'confirm', status: 502, resume: { meetingId: 'm-1', fileId: 'fileId_1234567890', size: 10 } })
+    const again = deps({ 'POST /meetings/m-1/uploaded': ok({ ok: true }) })
+    expect(await confirmMeetingUpload(again.d, err.resume!)).toEqual({ meetingId: 'm-1' })
+    expect(again.calls.map((c) => c.path)).toEqual(['/meetings/m-1/uploaded'])
+  })
+
+  it('a retried confirm answered 409 means the first one went through (lost response)', async () => {
+    const pending = { meetingId: 'm-1', fileId: 'fileId_1234567890', size: 10 }
+    const { d } = deps({ 'POST /meetings/m-1/uploaded': () => new Response('{}', { status: 409 }) })
+    expect(await confirmMeetingUpload(d, pending, { retry: true })).toEqual({ meetingId: 'm-1' })
+    await expect(confirmMeetingUpload(d, pending)).rejects.toMatchObject({ status: 409 })
   })
 
   it('a confirm failure keeps the meeting (the API decides) and reports it', async () => {

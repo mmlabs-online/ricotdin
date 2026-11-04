@@ -17,16 +17,38 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
   const fetchApi = useFetchApi()
   const { state: auth } = useAuth()
   const rec = useRecorder()
-  const { status, upload, reset: resetUpload } = useMeetingUpload()
+  const { status, upload, retryConfirm, reset: resetUpload } = useMeetingUpload()
   const [showNotice, setShowNotice] = useState(false)
   const startedAt = useRef<string | null>(null)
-  const busy = rec.state === 'recording' || rec.state === 'starting' || status.phase === 'uploading'
+  // Anything that would be lost by leaving: a live or starting recording, an upload, or a
+  // finished recording that has not been uploaded yet.
+  const busy =
+    rec.state === 'recording' ||
+    rec.state === 'starting' ||
+    status.phase === 'uploading' ||
+    (rec.state === 'stopped' && status.phase !== 'done')
 
   useEffect(() => onBusyChange?.(busy), [busy, onBusyChange])
 
+  // The control that was used disappears on every state change: put focus on the next one.
+  const startRef = useRef<HTMLButtonElement>(null)
+  const stopRef = useRef<HTMLButtonElement>(null)
+  const summaryRef = useRef<HTMLParagraphElement>(null)
+  const retryRef = useRef<HTMLButtonElement>(null)
+  const prevState = useRef(rec.state)
+  useEffect(() => {
+    const prev = prevState.current
+    prevState.current = rec.state
+    if (prev === rec.state) return
+    if (rec.state === 'recording') stopRef.current?.focus()
+    else if (rec.state === 'stopped') summaryRef.current?.focus()
+    else if (rec.state === 'error') retryRef.current?.focus()
+    else if (rec.state === 'idle') startRef.current?.focus()
+  }, [rec.state])
+
   if (rec.missing.length > 0) {
     return (
-      <section className="record-card" role="alert">
+      <section className="record-card" role="status">
         <h2>{t('record.unsupported.title')}</h2>
         <p>{t('record.unsupported.body')}</p>
         <ul className="missing-list">
@@ -80,11 +102,19 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
         <Mic2 size={35} />
       </div>
       <h2 id="record-title">{t('record.card.title')}</h2>
+      {/* One persistent polite region: "started" / the stopped summary — never the timer. */}
+      <p className="sr-only" role="status">
+        {rec.state === 'recording'
+          ? t('record.startedAnnounce')
+          : rec.state === 'stopped'
+            ? t('record.stoppedAnnounce', { time: formatClock(rec.elapsedSeconds) })
+            : ''}
+      </p>
 
       {(rec.state === 'idle' || rec.state === 'starting') && (
         <>
           <p>{t('record.card.body')}</p>
-          <Button variant="primary" className="start-btn" onClick={onStartClick} disabled={rec.state === 'starting'}>
+          <Button ref={startRef} variant="primary" className="start-btn" onClick={onStartClick} disabled={rec.state === 'starting'}>
             <span className="record-dot" aria-hidden="true" />{' '}
             {rec.state === 'starting' ? t('record.waiting') : t('record.start')}
           </Button>
@@ -113,7 +143,7 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
               <span>{t('record.noTabAudio')}</span>
             </div>
           )}
-          <Button variant="danger" className="start-btn" onClick={rec.stop}>
+          <Button ref={stopRef} variant="danger" className="start-btn" onClick={rec.stop}>
             <Square size={14} aria-hidden="true" /> {t('record.stop')}
           </Button>
         </>
@@ -121,7 +151,7 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
 
       {rec.state === 'stopped' && rec.blob && (
         <>
-          <p>
+          <p ref={summaryRef} tabIndex={-1}>
             {t('record.stopped', { time: formatClock(rec.elapsedSeconds), size: formatBytes(rec.blob.size) })}
           </p>
           {rec.objectUrl && <audio className="record-preview" src={rec.objectUrl} controls aria-label={t('record.preview')} />}
@@ -146,7 +176,7 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
               </Button>
             </div>
           )}
-          <UploadStatusView status={status} onRetry={onUpload} />
+          <UploadStatusView status={status} onRetry={status.phase === 'error' && status.resume ? () => void retryConfirm(status.resume!) : onUpload} />
           {status.phase === 'done' && (
             <Button variant="ghost" onClick={discard}>
               {t('record.another')}
@@ -158,7 +188,9 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
       {rec.state === 'error' && (
         <div role="alert">
           <p>{t(rec.errorKey ?? 'record.errors.generic')}</p>
-          <Button onClick={rec.reset}>{t('common.tryAgain')}</Button>
+          <Button ref={retryRef} onClick={rec.reset}>
+            {t('common.tryAgain')}
+          </Button>
         </div>
       )}
 

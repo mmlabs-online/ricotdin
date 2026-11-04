@@ -7,22 +7,33 @@
 import { apiErrorFrom } from '../../api/errors'
 import type { UploadSource } from './rules'
 
-export const DRIVE_UPLOAD_PREFIX = 'https://www.googleapis.com/upload/'
+// Drive's resumable session URIs (`create_session` in gdrive.py); the CSP allows only this path.
+export const DRIVE_UPLOAD_PREFIX = 'https://www.googleapis.com/upload/drive/v3/files?'
 const FILE_ID = /^[A-Za-z0-9_-]{10,200}$/
 
 export type UploadStep = 'create' | 'upload' | 'confirm'
+
+/** What a confirm-only retry needs: the file is already in Drive. */
+export interface PendingConfirm {
+  meetingId: string
+  fileId: string
+  size: number
+}
 
 export class UploadError extends Error {
   readonly step: UploadStep
   readonly code: string
   readonly status: number
+  /** Set when only the confirm failed: retry that, never a new upload. */
+  readonly resume: PendingConfirm | undefined
 
-  constructor(step: UploadStep, code: string, status: number) {
+  constructor(step: UploadStep, code: string, status: number, resume?: PendingConfirm) {
     super(`${step}: ${code}`)
     this.name = 'UploadError'
     this.step = step
     this.code = code
     this.status = status
+    this.resume = resume
   }
 }
 
@@ -97,14 +108,33 @@ export async function uploadMeeting(
     throw err instanceof UploadError ? err : new UploadError('upload', 'network', 0)
   }
 
+  return confirmMeetingUpload(deps, { meetingId, fileId, size: blob.size })
+}
+
+/** Step 3 alone; also the retry after a failed confirm (no second meeting, no second upload). */
+export async function confirmMeetingUpload(
+  deps: Pick<UploadDeps, 'fetchApi'>,
+  pending: PendingConfirm,
+  { retry = false }: { retry?: boolean } = {},
+): Promise<{ meetingId: string }> {
   let confirm: Response
   try {
-    confirm = await deps.fetchApi(`/meetings/${encodeURIComponent(meetingId)}/uploaded`, jsonPost({ fileId, size: blob.size }))
+    confirm = await deps.fetchApi(
+      `/meetings/${encodeURIComponent(pending.meetingId)}/uploaded`,
+      jsonPost({ fileId: pending.fileId, size: pending.size }),
+    )
   } catch {
-    throw new UploadError('confirm', 'network', 0)
+    throw new UploadError('confirm', 'network', 0, pending)
   }
-  if (!confirm.ok) throw await failure('confirm', confirm)
-  return { meetingId }
+  // On a retry, 409 "already uploaded" means the first confirm went through and its answer was lost.
+  if (retry && confirm.status === 409) return { meetingId: pending.meetingId }
+  if (!confirm.ok) {
+    const err = await failure('confirm', confirm)
+    // 4xx = the API refused this file (it may have deleted the meeting): no retry of the confirm.
+    const retryable = confirm.status >= 500 || confirm.status === 429 || confirm.status === 408
+    throw new UploadError('confirm', err.code, err.status, retryable ? pending : undefined)
+  }
+  return { meetingId: pending.meetingId }
 }
 
 export const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
@@ -156,6 +186,27 @@ export function parseDriveFileId(body: string): string | null {
   }
 }
 
+/** Drive resumable status query: an empty PUT with `Content-Range: bytes *\/size`. */
+export function sessionStatusRequest(size: number): { method: 'PUT'; headers: Record<string, string> } {
+  return { method: 'PUT', headers: { 'Content-Range': `bytes */${size}` } }
+}
+
+/** The file id when a status answer says the upload is complete (200/201 + the file resource). */
+export function finishedFileId(status: number, body: string): string | null {
+  return status === 200 || status === 201 ? parseDriveFileId(body) : null
+}
+
+/** After a failed PUT: did Drive receive the whole file anyway? (Avoids an orphan Drive file whose
+ * meeting we would otherwise delete.) Any doubt → null. */
+async function askSession(url: string, size: number): Promise<string | null> {
+  try {
+    const res = await fetch(url, { ...sessionStatusRequest(size), credentials: 'omit' })
+    return finishedFileId(res.status, await res.text())
+  } catch {
+    return null
+  }
+}
+
 /** XHR PUT (fetch has no upload progress). No cookies, no Authorization: the URL is the credential. */
 export function putToDrive(
   url: string,
@@ -171,16 +222,19 @@ export function putToDrive(
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total)
     }
+    const failed = (err: UploadError) => {
+      void askSession(url, blob.size).then((id) => (id ? resolve(id) : reject(err)))
+    }
     xhr.onload = () => {
       const id = xhr.status >= 200 && xhr.status < 300 ? parseDriveFileId(xhr.responseText) : null
       if (id) {
         onProgress?.(1)
         resolve(id)
       } else {
-        reject(new UploadError('upload', `drive_${xhr.status}`, xhr.status))
+        failed(new UploadError('upload', `drive_${xhr.status}`, xhr.status))
       }
     }
-    xhr.onerror = () => reject(new UploadError('upload', 'network', 0))
+    xhr.onerror = () => failed(new UploadError('upload', 'network', 0))
     xhr.onabort = () => reject(new UploadError('upload', 'aborted', 0))
     signal?.addEventListener('abort', () => xhr.abort(), { once: true })
     xhr.send(blob)

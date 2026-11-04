@@ -1,5 +1,6 @@
 // Record or upload (ARC-12): Figma Make "Record or upload" screen.
 import { useCallback, useEffect, useState } from 'react'
+import { useBlocker } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { FileUploadPanel } from '../components/FileUploadPanel'
 import { Recorder } from '../components/Recorder'
@@ -13,6 +14,14 @@ export function RecordPage() {
   const busy = recBusy || fileBusy
   const onRecBusy = useCallback((b: boolean) => setRecBusy(b), [])
   const onFileBusy = useCallback((b: boolean) => setFileBusy(b), [])
+
+  // Leaving inside the app (sidebar, back button) would unmount the recorder: ask first.
+  const blocker = useBlocker(busy)
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm(t('record.leaveConfirm'))) blocker.proceed()
+    else blocker.reset()
+  }, [blocker, t])
 
   // Leaving while recording or uploading loses the recording: ask first.
   useEffect(() => {

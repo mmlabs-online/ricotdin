@@ -43,6 +43,7 @@ export function useAudioDurationFix(
   const ranRef      = useRef(false) // hack already fired for this source
   const scanningRef = useRef(false) // a scan is currently in flight
   const resumeRef   = useRef(0)     // playhead to restore after the scan
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     const el = audioRef.current
@@ -55,6 +56,10 @@ export function useAudioDurationFix(
     setDuration(null)
 
     function startScan(node: HTMLAudioElement) {
+      // Some engines never report a finite duration: give up after 20 s instead of "scanning…" forever.
+      scanTimerRef.current = setTimeout(() => {
+        if (scanningRef.current) endScan(node)
+      }, 20_000)
       resumeRef.current = node.currentTime || 0
       ranRef.current = true
       scanningRef.current = true
@@ -69,6 +74,7 @@ export function useAudioDurationFix(
     }
 
     function endScan(node: HTMLAudioElement) {
+      clearTimeout(scanTimerRef.current)
       scanningRef.current = false
       setScanning(false)
       try {
@@ -104,6 +110,7 @@ export function useAudioDurationFix(
     if (el.readyState >= 1 /* HAVE_METADATA */) onLoadedMetadata()
 
     return () => {
+      clearTimeout(scanTimerRef.current)
       el.removeEventListener('loadedmetadata', onLoadedMetadata)
       el.removeEventListener('durationchange', onDurationChange)
     }

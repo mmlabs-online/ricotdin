@@ -46,6 +46,8 @@ export function useRecorder(): UseRecorderReturn {
   const audioContextRef = useRef<AudioContext | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const objectUrlRef = useRef<string | null>(null)
+  /** Bumped by reset and unmount: a start() still waiting for permission prompts is then stale. */
+  const sessionRef = useRef(0)
 
   const setBoth = useCallback((next: RecorderState) => {
     stateRef.current = next
@@ -82,13 +84,25 @@ export function useRecorder(): UseRecorderReturn {
     if (stateRef.current !== 'idle') return
     setBoth('starting')
     setErrorKey(null)
+    const session = ++sessionRef.current
+    const stale = () => session !== sessionRef.current
     try {
       const { micStream, displayStream } = await startCapture()
+      if (stale()) {
+        // the page was left (or reset) while the prompts were open: never record without a UI
+        micStream.getTracks().forEach((t) => t.stop())
+        displayStream.getTracks().forEach((t) => t.stop())
+        return
+      }
       micStreamRef.current = micStream
       displayStreamRef.current = displayStream
       const mix = mixToMonoAudioStream(displayStream, micStream)
       audioContextRef.current = mix.audioContext
       if (mix.audioContext.state === 'suspended') await mix.audioContext.resume()
+      if (stale()) {
+        cleanup()
+        return
+      }
       setTrackInfo({ hasMic: micStream.getAudioTracks().length > 0, hasDisplayAudio: mix.hasDisplayAudio })
 
       const kit = createRecorder(mix.mixedStream)
@@ -117,6 +131,7 @@ export function useRecorder(): UseRecorderReturn {
       timerRef.current = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 500)
     } catch (err) {
       cleanup()
+      if (stale()) return
       setErrorKey(recorderErrorKey(err))
       setBoth('error')
     }
@@ -128,6 +143,7 @@ export function useRecorder(): UseRecorderReturn {
   }, [clearTimer])
 
   const reset = useCallback(() => {
+    sessionRef.current += 1
     cleanup()
     revokeObjectUrl()
     recorderRef.current = null
@@ -141,6 +157,7 @@ export function useRecorder(): UseRecorderReturn {
 
   useEffect(
     () => () => {
+      sessionRef.current += 1
       if (recorderRef.current?.state === 'recording') {
         recorderRef.current.onstop = null
         recorderRef.current.stop()

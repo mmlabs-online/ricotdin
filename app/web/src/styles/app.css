@@ -82,3 +82,10 @@ a.nav-item, a.side-link, .mobile-nav a, .admin-nav a, a.button { text-decoration
 .audio-native { display: flex; align-items: center; gap: 12px; }
 .audio-native audio { flex: 1; min-width: 0; }
 .audio-meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* ARC-12 accessibility review */
+:root:not(.dark) .notice-banner.warning { color: #8a5b17; } /* 4.49:1 → ~5:1 on --warning-soft */
+.dark .record-orb { color: #2b1825; }
+.dropzone { padding: 18px 16px; }
+.capture-list, .dropzone p, .date-row p { font-size: 12px; }
+.upload-status { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.upload-status progress:focus-visible { outline-offset: 4px; }

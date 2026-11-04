@@ -18,10 +18,15 @@ function readDuration(file: File, video: boolean): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
     const media = document.createElement(video ? 'video' : 'audio')
+    let settled = false
     const done = (seconds: number) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
       URL.revokeObjectURL(url)
       resolve(seconds)
     }
+    const timer = setTimeout(() => done(0), 10_000) // a file that never loads must not pin the URL
     media.preload = 'metadata'
     media.onloadedmetadata = () => done(Number.isFinite(media.duration) ? Math.round(media.duration) : 0)
     media.onerror = () => done(0)
@@ -33,27 +38,38 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const dateId = useId()
+  const dateHelpId = useId()
+  const formatsId = useId()
+  const chooseRef = useRef<HTMLButtonElement>(null)
+  const [attempt, setAttempt] = useState(0) // re-announces a repeated identical error
   const [file, setFile] = useState<File | null>(null)
   const [check, setCheck] = useState<FileCheck | null>(null)
   const [duration, setDuration] = useState(0)
   const [date, setDate] = useState(localNow)
   const [dragging, setDragging] = useState(false)
-  const { status, upload, reset } = useMeetingUpload()
+  const { status, upload, retryConfirm, reset } = useMeetingUpload()
+  const pickId = useRef(0) // only the latest file's duration counts
 
   useEffect(() => onBusyChange?.(status.phase === 'uploading'), [status.phase, onBusyChange])
 
   const pick = (picked: File | null) => {
     reset()
     setDuration(0)
+    const id = ++pickId.current
     if (!picked) {
       setFile(null)
       setCheck(null)
       return
     }
     const result = checkUploadFile(picked.name, picked.size, picked.type)
+    setAttempt((n) => n + 1)
     setCheck(result)
     setFile(result.ok ? picked : null)
-    if (result.ok) void readDuration(picked, result.source === 'video').then(setDuration)
+    if (result.ok) {
+      void readDuration(picked, result.source === 'video').then((seconds) => {
+        if (id === pickId.current) setDuration(seconds)
+      })
+    }
   }
 
   const onDrop = (e: DragEvent) => {
@@ -77,9 +93,10 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
   const uploading = status.phase === 'uploading'
   return (
     <>
+      <h2 className="sr-only">{t('upload.title')}</h2>
       <section
         className={`dropzone${dragging ? ' dragging' : ''}`}
-        aria-labelledby="dropzone-title"
+        aria-label={t('upload.title')}
         onDragOver={(e) => {
           e.preventDefault()
           setDragging(true)
@@ -88,8 +105,8 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
         onDrop={onDrop}
       >
         <CloudUpload size={27} aria-hidden="true" />
-        <strong id="dropzone-title">{t('upload.drop')}</strong>
-        <p>{t('upload.formats', { max: MAX_UPLOAD_LABEL })}</p>
+        <strong>{t('upload.drop')}</strong>
+        <p id={formatsId}>{t('upload.formats', { max: MAX_UPLOAD_LABEL })}</p>
         <input
           ref={inputRef}
           type="file"
@@ -102,13 +119,16 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
             e.target.value = '' // picking the same file again still fires change
           }}
         />
-        <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
+        <Button ref={chooseRef} onClick={() => inputRef.current?.click()} disabled={uploading} aria-describedby={formatsId}>
           {t('upload.choose')}
         </Button>
       </section>
 
+      <p className="sr-only" role="status">
+        {file ? t('upload.selected', { name: file.name, size: formatBytes(file.size) }) : ''}
+      </p>
       {check && !check.ok && (
-        <p className="notice-banner error" role="alert">
+        <p key={attempt} className="notice-banner error" role="alert">
           {check.error === 'size'
             ? t('upload.errors.size', { max: MAX_UPLOAD_LABEL })
             : check.error === 'empty'
@@ -120,10 +140,19 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
       {file && (
         <div className="file-row">
           <FileAudio size={18} aria-hidden="true" />
-          <span className="file-name">{file.name}</span>
+          <span className="file-name" title={file.name}>
+            {file.name}
+          </span>
           <span className="file-size">{formatBytes(file.size)}</span>
           {!uploading && status.phase !== 'done' && (
-            <Button variant="ghost" onClick={() => pick(null)} aria-label={t('upload.remove')}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                pick(null)
+                chooseRef.current?.focus()
+              }}
+              aria-label={t('upload.removeNamed', { name: file.name })}
+            >
               <X size={16} aria-hidden="true" />
             </Button>
           )}
@@ -135,9 +164,16 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
           <label htmlFor={dateId}>
             <strong>{t('upload.date')}</strong>
           </label>
-          <p>{t('upload.dateHelp')}</p>
+          <p id={dateHelpId}>{t('upload.dateHelp')}</p>
         </div>
-        <input id={dateId} type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} disabled={uploading} />
+        <input
+          id={dateId}
+          type="datetime-local"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={uploading}
+          aria-describedby={dateHelpId}
+        />
       </div>
 
       {file && (status.phase === 'idle' || status.phase === 'error') && (
@@ -147,7 +183,7 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
           </Button>
         </div>
       )}
-      <UploadStatusView status={status} onRetry={start} />
+      <UploadStatusView status={status} onRetry={status.phase === 'error' && status.resume ? () => void retryConfirm(status.resume!) : start} />
     </>
   )
 }

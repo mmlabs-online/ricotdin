@@ -750,9 +750,16 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `lib/consent/recordingNotice.ts` + `RecordingNoticeDialog` (`components/ui/Modal.tsx`: portal,
   inert page, focus on the heading, Tab trap, Escape cancels); recording starts synchronously in the
   confirm click; the ack is logged best effort (`POST /activity`). **Upload** (`lib/upload/upload.ts`):
-  `POST /meetings` → XHR PUT straight to the Drive session (only to `https://www.googleapis.com/upload/`,
-  no cookies/Authorization; CSP `connect-src` allows that host) → `POST /meetings/{id}/uploaded
-  {fileId, size}`; a failed PUT deletes the pending meeting (frees one of the 20 pending slots).
+  `POST /meetings` → XHR PUT straight to the Drive session (only to
+  `https://www.googleapis.com/upload/drive/v3/files?…`, no cookies/Authorization; the CSP allows only
+  that path) → `POST /meetings/{id}/uploaded {fileId, size}`. A failed PUT first asks the session
+  (`Content-Range: bytes */size`) whether Drive got the whole file anyway, else deletes the pending
+  meeting (frees one of the 20 pending slots). A failed confirm keeps `{meetingId, fileId, size}`:
+  "Try again" repeats only the confirm (409 on that retry = the first went through), "Discard"
+  deletes the meeting. **Open (before go-live):** files of sessions that are never confirmed (a
+  client that PUTs and stops, or a PUT whose meeting was deleted) stay in Drive — the §0.4
+  "orphans of never-confirmed sessions" sweeper; a signed-in user can fill the Drive with
+  30 sessions/h × 500 MB.
   Checked before any request (`lib/upload/rules.ts`, same lists as `domain/uploads.py`): **500 MB**
   (owner decision 2026-11-04; v1 1 GB) — the API enforces it for new uploads, the worker still reads
   stored files up to 1 GB (`MAX_STORED_AUDIO_BYTES`, ARC-18 copies). `uploadAvatar` (PRF-04, ≤ 2 MB
@@ -761,7 +768,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `seekTo(ms)`), `lib/media/seek.ts` (`meetingSeekPath` `?t=`, `parseSeekParam`, `nearestSegment`),
   `lib/media/download.ts` (`downloadIcs` via `fetchApi`), `lib/transcript/export.ts`. `useFetchApi()`
   = authenticated raw requests for bodies the typed client does not describe. Ported v1 tests use
-  `src/test/assert.ts` (node:assert subset on vitest). Leaving `/record` while recording/uploading asks first.
+  `src/test/assert.ts` (node:assert subset on vitest). Leaving `/record` (reload or in-app link, `useBlocker`)
+  while recording, uploading or holding a recording not yet uploaded asks first; a start whose
+  permission prompts finish after the page was left stops its tracks. Focus moves to the next
+  control on every recorder/upload state change; one sr-only status region per panel announces
+  start/stop/upload phases (never the timer or each percent).
 
 ## 1. What we are building
 

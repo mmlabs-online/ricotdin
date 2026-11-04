@@ -187,14 +187,16 @@
       "cancelled": "Screen sharing was cancelled.",
       "state": "The recorder stopped unexpectedly — try again.",
       "generic": "Recording could not start. Try again."
-    }
+    },
+    "leaveConfirm": "You have a recording or upload in progress. Leave this page and lose it?",
+    "startedAnnounce": "Recording started.",
+    "stoppedAnnounce": "Recording stopped after {{time}}."
   },
   "upload": {
     "or": "or upload a file",
     "drop": "Drop an audio or video file here",
     "choose": "Choose file",
     "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM or video (MP4, MOV, AVI, MKV, M4V) · max {{max}}",
-    "remove": "Remove file",
     "date": "Meeting date",
     "dateHelp": "Used to organise your timeline.",
     "start": "Upload and process",
@@ -215,6 +217,11 @@
       "generic": "Upload failed. Try again.",
       "avatarType": "Use a JPEG, PNG or WebP image.",
       "avatarSize": "The image must be smaller than 2 MB."
-    }
+    },
+    "title": "Upload a file",
+    "selected": "Selected {{name}}, {{size}}",
+    "removeNamed": "Remove {{name}}",
+    "started": "Uploading…",
+    "progressLabel": "Upload progress"
   }
 }

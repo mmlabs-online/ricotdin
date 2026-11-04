@@ -187,14 +187,16 @@
       "cancelled": "Đã hủy chia sẻ màn hình.",
       "state": "Trình ghi âm dừng bất ngờ — hãy thử lại.",
       "generic": "Không bắt đầu ghi âm được. Hãy thử lại."
-    }
+    },
+    "leaveConfirm": "Bạn đang ghi âm hoặc tải lên. Rời trang và mất bản ghi này?",
+    "startedAnnounce": "Đã bắt đầu ghi âm.",
+    "stoppedAnnounce": "Đã dừng ghi âm sau {{time}}."
   },
   "upload": {
     "or": "hoặc tải tệp lên",
     "drop": "Thả tệp âm thanh hoặc video vào đây",
     "choose": "Chọn tệp",
     "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM hoặc video (MP4, MOV, AVI, MKV, M4V) · tối đa {{max}}",
-    "remove": "Bỏ tệp",
     "date": "Ngày họp",
     "dateHelp": "Dùng để sắp xếp dòng thời gian của bạn.",
     "start": "Tải lên và xử lý",
@@ -215,6 +217,11 @@
       "generic": "Tải lên thất bại. Hãy thử lại.",
       "avatarType": "Hãy dùng ảnh JPEG, PNG hoặc WebP.",
       "avatarSize": "Ảnh phải nhỏ hơn 2 MB."
-    }
+    },
+    "title": "Tải tệp lên",
+    "selected": "Đã chọn {{name}}, {{size}}",
+    "removeNamed": "Bỏ {{name}}",
+    "started": "Đang tải lên…",
+    "progressLabel": "Tiến trình tải lên"
   }
 }
