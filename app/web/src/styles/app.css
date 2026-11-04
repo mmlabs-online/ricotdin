@@ -89,3 +89,63 @@ a.nav-item, a.side-link, .mobile-nav a, .admin-nav a, a.button { text-decoration
 .capture-list, .dropzone p, .date-row p { font-size: 12px; }
 .upload-status { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .upload-status progress:focus-visible { outline-offset: 4px; }
+
+/* --- Meetings list, folders, auth forms (ARC-13a) --- */
+.row-menu { position: relative; }
+.row-menu-spacer { width: 38px; }
+.row-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 170px; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-floating); display: flex; flex-direction: column; }
+.row-menu-list button { border: 0; background: transparent; text-align: left; padding: 9px 10px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text); cursor: pointer; }
+.row-menu-list button:hover { background: var(--surface-subtle); }
+.row-menu-list button.danger { color: var(--danger); }
+a.meeting-title { display: block; text-decoration: none; }
+a.meeting-title:hover { text-decoration: underline; }
+.rename-input { width: 100%; min-height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 8px; font-size: 13px; }
+.notice-banner.success { background: var(--success-soft); color: var(--success); }
+.notice-banner .button { margin-left: auto; min-height: 24px; padding: 0 6px; }
+.notice-banner { max-width: none; }
+.choice-list { border: 0; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; }
+.choice-list label { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; }
+.folder-row { display: flex; align-items: center; gap: 10px; }
+.folder-row .folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-actions { display: flex; gap: 2px; margin-left: auto; }
+.folder-actions .button { min-height: 32px; padding: 0 6px; }
+.folder-rename { display: flex; gap: 6px; flex: 1; }
+.folder-rename input { flex: 1; min-height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 8px; }
+.folder-row select { min-height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.check-row { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; font-size: 13px; }
+.check-row small { display: block; color: var(--muted); margin-top: 4px; }
+.plain-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.plain-list small { color: var(--muted); }
+.modal-list { list-style: none; padding: 0; }
+.modal-list .folder-row { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.modal-list .folder-row:last-child { border-bottom: 0; }
+.modal { max-height: calc(100vh - 36px); overflow-y: auto; }
+.auth-card .field-help { color: var(--muted); font-weight: 400; font-size: 12px; }
+.auth-card .field-error { color: var(--danger); font-weight: 400; font-size: 12px; }
+.auth-card .auth-field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; font-size: 13px; font-weight: 600; }
+.auth-card .auth-success { color: var(--success); font-size: 13px; line-height: 1.6; }
+.auth-card .forgot, .auth-card > small a, .auth-error a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+a.forgot { text-align: right; }
+@media (max-width: 767px) {
+  .meeting-row > div:last-child { display: block; } /* keep row actions reachable on phones */
+}
+.plain-list li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* User-written names never reorder the text around them (bidi isolation). */
+.folder-name, .meeting-title, .folder-cell, .folder-pills > button, .choice-list label, .modal-head h2 { unicode-bidi: isolate; }
+/* ARC-13a accessibility review */
+.auth-card .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
+.auth-card .field > label { font-size: 13px; font-weight: 600; }
+.auth-card .field input { min-height: 44px; }
+.auth-card p.field-help { margin: -8px 0 15px; }
+.pin { min-height: 24px; min-width: 24px; }
+.tiny-shared, .badge { font-size: 11px; }
+@media (max-width: 767px) {
+  /* keep the ⋯ menu in the row's top-right cell so its popup opens on screen */
+  .meeting-row { grid-template-columns: 28px 38px minmax(0, 1fr) auto auto; }
+}
+@media (max-width: 479px) {
+  .modal-list .folder-row { flex-wrap: wrap; }
+  .folder-actions { width: 100%; justify-content: flex-end; }
+  .share-box .inline, .modal > .inline { grid-template-columns: 1fr; }
+  .share-box .inline > *, .modal > .inline > * { min-width: 0; }
+}

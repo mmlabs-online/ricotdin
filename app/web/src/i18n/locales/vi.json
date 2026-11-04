@@ -50,7 +50,6 @@
     "submitting": "Đang đăng nhập…",
     "newHere": "Chưa có tài khoản?",
     "createAccount": "Tạo tài khoản",
-    "comingSoon": "Trang này chưa sẵn sàng.",
     "errors": {
       "missing": "Nhập email hoặc tên người dùng và mật khẩu.",
       "invalid_credentials": "Email, tên người dùng hoặc mật khẩu không đúng.",
@@ -58,9 +57,58 @@
       "account_disabled": "Tài khoản này đã bị vô hiệu hóa. Hãy liên hệ quản trị viên.",
       "rate_limited": "Bạn thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
-      "generic": "Đăng nhập thất bại. Vui lòng thử lại."
+      "generic": "Đăng nhập thất bại. Vui lòng thử lại.",
+      "invalidLink": "Liên kết không hợp lệ hoặc đã hết hạn.",
+      "unavailable": "Hiện chưa thể đăng ký. Hãy thử lại sau."
     },
-    "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt."
+    "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt.",
+    "resendLink": "Gửi lại email xác minh",
+    "backToSignIn": "Quay lại đăng nhập",
+    "linkSent": "Nếu có tài khoản với địa chỉ này, chúng tôi đã gửi liên kết. Hãy kiểm tra hộp thư (cả thư rác).",
+    "forgotTitle": "Đặt lại mật khẩu",
+    "forgotHelp": "Nhập email tài khoản. Chúng tôi sẽ gửi liên kết để bạn chọn mật khẩu mới.",
+    "forgotSubmit": "Gửi liên kết đặt lại",
+    "validation": {
+      "usernameShort": "Tên người dùng cần ít nhất 3 ký tự.",
+      "usernameLong": "Tên người dùng tối đa 30 ký tự.",
+      "usernameChars": "Chỉ dùng chữ thường, số, dấu gạch ngang và gạch dưới.",
+      "email": "Nhập địa chỉ email hợp lệ.",
+      "passwordShort": "Mật khẩu cần ít nhất 8 ký tự.",
+      "passwordLong": "Mật khẩu tối đa 256 ký tự.",
+      "mismatch": "Hai mật khẩu không khớp."
+    },
+    "register": {
+      "eyebrow": "Bắt đầu",
+      "title": "Tạo tài khoản",
+      "subtitle": "Ghi âm cuộc họp và nhận bản ghi, ghi chú, việc cần làm.",
+      "email": "Email",
+      "username": "Tên người dùng",
+      "usernameHelp": "3–30 ký tự: chữ thường, số, - hoặc _. Có thể dùng để đăng nhập.",
+      "passwordHelp": "Ít nhất 8 ký tự.",
+      "confirm": "Nhập lại mật khẩu",
+      "submit": "Tạo tài khoản",
+      "submitting": "Đang tạo tài khoản…",
+      "haveAccount": "Đã có tài khoản?",
+      "checkInbox": "Kiểm tra hộp thư",
+      "sent": "Chúng tôi đã gửi liên kết xác minh tới {{email}}. Mở liên kết để kích hoạt tài khoản rồi đăng nhập.",
+      "notSent": "Tài khoản đã được tạo nhưng hiện chưa gửi được email xác minh. Hãy yêu cầu gửi lại từ trang đăng nhập sau.",
+      "taken": "Email hoặc tên người dùng này đã được dùng.",
+      "invalid": "Hãy kiểm tra lại thông tin rồi thử lại."
+    },
+    "verify": {
+      "done": "Email đã được xác minh. Bạn có thể đăng nhập.",
+      "resendHelp": "Cần liên kết xác minh mới? Nhập email của bạn.",
+      "resend": "Gửi email xác minh",
+      "confirmHelp": "Xác nhận đây là địa chỉ email của bạn để kích hoạt tài khoản.",
+      "confirm": "Xác nhận email của tôi"
+    },
+    "reset": {
+      "help": "Chọn mật khẩu mới. Bạn sẽ bị đăng xuất trên mọi thiết bị.",
+      "newPassword": "Mật khẩu mới",
+      "submit": "Đặt mật khẩu mới",
+      "done": "Đã đổi mật khẩu. Hãy đăng nhập bằng mật khẩu mới.",
+      "newLink": "Yêu cầu liên kết mới"
+    }
   },
   "page": {
     "workspace": "Không gian làm việc",
@@ -137,7 +185,9 @@
   "common": {
     "close": "Đóng",
     "cancel": "Hủy",
-    "tryAgain": "Thử lại"
+    "tryAgain": "Thử lại",
+    "save": "Lưu",
+    "dismiss": "Đóng thông báo"
   },
   "player": {
     "scanning": "Đang chuẩn bị phát…"
@@ -223,5 +273,137 @@
     "removeNamed": "Bỏ {{name}}",
     "started": "Đang tải lên…",
     "progressLabel": "Tiến trình tải lên"
+  },
+  "errors": {
+    "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    "forbidden": "Bạn không có quyền làm việc này.",
+    "notFound": "Mục này không còn tồn tại.",
+    "rateLimited": "Quá nhiều yêu cầu. Đợi một lát rồi thử lại.",
+    "generic": "Đã có lỗi. Hãy thử lại."
+  },
+  "meetings": {
+    "upload": "Tải tệp lên",
+    "record": "Ghi âm cuộc họp",
+    "search": "Tìm kiếm cuộc họp…",
+    "count_one": "{{count}} cuộc họp",
+    "count_other": "{{count}} cuộc họp",
+    "insight": {
+      "title": "Bộ nhớ cuộc họp của bạn đã sẵn sàng",
+      "body_one": "Hỏi Ricotdin về quyết định, việc cần làm hoặc nội dung trong {{count}} cuộc họp đã xử lý.",
+      "body_other": "Hỏi Ricotdin về quyết định, việc cần làm hoặc nội dung trong {{count}} cuộc họp đã xử lý.",
+      "cta": "Bắt đầu trò chuyện"
+    },
+    "folders": {
+      "filter": "Lọc theo thư mục",
+      "all": "Tất cả cuộc họp",
+      "none": "Không có thư mục",
+      "shared": "Chia sẻ",
+      "manage": "Quản lý thư mục",
+      "loadError": "Không tải được thư mục nên tên thư mục và quyền biên tập chia sẻ chưa hiển thị."
+    },
+    "empty": {
+      "first": "Chưa có cuộc họp nào",
+      "firstBody": "Ghi âm hoặc tải lên cuộc họp đầu tiên để có bản ghi, ghi chú và việc cần làm.",
+      "title": "Không tìm thấy cuộc họp",
+      "body": "Thử đổi từ khóa tìm kiếm hoặc thư mục."
+    },
+    "duration": {
+      "m": "{{m}} phút",
+      "hm": "{{h}} giờ {{m}} phút"
+    },
+    "source": {
+      "recorded": "Ghi âm",
+      "uploaded": "Tải lên",
+      "video": "Video"
+    },
+    "status": {
+      "success": "Xong",
+      "processing": "Đang xử lý",
+      "danger": "Lỗi"
+    },
+    "actions": {
+      "more": "Thao tác khác cho {{title}}",
+      "rename": "Đổi tên",
+      "renameLabel": "Tiêu đề cuộc họp",
+      "move": "Chuyển thư mục",
+      "delete": "Xóa",
+      "pin": "Ghim {{title}}",
+      "unpin": "Bỏ ghim {{title}}"
+    },
+    "move": {
+      "title": "Chuyển “{{title}}”",
+      "legend": "Thư mục đích",
+      "confirm": "Chuyển"
+    },
+    "delete": {
+      "title": "Xóa cuộc họp?",
+      "body": "“{{title}}” sẽ bị xóa vĩnh viễn, cùng bản ghi âm, bản ghi, ghi chú, việc cần làm và các cuộc trò chuyện.",
+      "confirm": "Xóa vĩnh viễn",
+      "done": "Đã xóa cuộc họp.",
+      "warning": "Đã xóa cuộc họp nhưng chưa xóa được tệp ghi âm khỏi kho lưu trữ. Quản trị viên có thể dọn sau."
+    }
+  },
+  "folders": {
+    "title": "Quản lý thư mục",
+    "mine": "Thư mục của bạn",
+    "empty": "Bạn chưa có thư mục nào.",
+    "newLabel": "Tên thư mục mới",
+    "newPlaceholder": "Tên thư mục mới",
+    "create": "Tạo thư mục",
+    "renameLabel": "Tên mới cho {{name}}",
+    "rename": "Đổi tên {{name}}",
+    "up": "Chuyển {{name}} lên",
+    "down": "Chuyển {{name}} xuống",
+    "share": {
+      "title": "Chia sẻ “{{name}}”",
+      "back": "Quay lại danh sách thư mục",
+      "help": "Người được thêm sẽ thấy mọi cuộc họp trong thư mục. Người biên tập còn đổi tên cuộc họp và cập nhật việc cần làm.",
+      "none": "Chưa chia sẻ với ai.",
+      "members": "Người có quyền truy cập",
+      "roleFor": "Vai trò của {{name}}",
+      "remove": "Bỏ {{name}}",
+      "invite": "Mời người khác",
+      "identifier": "Email hoặc tên người dùng",
+      "placeholder": "ten@congty.com hoặc tên người dùng",
+      "role": "Vai trò",
+      "inviteButton": "Mời",
+      "roleHelp": "Xem: đọc và trò chuyện. Biên tập: thêm quyền đổi tên cuộc họp và cập nhật việc cần làm.",
+      "notFound": "Không tìm thấy tài khoản với email hoặc tên người dùng này.",
+      "conflict": "Người này đã có quyền truy cập, hoặc đó là bạn.",
+      "invalid": "Nhập email hoặc tên người dùng.",
+      "addedWho": "Đã thêm {{name}} với vai trò {{role}}.",
+      "changed": "{{name}} giờ là {{role}}.",
+      "removed": "Đã bỏ {{name}}."
+    },
+    "deleteLabel": "Xóa {{name}}",
+    "members_one": "{{count}} thành viên",
+    "members_other": "{{count}} thành viên",
+    "sharedWithMe": "Được chia sẻ với bạn",
+    "sharedBy": "của {{owner}} · {{role}}",
+    "roles": {
+      "owner": "Chủ sở hữu",
+      "editor": "Biên tập",
+      "viewer": "Xem"
+    },
+    "errors": {
+      "duplicate": "Bạn đã có thư mục cùng tên.",
+      "name": "Nhập tên thư mục (tối đa 100 ký tự)."
+    },
+    "delete": {
+      "title": "Xóa “{{name}}”?",
+      "chatNotice": "Lịch sử trò chuyện của thư mục sẽ bị xóa.",
+      "chatNoticeShared_one": "Lịch sử trò chuyện của thư mục sẽ bị xóa với mọi người, kể cả của {{count}} thành viên được chia sẻ.",
+      "chatNoticeShared_other": "Lịch sử trò chuyện của thư mục sẽ bị xóa với mọi người, kể cả của {{count}} thành viên được chia sẻ.",
+      "alsoMeetings_one": "Xóa luôn {{count}} cuộc họp của tôi trong thư mục này",
+      "alsoMeetings_other": "Xóa luôn {{count}} cuộc họp của tôi trong thư mục này",
+      "othersMoved_one": "{{count}} cuộc họp của thành viên khác sẽ trở về “Không có thư mục” của chủ sở hữu.",
+      "othersMoved_other": "{{count}} cuộc họp của thành viên khác sẽ trở về “Không có thư mục” của chủ sở hữu.",
+      "meetingsGone": "Các cuộc họp của bạn trong thư mục sẽ bị xóa vĩnh viễn.",
+      "meetingsKept": "Các cuộc họp của bạn sẽ được giữ, chuyển về “Không có thư mục”.",
+      "confirm": "Xóa thư mục"
+    },
+    "shareLabel": "Chia sẻ {{name}}",
+    "moved": "Đã chuyển {{name}} tới vị trí {{pos}}/{{total}}.",
+    "deleted": "Đã xóa thư mục {{name}}."
   }
 }

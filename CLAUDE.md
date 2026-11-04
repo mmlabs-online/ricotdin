@@ -773,6 +773,31 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   permission prompts finish after the page was left stops its tracks. Focus moves to the next
   control on every recorder/upload state change; one sr-only status region per panel announces
   start/stop/upload phases (never the timer or each percent).
+- **User screens (ARC-13, three PRs: 13a auth + meetings list + folders, 13b meeting detail, 13c
+  chat + profile + Playwright).** 13a: `/register`, `/verify-email`, `/forgot-password`,
+  `/reset-password` are public (`AuthLayout`); signed-out auth calls go through
+  `session.publicAuth(path, body)` (auth origin, no cookie); email-link tokens are read once
+  (`readHashToken`), removed from the address bar (`forgetHashToken`) and posted once (single use,
+  guarded against StrictMode double effects); forgot / resend always say "if an account exists"
+  (no enumeration). Client checks mirror `app/auth/validate.py` (`src/auth/validate.ts`); the API
+  answers generic codes (`conflict`, `unprocessable`), so messages are chosen per screen
+  (`publicAuthErrorKey`, `folderErrorKey`). `/meetings` = `MeetingsPage` (Make MeetingsView):
+  data via TanStack Query in `src/api/meetings.ts` (`apiJson` + `useFetchApi`), polling every 5 s
+  while a meeting is pending/processing; pin / rename / move are optimistic and roll back on error;
+  delete is not optimistic (storage `warning` shown). UI permissions = v2 API (`lib/access/roles.ts`:
+  pin/move/delete owner only, rename owner or editor; v1's UI let editors delete). Pin is a server
+  toggle: the button is disabled while a pin request is in flight. Folders dialog: create /
+  rename / reorder (up-down buttons, not drag) / delete with the v1 notices (BUG-014..016) / share
+  by email or username. `src/i18n/keys.test.ts` checks that every literal `t('…')` key resolves to a
+  string in EN and VI.
+  Review rules kept (13a): the verify link POSTs only after a "Confirm" click (mail scanners must
+  not verify a pre-registered account); text other users write (titles, folder names) goes through
+  `lib/text.ts` `displayText` (no bidi / zero-width characters) and is bidi-isolated in CSS —
+  **follow-up:** the API should also reject them in `parse_folder_name` / `parse_meeting_patch`;
+  share success shows WHO was added; optimistic edits share the mutation key `['meetings','edit']`
+  (no polling while one is in flight, per-row rollback, refetch after the last one settles);
+  controls that disappear hand focus to a stable one (`data-*` targets, `aria-disabled` instead
+  of `disabled` on buttons that keep focus); `Modal` traps also `select` / `textarea`.
 
 ## 1. What we are building
 

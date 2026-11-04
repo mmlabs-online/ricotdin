@@ -50,7 +50,6 @@
     "submitting": "Signing in…",
     "newHere": "New to Ricotdin?",
     "createAccount": "Create an account",
-    "comingSoon": "This page is not available yet.",
     "errors": {
       "missing": "Enter your email or username and your password.",
       "invalid_credentials": "That email, username or password is not right.",
@@ -58,9 +57,58 @@
       "account_disabled": "This account has been disabled. Contact an administrator.",
       "rate_limited": "Too many attempts. Wait a few minutes and try again.",
       "network": "Cannot reach the server. Check your connection and try again.",
-      "generic": "Sign-in failed. Please try again."
+      "generic": "Sign-in failed. Please try again.",
+      "invalidLink": "This link is invalid or has expired.",
+      "unavailable": "Sign-up is not available right now. Try again later."
     },
-    "signOutFailed": "We could not end your session on the server. On a shared computer, sign in and sign out again, or close the browser."
+    "signOutFailed": "We could not end your session on the server. On a shared computer, sign in and sign out again, or close the browser.",
+    "resendLink": "Send a new verification email",
+    "backToSignIn": "Back to sign in",
+    "linkSent": "If an account exists for that address, we have sent it a link. Check your inbox (and spam folder).",
+    "forgotTitle": "Reset your password",
+    "forgotHelp": "Enter the email of your account. We will send you a link to choose a new password.",
+    "forgotSubmit": "Send reset link",
+    "validation": {
+      "usernameShort": "Username must be at least 3 characters.",
+      "usernameLong": "Username must be at most 30 characters.",
+      "usernameChars": "Use only lowercase letters, digits, hyphens and underscores.",
+      "email": "Enter a valid email address.",
+      "passwordShort": "Password must be at least 8 characters.",
+      "passwordLong": "Password must be at most 256 characters.",
+      "mismatch": "The passwords do not match."
+    },
+    "register": {
+      "eyebrow": "Get started",
+      "title": "Create your account",
+      "subtitle": "Record meetings and get transcripts, notes and to-dos.",
+      "email": "Email",
+      "username": "Username",
+      "usernameHelp": "3–30 lowercase letters, digits, - or _. You can sign in with it.",
+      "passwordHelp": "At least 8 characters.",
+      "confirm": "Confirm password",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "haveAccount": "Already have an account?",
+      "checkInbox": "Check your inbox",
+      "sent": "We sent a verification link to {{email}}. Open it to activate your account, then sign in.",
+      "notSent": "Your account was created, but the verification email could not be sent right now. Ask for a new one from the sign-in page later.",
+      "taken": "That email or username is already in use.",
+      "invalid": "Check your details and try again."
+    },
+    "verify": {
+      "done": "Your email is verified. You can sign in now.",
+      "resendHelp": "Need a new verification link? Enter your email.",
+      "resend": "Send verification email",
+      "confirmHelp": "Confirm that this is your email address to activate your account.",
+      "confirm": "Confirm my email"
+    },
+    "reset": {
+      "help": "Choose a new password. You will be signed out on every device.",
+      "newPassword": "New password",
+      "submit": "Set new password",
+      "done": "Your password was changed. Sign in with the new password.",
+      "newLink": "Request a new link"
+    }
   },
   "page": {
     "workspace": "Workspace",
@@ -137,7 +185,9 @@
   "common": {
     "close": "Close",
     "cancel": "Cancel",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "save": "Save",
+    "dismiss": "Dismiss"
   },
   "player": {
     "scanning": "Preparing playback…"
@@ -223,5 +273,137 @@
     "removeNamed": "Remove {{name}}",
     "started": "Uploading…",
     "progressLabel": "Upload progress"
+  },
+  "errors": {
+    "network": "Cannot reach the server. Check your connection and try again.",
+    "forbidden": "You do not have permission to do that.",
+    "notFound": "It no longer exists.",
+    "rateLimited": "Too many requests. Wait a moment and try again.",
+    "generic": "Something went wrong. Try again."
+  },
+  "meetings": {
+    "upload": "Upload",
+    "record": "Record meeting",
+    "search": "Search meetings…",
+    "count_one": "{{count}} meeting",
+    "count_other": "{{count}} meetings",
+    "insight": {
+      "title": "Your meeting memory is ready",
+      "body_one": "Ask Ricotdin about decisions, action items or anything discussed in your {{count}} processed meeting.",
+      "body_other": "Ask Ricotdin about decisions, action items or anything discussed in your {{count}} processed meetings.",
+      "cta": "Start a chat"
+    },
+    "folders": {
+      "filter": "Filter by folder",
+      "all": "All meetings",
+      "none": "No folder",
+      "shared": "Shared",
+      "manage": "Manage",
+      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown."
+    },
+    "empty": {
+      "first": "No meetings yet",
+      "firstBody": "Record or upload your first meeting to get a transcript, notes and to-dos.",
+      "title": "No meetings found",
+      "body": "Try changing your search or folder filter."
+    },
+    "duration": {
+      "m": "{{m}} min",
+      "hm": "{{h}} hr {{m}} min"
+    },
+    "source": {
+      "recorded": "Recorded",
+      "uploaded": "Uploaded",
+      "video": "Video"
+    },
+    "status": {
+      "success": "Done",
+      "processing": "Processing",
+      "danger": "Failed"
+    },
+    "actions": {
+      "more": "More actions for {{title}}",
+      "rename": "Rename",
+      "renameLabel": "Meeting title",
+      "move": "Move to folder",
+      "delete": "Delete",
+      "pin": "Pin {{title}}",
+      "unpin": "Unpin {{title}}"
+    },
+    "move": {
+      "title": "Move “{{title}}”",
+      "legend": "Destination folder",
+      "confirm": "Move"
+    },
+    "delete": {
+      "title": "Delete meeting?",
+      "body": "“{{title}}” will be deleted permanently, with its recording, transcript, notes, to-dos and chats.",
+      "confirm": "Delete permanently",
+      "done": "Meeting deleted.",
+      "warning": "Meeting deleted, but its recording could not be removed from storage. An administrator can clean it up."
+    }
+  },
+  "folders": {
+    "title": "Manage folders",
+    "mine": "Your folders",
+    "empty": "You have no folders yet.",
+    "newLabel": "New folder name",
+    "newPlaceholder": "New folder name",
+    "create": "Create folder",
+    "renameLabel": "New name for {{name}}",
+    "rename": "Rename {{name}}",
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down",
+    "share": {
+      "title": "Share “{{name}}”",
+      "back": "Back to folders",
+      "help": "People you add see every meeting in this folder. Editors can also rename meetings and update to-dos.",
+      "none": "Not shared with anyone yet.",
+      "members": "People with access",
+      "roleFor": "Role of {{name}}",
+      "remove": "Remove {{name}}",
+      "invite": "Invite someone",
+      "identifier": "Email or username",
+      "placeholder": "name@company.com or username",
+      "role": "Role",
+      "inviteButton": "Invite",
+      "roleHelp": "Viewer: can read and chat. Editor: can also rename meetings and update to-dos.",
+      "notFound": "No account found with that email or username.",
+      "conflict": "That person already has access, or it is you.",
+      "invalid": "Enter an email or username.",
+      "addedWho": "Added {{name}} as {{role}}.",
+      "changed": "{{name}} is now {{role}}.",
+      "removed": "Removed {{name}}."
+    },
+    "deleteLabel": "Delete {{name}}",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "sharedWithMe": "Shared with you",
+    "sharedBy": "by {{owner}} · {{role}}",
+    "roles": {
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    },
+    "errors": {
+      "duplicate": "You already have a folder with that name.",
+      "name": "Enter a folder name (up to 100 characters)."
+    },
+    "delete": {
+      "title": "Delete “{{name}}”?",
+      "chatNotice": "The folder's chat history will be deleted.",
+      "chatNoticeShared_one": "The folder's chat history will be deleted for everyone, including the chats of its {{count}} shared member.",
+      "chatNoticeShared_other": "The folder's chat history will be deleted for everyone, including the chats of its {{count}} shared members.",
+      "alsoMeetings_one": "Also delete my {{count}} meeting in this folder",
+      "alsoMeetings_other": "Also delete my {{count}} meetings in this folder",
+      "othersMoved_one": "{{count}} meeting of another member goes back to its owner's “No folder”.",
+      "othersMoved_other": "{{count}} meetings of other members go back to their owners' “No folder”.",
+      "meetingsGone": "Your meetings in it will be deleted permanently.",
+      "meetingsKept": "Your meetings in it will be kept, under “No folder”.",
+      "confirm": "Delete folder"
+    },
+    "shareLabel": "Share {{name}}",
+    "moved": "{{name}} moved to position {{pos}} of {{total}}.",
+    "deleted": "Folder {{name}} deleted."
   }
 }

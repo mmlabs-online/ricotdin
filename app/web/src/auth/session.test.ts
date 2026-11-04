@@ -137,6 +137,15 @@ describe('AuthSession', () => {
     expect(s.getState().status).toBe('signedIn')
   })
 
+  it('posts signed-out auth calls to the auth origin without cookies', async () => {
+    const f = fakeDeps([json(201, { verify_email: true, email_sent: true }), json(400, { error: { code: 'invalid_token', message: '' } })])
+    const s = new AuthSession('https://api.example.com', f.deps)
+    expect(await s.publicAuth('/register', { email: 'a@b.co' })).toEqual({ verify_email: true, email_sent: true })
+    expect(f.calls[0]?.url).toBe('https://api.example.com/auth/register')
+    expect(f.calls[0]?.init?.credentials).toBe('omit')
+    await expect(s.publicAuth('/verify-email', { token: 'x' })).rejects.toMatchObject({ code: 'invalid_token', status: 400 })
+  })
+
   it('surfaces sign-in errors with the API code', async () => {
     const f = fakeDeps([json(403, { error: { code: 'email_not_verified', message: 'Verify.' } })])
     const s = new AuthSession('https://api.example.com', f.deps)

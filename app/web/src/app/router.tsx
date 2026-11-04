@@ -4,7 +4,11 @@ import { ErrorScreen } from '../components/ErrorScreen'
 import { AdminSectionPage } from '../routes/AdminSectionPage'
 import { MeetingDetailPage } from '../routes/MeetingDetailPage'
 import { PlaceholderPage } from '../routes/PlaceholderPage'
-import { PublicPlaceholderPage } from '../routes/PublicPlaceholderPage'
+import { ForgotPasswordPage } from '../routes/auth/ForgotPasswordPage'
+import { RegisterPage } from '../routes/auth/RegisterPage'
+import { ResetPasswordPage } from '../routes/auth/ResetPasswordPage'
+import { VerifyEmailPage } from '../routes/auth/VerifyEmailPage'
+import { MeetingsPage } from '../routes/MeetingsPage'
 import { RecordPage } from '../routes/RecordPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
@@ -16,8 +20,10 @@ export function createRouter() {
   return createBrowserRouter([
     { path: '/sign-in', element: <SignInPage />, errorElement: <ErrorScreen /> },
     // Email-link targets (#token=…) stay public: never redirect them through /sign-in.
-    { path: '/verify-email', element: <PublicPlaceholderPage titleKey="page.verifyEmail.title" />, errorElement: <ErrorScreen /> },
-    { path: '/reset-password', element: <PublicPlaceholderPage titleKey="page.resetPassword.title" />, errorElement: <ErrorScreen /> },
+    { path: '/verify-email', element: <VerifyEmailPage />, errorElement: <ErrorScreen /> },
+    { path: '/reset-password', element: <ResetPasswordPage />, errorElement: <ErrorScreen /> },
+    { path: '/register', element: <RegisterPage />, errorElement: <ErrorScreen /> },
+    { path: '/forgot-password', element: <ForgotPasswordPage />, errorElement: <ErrorScreen /> },
     {
       path: '/admin',
       element: (
@@ -40,7 +46,7 @@ export function createRouter() {
       errorElement: <ErrorScreen />,
       children: [
         { index: true, element: <Navigate to="/meetings" replace /> },
-        { path: 'meetings', element: <PlaceholderPage titleKey="page.meetings.title" subtitleKey="page.meetings.subtitle" /> },
+        { path: 'meetings', element: <MeetingsPage /> },
         { path: 'meetings/:meetingId', element: <MeetingDetailPage /> },
         { path: 'record', element: <RecordPage /> },
         { path: 'chat', element: <PlaceholderPage titleKey="page.chat.title" subtitleKey="page.chat.subtitle" /> },
