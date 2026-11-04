@@ -661,7 +661,7 @@ Ports ADM-*, §9c, §9d, §9f, §9g, §9h, §9i. Guards: self-action, last-admin
 ---
 
 ### ARC-11 — Import Figma Make frontend
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (2026-11-04; foundation + shell + sign-in, screens in ARC-13/14)
 
 **User Story**  
 As a developer, I want the Figma Make source turned into a clean `app/web` foundation (routing, tokens, i18n, runtime config, API client, auth flow) so that screens can be wired to the API.
@@ -703,6 +703,10 @@ Figma Make output is a prototype: mock data, state-based navigation, hard-coded 
 
 **Key files (expected)**
 - `app/web/src/{app,routes,lib,i18n,components/ui}/**`, `app/web/Dockerfile`
+
+**Key files**
+- `app/web/src/{main.tsx,app/,auth/,api/,i18n/,theme/,lib/config.ts}`, `app/web/Dockerfile`, `app/web/deploy/*`,
+  `app/web/scripts/{check-i18n.mjs,gen-api.sh}`, `app/web/design/figma-make/` (reference), `.github/workflows/ci-web.yml`
 
 ---
 
