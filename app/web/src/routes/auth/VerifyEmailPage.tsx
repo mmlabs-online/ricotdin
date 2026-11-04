@@ -58,7 +58,10 @@ export function VerifyEmailPage() {
   return (
     <AuthLayout>
       <div className="auth-card">
-        <h1>{t('page.verifyEmail.title')}</h1>
+        {/* the Confirm button is gone: the result's heading takes focus */}
+        <h1 tabIndex={-1} ref={(el) => (started.current ? el?.focus() : undefined)}>
+          {t('page.verifyEmail.title')}
+        </h1>
         {state === 'verified' ? (
           <>
             <p role="status">{t('auth.verify.done')}</p>

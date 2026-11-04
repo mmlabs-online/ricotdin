@@ -1,7 +1,7 @@
 // Manage folders (ARC-13a; COM-05), Figma Make "Manage folders" modal: create, rename, reorder
 // (up / down buttons instead of drag and drop: keyboard friendly), delete with the v1 notices
 // (BUG-014..016), shared-with-me list, and the share panel of an own folder.
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowDown, ArrowUp, Folder as FolderIcon, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../api/errors'
@@ -49,6 +49,17 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
   const [alsoMeetings, setAlsoMeetings] = useState(false)
   const [sharing, setSharing] = useState<Folder | null>(null)
   const [errorKey, setErrorKey] = useState<string | null>(null)
+  const [status, setStatus] = useState('')
+  // Controls that disappear (rename input, delete view, share panel) hand focus to a stable one.
+  const focusAfter = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusAfter.current) return
+    const el = document.querySelector<HTMLElement>(focusAfter.current)
+    if (el) {
+      el.focus()
+      focusAfter.current = null
+    }
+  })
 
   const all = folders.data ?? []
   const own = all.filter((f) => f.myRole === 'owner')
@@ -67,24 +78,47 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
     if (!editing) return
     const n = editing.name.trim()
     const before = own.find((f) => f.id === editing.id)?.name
+    focusAfter.current = `[data-rename="${CSS.escape(editing.id)}"]`
     setEditing(null)
     if (n && n !== before) rename.mutate({ id: editing.id, name: n }, { onError: fail })
   }
   const moveBy = (index: number, delta: number) => {
     const ids = own.map((f) => f.id)
     const j = index + delta
-    if (j < 0 || j >= ids.length) return
+    if (reorder.isPending || j < 0 || j >= ids.length) return
+    const moved = own[index]!
     ;[ids[index], ids[j]] = [ids[j]!, ids[index]!]
-    reorder.mutate(ids, { onError: fail })
+    // keep focus on the same arrow of the moved folder (the other arrow once it reaches the edge)
+    const atEdge = (delta < 0 && j === 0) || (delta > 0 && j === ids.length - 1)
+    const dir = (delta < 0) !== atEdge ? 'up' : 'down'
+    focusAfter.current = `[data-move="${CSS.escape(moved.id)}-${dir}"]`
+    reorder.mutate(ids, {
+      onSuccess: () => setStatus(t('folders.moved', { name: displayText(moved.name), pos: j + 1, total: ids.length })),
+      onError: fail,
+    })
   }
 
-  if (sharing) return <SharePanel folder={sharing} onBack={() => setSharing(null)} onClose={onClose} />
+  if (sharing) {
+    const back = () => {
+      focusAfter.current = `[data-share="${CSS.escape(sharing.id)}"]`
+      setSharing(null)
+    }
+    return <SharePanel folder={sharing} onBack={back} />
+  }
+  const leaveDelete = (target: string) => {
+    focusAfter.current = target
+    setDeleting(null)
+  }
 
   if (deleting) {
     const counts = folderDeleteCounts(meetings, deleting.id, me)
     const chat = folderDeleteChatNotice(deleting.memberCount)
     return (
-      <Modal key="delete" title={t('folders.delete.title', { name: displayText(deleting.name) })} onClose={() => setDeleting(null)}>
+      <Modal
+        key="delete"
+        title={t('folders.delete.title', { name: displayText(deleting.name) })}
+        onClose={() => leaveDelete(`[data-delete="${CSS.escape(deleting.id)}"]`)}
+      >
         <p className="modal-copy">{t(chat.key, { count: chat.count })}</p>
         {counts.total > 0 && (
           <label className="check-row">
@@ -102,7 +136,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
           </p>
         )}
         <div className="modal-actions">
-          <Button variant="ghost" onClick={() => setDeleting(null)}>
+          <Button variant="ghost" onClick={() => leaveDelete(`[data-delete="${CSS.escape(deleting.id)}"]`)}>
             {t('common.cancel')}
           </Button>
           <Button
@@ -111,7 +145,13 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
             onClick={() =>
               remove.mutate(
                 { id: deleting.id, deleteMeetings: alsoMeetings && counts.deletable > 0 },
-                { onSuccess: () => setDeleting(null), onError: fail },
+                {
+                  onSuccess: () => {
+                    setStatus(t('folders.deleted', { name: displayText(deleting.name) }))
+                    leaveDelete('[data-new-folder]')
+                  },
+                  onError: fail,
+                },
               )
             }
           >
@@ -124,6 +164,9 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
 
   return (
     <Modal key="list" title={t('folders.title')} onClose={onClose}>
+      <p className="sr-only" role="status">
+        {status}
+      </p>
       {errorKey && (
         <p className="notice-banner error" role="alert">
           {t(errorKey)}
@@ -148,6 +191,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
                       if (e.key === 'Escape') {
                         e.preventDefault()
                         e.stopPropagation()
+                        focusAfter.current = `[data-rename="${CSS.escape(f.id)}"]`
                         setEditing(null)
                       }
                     }}
@@ -161,25 +205,38 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
               )}
               {f.memberCount > 0 && <span className="badge">{t('folders.members', { count: f.memberCount })}</span>}
               <span className="folder-actions">
-                <Button variant="ghost" aria-label={t('folders.up', { name: displayText(f.name) })} disabled={i === 0 || reorder.isPending} onClick={() => moveBy(i, -1)}>
+                <Button
+                  variant="ghost"
+                  data-move={`${f.id}-up`}
+                  aria-label={t('folders.up', { name: displayText(f.name) })}
+                  aria-disabled={i === 0 || reorder.isPending || undefined}
+                  onClick={() => moveBy(i, -1)}
+                >
                   <ArrowUp size={16} aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
+                  data-move={`${f.id}-down`}
                   aria-label={t('folders.down', { name: displayText(f.name) })}
-                  disabled={i === own.length - 1 || reorder.isPending}
+                  aria-disabled={i === own.length - 1 || reorder.isPending || undefined}
                   onClick={() => moveBy(i, 1)}
                 >
                   <ArrowDown size={16} aria-hidden="true" />
                 </Button>
-                <Button variant="ghost" aria-label={t('folders.rename', { name: displayText(f.name) })} onClick={() => setEditing({ id: f.id, name: f.name })}>
+                <Button
+                  variant="ghost"
+                  data-rename={f.id}
+                  aria-label={t('folders.rename', { name: displayText(f.name) })}
+                  onClick={() => setEditing({ id: f.id, name: f.name })}
+                >
                   <Pencil size={16} aria-hidden="true" />
                 </Button>
-                <Button variant="ghost" aria-label={t('folders.shareLabel', { name: displayText(f.name) })} onClick={() => setSharing(f)}>
+                <Button variant="ghost" data-share={f.id} aria-label={t('folders.shareLabel', { name: displayText(f.name) })} onClick={() => setSharing(f)}>
                   <Users size={16} aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
+                  data-delete={f.id}
                   aria-label={t('folders.deleteLabel', { name: displayText(f.name) })}
                   onClick={() => {
                     setAlsoMeetings(false)
@@ -196,6 +253,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
       )}
       <form className="inline" onSubmit={onCreate}>
         <input
+          data-new-folder
           value={name}
           maxLength={MAX_NAME}
           onChange={(e) => setName(e.target.value)}

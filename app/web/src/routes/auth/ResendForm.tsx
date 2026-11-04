@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../auth/AuthProvider'
 import { publicAuthErrorKey } from '../../auth/authErrors'
@@ -23,6 +23,7 @@ export function EmailLinkForm({
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -30,6 +31,7 @@ export function EmailLinkForm({
     const invalid = validateEmail(value)
     if (invalid) {
       setErrorKey(invalid)
+      inputRef.current?.focus()
       return
     }
     setBusy(true)
@@ -39,6 +41,7 @@ export function EmailLinkForm({
       setDone(true)
     } catch (err) {
       setErrorKey(publicAuthErrorKey(err, 'verify'))
+      requestAnimationFrame(() => inputRef.current?.focus())
     } finally {
       setBusy(false)
     }
@@ -46,7 +49,7 @@ export function EmailLinkForm({
 
   if (done) {
     return (
-      <p className="auth-success" role="status">
+      <p className="auth-success" role="status" tabIndex={-1} ref={(el) => el?.focus()}>
         {t('auth.linkSent')}
       </p>
     )
@@ -56,6 +59,7 @@ export function EmailLinkForm({
       <label className="auth-field">
         {t('auth.register.email')}
         <input
+          ref={inputRef}
           type="email"
           autoComplete="email"
           value={email}

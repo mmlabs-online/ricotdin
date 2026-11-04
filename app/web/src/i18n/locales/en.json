@@ -371,7 +371,9 @@
       "notFound": "No account found with that email or username.",
       "conflict": "That person already has access, or it is you.",
       "invalid": "Enter an email or username.",
-      "addedWho": "Added {{name}} as {{role}}."
+      "addedWho": "Added {{name}} as {{role}}.",
+      "changed": "{{name}} is now {{role}}.",
+      "removed": "Removed {{name}}."
     },
     "deleteLabel": "Delete {{name}}",
     "members_one": "{{count}} member",
@@ -400,6 +402,8 @@
       "meetingsKept": "Your meetings in it will be kept, under “No folder”.",
       "confirm": "Delete folder"
     },
-    "shareLabel": "Share {{name}}"
+    "shareLabel": "Share {{name}}",
+    "moved": "{{name}} moved to position {{pos}} of {{total}}.",
+    "deleted": "Folder {{name}} deleted."
   }
 }

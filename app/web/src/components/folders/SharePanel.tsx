@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { ArrowLeft, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../api/errors'
@@ -20,7 +20,7 @@ function shareErrorKey(err: unknown): string {
 }
 
 /** Share an own folder by email or username; change or remove members. */
-export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack: () => void; onClose: () => void }) {
+export function SharePanel({ folder, onBack }: { folder: Folder; onBack: () => void }) {
   const { t } = useTranslation()
   const members = useShares(folder.id)
   const { add, change, remove } = useShareMutations(folder.id)
@@ -28,6 +28,8 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [added, setAdded] = useState<{ username: string; role: 'editor' | 'viewer' } | null>(null)
+  const [announce, setAnnounce] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const fail = (err: unknown) => {
     setAdded(null)
     setErrorKey(shareErrorKey(err))
@@ -46,6 +48,7 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
           const member = (res as { member?: { username?: unknown; role?: unknown } } | null)?.member
           // Show WHO got access: a mistyped / look-alike email is caught here (CWE-451).
           setAdded({ username: typeof member?.username === 'string' ? member.username : id, role })
+          requestAnimationFrame(() => inputRef.current?.focus()) // Invite was disabled while sending
         },
         onError: fail,
       },
@@ -53,7 +56,7 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
   }
 
   return (
-    <Modal title={t('folders.share.title', { name: displayText(folder.name) })} onClose={onClose}>
+    <Modal title={t('folders.share.title', { name: displayText(folder.name) })} onClose={onBack}>
       <Button variant="ghost" onClick={onBack}>
         <ArrowLeft size={16} aria-hidden="true" /> {t('folders.share.back')}
       </Button>
@@ -70,12 +73,34 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
               <select
                 value={m.role}
                 aria-label={t('folders.share.roleFor', { name: m.username })}
-                onChange={(e) => change.mutate({ userId: m.userId, role: e.target.value as 'viewer' | 'editor' }, { onError: fail })}
+                onChange={(e) => {
+                  const next = e.target.value as 'viewer' | 'editor'
+                  change.mutate(
+                    { userId: m.userId, role: next },
+                    {
+                      onSuccess: () => setAnnounce(t('folders.share.changed', { name: m.username, role: t(`folders.roles.${next}`) })),
+                      onError: fail,
+                    },
+                  )
+                }}
               >
                 <option value="viewer">{t('folders.roles.viewer')}</option>
                 <option value="editor">{t('folders.roles.editor')}</option>
               </select>
-              <Button variant="ghost" aria-label={t('folders.share.remove', { name: m.username })} onClick={() => remove.mutate(m.userId, { onError: fail })}>
+              <Button
+                variant="ghost"
+                aria-label={t('folders.share.remove', { name: m.username })}
+                onClick={() =>
+                  remove.mutate(m.userId, {
+                    onSuccess: () => {
+                      setAdded(null) // never leave "Added X" on screen for someone just removed
+                      setAnnounce(t('folders.share.removed', { name: m.username }))
+                      requestAnimationFrame(() => inputRef.current?.focus())
+                    },
+                    onError: fail,
+                  })
+                }
+              >
                 <UserMinus size={16} aria-hidden="true" />
               </Button>
             </li>
@@ -86,6 +111,7 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
         <span className="eyebrow">{t('folders.share.invite')}</span>
         <div className="inline">
           <input
+            ref={inputRef}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             placeholder={t('folders.share.placeholder')}
@@ -102,9 +128,14 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
         </div>
         <p className="modal-copy">{t('folders.share.roleHelp')}</p>
       </form>
-      <p className={added ? 'notice-banner success' : 'sr-only'} role="status">
-        {added ? t('folders.share.addedWho', { name: added.username, role: t(`folders.roles.${added.role}`) }) : ''}
+      <p className="sr-only" role="status">
+        {added ? t('folders.share.addedWho', { name: added.username, role: t(`folders.roles.${added.role}`) }) : announce}
       </p>
+      {added && (
+        <p className="notice-banner success" aria-hidden="true">
+          {t('folders.share.addedWho', { name: added.username, role: t(`folders.roles.${added.role}`) })}
+        </p>
+      )}
       {errorKey && (
         <p className="notice-banner error" role="alert">
           {t(errorKey)}

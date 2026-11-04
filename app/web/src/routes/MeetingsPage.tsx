@@ -1,5 +1,5 @@
 // Meetings list (ARC-13a; MMG-01..04, PRP-07), Figma Make MeetingsView.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowUpRight, FileAudio, FolderCog, Mic2, Search, Sparkles, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -66,6 +66,15 @@ export function MeetingsPage() {
   )
   const doneCount = (meetings.data ?? []).filter((m) => m.status === 'done').length
   const fail = (err: unknown) => setNotice({ key: errorKey(err), kind: 'error' })
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  // A re-sorted row (pin) may lose focus when React moves it: put it back on the same pin.
+  const refocusPin = useRef<string | null>(null)
+  useEffect(() => {
+    const id = refocusPin.current
+    if (!id) return
+    if (document.activeElement && document.activeElement !== document.body) return // focus is somewhere on purpose
+    document.querySelector<HTMLElement>(`[data-pin="${CSS.escape(id)}"]`)?.focus()
+  })
 
 
   if (meetings.isPending) return <FullPageLoading />
@@ -75,7 +84,9 @@ export function MeetingsPage() {
       <div className="page-head">
         <div>
           <span className="eyebrow">{t('page.workspace')}</span>
-          <h1>{t('page.meetings.title')}</h1>
+          <h1 ref={headingRef} tabIndex={-1}>
+            {t('page.meetings.title')}
+          </h1>
           <p>{t('page.meetings.subtitle')}</p>
         </div>
         <div className="head-actions">
@@ -103,8 +114,12 @@ export function MeetingsPage() {
         </section>
       )}
 
+      {/* always present, so screen readers announce the text that appears in it */}
+      <p className="sr-only" role="status">
+        {notice && notice.kind !== 'error' ? t(notice.key) : ''}
+      </p>
       {notice && (
-        <div className={`notice-banner ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
+        <div className={`notice-banner ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : undefined}>
           <span>{t(notice.key)}</span>
           <Button variant="ghost" onClick={() => setNotice(null)} aria-label={t('common.dismiss')}>
             <X size={16} aria-hidden="true" />
@@ -146,7 +161,12 @@ export function MeetingsPage() {
               onClick={() => setFolder(f.id)}
             >
               {f.name}
-              {f.shared && <span className="tiny-shared">{t('meetings.folders.shared')}</span>}
+              {f.shared && (
+                <>
+                  {' '}
+                  <span className="tiny-shared">{t('meetings.folders.shared')}</span>
+                </>
+              )}
             </button>
           ))}
           <Button variant="ghost" onClick={() => setManaging(true)}>
@@ -185,7 +205,19 @@ export function MeetingsPage() {
                   role={getMeetingRole(m, me, folderList)}
                   folderName={m.folder_id ? (byId.get(m.folder_id)?.name ?? null) : null}
                   pinBusy={pinsInFlight.has(m.id)}
-                  onPin={() => pin.mutate({ id: m.id, pinned: m.pinned_at === null }, { onError: fail })}
+                  onPin={() => {
+                    refocusPin.current = m.id
+                    pin.mutate(
+                      { id: m.id, pinned: m.pinned_at === null },
+                      {
+                        onError: fail,
+                        onSettled: () =>
+                          requestAnimationFrame(() => {
+                            if (refocusPin.current === m.id) refocusPin.current = null
+                          }),
+                      },
+                    )
+                  }}
                   onRename={(title) => rename.mutate({ id: m.id, title }, { onError: fail })}
                   onMove={() => setMoving(m)}
                   onDelete={() => setDeleting(m)}
@@ -218,7 +250,11 @@ export function MeetingsPage() {
               onSuccess: (res) =>
                 setNotice(res.warning ? { key: 'meetings.delete.warning', kind: 'warning' } : { key: 'meetings.delete.done', kind: 'success' }),
               onError: fail,
-              onSettled: () => setDeleting(null),
+              onSettled: () => {
+                setDeleting(null)
+                // the row (and its menu button) is gone: continue from the page heading
+                requestAnimationFrame(() => headingRef.current?.focus())
+              },
             })
           }
         />

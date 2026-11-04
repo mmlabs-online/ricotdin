@@ -1,5 +1,5 @@
 // AUT-02: set a new password from the emailed link (#token=…). Every session is signed out.
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../auth/AuthProvider'
@@ -17,6 +17,8 @@ export function ResetPasswordPage() {
   const location = useLocation()
   const [token] = useState(() => readHashToken(location.hash))
   const errId = useId()
+  const helpId = useId()
+  const pwRef = useRef<HTMLInputElement>(null)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [errorKey, setErrorKey] = useState<string | null>(null)
@@ -33,6 +35,7 @@ export function ResetPasswordPage() {
     const invalid = validatePassword(password) ?? (confirm !== password ? 'auth.validation.mismatch' : null)
     if (invalid) {
       setErrorKey(invalid)
+      pwRef.current?.focus()
       return
     }
     setBusy(true)
@@ -42,6 +45,7 @@ export function ResetPasswordPage() {
       setDone(true)
     } catch (err) {
       setErrorKey(publicAuthErrorKey(err, 'reset'))
+      requestAnimationFrame(() => pwRef.current?.focus())
     } finally {
       setBusy(false)
     }
@@ -51,7 +55,9 @@ export function ResetPasswordPage() {
     <AuthLayout>
       {done ? (
         <div className="auth-card" role="status">
-          <h1>{t('page.resetPassword.title')}</h1>
+          <h1 tabIndex={-1} ref={(el) => el?.focus()}>
+            {t('page.resetPassword.title')}
+          </h1>
           <p>{t('auth.reset.done')}</p>
           <Link className="button button-primary full" to="/sign-in">
             {t('auth.submit')}
@@ -74,15 +80,19 @@ export function ResetPasswordPage() {
           <label>
             {t('auth.reset.newPassword')}
             <input
+              ref={pwRef}
               type="password"
               autoComplete="new-password"
               value={password}
               maxLength={1024}
               onChange={(e) => setPassword(e.target.value)}
               aria-invalid={errorKey ? true : undefined}
-              aria-describedby={errorKey ? errId : undefined}
+              aria-describedby={errorKey ? `${helpId} ${errId}` : helpId}
             />
           </label>
+          <p id={helpId} className="field-help">
+            {t('auth.register.passwordHelp')}
+          </p>
           <label>
             {t('auth.register.confirm')}
             <input

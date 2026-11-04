@@ -132,3 +132,20 @@ a.forgot { text-align: right; }
 .plain-list li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 /* User-written names never reorder the text around them (bidi isolation). */
 .folder-name, .meeting-title, .folder-cell, .folder-pills > button, .choice-list label, .modal-head h2 { unicode-bidi: isolate; }
+/* ARC-13a accessibility review */
+.auth-card .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
+.auth-card .field > label { font-size: 13px; font-weight: 600; }
+.auth-card .field input { min-height: 44px; }
+.auth-card p.field-help { margin: -8px 0 15px; }
+.pin { min-height: 24px; min-width: 24px; }
+.tiny-shared, .badge { font-size: 11px; }
+@media (max-width: 767px) {
+  /* keep the ⋯ menu in the row's top-right cell so its popup opens on screen */
+  .meeting-row { grid-template-columns: 28px 38px minmax(0, 1fr) auto auto; }
+}
+@media (max-width: 479px) {
+  .modal-list .folder-row { flex-wrap: wrap; }
+  .folder-actions { width: 100%; justify-content: flex-end; }
+  .share-box .inline, .modal > .inline { grid-template-columns: 1fr; }
+  .share-box .inline > *, .modal > .inline > * { min-width: 0; }
+}

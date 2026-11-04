@@ -50,6 +50,8 @@ export function RegisterPage() {
       setSent({ emailSent: res?.email_sent === true })
     } catch (err) {
       setFormError(publicAuthErrorKey(err, 'register'))
+      // the submit button was disabled while busy: continue from the first field
+      requestAnimationFrame(() => document.getElementById(ids.email)?.focus())
     } finally {
       setBusy(false)
     }
@@ -59,7 +61,9 @@ export function RegisterPage() {
     return (
       <AuthLayout>
         <div className="auth-card" role="status">
-          <h1>{t('auth.register.checkInbox')}</h1>
+          <h1 tabIndex={-1} ref={(el) => el?.focus()}>
+            {t('auth.register.checkInbox')}
+          </h1>
           <p>{sent.emailSent ? t('auth.register.sent', { email: normalizeEmail(values.email) }) : t('auth.register.notSent')}</p>
           <Link className="button button-primary full" to="/sign-in">
             {t('auth.backToSignIn')}
@@ -69,31 +73,35 @@ export function RegisterPage() {
     )
   }
 
-  const field = (f: Field, label: string, type: string, autoComplete: string, help?: string) => (
-    <label key={f}>
-      {label}
-      <input
-        id={ids[f]}
-        type={type}
-        autoComplete={autoComplete}
-        value={values[f]}
-        onChange={set(f)}
-        aria-invalid={errors[f] ? true : undefined}
-        aria-describedby={errors[f] ? `${ids[f]}-err` : help ? `${ids[f]}-help` : undefined}
-        maxLength={f === 'email' ? 320 : f === 'username' ? 100 : 1024}
-      />
-      {help && !errors[f] && (
-        <small id={`${ids[f]}-help`} className="field-help">
-          {help}
-        </small>
-      )}
-      {errors[f] && (
-        <small id={`${ids[f]}-err`} className="field-error">
-          {t(errors[f])}
-        </small>
-      )}
-    </label>
-  )
+  // help and error text sit outside the <label>, so they describe the input but are not its name
+  const field = (f: Field, label: string, type: string, autoComplete: string, help?: string) => {
+    const described = [help ? `${ids[f]}-help` : '', errors[f] ? `${ids[f]}-err` : ''].filter(Boolean).join(' ')
+    return (
+      <div className="field" key={f}>
+        <label htmlFor={ids[f]}>{label}</label>
+        <input
+          id={ids[f]}
+          type={type}
+          autoComplete={autoComplete}
+          value={values[f]}
+          onChange={set(f)}
+          aria-invalid={errors[f] ? true : undefined}
+          aria-describedby={described || undefined}
+          maxLength={f === 'email' ? 320 : f === 'username' ? 100 : 1024}
+        />
+        {help && (
+          <small id={`${ids[f]}-help`} className="field-help">
+            {help}
+          </small>
+        )}
+        {errors[f] && (
+          <small id={`${ids[f]}-err`} className="field-error">
+            {t(errors[f])}
+          </small>
+        )}
+      </div>
+    )
+  }
 
   return (
     <AuthLayout>

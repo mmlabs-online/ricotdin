@@ -83,10 +83,13 @@ export function MeetingRow({
         <button
           type="button"
           className={`pin ${pinned ? 'pinned' : ''}`}
-          aria-label={pinned ? t('meetings.actions.unpin', { title }) : t('meetings.actions.pin', { title })}
+          data-pin={meeting.id}
+          aria-label={t('meetings.actions.pin', { title })}
           aria-pressed={pinned}
-          disabled={pinBusy}
-          onClick={onPin}
+          aria-disabled={pinBusy || undefined}
+          onClick={() => {
+            if (!pinBusy) onPin() // the server toggles: never twice while one is in flight
+          }}
         >
           <Pin size={16} fill={pinned ? 'currentColor' : 'none'} aria-hidden="true" />
         </button>

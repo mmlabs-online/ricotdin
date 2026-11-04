@@ -371,7 +371,9 @@
       "notFound": "Không tìm thấy tài khoản với email hoặc tên người dùng này.",
       "conflict": "Người này đã có quyền truy cập, hoặc đó là bạn.",
       "invalid": "Nhập email hoặc tên người dùng.",
-      "addedWho": "Đã thêm {{name}} với vai trò {{role}}."
+      "addedWho": "Đã thêm {{name}} với vai trò {{role}}.",
+      "changed": "{{name}} giờ là {{role}}.",
+      "removed": "Đã bỏ {{name}}."
     },
     "deleteLabel": "Xóa {{name}}",
     "members_one": "{{count}} thành viên",
@@ -400,6 +402,8 @@
       "meetingsKept": "Các cuộc họp của bạn sẽ được giữ, chuyển về “Không có thư mục”.",
       "confirm": "Xóa thư mục"
     },
-    "shareLabel": "Chia sẻ {{name}}"
+    "shareLabel": "Chia sẻ {{name}}",
+    "moved": "Đã chuyển {{name}} tới vị trí {{pos}}/{{total}}.",
+    "deleted": "Đã xóa thư mục {{name}}."
   }
 }
