@@ -744,6 +744,24 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `/assets/*` immutable. **ARC-12/13:** the Drive resumable upload PUTs to `https://www.googleapis.com`
   — add it to `connect-src` then; never allow inline scripts/styles. The API must list the web origin
   in `WEB_ORIGIN` + `ALLOWED_ORIGINS`; web and API stay sibling subdomains (refresh cookie SameSite=Lax).
+- **Browser logic (ARC-12):** `/record` = `RecordPage` (`components/Recorder.tsx`, `FileUploadPanel.tsx`).
+  Recording = v1 (`lib/audio/{support,capture,useRecorder}.ts`: mic + tab/system audio mixed, video
+  dropped, missing tab audio → warning, unsupported browser → card; errors → i18n keys). COM-01 =
+  `lib/consent/recordingNotice.ts` + `RecordingNoticeDialog` (`components/ui/Modal.tsx`: portal,
+  inert page, focus on the heading, Tab trap, Escape cancels); recording starts synchronously in the
+  confirm click; the ack is logged best effort (`POST /activity`). **Upload** (`lib/upload/upload.ts`):
+  `POST /meetings` → XHR PUT straight to the Drive session (only to `https://www.googleapis.com/upload/`,
+  no cookies/Authorization; CSP `connect-src` allows that host) → `POST /meetings/{id}/uploaded
+  {fileId, size}`; a failed PUT deletes the pending meeting (frees one of the 20 pending slots).
+  Checked before any request (`lib/upload/rules.ts`, same lists as `domain/uploads.py`): **500 MB**
+  (owner decision 2026-11-04; v1 1 GB) — the API enforces it for new uploads, the worker still reads
+  stored files up to 1 GB (`MAX_STORED_AUDIO_BYTES`, ARC-18 copies). `uploadAvatar` (PRF-04, ≤ 2 MB
+  JPEG/PNG/WebP) → `PATCH /profile`. Server/upload text is never shown (`uploadErrorKey`).
+  Building blocks for ARC-13: `components/AudioPlayer.tsx` (`hackAudioRender` duration fix,
+  `seekTo(ms)`), `lib/media/seek.ts` (`meetingSeekPath` `?t=`, `parseSeekParam`, `nearestSegment`),
+  `lib/media/download.ts` (`downloadIcs` via `fetchApi`), `lib/transcript/export.ts`. `useFetchApi()`
+  = authenticated raw requests for bodies the typed client does not describe. Ported v1 tests use
+  `src/test/assert.ts` (node:assert subset on vitest). Leaving `/record` while recording/uploading asks first.
 
 ## 1. What we are building
 

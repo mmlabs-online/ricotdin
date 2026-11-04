@@ -133,5 +133,88 @@
     "config": "Ứng dụng chưa được cấu hình đúng. Hãy liên hệ quản trị viên.",
     "unavailable": "Hiện không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
     "retry": "Thử lại"
+  },
+  "common": {
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "tryAgain": "Thử lại"
+  },
+  "player": {
+    "scanning": "Đang chuẩn bị phát…"
+  },
+  "record": {
+    "start": "Bắt đầu ghi âm",
+    "waiting": "Đang chờ cấp quyền…",
+    "stop": "Dừng ghi âm",
+    "elapsed": "Thời gian ghi",
+    "preview": "Nghe lại bản ghi",
+    "discard": "Bỏ bản ghi",
+    "upload": "Tải lên và xử lý",
+    "another": "Ghi cuộc họp khác",
+    "stopped": "Đã ghi {{time}} ({{size}}). Nghe lại rồi tải lên để xử lý.",
+    "noTabAudio": "Không ghi được âm thanh tab hoặc hệ thống — chỉ có micro của bạn. Để có tiếng người khác, hãy dừng, bắt đầu lại và tick \"Chia sẻ âm thanh tab\" trong hộp thoại chia sẻ.",
+    "noTabAudioAfter": "Bản ghi này chỉ có micro của bạn: chưa chia sẻ âm thanh tab hoặc hệ thống.",
+    "card": {
+      "title": "Ghi âm cuộc họp này",
+      "body": "Ghi âm micro và âm thanh từ tab hoặc hệ thống một cách an toàn ngay trong trình duyệt."
+    },
+    "capture": {
+      "mic": "Âm thanh micro",
+      "tab": "Âm thanh tab hoặc hệ thống",
+      "secure": "Tải lên được mã hóa"
+    },
+    "notice": {
+      "title": "Trước khi ghi âm",
+      "body": "Ứng dụng sẽ ghi âm và chép lời cuộc họp. Mọi người tham gia cần biết và đồng ý trước khi bạn bắt đầu. Quy định về ghi âm khác nhau tùy nơi.",
+      "scriptLabel": "Câu mở đầu gợi ý",
+      "script": "“Trước khi bắt đầu: tôi sẽ ghi âm cuộc họp này để chép lời và ghi chú. Nếu ai không muốn bị ghi âm, xin cho tôi biết ngay bây giờ.”",
+      "confirm": "Tôi đã hiểu — bắt đầu ghi âm"
+    },
+    "unsupported": {
+      "title": "Trình duyệt này không ghi âm cuộc họp được",
+      "body": "Hãy dùng Chrome hoặc Edge bản mới trên máy tính. Bạn vẫn có thể tải bản ghi lên ở bên dưới. Còn thiếu:"
+    },
+    "missing": {
+      "browser": "Môi trường trình duyệt",
+      "display": "Chia sẻ màn hình hoặc tab",
+      "mic": "Quyền dùng micro",
+      "recorder": "Ghi phương tiện (MediaRecorder)",
+      "codec": "Định dạng âm thanh được hỗ trợ (WebM, Ogg hoặc MP4)"
+    },
+    "errors": {
+      "denied": "Bị từ chối quyền — hãy cho phép micro và chia sẻ màn hình rồi thử lại.",
+      "noMic": "Không tìm thấy micro — hãy cắm micro rồi thử lại.",
+      "cancelled": "Đã hủy chia sẻ màn hình.",
+      "state": "Trình ghi âm dừng bất ngờ — hãy thử lại.",
+      "generic": "Không bắt đầu ghi âm được. Hãy thử lại."
+    }
+  },
+  "upload": {
+    "or": "hoặc tải tệp lên",
+    "drop": "Thả tệp âm thanh hoặc video vào đây",
+    "choose": "Chọn tệp",
+    "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM hoặc video (MP4, MOV, AVI, MKV, M4V) · tối đa {{max}}",
+    "remove": "Bỏ tệp",
+    "date": "Ngày họp",
+    "dateHelp": "Dùng để sắp xếp dòng thời gian của bạn.",
+    "start": "Tải lên và xử lý",
+    "uploading": "Đang tải lên… {{pct}}%",
+    "done": "Đã tải lên. Đang xử lý — thường mất vài phút.",
+    "openMeeting": "Mở cuộc họp",
+    "errors": {
+      "type": "Không hỗ trợ loại tệp “{{ext}}”. Hãy dùng tệp âm thanh hoặc video.",
+      "size": "Tệp quá lớn. Tối đa {{max}}.",
+      "empty": "Tệp trống.",
+      "network": "Tải lên bị gián đoạn — kiểm tra mạng rồi thử lại.",
+      "aborted": "Đã hủy tải lên.",
+      "tooMany": "Đang có quá nhiều lượt tải lên. Đợi một lúc hoặc xóa các bản tải dở, rồi thử lại.",
+      "rejected": "Máy chủ từ chối tệp này.",
+      "unavailable": "Kho lưu trữ đang không dùng được. Hãy thử lại sau.",
+      "drive": "Không lưu được tệp. Hãy thử lại.",
+      "confirm": "Tệp đã tải lên nhưng chưa kiểm tra được. Mở danh sách cuộc họp hoặc thử lại.",
+      "generic": "Tải lên thất bại. Hãy thử lại.",
+      "avatarType": "Hãy dùng ảnh JPEG, PNG hoặc WebP.",
+      "avatarSize": "Ảnh phải nhỏ hơn 2 MB."
+    }
   }
 }

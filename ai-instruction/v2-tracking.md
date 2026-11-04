@@ -17,11 +17,11 @@
 
 | Feature | Title | ARC | API endpoints (v2) | API | FE screen | FE | Tests | Note |
 |---|---|---|---|---|---|---|---|---|
-| REC-01 | Toggle recording & mix sources | ARC-12 | — (browser only) | n/a | Record | todo | — | port `lib/audio/capture.ts`, `useRecorder.ts` |
-| REC-02 | Audio-only capture | ARC-12 | — (browser only) | n/a | Record | todo | — | video track dropped in capture |
-| REC-03 | Missing-audio warning | ARC-12 | — (browser only) | n/a | Record | todo | — | |
-| REC-04 | Browser support | ARC-12 | — (browser only) | n/a | Record | todo | — | `lib/audio/support.ts` |
-| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | todo | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — v2: extracted by the ARC-08 worker (08a), the original video stays in Drive |
+| REC-01 | Toggle recording & mix sources | ARC-12 | — (browser only) | n/a | Record | done | — | port `lib/audio/capture.ts`, `useRecorder.ts` |
+| REC-02 | Audio-only capture | ARC-12 | — (browser only) | n/a | Record | done | — | video track dropped in capture |
+| REC-03 | Missing-audio warning | ARC-12 | — (browser only) | n/a | Record | done | — | |
+| REC-04 | Browser support | ARC-12 | — (browser only) | n/a | Record | done | — | `lib/audio/support.ts` |
+| REC-05 | Upload existing audio file | ARC-07, ARC-12 | `POST /meetings`, `POST /meetings/{id}/uploaded` (ffprobe check) | todo | Record (upload) | done | ffprobe, transcode | 500 MB cap client + server. v1 also accepts **video** uploads (`source='video'`): audio extracted server-side with ffmpeg, original deleted — v2: extracted by the ARC-08 worker (08a), the original video stays in Drive |
 | PRP-01 | Audio upload | ARC-07 | `POST /meetings` (presigned R2 PUT), `POST /meetings/{id}/uploaded` | todo | Record | todo | storage-config | browser → R2 direct |
 | PRP-02 | Format transcoding | ARC-08 | — (worker) | done | — | n/a | transcode, ffprobe | ffmpeg mono 16 kHz (08a, `app/worker/audio.py`; input guards); Gemini long-audio chunking not ported (owner 2026-11-02) |
 | PRP-03 | Transcript generation | ARC-08 | — (worker) | todo | — | n/a | speechmatics, pipeline-parse | |
@@ -80,7 +80,7 @@
 | OPS-04 | Tag-driven release to deployment repo | ARC-15 | `GET /version.json` | todo | — | n/a | app-version | two images in v2 |
 | OPS-06 | CI on dev branch | ARC-00 | — (CI triggers include `dev`) | done | — | done | — | delivered by ARC-00 |
 | OPS-07 | Release runbook + deploy verify | ARC-15 | `GET /version.json`, `GET /health` | todo | — | n/a | verify-deploy | runbook rewritten for v2 |
-| COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | done | Record (notice dialog) | todo | recording-notice, activity-log | 12 h ack per tab |
+| COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | done | Record (notice dialog) | done | recording-notice, activity-log | 12 h ack per tab |
 | COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | in_progress | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | all routes done except `DELETE /folders/{id}?deleteMeetings=true` (503 until ARC-07 part 2); moving a meeting = `PATCH /meetings/{id}` |
 | QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | done | Profile | todo | quota | balance stays in `GET /profile` for parity |
 | QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
@@ -165,18 +165,18 @@ Legacy path = `legacy/app/api/<path>/route.ts` (and `legacy/app/version.json/rou
 
 | Logic | Legacy source | v2 target | ARC | Status | Tests |
 |---|---|---|---|---|---|
-| Tab/system audio + mic capture, mixing, audio-only | `legacy/lib/audio/capture.ts`, `legacy/lib/audio/useRecorder.ts` | `app/web/src/lib/audio/` | ARC-12 | todo | — |
-| Browser support + missing-system-audio warning | `legacy/lib/audio/support.ts`, `legacy/components/RecorderUI.tsx` | `app/web/src/lib/audio/` + Record screen | ARC-12 | todo | — |
-| Recording notice dialog + 12 h ack (COM-01) | `legacy/lib/consent/recordingNotice.ts`, `legacy/components/RecordingNoticeModal.tsx` | `app/web/src/lib/consent/` + dialog | ARC-12 | todo | recording-notice |
-| Upload to R2 (presigned PUT, progress, size/type guard) | `legacy/lib/upload/upload.ts`, `useUpload.ts`, `constants.ts`, `legacy/components/FileUploadSection.tsx` | `app/web/src/lib/upload/` | ARC-12 | todo | — |
-| Audio duration fix for live WebM (§9j) | `legacy/lib/audio/durationFix.ts`, `useAudioDurationFix.ts` | `app/web/src/lib/audio/` | ARC-12 | todo | audio-duration-fix |
-| Transcript timestamp → player seek | `legacy/app/(routes)/meetings/[id]/page.tsx` | Meeting detail | ARC-12 | todo | — |
-| `.ics` download (fetch + blob with bearer token) | `legacy/app/(routes)/meetings/[id]/page.tsx` | Meeting detail | ARC-12 | todo | — |
-| Chat citations → open meeting at timestamp | `legacy/components/ChatPanel.tsx` | Chat panel | ARC-12 | todo | — |
-| Transcript export | `legacy/lib/transcript/export.ts` | `app/web/src/lib/transcript/` | ARC-12 | todo | transcript-export |
+| Tab/system audio + mic capture, mixing, audio-only | `legacy/lib/audio/capture.ts`, `legacy/lib/audio/useRecorder.ts` | `app/web/src/lib/audio/` | ARC-12 | done | Record screen (browser check with fake devices) |
+| Browser support + missing-system-audio warning | `legacy/lib/audio/support.ts`, `legacy/components/RecorderUI.tsx` | `app/web/src/lib/audio/` + Record screen | ARC-12 | done | support.test |
+| Recording notice dialog + 12 h ack (COM-01) | `legacy/lib/consent/recordingNotice.ts`, `legacy/components/RecordingNoticeModal.tsx` | `app/web/src/lib/consent/` + dialog | ARC-12 | done | recording-notice |
+| Upload to R2 (presigned PUT, progress, size/type guard) | `legacy/lib/upload/upload.ts`, `useUpload.ts`, `constants.ts`, `legacy/components/FileUploadSection.tsx` | `app/web/src/lib/upload/` | ARC-12 | done (Drive resumable PUT, 500 MB) | — |
+| Audio duration fix for live WebM (§9j) | `legacy/lib/audio/durationFix.ts`, `useAudioDurationFix.ts` | `app/web/src/lib/audio/` | ARC-12 | done (`AudioPlayer`) | audio-duration-fix |
+| Transcript timestamp → player seek | `legacy/app/(routes)/meetings/[id]/page.tsx` | Meeting detail | ARC-12 | done (`AudioPlayer.seekTo`, `nearestSegment`; placed in ARC-13) | — |
+| `.ics` download (fetch + blob with bearer token) | `legacy/app/(routes)/meetings/[id]/page.tsx` | Meeting detail | ARC-12 | done (`downloadIcs`; placed in ARC-13) | — |
+| Chat citations → open meeting at timestamp | `legacy/components/ChatPanel.tsx` | Chat panel | ARC-12 | done (`meetingSeekPath` / `parseSeekParam`; placed in ARC-13) | — |
+| Transcript export | `legacy/lib/transcript/export.ts` | `app/web/src/lib/transcript/` | ARC-12 | done | transcript-export |
 | Folder delete notice + local state after delete | `legacy/lib/folders/deleteNotice.ts` | `app/web/src/lib/folders/` | ARC-13 | todo | folder-delete-notice |
 | Client role helpers (canPin / canEdit / canDelete / canManageShares) | `legacy/lib/access/roles.ts` | `app/web/src/lib/access/` | ARC-13 | todo | folder-shares |
-| Avatar upload (presigned PUT to R2, then confirm) | `legacy/app/(routes)/profile/page.tsx` | Profile | ARC-12 | todo | avatar-key |
+| Avatar upload (presigned PUT to R2, then confirm) | `legacy/app/(routes)/profile/page.tsx` | Profile | ARC-12 | done (`uploadAvatar`; Profile screen ARC-13) | avatar-key |
 | Model label | `legacy/lib/ai/modelLabel.ts` | `app/web/src/lib/` | ARC-13 | todo | model-label |
 | Audio state ("purged") display | `legacy/lib/retention/policy.ts` (`audioState`) | Meeting detail | ARC-13 | todo | retention |
 | Admin usage / health / config view helpers | `legacy/lib/admin/usage.ts`, `health.ts`, `config.ts` | `app/web/src/lib/admin/` | ARC-14 | todo | usage-by-user, admin-ext |

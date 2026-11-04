@@ -19,7 +19,10 @@ from app.services.storage.base import base_media_type
 from app.services.storage.drive_rules import is_valid_file_id
 from app.services.storage.ownership import is_owned_avatar_key
 
-MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
+# New uploads (owner decision 2026-11-04, ARC-12; v1 allowed 1 GB). Files already stored — v1
+# meetings copied by ARC-18 — can be up to 1 GB, so the worker reads with MAX_STORED_AUDIO_BYTES.
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+MAX_STORED_AUDIO_BYTES = 1024 * 1024 * 1024
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
 AUDIO_EXTENSIONS = (".mp3", ".m4a", ".wav", ".aac", ".ogg", ".flac", ".webm")
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv", ".m4v")

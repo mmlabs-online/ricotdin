@@ -91,7 +91,7 @@ def test_create_fields() -> None:
         ({"size": 0}, 422, "size must be"),
         ({"size": "10"}, 422, "size must be"),
         ({"size": True}, 422, "size must be"),
-        ({"size": MAX_UPLOAD_BYTES + 1}, 422, "File exceeds the 1024 MB upload limit."),
+        ({"size": MAX_UPLOAD_BYTES + 1}, 422, "File exceeds the 500 MB upload limit."),
         ({"size": 5, "durationSeconds": -1}, 422, "durationSeconds"),
         ({"size": 5, "durationSeconds": "x"}, 422, "durationSeconds"),
         ({"size": 5, "startedAt": "yesterday"}, 422, "startedAt"),
@@ -268,3 +268,11 @@ def test_create_empty_folder_id_means_no_folder() -> None:
 )
 def test_create_drops_an_unsafe_browser_mime(mime: str) -> None:
     assert parse_meeting_create({"size": 5, "mimeType": mime}).content_type == "audio/webm"
+
+
+def test_arc12_new_uploads_are_capped_at_500_mb_but_stored_audio_reads_keep_1_gb() -> None:
+    """Owner decision 2026-11-04: new uploads ≤ 500 MB; v1 files (≤ 1 GB) must still process."""
+    from app.domain.uploads import MAX_STORED_AUDIO_BYTES
+
+    assert MAX_UPLOAD_BYTES == 500 * 1024 * 1024
+    assert MAX_STORED_AUDIO_BYTES == 1024 * 1024 * 1024

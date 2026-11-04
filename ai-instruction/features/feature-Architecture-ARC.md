@@ -711,7 +711,7 @@ Figma Make output is a prototype: mock data, state-based navigation, hard-coded 
 ---
 
 ### ARC-12 — Port browser-only logic
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (2026-11-04; Record screen + building blocks; upload cap 500 MB, owner decision)
 
 **User Story**  
 As a user, I want recording, the recording notice, uploads and audio playback to behave exactly as in v1 inside the new UI.

@@ -5,6 +5,7 @@ import { AdminSectionPage } from '../routes/AdminSectionPage'
 import { MeetingDetailPage } from '../routes/MeetingDetailPage'
 import { PlaceholderPage } from '../routes/PlaceholderPage'
 import { PublicPlaceholderPage } from '../routes/PublicPlaceholderPage'
+import { RecordPage } from '../routes/RecordPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
 import { ADMIN_SECTIONS } from './adminSections'
@@ -41,10 +42,7 @@ export function createRouter() {
         { index: true, element: <Navigate to="/meetings" replace /> },
         { path: 'meetings', element: <PlaceholderPage titleKey="page.meetings.title" subtitleKey="page.meetings.subtitle" /> },
         { path: 'meetings/:meetingId', element: <MeetingDetailPage /> },
-        {
-          path: 'record',
-          element: <PlaceholderPage eyebrowKey="page.record.eyebrow" titleKey="page.record.title" subtitleKey="page.record.subtitle" />,
-        },
+        { path: 'record', element: <RecordPage /> },
         { path: 'chat', element: <PlaceholderPage titleKey="page.chat.title" subtitleKey="page.chat.subtitle" /> },
         {
           path: 'profile',

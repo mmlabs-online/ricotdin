@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ApiClient } from '../api/client'
+import type { ApiClient, FetchApi } from '../api/client'
 import type { AuthSession, AuthState } from './session'
 
-type AuthValue = { session: AuthSession; api: ApiClient }
+type AuthValue = { session: AuthSession; api: ApiClient; fetchApi: FetchApi }
 const AuthContext = createContext<AuthValue | null>(null)
 
-export function AuthProvider({ session, api, children }: AuthValue & { children: ReactNode }) {
+export function AuthProvider({ session, api, fetchApi, children }: AuthValue & { children: ReactNode }) {
   const queryClient = useQueryClient()
   useEffect(() => {
     void session.start()
@@ -25,7 +25,7 @@ export function AuthProvider({ session, api, children }: AuthValue & { children:
       lastUser = user
     })
   }, [session, queryClient])
-  return <AuthContext.Provider value={{ session, api }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, api, fetchApi }}>{children}</AuthContext.Provider>
 }
 
 function useAuthContext(): AuthValue {
@@ -42,4 +42,8 @@ export function useAuth(): { state: AuthState; session: AuthSession } {
 
 export function useApi(): ApiClient {
   return useAuthContext().api
+}
+
+export function useFetchApi(): FetchApi {
+  return useAuthContext().fetchApi
 }

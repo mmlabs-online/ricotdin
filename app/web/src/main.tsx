@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'
 import { I18nextProvider } from 'react-i18next'
-import { createApiClient } from './api/client'
+import { createApiClient, createFetchApi } from './api/client'
 import { ApiError } from './api/errors'
 import { AuthProvider } from './auth/AuthProvider'
 import { AuthSession } from './auth/session'
@@ -44,6 +44,7 @@ async function boot(): Promise<void> {
   }
   const session = new AuthSession(config.authUrl)
   const api = createApiClient(config.apiUrl, session)
+  const fetchApi = createFetchApi(config.apiUrl, session)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: retryable, staleTime: 30_000 } } })
   const router = createRouter()
   root.render(
@@ -52,7 +53,7 @@ async function boot(): Promise<void> {
         <ErrorBoundary>
           <ThemeProvider>
             <QueryClientProvider client={queryClient}>
-              <AuthProvider session={session} api={api}>
+              <AuthProvider session={session} api={api} fetchApi={fetchApi}>
                 <RouterProvider router={router} />
               </AuthProvider>
             </QueryClientProvider>
