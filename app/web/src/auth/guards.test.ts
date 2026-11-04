@@ -5,6 +5,9 @@ describe('guardDecision', () => {
   it('waits while the session is being restored', () => {
     expect(guardDecision({ status: 'loading' }, 'user')).toBe('wait')
   })
+  it('reports an unreachable API instead of signing out', () => {
+    expect(guardDecision({ status: 'unavailable' }, 'user')).toBe('unavailable')
+  })
   it('sends signed-out visitors to sign-in', () => {
     expect(guardDecision({ status: 'signedOut' }, 'user')).toBe('signIn')
     expect(guardDecision({ status: 'signedOut' }, 'admin')).toBe('signIn')

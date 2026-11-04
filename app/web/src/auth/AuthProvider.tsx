@@ -11,11 +11,17 @@ export function AuthProvider({ session, api, children }: AuthValue & { children:
   useEffect(() => {
     void session.start()
     // Cached data belongs to the previous user: drop it when the session ends or changes hands.
-    let lastUser: string | null = null
-    return session.subscribe(() => {
+    const userOf = () => {
       const state = session.getState()
-      const user = state.status === 'signedIn' ? state.user.id : null
-      if (user !== lastUser) queryClient.clear()
+      return state.status === 'signedIn' ? state.user.id : null
+    }
+    let lastUser = userOf()
+    return session.subscribe(() => {
+      const user = userOf()
+      if (user !== lastUser) {
+        void queryClient.cancelQueries()
+        queryClient.clear()
+      }
       lastUser = user
     })
   }, [session, queryClient])

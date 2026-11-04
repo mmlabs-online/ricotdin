@@ -1,14 +1,19 @@
 // Route guard rules (ARC-11). Pure: the components in RequireAuth.tsx apply them.
 
 export type Role = 'user' | 'admin'
-export type SessionView = { status: 'loading' } | { status: 'signedOut' } | { status: 'signedIn'; role: Role }
-export type Decision = 'wait' | 'allow' | 'signIn' | 'forbidden'
+export type SessionView =
+  | { status: 'loading' }
+  | { status: 'unavailable' }
+  | { status: 'signedOut' }
+  | { status: 'signedIn'; role: Role }
+export type Decision = 'wait' | 'unavailable' | 'allow' | 'signIn' | 'forbidden'
 
 export const HOME_PATH = '/meetings'
 export const SIGN_IN_PATH = '/sign-in'
 
 export function guardDecision(session: SessionView, needs: Role): Decision {
   if (session.status === 'loading') return 'wait'
+  if (session.status === 'unavailable') return 'unavailable'
   if (session.status === 'signedOut') return 'signIn'
   if (needs === 'admin' && session.role !== 'admin') return 'forbidden'
   return 'allow'

@@ -22,6 +22,9 @@ export function authFetch(session: AuthSession, apiUrl: string, fetchFn: typeof 
     const token = await session.getToken()
     const first = await fetchFn(withToken(input, token))
     if (first.status !== 401 || !token) return first
+    // Another request already refreshed while this one was in flight: just retry with that token.
+    const fresh = session.accessToken
+    if (fresh && fresh !== token) return fetchFn(withToken(retry, fresh))
     if (!(await session.refresh().catch(() => false))) return first
     return fetchFn(withToken(retry, session.accessToken))
   }

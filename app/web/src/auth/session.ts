@@ -21,6 +21,7 @@ import { expiresAtFrom, isExpiringSoon } from './token'
 
 export type AuthState =
   | { status: 'loading' }
+  | { status: 'unavailable' } // the API could not answer at start (offline, 5xx): not signed out
   | { status: 'signedOut' }
   | { status: 'signedIn'; user: SessionUser }
 
@@ -39,6 +40,8 @@ export type SessionDeps = {
 /** How long a tab whose refresh got 401 waits for another tab's token (no Web Locks). */
 const RACE_WAIT_MS = 1500
 const RACE_WINDOW_MS = 10_000
+/** An auth call must not hold the cross-tab lock forever when the API hangs. */
+const AUTH_TIMEOUT_MS = 15_000
 
 function defaultDeps(): SessionDeps {
   const nav = typeof navigator === 'undefined' ? undefined : navigator
@@ -62,6 +65,9 @@ export class AuthSession {
   private expiresAt: number | null = null
   private lastShared: TokenMessage | null = null
   private inflight: Promise<boolean> | null = null
+  /** Bumped by every sign-out: a refresh or shared token from an older epoch is discarded. */
+  private epoch = 0
+  private signedOutAt = Number.NEGATIVE_INFINITY
   private readonly listeners = new Set<() => void>()
 
   constructor(authUrl: string, deps: SessionDeps = defaultDeps()) {
@@ -81,10 +87,14 @@ export class AuthSession {
     return this.token
   }
 
-  /** Restore the session from the refresh cookie (app start). */
+  /** Restore the session from the refresh cookie (app start, or "retry" after `unavailable`). */
   async start(): Promise<void> {
-    const ok = await this.refresh().catch(() => false)
-    if (!ok && this.state.status === 'loading') this.setState({ status: 'signedOut' })
+    if (this.state.status === 'unavailable') this.setState({ status: 'loading' })
+    try {
+      await this.refresh() // false = signed out (state already set)
+    } catch {
+      if (this.state.status === 'loading') this.setState({ status: 'unavailable' })
+    }
   }
 
   /** A token for the next request, refreshed first when it is about to expire. */
@@ -122,12 +132,20 @@ export class AuthSession {
   /** Always forgets the session in this browser. false = the API did not confirm the logout, so
    * the refresh cookie may still work (shared computer: the caller must tell the user). */
   async signOut(): Promise<boolean> {
-    let confirmed = false
-    try {
-      confirmed = (await this.post('/auth/logout')).ok
-    } catch {
-      // offline
+    // Forget the session at once, so a refresh still running in this tab cannot bring it back.
+    this.clear()
+    this.broadcast({ type: 'signedOut' })
+    await this.inflight?.catch(() => false)
+    // Under the cross-tab lock: a refresh another tab started has finished (and been rotated)
+    // before the logout revokes the family, so its token cannot outlive the logout.
+    const logout = async () => {
+      try {
+        return (await this.post('/auth/logout')).ok
+      } catch {
+        return false // offline or timed out
+      }
     }
+    const confirmed = await (this.deps.locks ? this.deps.locks.request(REFRESH_LOCK, logout) : logout())
     this.clear()
     this.broadcast({ type: 'signedOut' })
     return confirmed
@@ -144,6 +162,7 @@ export class AuthSession {
   }
 
   private async refreshOnce(since: number): Promise<boolean> {
+    const epoch = this.epoch
     if (usableShared(this.lastShared, since, this.deps.now())) {
       this.adopt(this.lastShared)
       return true
@@ -155,18 +174,19 @@ export class AuthSession {
       throw apiErrorFrom(0, err)
     }
     const body: unknown = await response.json().catch(() => null)
+    if (epoch !== this.epoch) return false // signed out meanwhile: drop the answer
     if (response.ok) {
       const msg = this.adoptTokenBody(body)
-      if (msg) {
-        this.broadcast(msg)
-        return true
-      }
-    } else if (response.status >= 500) {
-      throw apiErrorFrom(response.status, body)
+      if (!msg) throw apiErrorFrom(response.status, null) // a proxy page, not a session answer
+      this.broadcast(msg)
+      return true
+    }
+    if (response.status !== 401 && response.status !== 403) {
+      throw apiErrorFrom(response.status, body) // 5xx, 429, 408…: transient, keep the session
     }
     // 401/403: our cookie is gone or was just rotated by another tab.
     if (await this.waitForShared(since - RACE_WINDOW_MS)) return true
-    this.clear()
+    if (epoch === this.epoch) this.clear()
     return false
   }
 
@@ -186,6 +206,7 @@ export class AuthSession {
     return this.deps.fetch(`${this.authUrl}${path}`, {
       method: 'POST',
       credentials: 'include',
+      signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       headers: json === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: json === undefined ? undefined : JSON.stringify(json),
     })
@@ -215,6 +236,10 @@ export class AuthSession {
   }
 
   private clear(): void {
+    if (this.state.status === 'signedIn' || this.token !== null) {
+      this.epoch += 1
+      this.signedOutAt = this.deps.now()
+    }
     this.token = null
     this.expiresAt = null
     this.lastShared = null
@@ -227,6 +252,7 @@ export class AuthSession {
       this.clear()
       return
     }
+    if (msg.at <= this.signedOutAt) return // minted before our sign-out
     this.lastShared = msg
     this.adopt(msg)
   }

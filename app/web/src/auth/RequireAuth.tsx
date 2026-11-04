@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
+import { ErrorScreen } from '../components/ErrorScreen'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { ForbiddenPage } from '../routes/ForbiddenPage'
 import { useAuth } from './AuthProvider'
@@ -11,11 +12,13 @@ function view(state: AuthState): SessionView {
 }
 
 export function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
-  const { state } = useAuth()
+  const { state, session } = useAuth()
   const location = useLocation()
   switch (guardDecision(view(state), role)) {
     case 'wait':
       return <FullPageLoading />
+    case 'unavailable':
+      return <ErrorScreen messageKey="error.unavailable" onRetry={() => void session.start()} />
     case 'signIn':
       return <Navigate to={signInPath(location.pathname, location.search)} replace />
     case 'forbidden':

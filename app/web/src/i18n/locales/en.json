@@ -131,6 +131,8 @@
     "title": "Something went wrong",
     "body": "The page hit an unexpected error. Reload to try again.",
     "reload": "Reload",
-    "config": "The app is not configured correctly. Contact an administrator."
+    "config": "The app is not configured correctly. Contact an administrator.",
+    "unavailable": "Cannot reach the server right now. Check your connection, then try again.",
+    "retry": "Try again"
   }
 }

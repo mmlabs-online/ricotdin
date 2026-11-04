@@ -295,6 +295,11 @@ async def refresh(
             user_agent=request.headers.get("user-agent"),
         )
     # Revocations above are committed before answering.
+    if result.outcome == "raced":
+        # Another tab (or a retry) rotated this token < 10 s ago and got the new cookie. The jar is
+        # shared, so clearing the cookie here would sign every tab out at their next refresh.
+        status, body = to_http(Unauthorized())
+        return JSONResponse(status_code=status, content=body)
     if result.outcome != "ok" or result.user is None or result.token is None:
         return _unauthorized_clearing_cookie()
     set_refresh_cookie(response, runtime, result.token)

@@ -94,6 +94,49 @@ describe('AuthSession', () => {
     }
   })
 
+  it('a refresh that was running when the user signed out cannot sign them back in', async () => {
+    let release: (r: Response) => void = () => {}
+    const pending = new Promise<Response>((resolve) => (release = resolve))
+    const f = fakeDeps([json(200, tokenBody('t1')), () => pending as unknown as Response, () => new Response(null, { status: 204 })])
+    // fakeDeps returns the thunk's value; make the second answer resolve later
+    const s = new AuthSession('https://api.example.com', f.deps)
+    await s.start()
+    const refreshing = s.refresh()
+    const out = s.signOut()
+    release(new Response(JSON.stringify(tokenBody('t2')), { status: 200 }))
+    await refreshing
+    await out
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(s.accessToken).toBeNull()
+  })
+
+  it('ignores a token another tab broadcast before we signed out', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1')), () => new Response(null, { status: 204 })])
+    const s = new AuthSession('https://api.example.com', f.deps)
+    await s.start()
+    const old = { type: 'token', accessToken: 'late', expiresAt: f.clock.t + 900_000, user, at: f.clock.t - 1 }
+    await s.signOut()
+    f.channel.onmessage?.({ data: old } as MessageEvent)
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+  })
+
+  it('is "unavailable", not signed out, when the API cannot answer at start', async () => {
+    for (const answer of [json(503, {}), json(429, {}), json(200, { nope: 1 }), () => { throw new TypeError('offline') }]) {
+      const f = fakeDeps([answer])
+      const s = new AuthSession('https://api.example.com', f.deps)
+      await s.start()
+      expect(s.getState()).toEqual({ status: 'unavailable' })
+    }
+  })
+
+  it('a later transient refresh failure keeps the session', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1')), json(502, {})])
+    const s = new AuthSession('https://api.example.com', f.deps)
+    await s.start()
+    await expect(s.refresh()).rejects.toBeTruthy()
+    expect(s.getState().status).toBe('signedIn')
+  })
+
   it('surfaces sign-in errors with the API code', async () => {
     const f = fakeDeps([json(403, { error: { code: 'email_not_verified', message: 'Verify.' } })])
     const s = new AuthSession('https://api.example.com', f.deps)

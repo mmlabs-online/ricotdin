@@ -131,6 +131,8 @@
     "title": "Đã xảy ra lỗi",
     "body": "Trang gặp lỗi không mong muốn. Hãy tải lại để thử lại.",
     "reload": "Tải lại",
-    "config": "Ứng dụng chưa được cấu hình đúng. Hãy liên hệ quản trị viên."
+    "config": "Ứng dụng chưa được cấu hình đúng. Hãy liên hệ quản trị viên.",
+    "unavailable": "Hiện không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    "retry": "Thử lại"
   }
 }

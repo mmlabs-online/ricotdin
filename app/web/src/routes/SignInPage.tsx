@@ -25,6 +25,7 @@ export function SignInPage() {
   const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
 
   if (state.status === 'loading') return <FullPageLoading />
+  // 'unavailable': the form still works; a failed sign-in shows the network/generic error
   if (state.status === 'signedIn' && !busy) return <Navigate to={next} replace />
 
   const submit = async (event: FormEvent) => {

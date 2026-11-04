@@ -153,7 +153,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `REFRESH_TTL_DAYS`). Web and API are sibling subdomains of one site (owner decision); login,
   refresh and logout require `Origin` in `ALLOWED_ORIGINS` + `WEB_ORIGIN`. A rotated token
   presented more than 10 s later revokes its whole family (theft); within 10 s it is a race
-  (second tab, retry): 401 without revoking. Disabled user -> 401 + all tokens revoked. Reset and
+  (second tab, retry): 401 without revoking and **without clearing the cookie** (the jar is shared by
+  all tabs; ARC-11). Disabled user -> 401 + all tokens revoked. Reset and
   change-password revoke every session (change-password then starts a new one). The API must be
   served at `/` (cookie path).
 - **Email tokens** (`email_tokens`): single use, hashed, verify 24 h, reset 1 h; a new one voids
@@ -710,8 +711,18 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   after a 401 (one retry, `src/api/client.ts`). Refreshes are single-flight per tab and serialised
   across tabs by a Web Lock (`ricotdin-auth-refresh`); the refreshing tab posts the new token on the
   `ricotdin-auth` BroadcastChannel (same origin only), sign-out is broadcast too. A refresh 401 adopts
-  a token another tab got within the last 10 s instead of signing out. Never put tokens in
-  storage, URLs or logs. Query cache is cleared when the signed-in user changes.
+  a token another tab got within the last 10 s instead of signing out. Only a 401/403 means signed
+  out: offline / 5xx / 429 / a malformed 200 at start → state `unavailable` (error screen + retry),
+  later → the session stays. Auth calls time out after 15 s. Sign-out forgets the session at once,
+  then posts `/auth/logout` under the same Web Lock (after any running refresh); an epoch counter
+  drops refresh answers and broadcast tokens from before the sign-out; a logout the API did not
+  confirm (non-2xx/offline) is shown on the sign-in page (the cookie may still work). The token goes
+  only to the API origin (`authFetch`); a 401 that arrives after another request refreshed retries
+  with the new token without a second rotation. Never put tokens in storage, URLs or logs. Query
+  cache is cancelled + cleared when the signed-in user changes.
+- **Email links:** `/verify-email` and `/reset-password` are public routes (placeholders until
+  ARC-13) so a `#token=` link is never bounced through `/sign-in`; `?next=` never carries a fragment.
+  nginx logs `$uri` only (no query strings).
 - **Guards** (`src/auth/guards.ts`, `RequireAuth.tsx`): signed-out → `/sign-in?next=<path>`;
   `safeReturnTo` accepts only in-app paths (no `//`, `\`, control chars, no `/sign-in` loop).
   `/admin/*` needs role `admin` (else a 403 page). UI guards are UX only — the API enforces.

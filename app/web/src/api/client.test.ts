@@ -59,6 +59,23 @@ describe('authFetch', () => {
     expect(r.seen[1]?.body).toBe('{"message":"hi"}')
   })
 
+  it('a 401 that arrives after another request refreshed retries with the new token, no second refresh', async () => {
+    let current = 'old'
+    let refreshes = 0
+    const session = {
+      getToken: async () => 'old',
+      refresh: async () => ((refreshes += 1), (current = 'other'), true),
+      get accessToken() {
+        return current
+      },
+    } as unknown as AuthSession
+    current = 'new' // a parallel request already refreshed
+    const r = recorder([401, 200])
+    expect((await authFetch(session, API, r.fetchFn)(new Request(`${API}/meetings`))).status).toBe(200)
+    expect(refreshes).toBe(0)
+    expect(r.seen.map((x) => x.auth)).toEqual(['Bearer old', 'Bearer new'])
+  })
+
   it('returns the 401 when the session is gone', async () => {
     const { session } = fakeSession(['old'], false)
     const r = recorder([401])
