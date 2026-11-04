@@ -816,7 +816,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   page shows it as queued (`isQueued`: same `updated_at` as when queued) and polls up to 20 min.
   Optimistic edits undo only their own change (`restoreRow`); notices use `mutateAsync` (a
   `mutate()` callback is skipped when another edit started since). A failed background refetch
-  keeps the page; only 403/404 or no data replaces it. The `/media` link (`useApiUrl()` + path) is refetched when the player
+  keeps the page; only 403/404 or no data replaces it.
+  A11y (13b review): `html` has `scroll-padding-top/bottom` for the sticky top bar + player and the
+  mobile nav (2.4.11); a status change is announced (derived from the first status, no effect);
+  the tabpanel carries the meeting's `lang` (`contentLang`); confirm dialogs pass `describedBy`;
+  `.button[aria-disabled="true"]` is styled. The `/media` link (`useApiUrl()` + path) is refetched when the player
   errors (at most every 30 s). `?t=<s>` opens the transcript tab and seeks once transcript + player
   are ready. A delete from the detail page returns to `/meetings` with router state
   `{notice: 'deleted'|'warning'}` (cleared so a reload does not repeat it).

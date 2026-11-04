@@ -164,6 +164,11 @@ export function mediaSrc(apiUrl: string, path: unknown): string | null {
   }
 }
 
+/** `lang` for the meeting's own text (3.1.2): the detected language when it is a plain tag. */
+export function contentLang(language: string | null): string | undefined {
+  return language && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(language) && language !== 'auto' ? language : undefined
+}
+
 /** Undo one optimistic row change, leaving other rows' in-flight edits alone. */
 export function restoreRow<T extends { id: string }>(list: readonly T[], prev: T): T[] {
   return list.map((x) => (x.id === prev.id ? prev : x))

@@ -415,7 +415,8 @@
       "body": "It may have been deleted, or you no longer have access to it."
     },
     "status": {
-      "pending": "Uploading"
+      "pending": "Uploading",
+      "queued": "Queued"
     },
     "state": {
       "pendingTitle": "Waiting for the upload",
@@ -423,7 +424,9 @@
       "processingTitle": "Processing the meeting",
       "processingBody": "Transcribing and writing the notes. This usually takes a few minutes; this page updates by itself.",
       "queuedTitle": "Waiting for a free worker",
-      "queuedBody": "Processing is queued and starts as soon as a worker is free. This page updates by itself."
+      "queuedBody": "Processing is queued and starts as soon as a worker is free. This page updates by itself.",
+      "doneAnnounce": "Processing finished. The results are ready.",
+      "failedAnnounce": "Processing failed."
     },
     "failed": {
       "title": "Processing failed",
@@ -458,11 +461,14 @@
       "notes": "Notes",
       "todos": "To-dos",
       "calendar": "Calendar",
-      "transcript": "Transcript"
+      "transcript": "Transcript",
+      "openCount_one": "{{count}} open",
+      "openCount_other": "{{count}} open"
     },
     "export": "Export transcript (.{{format}})",
     "rename": {
-      "title": "Rename meeting"
+      "title": "Rename meeting",
+      "empty": "Enter a title."
     },
     "summary": {
       "label": "AI-generated summary",

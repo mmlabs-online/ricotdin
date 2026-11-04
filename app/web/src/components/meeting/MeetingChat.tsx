@@ -99,7 +99,7 @@ export function MeetingChat({
           <p>{t('detail.chat.emptyBody')}</p>
         </div>
       ) : (
-        <div className="detail-chat-messages" ref={listRef} tabIndex={0} aria-label={t('detail.chat.history')}>
+        <div className="detail-chat-messages" ref={listRef} tabIndex={0} role="region" aria-label={t('detail.chat.history')}>
           {messages.map((m) =>
             m.role === 'user' ? (
               <div key={m.id} className="user-bubble">
@@ -146,7 +146,7 @@ export function MeetingChat({
         </div>
       )}
       {error && (
-        <p className="field-error" role="alert">
+        <p className="field-error" role="alert" id={`${inputId}-error`}>
           {t(error)}
         </p>
       )}
@@ -157,11 +157,15 @@ export function MeetingChat({
         <textarea
           id={inputId}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (error === 'chat.errors.empty' || error === 'chat.errors.tooLong') setError(null)
+          }}
           onKeyDown={onKey}
           placeholder={t('detail.chat.placeholder')}
           maxLength={MAX_QUESTION}
-          aria-describedby={hintId}
+          aria-describedby={error ? `${hintId} ${inputId}-error` : hintId}
+          aria-invalid={error === 'chat.errors.empty' || error === 'chat.errors.tooLong'}
           disabled={!ready}
         />
         <Button

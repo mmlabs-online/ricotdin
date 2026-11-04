@@ -69,6 +69,7 @@ export function NotesPanel({ notes }: { notes: string | null }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null)
   async function copy() {
+    setCopied(null) // a second copy is announced again
     try {
       await navigator.clipboard.writeText(notes ?? '')
       setCopied('ok')

@@ -42,6 +42,7 @@ import {
   canRegenerate,
   canReprocess,
   failureKind,
+  contentLang,
   isQueued,
   mediaSrc,
   modelLabel,
@@ -156,6 +157,11 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   })
   const tabsId = useId()
   const fail = (action: DetailAction) => (err: unknown) => setNotice({ key: actionErrorKey(action, err), kind: 'error' })
+
+  // A status change while the page is open is announced (the cards are not live regions).
+  const [firstStatus] = useState(meeting.status)
+  const statusNews =
+    meeting.status === firstStatus ? '' : meeting.status === 'done' ? 'detail.state.doneAnnounce' : meeting.status === 'failed' ? 'detail.state.failedAnnounce' : meeting.status === 'processing' ? 'detail.state.processingTitle' : ''
 
   // Processing finished while the page was open: load the results.
   const prevStatus = useRef(meeting.status)
@@ -287,7 +293,9 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
             {title}
           </h1>
           <div className="detail-meta">
-            <Status type={kind}>{meeting.status === 'pending' ? t('detail.status.pending') : t(`meetings.status.${kind}`)}</Status>
+            <Status type={waiting ? 'processing' : kind}>
+              {waiting ? t('detail.status.queued') : meeting.status === 'pending' ? t('detail.status.pending') : t(`meetings.status.${kind}`)}
+            </Status>
             {parts && (
               <span>
                 <Clock3 size={14} aria-hidden="true" />
@@ -303,10 +311,20 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
       <p className="sr-only" role="status">
         {notice && notice.kind !== 'error' ? t(notice.key) : ''}
       </p>
+      <p className="sr-only" role="status">
+        {statusNews ? t(statusNews) : ''}
+      </p>
       {notice && (
         <div className={`notice-banner ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : undefined}>
           <span>{t(notice.key)}</span>
-          <Button variant="ghost" onClick={() => setNotice(null)} aria-label={t('common.dismiss')}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              focusAfter.current = ['#detail-title'] // the button itself disappears
+              setNotice(null)
+            }}
+            aria-label={t('common.dismiss')}
+          >
             <X size={16} aria-hidden="true" />
           </Button>
         </div>
@@ -388,11 +406,23 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   onKeyDown={onTabKey}
                 >
                   {t(`detail.tabs.${id2}`)}
-                  {id2 === 'todos' && openTodos > 0 && <span>{openTodos}</span>}
+                  {id2 === 'todos' && openTodos > 0 && (
+                    <>
+                      <span aria-hidden="true">{openTodos}</span>
+                      <span className="sr-only">{t('detail.tabs.openCount', { count: openTodos })}</span>
+                    </>
+                  )}
                 </button>
               ))}
             </div>
-            <div role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-tab-${tab}`} className="tab-content">
+            <div
+              role="tabpanel"
+              id={`${tabsId}-panel`}
+              aria-labelledby={`${tabsId}-tab-${tab}`}
+              className="tab-content"
+              tabIndex={0}
+              lang={contentLang(meeting.language)}
+            >
               {tab === 'summary' && (
                 <SummaryPanel
                   summary={meeting.summary}
@@ -484,8 +514,10 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
         />
       )}
       {(dialog === 'regenerate' || dialog === 'reprocess') && (
-        <Modal title={t(`detail.${dialog}.confirmTitle`)} onClose={() => setDialog(null)}>
-          <p className="modal-copy">{t(`detail.${dialog}.confirmBody`)}</p>
+        <Modal title={t(`detail.${dialog}.confirmTitle`)} onClose={() => setDialog(null)} describedBy={`${tabsId}-confirm`}>
+          <p className="modal-copy" id={`${tabsId}-confirm`}>
+            {t(`detail.${dialog}.confirmBody`)}
+          </p>
           <div className="modal-actions">
             <Button variant="ghost" onClick={() => setDialog(null)}>
               {t('common.cancel')}
@@ -503,6 +535,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
 function RenameDialog({ current, onSave, onClose }: { current: string; onSave: (title: string) => void; onClose: () => void }) {
   const { t } = useTranslation()
   const [value, setValue] = useState(current)
+  const [empty, setEmpty] = useState(false)
   const inputId = useId()
   const trimmed = value.trim()
   return (
@@ -511,17 +544,33 @@ function RenameDialog({ current, onSave, onClose }: { current: string; onSave: (
         onSubmit={(e) => {
           e.preventDefault()
           if (trimmed) onSave(trimmed)
+          else setEmpty(true)
         }}
       >
         <div className="modal-field">
           <label htmlFor={inputId}>{t('meetings.actions.renameLabel')}</label>
-          <input id={inputId} value={value} onChange={(e) => setValue(e.target.value)} maxLength={200} required />
+          <input
+            id={inputId}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setEmpty(false)
+            }}
+            maxLength={200}
+            aria-invalid={empty}
+            aria-describedby={empty ? `${inputId}-error` : undefined}
+          />
+          {empty && (
+            <p className="field-error" id={`${inputId}-error`} role="alert">
+              {t('detail.rename.empty')}
+            </p>
+          )}
         </div>
         <div className="modal-actions">
           <Button type="button" variant="ghost" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" variant="primary" aria-disabled={!trimmed}>
+          <Button type="submit" variant="primary">
             {t('common.save')}
           </Button>
         </div>

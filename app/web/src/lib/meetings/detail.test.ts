@@ -6,6 +6,7 @@ import {
   calendarParts,
   canRegenerate,
   canReprocess,
+  contentLang,
   isQueued,
   mediaSrc,
   restoreRow,
@@ -218,5 +219,15 @@ describe('mediaSrc', () => {
       'https://evil.com/media?t=x', '/other?t=x', '/media/../x?t=1', 'media?t=x', 42, null]) {
       expect(mediaSrc(api, bad)).toBeNull()
     }
+  })
+})
+
+describe('contentLang', () => {
+  it('a plain language tag, else none', () => {
+    expect(contentLang('vi')).toBe('vi')
+    expect(contentLang('en-US')).toBe('en-US')
+    expect(contentLang(null)).toBeUndefined()
+    expect(contentLang('auto')).toBeUndefined()
+    expect(contentLang('"><x')).toBeUndefined()
   })
 })

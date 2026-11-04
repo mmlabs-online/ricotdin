@@ -55,7 +55,7 @@ export const AudioPlayer = forwardRef<
   return (
     <div className="audio-native">
       <audio ref={audioRef} src={src} controls preload="metadata" aria-label={label} onError={onError} />
-      <span className="audio-meta" aria-live="polite">
+      <span className="audio-meta" role="status">
         {scanning ? t('player.scanning') : shown !== null ? formatClock(shown) : ''}
       </span>
     </div>

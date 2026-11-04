@@ -415,7 +415,8 @@
       "body": "Cuộc họp có thể đã bị xóa, hoặc bạn không còn quyền truy cập."
     },
     "status": {
-      "pending": "Đang tải lên"
+      "pending": "Đang tải lên",
+      "queued": "Đang chờ"
     },
     "state": {
       "pendingTitle": "Đang chờ tải lên",
@@ -423,7 +424,9 @@
       "processingTitle": "Đang xử lý cuộc họp",
       "processingBody": "Đang chép lời và viết ghi chú. Thường mất vài phút; trang này tự cập nhật.",
       "queuedTitle": "Đang chờ đến lượt xử lý",
-      "queuedBody": "Việc xử lý đã được xếp hàng và bắt đầu ngay khi có máy rảnh. Trang này tự cập nhật."
+      "queuedBody": "Việc xử lý đã được xếp hàng và bắt đầu ngay khi có máy rảnh. Trang này tự cập nhật.",
+      "doneAnnounce": "Đã xử lý xong. Kết quả đã sẵn sàng.",
+      "failedAnnounce": "Xử lý thất bại."
     },
     "failed": {
       "title": "Xử lý thất bại",
@@ -458,11 +461,14 @@
       "notes": "Ghi chú",
       "todos": "Việc cần làm",
       "calendar": "Lịch",
-      "transcript": "Bản ghi lời"
+      "transcript": "Bản ghi lời",
+      "openCount_one": "{{count}} việc chưa xong",
+      "openCount_other": "{{count}} việc chưa xong"
     },
     "export": "Xuất bản ghi lời (.{{format}})",
     "rename": {
-      "title": "Đổi tên cuộc họp"
+      "title": "Đổi tên cuộc họp",
+      "empty": "Hãy nhập tên."
     },
     "summary": {
       "label": "Tóm tắt do AI tạo",
