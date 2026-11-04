@@ -79,8 +79,10 @@ def enforce_limit(limiter: RateLimiter, user_id: uuid.UUID, message: str | None 
 
 
 def jsonb(value: Any) -> Any:
-    """asyncpg returns json/jsonb as text unless a codec is set (if one is ever registered for
-    jsonb, a jsonb string value would be parsed twice here: drop this then)."""
+    """Decode a json/jsonb value that may arrive as text. SQLAlchemy's asyncpg dialect already
+    decodes jsonb, so a jsonb *string* would be parsed twice here: use it only for columns that
+    hold objects or arrays, and select scalar jsonb columns as ``col::text`` + ``json.loads``
+    (``app_config.value``, ARC-10c)."""
     return json.loads(value) if isinstance(value, str) else value
 
 

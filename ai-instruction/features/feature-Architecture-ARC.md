@@ -619,7 +619,7 @@ Ports RAG-01..04 and AIP-04 chat model rule. Retrieval must stay scoped to meeti
 ---
 
 ### ARC-10 — Admin API
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As an admin, I want all admin operations (users, pipeline, usage, keys, storage, config, activity, audit, features, health) on the v2 API so that the admin screens can be rebuilt.
@@ -656,7 +656,7 @@ Ports ADM-*, §9c, §9d, §9f, §9g, §9h, §9i. Guards: self-action, last-admin
 - New admin features.
 
 **Key files (expected)**
-- `app/api/app/routers/admin/**`
+- `app/api/app/routers/admin/{_common,users,ops,config}.py`, `app/api/app/domain/{admin,admin_ops,admin_config}.py`; tests `app/api/tests/test_admin_*`
 
 ---
 

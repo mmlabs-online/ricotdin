@@ -422,6 +422,21 @@ def test_key_source_skips_keys_reported_invalid() -> None:
     assert [k.key for k in src.usable(env_keys("gemini", {"GEMINI_API_KEYS": "a,b"}))] == ["b"]
 
 
+def test_a_rejected_key_is_retried_after_an_hour() -> None:
+    """ARC-10c: the worker never sees the API's invalidate() after an admin re-enables or tops
+    up a key, so a 401 mark expires on its own."""
+    from app.services.keys.pool import KeyWithMeta
+    from app.services.keys.source import INVALID_TTL_S, KeySource
+
+    now = [1000.0]
+    src = KeySource(None, {"GEMINI_API_KEYS": "a,b"}, clock=lambda: now[0])
+    src.mark_invalid(KeyWithMeta(None, "a"))
+    keys = env_keys("gemini", {"GEMINI_API_KEYS": "a,b"})
+    assert [k.key for k in src.usable(keys)] == ["b"]
+    now[0] += INVALID_TTL_S + 1
+    assert [k.key for k in src.usable(keys)] == ["a", "b"]
+
+
 def test_platform_keeps_only_provider_fallback_variables() -> None:
     from app.core.settings import Settings
     from app.services.platform import Platform

@@ -7,6 +7,7 @@ only in memory; a row that fails to decrypt is logged by id only.
 """
 
 import hashlib
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.core.logging import get_logger
 from app.services.ai.catalog import PROVIDERS
 from app.services.cache import TtlCache
-from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key
+from app.services.crypto import DecryptError, EncryptedSecret, decrypt_with_key, encrypt_with_key
 from app.services.keys.pool import KeyWithMeta
 
 log = get_logger("keys")
@@ -29,6 +30,9 @@ FALLBACK_ENV_NAMES = frozenset(
     | {f"{name.upper()}_API_KEY" for name in PROVIDERS}
 )  # fmt: skip
 FAILURE_TTL_S = 5.0  # after a failed lookup, retry the database soon
+# A key a provider rejected (401, out of credits) is skipped this long, then tried again: the
+# worker never sees the API's invalidate() after an admin re-enables or tops up a key (ARC-10).
+INVALID_TTL_S = 3600.0
 _CONFIG_KEYS = {
     "gemini": "gemini_api_key",
     "speechmatics": "speechmatics_api_key",
@@ -93,11 +97,18 @@ class KeySource:
         self._failed: TtlCache[str, list[KeyWithMeta]] = (
             TtlCache(FAILURE_TTL_S, clock) if clock else TtlCache(FAILURE_TTL_S)
         )
-        self._invalid: set[str] = set()  # sha-256 of keys a provider rejected (401)
+        # sha-256 of keys a provider rejected (401) → when they may be tried again
+        self._invalid: dict[str, float] = {}
+        self._now: Callable[[], float] = clock or time.monotonic
 
     @property
     def has_master(self) -> bool:
         return self._master is not None
+
+    def encrypt(self, plaintext: str) -> EncryptedSecret | None:
+        """A new key encrypted with ``KEY_ENCRYPTION_SECRET`` (ARC-10 admin keys); None when
+        the secret is not set (the caller answers 503)."""
+        return encrypt_with_key(plaintext, self._master) if self._master is not None else None
 
     @property
     def env_names(self) -> list[str]:
@@ -109,11 +120,13 @@ class KeySource:
 
     def mark_invalid(self, key: KeyWithMeta) -> None:
         """Pass as ``KeyPool(on_invalid_key=...)``: a key rejected with 401 is skipped by every
-        later pool of this process until ``invalidate()`` runs (an admin key change)."""
-        self._invalid.add(self._fingerprint(key))
+        later pool of this process until ``invalidate()`` runs (an admin key change in this
+        process) or for ``INVALID_TTL_S`` (the worker never sees the API's invalidate)."""
+        self._invalid[self._fingerprint(key)] = self._now() + INVALID_TTL_S
 
     def usable(self, keys: list[KeyWithMeta]) -> list[KeyWithMeta]:
-        return [k for k in keys if self._fingerprint(k) not in self._invalid]
+        now = self._now()
+        return [k for k in keys if self._invalid.get(self._fingerprint(k), 0.0) <= now]
 
     def __repr__(self) -> str:
         return "KeySource()"
