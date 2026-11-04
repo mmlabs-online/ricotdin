@@ -16,14 +16,13 @@
     "expand": "Mở rộng thanh bên"
   },
   "menu": {
-    "open": "Menu tài khoản",
     "language": "Ngôn ngữ",
     "colorTheme": "Màu giao diện",
     "lightMode": "Giao diện sáng",
     "darkMode": "Giao diện tối",
-    "toggleTheme": "Chuyển giao diện sáng / tối",
     "signOut": "Đăng xuất",
-    "useTheme": "Dùng giao diện {{name}}"
+    "useTheme": "Dùng giao diện {{name}}",
+    "openFor": "Menu tài khoản của {{name}}"
   },
   "theme": {
     "rose": "Hồng",

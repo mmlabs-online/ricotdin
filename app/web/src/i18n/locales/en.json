@@ -16,14 +16,13 @@
     "expand": "Expand sidebar"
   },
   "menu": {
-    "open": "Account menu",
     "language": "Language",
     "colorTheme": "Color theme",
     "lightMode": "Light mode",
     "darkMode": "Dark mode",
-    "toggleTheme": "Toggle light and dark mode",
     "signOut": "Sign out",
-    "useTheme": "Use the {{name}} theme"
+    "useTheme": "Use the {{name}} theme",
+    "openFor": "Account menu for {{name}}"
   },
   "theme": {
     "rose": "Rose",

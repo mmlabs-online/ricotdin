@@ -1,7 +1,7 @@
 // Workspace layout from the Figma Make design: sidebar, top bar with the account menu, mobile nav.
 // Quota and "Shared with me" / "Archive" widgets of the prototype are left out until their data
 // exists (ARC-13).
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
@@ -36,22 +36,34 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuId = useId()
+  const langLabelId = useId()
   const user = state.status === 'signedIn' ? state.user : null
   const isAdmin = user?.role === 'admin'
   const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
 
   useEffect(() => {
     if (!menuOpen) return
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !menuRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false)
-      }
+    const outside = (target: EventTarget | null) => !menuRef.current?.contains(target as Node | null)
+    const onMouse = (event: MouseEvent) => {
+      if (outside(event.target)) setMenuOpen(false)
     }
-    document.addEventListener('mousedown', close)
-    document.addEventListener('keydown', close)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      triggerRef.current?.focus() // never leave focus on a removed element
+    }
+    const onFocus = (event: FocusEvent) => {
+      if (outside(event.target)) setMenuOpen(false) // tabbed past the last item
+    }
+    document.addEventListener('mousedown', onMouse)
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('focusin', onFocus)
     return () => {
-      document.removeEventListener('mousedown', close)
-      document.removeEventListener('keydown', close)
+      document.removeEventListener('mousedown', onMouse)
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('focusin', onFocus)
     }
   }, [menuOpen])
 
@@ -91,11 +103,16 @@ export function AppShell() {
         </div>
         <nav className="nav" aria-label={t('nav.main')}>
           {nav.map(({ to, icon: Icon, label }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title={collapsed ? label : undefined}>
+            <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} aria-label={label} title={label}>
               <Icon aria-hidden="true" />
               {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink to="/admin" className="nav-item admin-compact" aria-label={t('nav.admin')} title={t('nav.admin')}>
+              <Settings aria-hidden="true" />
+            </NavLink>
+          )}
         </nav>
         {isAdmin && !collapsed && (
           <div className="sidebar-section">
@@ -116,16 +133,17 @@ export function AppShell() {
             <span className="privacy-dot" /> {t('app.privacy')}
           </span>
           <div className="top-actions" ref={menuRef}>
-            <Button variant="ghost" aria-label={t('menu.toggleTheme')} onClick={() => setDark(!dark)}>
+            <Button variant="ghost" aria-label={t('menu.darkMode')} aria-pressed={dark} onClick={() => setDark(!dark)}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
             <button
               type="button"
+              ref={triggerRef}
               className="user-trigger"
               onClick={() => setMenuOpen(!menuOpen)}
               aria-expanded={menuOpen}
-              aria-haspopup="true"
-              aria-label={t('menu.open')}
+              aria-controls={menuId}
+              aria-label={t('menu.openFor', { name: user?.username || user?.email || '' })}
             >
               <div className="avatar" aria-hidden="true">
                 {initials(user)}
@@ -133,7 +151,7 @@ export function AppShell() {
               <ChevronDown size={15} aria-hidden="true" />
             </button>
             {menuOpen && (
-              <div className="user-menu">
+              <div className="user-menu" id={menuId}>
                 <button
                   type="button"
                   onClick={() => {
@@ -146,12 +164,12 @@ export function AppShell() {
                 </button>
                 <div className="menu-language">
                   <Languages size={16} />
-                  <span>{t('menu.language')}</span>
-                  <div>
-                    <button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => setLocale('en')}>
+                  <span id={langLabelId}>{t('menu.language')}</span>
+                  <div role="group" aria-labelledby={langLabelId}>
+                    <button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} aria-label={t('language.en')} lang="en" onClick={() => setLocale('en')}>
                       {t('language.enShort')}
                     </button>
-                    <button type="button" className={language === 'vi' ? 'active' : ''} aria-pressed={language === 'vi'} onClick={() => setLocale('vi')}>
+                    <button type="button" className={language === 'vi' ? 'active' : ''} aria-pressed={language === 'vi'} aria-label={t('language.vi')} lang="vi" onClick={() => setLocale('vi')}>
                       {t('language.viShort')}
                     </button>
                   </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 /** Page header from the Make design + a "being connected" note until ARC-13/14 wire the screen. */
 export function PlaceholderPage({ eyebrowKey = 'page.workspace', titleKey, subtitleKey, children }: {
@@ -9,6 +10,7 @@ export function PlaceholderPage({ eyebrowKey = 'page.workspace', titleKey, subti
   children?: ReactNode
 }) {
   const { t } = useTranslation()
+  useDocumentTitle(titleKey)
   return (
     <>
       {children}
