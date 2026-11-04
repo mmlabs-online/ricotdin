@@ -187,10 +187,12 @@
     "cancel": "Cancel",
     "tryAgain": "Try again",
     "save": "Save",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "loading": "Loading…"
   },
   "player": {
-    "scanning": "Preparing playback…"
+    "scanning": "Preparing playback…",
+    "loading": "Loading the recording…"
   },
   "record": {
     "start": "Start recording",
@@ -405,5 +407,147 @@
     "shareLabel": "Share {{name}}",
     "moved": "{{name}} moved to position {{pos}} of {{total}}.",
     "deleted": "Folder {{name}} deleted."
+  },
+  "detail": {
+    "loadError": "This could not be loaded. Check your connection and try again.",
+    "notFound": {
+      "title": "Meeting not found",
+      "body": "It may have been deleted, or you no longer have access to it."
+    },
+    "status": {
+      "pending": "Uploading"
+    },
+    "state": {
+      "pendingTitle": "Waiting for the upload",
+      "pendingBody": "Processing starts as soon as the upload is confirmed.",
+      "processingTitle": "Processing the meeting",
+      "processingBody": "Transcribing and writing the notes. This usually takes a few minutes; this page updates by itself."
+    },
+    "failed": {
+      "title": "Processing failed",
+      "body": "Run it again, or ask an administrator if it keeps failing.",
+      "quotaTitle": "Not enough audio minutes",
+      "quotaBody": "This recording could not be processed because your audio balance is too low. Ask an administrator to top it up, then run processing again."
+    },
+    "reprocess": {
+      "action": "Process again",
+      "busy": "Starting…",
+      "started": "Processing started.",
+      "confirmTitle": "Process this meeting again?",
+      "confirmBody": "The recording is transcribed and analysed again, which uses audio minutes from your balance. The transcript, notes, to-dos and calendar suggestions are replaced as each step finishes.",
+      "confirm": "Process again"
+    },
+    "regenerate": {
+      "action": "Regenerate summary",
+      "busy": "Regenerating…",
+      "done": "Summary and notes regenerated.",
+      "confirmTitle": "Regenerate the summary and notes?",
+      "confirmBody": "The AI rewrites the summary and notes from the transcript. This uses audio minutes from your balance. To-dos and calendar suggestions stay as they are.",
+      "confirm": "Regenerate"
+    },
+    "audio": {
+      "purged": "The recording was deleted under the retention policy. The transcript and notes are kept.",
+      "label": "Recording of {{title}}",
+      "error": "The recording could not be loaded."
+    },
+    "tabsLabel": "Meeting results",
+    "tabs": {
+      "summary": "Summary",
+      "notes": "Notes",
+      "todos": "To-dos",
+      "calendar": "Calendar",
+      "transcript": "Transcript"
+    },
+    "export": "Export transcript (.{{format}})",
+    "rename": {
+      "title": "Rename meeting"
+    },
+    "summary": {
+      "label": "AI-generated summary",
+      "empty": "No summary was written for this meeting.",
+      "model": "Written by {{model}}"
+    },
+    "notes": {
+      "label": "Meeting notes",
+      "copy": "Copy notes",
+      "copied": "Notes copied.",
+      "copyFailed": "The notes could not be copied.",
+      "empty": "No notes were written for this meeting."
+    },
+    "todos": {
+      "label": "Action items",
+      "empty": "No to-dos were found in this meeting.",
+      "markOpen": "Mark “{{item}}” as not done",
+      "markDone": "Mark “{{item}}” as done",
+      "overdue": "Overdue · {{date}}",
+      "due": "Due {{date}}",
+      "noDue": "No due date",
+      "dismiss": "Dismiss “{{item}}”"
+    },
+    "source": "Jump to source · {{time}}",
+    "calendar": {
+      "label": "Calendar suggestions",
+      "empty": "No events were mentioned in this meeting.",
+      "noTime": "No specific date or time was mentioned.",
+      "mention": "Mentioned as: “{{text}}”",
+      "ics": "Download .ics",
+      "manual": "Add it to your calendar by hand.",
+      "dismiss": "Dismiss “{{title}}”",
+      "noSync": "Ricotdin does not sync with your calendar: download the file and open it in your calendar app."
+    },
+    "transcript": {
+      "label": "Meeting transcript",
+      "search": "Search the transcript",
+      "searchPlaceholder": "Search transcript…",
+      "matches_one": "{{count}} matching line",
+      "matches_other": "{{count}} matching lines",
+      "empty": "This meeting has no transcript.",
+      "noMatch": "No lines match your search.",
+      "unknownSpeaker": "Speaker",
+      "playFrom": "Play from {{time}} ({{speaker}})"
+    },
+    "chat": {
+      "title": "Ask about this meeting",
+      "notReady": "You can ask questions once processing is done.",
+      "loadError": "The conversation could not be loaded.",
+      "emptyTitle": "What would you like to know?",
+      "emptyBody": "Answers come from this meeting and cite the exact moments.",
+      "history": "Conversation",
+      "inputLabel": "Your question about this meeting",
+      "placeholder": "Ask about this meeting…",
+      "hint": "Enter sends, Shift+Enter adds a line. Answers only use this meeting."
+    },
+    "errors": {
+      "quota": "Not enough audio minutes left. Ask an administrator to top up your balance.",
+      "busy": "This meeting is busy processing. Try again when it is done.",
+      "noTranscript": "This meeting has no transcript to work from.",
+      "aiUnavailable": "The AI service is unavailable right now. Try again in a few minutes.",
+      "cannotProcess": "This meeting cannot be processed now: its recording is missing or still uploading.",
+      "icsNoTime": "This event has no specific date or time, so no calendar file can be made.",
+      "icsFailed": "The calendar file could not be downloaded.",
+      "saveFailed": "The change could not be saved and was undone.",
+      "rateLimited": "Too many requests. Wait a little and try again.",
+      "forbidden": "You do not have permission to do this.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "chat": {
+    "thinking": "Thinking…",
+    "answered": "Answer received.",
+    "you": "You:",
+    "assistant": "Ricotdin:",
+    "sources": "Sources",
+    "playFrom": "Play the recording from {{time}}",
+    "send": "Send question",
+    "errors": {
+      "empty": "Type a question first.",
+      "tooLong": "The question is too long (at most 4000 characters).",
+      "noQuota": "You have no chat questions left. Ask an administrator to top up your balance.",
+      "rateLimited": "Too many questions in a short time. Wait a few minutes and try again.",
+      "forbidden": "You no longer have access to this conversation.",
+      "network": "No connection to the server. Your question was not sent.",
+      "generic": "The question could not be answered. Please try again."
+    }
   }
 }

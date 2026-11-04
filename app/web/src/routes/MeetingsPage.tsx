@@ -1,6 +1,6 @@
 // Meetings list (ARC-13a; MMG-01..04, PRP-07), Figma Make MeetingsView.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { ArrowUpRight, FileAudio, FolderCog, Mic2, Search, Sparkles, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../api/errors'
@@ -53,7 +53,19 @@ export function MeetingsPage() {
   const [moving, setMoving] = useState<Meeting | null>(null)
   const [deleting, setDeleting] = useState<Meeting | null>(null)
   const [managing, setManaging] = useState(false)
-  const [notice, setNotice] = useState<{ key: string; kind: 'error' | 'warning' | 'success' } | null>(null)
+  // A meeting deleted from its detail page reports here (router state, not the URL).
+  const arrived = (useLocation().state as { notice?: unknown } | null)?.notice
+  const [notice, setNotice] = useState<{ key: string; kind: 'error' | 'warning' | 'success' } | null>(() =>
+    arrived === 'warning'
+      ? { key: 'meetings.delete.warning', kind: 'warning' }
+      : arrived === 'deleted'
+        ? { key: 'meetings.delete.done', kind: 'success' }
+        : null,
+  )
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (arrived) void navigate('.', { replace: true, state: null }) // a reload must not repeat it
+  }, [arrived, navigate])
 
   const folderList = useMemo(() => folders.data ?? [], [folders.data])
   const byId = useMemo(() => new Map(folderList.map((f) => [f.id, f])), [folderList])
