@@ -98,7 +98,9 @@
     "verify": {
       "done": "Email đã được xác minh. Bạn có thể đăng nhập.",
       "resendHelp": "Cần liên kết xác minh mới? Nhập email của bạn.",
-      "resend": "Gửi email xác minh"
+      "resend": "Gửi email xác minh",
+      "confirmHelp": "Xác nhận đây là địa chỉ email của bạn để kích hoạt tài khoản.",
+      "confirm": "Xác nhận email của tôi"
     },
     "reset": {
       "help": "Chọn mật khẩu mới. Bạn sẽ bị đăng xuất trên mọi thiết bị.",
@@ -365,10 +367,10 @@
       "role": "Vai trò",
       "inviteButton": "Mời",
       "roleHelp": "Xem: đọc và trò chuyện. Biên tập: thêm quyền đổi tên cuộc họp và cập nhật việc cần làm.",
-      "added": "Đã thêm.",
       "notFound": "Không tìm thấy tài khoản với email hoặc tên người dùng này.",
       "conflict": "Người này đã có quyền truy cập, hoặc đó là bạn.",
-      "invalid": "Nhập email hoặc tên người dùng."
+      "invalid": "Nhập email hoặc tên người dùng.",
+      "addedWho": "Đã thêm {{name}} với vai trò {{role}}."
     },
     "deleteLabel": "Xóa {{name}}",
     "members_one": "{{count}} thành viên",

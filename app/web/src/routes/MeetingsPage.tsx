@@ -22,6 +22,7 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { getMeetingRole } from '../lib/access/roles'
 import { filterMeetings, type FolderFilter } from '../lib/meetings/list'
+import { displayText } from '../lib/text'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 function errorKey(err: unknown): string {
@@ -116,7 +117,7 @@ export function MeetingsPage() {
         <div className="folder-pills" role="group" aria-label={t('meetings.folders.filter')}>
           {[
             { id: 'all', name: t('meetings.folders.all'), shared: false },
-            ...folderList.map((f) => ({ id: f.id, name: f.name, shared: f.myRole !== 'owner' || f.memberCount > 0 })),
+            ...folderList.map((f) => ({ id: f.id, name: displayText(f.name), shared: f.myRole !== 'owner' || f.memberCount > 0 })),
             { id: 'none', name: t('meetings.folders.none'), shared: false },
           ].map((f) => (
             <button
@@ -179,7 +180,7 @@ export function MeetingsPage() {
 
       {moving && (
         <MoveDialog
-          title={moving.title}
+          title={displayText(moving.title)}
           current={moving.folder_id}
           folders={folderList}
           onClose={() => setMoving(null)}
@@ -191,7 +192,7 @@ export function MeetingsPage() {
       )}
       {deleting && (
         <DeleteMeetingDialog
-          title={deleting.title}
+          title={displayText(deleting.title)}
           busy={del.isPending}
           onClose={() => setDeleting(null)}
           onConfirm={() =>

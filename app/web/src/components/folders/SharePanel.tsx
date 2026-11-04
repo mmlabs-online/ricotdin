@@ -5,6 +5,7 @@ import { ApiError } from '../../api/errors'
 import { useShareMutations, useShares, type Folder } from '../../api/meetings'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { displayText } from '../../lib/text'
 
 function shareErrorKey(err: unknown): string {
   if (err instanceof ApiError) {
@@ -26,9 +27,9 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
   const [identifier, setIdentifier] = useState('')
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
   const [errorKey, setErrorKey] = useState<string | null>(null)
-  const [doneKey, setDoneKey] = useState<string | null>(null)
+  const [added, setAdded] = useState<{ username: string; role: 'editor' | 'viewer' } | null>(null)
   const fail = (err: unknown) => {
-    setDoneKey(null)
+    setAdded(null)
     setErrorKey(shareErrorKey(err))
   }
 
@@ -40,9 +41,11 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
     add.mutate(
       { identifier: id, role },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           setIdentifier('')
-          setDoneKey('folders.share.added')
+          const member = (res as { member?: { username?: unknown; role?: unknown } } | null)?.member
+          // Show WHO got access: a mistyped / look-alike email is caught here (CWE-451).
+          setAdded({ username: typeof member?.username === 'string' ? member.username : id, role })
         },
         onError: fail,
       },
@@ -50,7 +53,7 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
   }
 
   return (
-    <Modal title={t('folders.share.title', { name: folder.name })} onClose={onClose}>
+    <Modal title={t('folders.share.title', { name: displayText(folder.name) })} onClose={onClose}>
       <Button variant="ghost" onClick={onBack}>
         <ArrowLeft size={16} aria-hidden="true" /> {t('folders.share.back')}
       </Button>
@@ -99,8 +102,8 @@ export function SharePanel({ folder, onBack, onClose }: { folder: Folder; onBack
         </div>
         <p className="modal-copy">{t('folders.share.roleHelp')}</p>
       </form>
-      <p className="sr-only" role="status">
-        {doneKey ? t(doneKey) : ''}
+      <p className={added ? 'notice-banner success' : 'sr-only'} role="status">
+        {added ? t('folders.share.addedWho', { name: added.username, role: t(`folders.roles.${added.role}`) }) : ''}
       </p>
       {errorKey && (
         <p className="notice-banner error" role="alert">

@@ -10,7 +10,9 @@ export function readHashToken(hash: string): string | null {
 /** Remove the token from the address bar and history once it has been read. */
 export function forgetHashToken(): void {
   try {
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+    // Keep the router's own fields but drop the app state (e.g. an email passed to /verify-email).
+    const state = (window.history.state ?? {}) as Record<string, unknown>
+    window.history.replaceState({ ...state, usr: null }, '', window.location.pathname + window.location.search)
   } catch {
     // not fatal: the token is single use
   }

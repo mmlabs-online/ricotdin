@@ -98,7 +98,9 @@
     "verify": {
       "done": "Your email is verified. You can sign in now.",
       "resendHelp": "Need a new verification link? Enter your email.",
-      "resend": "Send verification email"
+      "resend": "Send verification email",
+      "confirmHelp": "Confirm that this is your email address to activate your account.",
+      "confirm": "Confirm my email"
     },
     "reset": {
       "help": "Choose a new password. You will be signed out on every device.",
@@ -365,10 +367,10 @@
       "role": "Role",
       "inviteButton": "Invite",
       "roleHelp": "Viewer: can read and chat. Editor: can also rename meetings and update to-dos.",
-      "added": "Added.",
       "notFound": "No account found with that email or username.",
       "conflict": "That person already has access, or it is you.",
-      "invalid": "Enter an email or username."
+      "invalid": "Enter an email or username.",
+      "addedWho": "Added {{name}} as {{role}}."
     },
     "deleteLabel": "Delete {{name}}",
     "members_one": "{{count}} member",

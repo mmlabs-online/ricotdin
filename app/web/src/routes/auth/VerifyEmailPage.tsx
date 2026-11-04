@@ -1,5 +1,8 @@
-// Email verification (AUT-01, SEC-02): the link carries #token=…; it is read once, removed from
-// the address bar, and posted to /auth/verify-email. Without a usable token: resend form.
+// Email verification (AUT-01, SEC-02): the link carries #token=…; it is read once and removed
+// from the address bar. It is posted to /auth/verify-email only when the person clicks "Confirm":
+// mail scanners that open links and run the page must not verify an account on their own (with
+// the §0.3 pre-registration risk, that would verify an attacker's account for the victim's
+// address). Without a usable token: resend form.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -7,7 +10,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { publicAuthErrorKey } from '../../auth/authErrors'
 import { forgetHashToken, readHashToken } from '../../auth/emailLink'
 import { AuthLayout } from '../../components/AuthLayout'
-import { FullPageLoading } from '../../components/FullPageLoading'
+import { Button } from '../../components/ui/Button'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { EmailLinkForm } from './ResendForm'
 
@@ -18,14 +21,18 @@ export function VerifyEmailPage() {
   const location = useLocation()
   const [token] = useState(() => readHashToken(location.hash))
   const started = useRef(false)
-  const [state, setState] = useState<'verifying' | 'verified' | 'error' | 'resend'>(token ? 'verifying' : 'resend')
+  const [state, setState] = useState<'confirm' | 'verifying' | 'verified' | 'error' | 'resend'>(token ? 'confirm' : 'resend')
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const email = (location.state as { email?: string } | null)?.email ?? ''
 
   useEffect(() => {
     if (location.hash) forgetHashToken()
+  }, [location.hash])
+
+  const confirm = () => {
     if (!token || started.current) return
     started.current = true // the token is single use: never post it twice
+    setState('verifying')
     session
       .publicAuth('/verify-email', { token })
       .then(() => setState('verified'))
@@ -33,9 +40,21 @@ export function VerifyEmailPage() {
         setErrorKey(publicAuthErrorKey(err, 'verify'))
         setState('error')
       })
-  }, [token, session, location.hash])
+  }
 
-  if (state === 'verifying') return <FullPageLoading />
+  if (state === 'confirm' || state === 'verifying') {
+    return (
+      <AuthLayout>
+        <div className="auth-card">
+          <h1>{t('page.verifyEmail.title')}</h1>
+          <p>{t('auth.verify.confirmHelp')}</p>
+          <Button variant="primary" className="full" onClick={confirm} disabled={state === 'verifying'} aria-busy={state === 'verifying'}>
+            {t('auth.verify.confirm')}
+          </Button>
+        </div>
+      </AuthLayout>
+    )
+  }
   return (
     <AuthLayout>
       <div className="auth-card">

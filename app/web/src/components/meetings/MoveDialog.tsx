@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Folder } from '../../api/meetings'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { displayText } from '../../lib/text'
 
 /** Move a meeting (owner only) to "No folder" or to a folder the caller owns or edits. */
 export function MoveDialog({
@@ -33,7 +34,7 @@ export function MoveDialog({
         {targets.map((f) => (
           <label key={f.id}>
             <input type="radio" name={name} value={f.id} checked={choice === f.id} onChange={() => setChoice(f.id)} />
-            {f.name}
+            {displayText(f.name)}
             {f.myRole !== 'owner' && <span className="badge">{t('meetings.folders.shared')}</span>}
           </label>
         ))}

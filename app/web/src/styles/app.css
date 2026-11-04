@@ -130,3 +130,5 @@ a.forgot { text-align: right; }
   .meeting-row > div:last-child { display: block; } /* keep row actions reachable on phones */
 }
 .plain-list li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* User-written names never reorder the text around them (bidi isolation). */
+.folder-name, .meeting-title, .folder-cell, .folder-pills > button, .choice-list label, .modal-head h2 { unicode-bidi: isolate; }

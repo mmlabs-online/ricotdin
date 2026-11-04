@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { Meeting } from '../../api/meetings'
 import { canDelete, canMove, canPin, canRename, type MeetingRole } from '../../lib/access/roles'
 import { durationParts, statusKind } from '../../lib/meetings/list'
+import { displayText } from '../../lib/text'
 import { Status } from '../ui/Status'
 import { RowMenu, type MenuItem } from './RowMenu'
 
@@ -48,6 +49,7 @@ export function MeetingRow({
       : t('meetings.duration.m', { m: parts.minutes })
     : null
   const kind = statusKind(meeting.status)
+  const title = displayText(meeting.title)
   const pinned = meeting.pinned_at !== null
 
   const finishEdit = (e?: FormEvent) => {
@@ -78,7 +80,7 @@ export function MeetingRow({
         <button
           type="button"
           className={`pin ${pinned ? 'pinned' : ''}`}
-          aria-label={pinned ? t('meetings.actions.unpin', { title: meeting.title }) : t('meetings.actions.pin', { title: meeting.title })}
+          aria-label={pinned ? t('meetings.actions.unpin', { title }) : t('meetings.actions.pin', { title })}
           aria-pressed={pinned}
           disabled={pinBusy}
           onClick={onPin}
@@ -115,7 +117,7 @@ export function MeetingRow({
           </form>
         ) : (
           <Link className="meeting-title" to={`/meetings/${encodeURIComponent(meeting.id)}`}>
-            {meeting.title}
+            {title}
           </Link>
         )}
         <span>{duration ? `${date} · ${duration}` : date}</span>
@@ -123,14 +125,14 @@ export function MeetingRow({
       <span className="folder-cell">
         {folderName && (
           <>
-            <FolderIcon size={15} aria-hidden="true" /> {folderName}
+            <FolderIcon size={15} aria-hidden="true" /> {displayText(folderName)}
           </>
         )}
       </span>
       <span className="source">{t(`meetings.source.${meeting.source}`, { defaultValue: '' })}</span>
       <Status type={kind}>{t(`meetings.status.${kind}`)}</Status>
       <div ref={menuWrap}>
-        <RowMenu label={t('meetings.actions.more', { title: meeting.title })} items={items} />
+        <RowMenu label={t('meetings.actions.more', { title })} items={items} />
       </div>
     </article>
   )

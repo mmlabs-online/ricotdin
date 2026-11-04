@@ -16,6 +16,7 @@ import {
 } from '../../api/meetings'
 import { useAuth } from '../../auth/AuthProvider'
 import { folderDeleteChatNotice, folderDeleteCounts } from '../../lib/folders/deleteNotice'
+import { displayText } from '../../lib/text'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { SharePanel } from './SharePanel'
@@ -83,7 +84,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
     const counts = folderDeleteCounts(meetings, deleting.id, me)
     const chat = folderDeleteChatNotice(deleting.memberCount)
     return (
-      <Modal title={t('folders.delete.title', { name: deleting.name })} onClose={() => setDeleting(null)}>
+      <Modal title={t('folders.delete.title', { name: displayText(deleting.name) })} onClose={() => setDeleting(null)}>
         <p className="modal-copy">{t(chat.key, { count: chat.count })}</p>
         {counts.total > 0 && (
           <label className="check-row">
@@ -141,7 +142,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
                     autoFocus
                     value={editing.name}
                     maxLength={MAX_NAME}
-                    aria-label={t('folders.renameLabel', { name: f.name })}
+                    aria-label={t('folders.renameLabel', { name: displayText(f.name) })}
                     onChange={(e) => setEditing({ id: f.id, name: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') {
@@ -156,30 +157,30 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
                   </Button>
                 </form>
               ) : (
-                <span className="folder-name">{f.name}</span>
+                <span className="folder-name">{displayText(f.name)}</span>
               )}
               {f.memberCount > 0 && <span className="badge">{t('folders.members', { count: f.memberCount })}</span>}
               <span className="folder-actions">
-                <Button variant="ghost" aria-label={t('folders.up', { name: f.name })} disabled={i === 0 || reorder.isPending} onClick={() => moveBy(i, -1)}>
+                <Button variant="ghost" aria-label={t('folders.up', { name: displayText(f.name) })} disabled={i === 0 || reorder.isPending} onClick={() => moveBy(i, -1)}>
                   <ArrowUp size={16} aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
-                  aria-label={t('folders.down', { name: f.name })}
+                  aria-label={t('folders.down', { name: displayText(f.name) })}
                   disabled={i === own.length - 1 || reorder.isPending}
                   onClick={() => moveBy(i, 1)}
                 >
                   <ArrowDown size={16} aria-hidden="true" />
                 </Button>
-                <Button variant="ghost" aria-label={t('folders.rename', { name: f.name })} onClick={() => setEditing({ id: f.id, name: f.name })}>
+                <Button variant="ghost" aria-label={t('folders.rename', { name: displayText(f.name) })} onClick={() => setEditing({ id: f.id, name: f.name })}>
                   <Pencil size={16} aria-hidden="true" />
                 </Button>
-                <Button variant="ghost" aria-label={t('folders.shareLabel', { name: f.name })} onClick={() => setSharing(f)}>
+                <Button variant="ghost" aria-label={t('folders.shareLabel', { name: displayText(f.name) })} onClick={() => setSharing(f)}>
                   <Users size={16} aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
-                  aria-label={t('folders.deleteLabel', { name: f.name })}
+                  aria-label={t('folders.deleteLabel', { name: displayText(f.name) })}
                   onClick={() => {
                     setAlsoMeetings(false)
                     setErrorKey(null)
@@ -211,7 +212,7 @@ export function FoldersDialog({ meetings, onClose }: { meetings: Meeting[]; onCl
           <ul className="plain-list">
             {shared.map((f) => (
               <li key={f.id}>
-                <FolderIcon size={15} aria-hidden="true" /> {f.name}{' '}
+                <FolderIcon size={15} aria-hidden="true" /> <bdi>{displayText(f.name)}</bdi>{' '}
                 <small>{t('folders.sharedBy', { owner: f.ownerUsername ?? '—', role: t(`folders.roles.${f.myRole}`) })}</small>
               </li>
             ))}
