@@ -268,6 +268,7 @@ export function TranscriptPanel({
   onRetry,
   canSeek,
   activeId,
+  seekNonce,
   onSeek,
 }: {
   segments: TranscriptSegment[]
@@ -275,6 +276,8 @@ export function TranscriptPanel({
   onRetry: () => void
   canSeek: boolean
   activeId: string | null
+  /** Changes on every seek, so seeking to the same line again scrolls back to it. */
+  seekNonce: number
   onSeek: (seg: TranscriptSegment) => void
 }) {
   const { t } = useTranslation()
@@ -282,13 +285,13 @@ export function TranscriptPanel({
   const activeRef = useRef<HTMLLIElement>(null)
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: 'center' })
-  }, [activeId])
+  }, [activeId, seekNonce])
   if (state !== 'success') return <Loading state={state} onRetry={onRetry} />
   const groups = groupTranscript(filterSegments(segments, query))
   return (
     <section className="transcript-content" aria-labelledby="transcript-title">
       <div className="transcript-toolbar">
-        <h2 className="section-label" id="transcript-title">
+        <h2 className="section-label" id="transcript-title" tabIndex={-1}>
           <MessageSquareText size={16} aria-hidden="true" />
           {t('detail.transcript.label')}
         </h2>

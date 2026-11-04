@@ -6,6 +6,8 @@ import {
   calendarParts,
   canRegenerate,
   canReprocess,
+  isQueued,
+  restoreRow,
   failureKind,
   filterSegments,
   groupTranscript,
@@ -152,9 +154,9 @@ describe('owner actions', () => {
     expect(canRegenerate({ ...base, status: 'processing' }, 'owner')).toBe(false)
   })
 
-  it('reprocess: owner, failed or done, with audio', () => {
+  it('reprocess: owner, failed, with audio (the worker never claims a done meeting)', () => {
     expect(canReprocess({ ...base, status: 'failed' }, 'owner')).toBe(true)
-    expect(canReprocess(base, 'owner')).toBe(true)
+    expect(canReprocess(base, 'owner')).toBe(false)
     expect(canReprocess({ ...base, audio_path: null }, 'owner')).toBe(false)
     expect(canReprocess({ ...base, status: 'pending' }, 'owner')).toBe(false)
     expect(canReprocess({ ...base, status: 'failed' }, 'viewer')).toBe(false)
@@ -172,6 +174,7 @@ describe('actionErrorKey', () => {
     expect(actionErrorKey('ics', e(422))).toBe('detail.errors.icsNoTime')
     expect(actionErrorKey('ics', e(500))).toBe('detail.errors.icsFailed')
     expect(actionErrorKey('save', e(500))).toBe('detail.errors.saveFailed')
+    expect(actionErrorKey('delete', e(500))).toBe('detail.errors.generic')
   })
 
   it('shared answers', () => {
@@ -179,5 +182,27 @@ describe('actionErrorKey', () => {
     expect(actionErrorKey('save', e(403))).toBe('detail.errors.forbidden')
     expect(actionErrorKey('regenerate', e(0, 'network'))).toBe('detail.errors.network')
     expect(actionErrorKey('regenerate', new Error('x'))).toBe('detail.errors.generic')
+  })
+})
+
+describe('isQueued', () => {
+  it('a failed meeting the owner re-queued, until the worker touches it', () => {
+    const m = { status: 'failed', updated_at: 'T1' }
+    expect(isQueued(m, 'T1')).toBe(true)
+    expect(isQueued(m, null)).toBe(false)
+    expect(isQueued({ status: 'failed', updated_at: 'T2' }, 'T1')).toBe(false) // failed again later
+    expect(isQueued({ status: 'processing', updated_at: 'T1' }, 'T1')).toBe(false)
+  })
+})
+
+describe('restoreRow', () => {
+  it('puts back one row only, keeping other edits', () => {
+    const list = [todo('1', { status: 'done' }), todo('2', { status: 'done' })]
+    const back = restoreRow(list, todo('1'))
+    expect(back.map((t) => t.status)).toEqual(['open', 'done'])
+  })
+  it('a missing row changes nothing', () => {
+    const list = [todo('1')]
+    expect(restoreRow(list, todo('9'))).toEqual(list)
   })
 })

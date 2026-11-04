@@ -18,8 +18,11 @@ export type Block =
 const MAX_INPUT = 200_000
 const MAX_DEPTH = 2
 
+// Every inner part is bounded (and paragraphs are capped below), so text full of stray `**` or
+// `[` cannot make the scan quadratic on a long paragraph.
 const INLINE =
-  /!\[([^\]]*)\]\([^)]*\)|\[([^\]]+)\]\([^)]*\)|`([^`]+)`|\*\*(\S(?:.*?\S)?)\*\*|__(\S(?:.*?\S)?)__|~~(.+?)~~|(?<![\w*])\*(\S(?:[^*]*?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]*?\S)?)_(?!\w)/g
+  /!\[([^\]]{0,300})\]\([^)\s]{0,2000}\)|\[([^\]]{1,300})\]\([^)\s]{0,2000}\)|`([^`]{1,300})`|\*\*(\S(?:[^*]{0,300}?\S)?)\*\*|__(\S(?:[^_]{0,300}?\S)?)__|~~([^~]{1,300}?)~~|(?<![\w*])\*(\S(?:[^*]{0,300}?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]{0,300}?\S)?)_(?!\w)/g
+const MAX_PARAGRAPH = 20_000
 
 export function parseInline(source: string): Inline[] {
   const out: Inline[] = []
@@ -59,7 +62,7 @@ export function parseMarkdown(source: string): Block[] {
   let list: Extract<Block, { kind: 'list' }> | null = null
 
   const flush = () => {
-    if (paragraph.length) blocks.push({ kind: 'paragraph', inlines: parseInline(paragraph.join(' ')) })
+    if (paragraph.length) blocks.push({ kind: 'paragraph', inlines: parseInline(paragraph.join(' ').slice(0, MAX_PARAGRAPH)) })
     paragraph = []
     list = null
   }

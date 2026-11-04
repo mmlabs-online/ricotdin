@@ -421,7 +421,9 @@
       "pendingTitle": "Waiting for the upload",
       "pendingBody": "Processing starts as soon as the upload is confirmed.",
       "processingTitle": "Processing the meeting",
-      "processingBody": "Transcribing and writing the notes. This usually takes a few minutes; this page updates by itself."
+      "processingBody": "Transcribing and writing the notes. This usually takes a few minutes; this page updates by itself.",
+      "queuedTitle": "Waiting for a free worker",
+      "queuedBody": "Processing is queued and starts as soon as a worker is free. This page updates by itself."
     },
     "failed": {
       "title": "Processing failed",
@@ -434,7 +436,7 @@
       "busy": "Starting…",
       "started": "Processing started.",
       "confirmTitle": "Process this meeting again?",
-      "confirmBody": "The recording is transcribed and analysed again, which uses audio minutes from your balance. The transcript, notes, to-dos and calendar suggestions are replaced as each step finishes.",
+      "confirmBody": "The recording is transcribed and analysed again. This uses audio minutes from your balance.",
       "confirm": "Process again"
     },
     "regenerate": {

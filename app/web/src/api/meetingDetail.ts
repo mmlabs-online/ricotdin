@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useFetchApi } from '../auth/AuthProvider'
 import { normalizeChat, normalizeMessage, type ChatMessage } from '../lib/chat/chat'
-import type { CalendarSuggestion, Todo, TodoStatus } from '../lib/meetings/detail'
+import { isQueued, restoreRow, type CalendarSuggestion, type Todo, type TodoStatus } from '../lib/meetings/detail'
 import { needsPolling } from '../lib/meetings/list'
 import type { TranscriptSegment } from '../lib/transcript/export'
 import { apiJson } from './json'
@@ -21,15 +21,24 @@ export const detailKeys = {
 }
 const DETAIL_EDIT = ['meeting', 'edit'] as const
 
-export function useMeeting(id: string) {
+/** While a re-queued failed meeting waits for a free worker (`isQueued`), keep polling up to this
+ * long: the worker runs one job at a time, each step up to 12 min. */
+export const FOLLOW_QUEUED_MS = 20 * 60_000
+
+export function useMeeting(id: string, queued: { at: string; since: number } | null = null) {
   const fetchApi = useFetchApi()
   const qc = useQueryClient()
   return useQuery({
     queryKey: detailKeys.meeting(id),
     queryFn: () => apiJson<Meeting>(fetchApi, `/meetings/${enc(id)}`),
-    // Follow processing (PRP-07); never while an edit is in flight (an older answer would undo it).
-    refetchInterval: (q) =>
-      q.state.data && needsPolling([q.state.data]) && qc.isMutating({ mutationKey: DETAIL_EDIT }) === 0 ? POLL_MS : false,
+    // Follow processing (PRP-07) and a queued re-run; never while an edit is in flight (an older
+    // answer would undo it).
+    refetchInterval: (q) => {
+      const m = q.state.data
+      if (!m || qc.isMutating({ mutationKey: DETAIL_EDIT }) > 0) return false
+      const waiting = queued !== null && isQueued(m, queued.at) && Date.now() - queued.since < FOLLOW_QUEUED_MS
+      return needsPolling([m]) || waiting ? POLL_MS : false
+    },
   })
 }
 
@@ -65,8 +74,17 @@ export function useAudioUrl(id: string, enabled: boolean) {
   })
 }
 
-/** Optimistic change of one cached value, rolled back if the request fails. */
-function useOptimisticEdit<V, T>(kind: string, key: QueryKey, request: (v: V) => Promise<unknown>, apply: (data: T, v: V) => T, after?: QueryKey[]) {
+/** Optimistic change of one cached value. A failure undoes only THIS change (`undo` gets the value
+ * from before it), so other edits in flight stay on screen; data is refetched once the last edit
+ * of the page settles. */
+function useOptimisticEdit<V, T>(
+  kind: string,
+  key: QueryKey,
+  request: (v: V) => Promise<unknown>,
+  apply: (data: T, v: V) => T,
+  undo: (data: T, v: V, before: T) => T,
+  after?: QueryKey[],
+) {
   const qc = useQueryClient()
   return useMutation({
     mutationKey: [...DETAIL_EDIT, kind],
@@ -77,11 +95,13 @@ function useOptimisticEdit<V, T>(kind: string, key: QueryKey, request: (v: V) =>
       if (before !== undefined) qc.setQueryData<T>(key, apply(before, v))
       return { before }
     },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.before !== undefined) qc.setQueryData(key, ctx.before)
+    onError: (_e, v, ctx) => {
+      const before = ctx?.before
+      if (before !== undefined) qc.setQueryData<T>(key, (now) => (now === undefined ? before : undo(now, v, before)))
     },
     onSettled: () => {
-      if (qc.isMutating({ mutationKey: [...DETAIL_EDIT, kind] }) <= 1) {
+      // all kinds count: rename and move share the meeting key
+      if (qc.isMutating({ mutationKey: DETAIL_EDIT }) <= 1) {
         void qc.invalidateQueries({ queryKey: key, exact: true })
         for (const k of after ?? []) void qc.invalidateQueries({ queryKey: k })
       }
@@ -96,6 +116,10 @@ export function useTodoStatus(meetingId: string) {
     detailKeys.todos(meetingId),
     ({ id, status }) => apiJson(fetchApi, `/todos/${enc(id)}`, { method: 'PATCH', body: { status } }),
     (list, { id, status }) => list.map((t) => (t.id === id ? { ...t, status } : t)),
+    (list, { id }, before) => {
+      const prev = before.find((t) => t.id === id)
+      return prev ? restoreRow(list, prev) : list
+    },
   )
 }
 
@@ -106,6 +130,10 @@ export function useDismissSuggestion(meetingId: string) {
     detailKeys.suggestions(meetingId),
     (id) => apiJson(fetchApi, `/calendar-suggestions/${enc(id)}`, { method: 'PATCH', body: { dismissed: true } }),
     (list, id) => list.map((s) => (s.id === id ? { ...s, dismissed: true } : s)),
+    (list, id, before) => {
+      const prev = before.find((s) => s.id === id)
+      return prev ? restoreRow(list, prev) : list
+    },
   )
 }
 
@@ -116,6 +144,7 @@ export function useRenameDetail(meetingId: string) {
     detailKeys.meeting(meetingId),
     (title) => apiJson(fetchApi, `/meetings/${enc(meetingId)}`, { method: 'PATCH', body: { title } }),
     (m, title) => ({ ...m, title }),
+    (m, _title, before) => ({ ...m, title: before.title }),
     [listKeys.meetings],
   )
 }
@@ -127,6 +156,7 @@ export function useMoveDetail(meetingId: string) {
     detailKeys.meeting(meetingId),
     (folderId) => apiJson(fetchApi, `/meetings/${enc(meetingId)}`, { method: 'PATCH', body: { folder_id: folderId } }),
     (m, folderId) => ({ ...m, folder_id: folderId }),
+    (m, _folderId, before) => ({ ...m, folder_id: before.folder_id }),
     [listKeys.meetings],
   )
 }
@@ -154,11 +184,9 @@ export function useProcess(meetingId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => apiJson(fetchApi, `/meetings/${enc(meetingId)}/process`, { method: 'POST' }),
-    // The job is queued; the worker moves the meeting to `processing` when it claims it (about a
-    // second). Show it as processing now and let the 5 s polling bring the real status, instead of
-    // refetching at once and briefly showing the old `failed` / `done` again.
+    // A job is queued; the meeting stays `failed` until a worker claims it. The page shows it as
+    // queued (`isQueued`) and keeps polling (`useMeeting`'s `queued`).
     onSuccess: () => {
-      qc.setQueryData<Meeting>(detailKeys.meeting(meetingId), (m) => (m ? { ...m, status: 'processing', error_message: null } : m))
       void qc.invalidateQueries({ queryKey: listKeys.meetings })
     },
   })
@@ -176,6 +204,9 @@ export function useMeetingChat(meetingId: string, enabled: boolean) {
   return useQuery({
     queryKey: detailKeys.chat(meetingId),
     enabled,
+    // The API stores the question before it answers: a refetch while waiting would show it next to
+    // the local "sending" bubble. Refetch only after a send settles.
+    refetchOnWindowFocus: false,
     queryFn: async () => normalizeChat(await apiJson<unknown>(fetchApi, `/chat?meetingId=${enc(meetingId)}`)),
   })
 }
@@ -190,6 +221,7 @@ export function useAskMeeting(meetingId: string) {
         method: 'POST',
         body: sessionId ? { message, meetingId, sessionId } : { message, meetingId },
       }),
+    onMutate: () => qc.cancelQueries({ queryKey: key, exact: true }),
     onSuccess: (res, { message }) => {
       const reply = normalizeMessage(res.message)
       qc.setQueryData<MeetingChat>(key, (chat) => {

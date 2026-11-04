@@ -421,7 +421,9 @@
       "pendingTitle": "Đang chờ tải lên",
       "pendingBody": "Việc xử lý bắt đầu ngay khi tệp tải lên được xác nhận.",
       "processingTitle": "Đang xử lý cuộc họp",
-      "processingBody": "Đang chép lời và viết ghi chú. Thường mất vài phút; trang này tự cập nhật."
+      "processingBody": "Đang chép lời và viết ghi chú. Thường mất vài phút; trang này tự cập nhật.",
+      "queuedTitle": "Đang chờ đến lượt xử lý",
+      "queuedBody": "Việc xử lý đã được xếp hàng và bắt đầu ngay khi có máy rảnh. Trang này tự cập nhật."
     },
     "failed": {
       "title": "Xử lý thất bại",
@@ -434,7 +436,7 @@
       "busy": "Đang bắt đầu…",
       "started": "Đã bắt đầu xử lý.",
       "confirmTitle": "Xử lý lại cuộc họp này?",
-      "confirmBody": "Bản ghi sẽ được chép lời và phân tích lại, việc này dùng số phút âm thanh trong số dư của bạn. Bản ghi lời, ghi chú, việc cần làm và đề xuất lịch được thay thế khi từng bước hoàn tất.",
+      "confirmBody": "Bản ghi sẽ được chép lời và phân tích lại. Việc này dùng số phút âm thanh trong số dư của bạn.",
       "confirm": "Xử lý lại"
     },
     "regenerate": {

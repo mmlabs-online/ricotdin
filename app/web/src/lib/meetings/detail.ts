@@ -139,12 +139,24 @@ export function canRegenerate(m: ActionMeeting, role: MeetingRole): boolean {
   return role === 'owner' && m.status === 'done'
 }
 
-/** Owner only, with audio, once processing has ended (failed, or done to run it again). */
+/** Owner only, with audio, after a failure. Not for a `done` meeting: `/process` queues a job, but
+ * the worker only claims `pending` / `failed` meetings, so it would end without doing anything. */
 export function canReprocess(m: ActionMeeting, role: MeetingRole): boolean {
-  return role === 'owner' && !!m.audio_path && (m.status === 'failed' || m.status === 'done')
+  return role === 'owner' && !!m.audio_path && m.status === 'failed'
 }
 
-export type DetailAction = 'regenerate' | 'process' | 'save' | 'ics'
+/** The owner pressed "Process again" on this failed meeting and the worker has not claimed it yet
+ * (claiming moves it to `processing` and bumps `updated_at`). `queuedAt` = its `updated_at` then. */
+export function isQueued(m: { status: string; updated_at: string }, queuedAt: string | null): boolean {
+  return queuedAt !== null && m.status === 'failed' && m.updated_at === queuedAt
+}
+
+/** Undo one optimistic row change, leaving other rows' in-flight edits alone. */
+export function restoreRow<T extends { id: string }>(list: readonly T[], prev: T): T[] {
+  return list.map((x) => (x.id === prev.id ? prev : x))
+}
+
+export type DetailAction = 'regenerate' | 'process' | 'save' | 'ics' | 'delete'
 
 export function actionErrorKey(action: DetailAction, err: unknown): string {
   if (!(err instanceof ApiError)) return 'detail.errors.generic'
@@ -164,5 +176,7 @@ export function actionErrorKey(action: DetailAction, err: unknown): string {
       return err.status === 422 ? 'detail.errors.icsNoTime' : 'detail.errors.icsFailed'
     case 'save':
       return 'detail.errors.saveFailed'
+    case 'delete':
+      return 'detail.errors.generic'
   }
 }

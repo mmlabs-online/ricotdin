@@ -42,6 +42,7 @@ import {
   canRegenerate,
   canReprocess,
   failureKind,
+  isQueued,
   modelLabel,
   visibleTodos,
   type CalendarSuggestion,
@@ -62,8 +63,10 @@ export function MeetingDetailPage() {
   const { meetingId = '' } = useParams()
   const meeting = useMeeting(meetingId)
   if (meeting.isPending) return <FullPageLoading />
-  if (meeting.isError) {
-    const missing = meeting.error instanceof ApiError && [400, 403, 404].includes(meeting.error.status)
+  const missing = meeting.error instanceof ApiError && [400, 403, 404].includes(meeting.error.status)
+  // A failed background refetch keeps the page (audio, chat draft, open tab); only a meeting that
+  // is gone (deleted, unshared) or never loaded replaces it.
+  if (meeting.isError && (missing || meeting.data === undefined)) {
     return (
       <div className="detail-page">
         <BackLink />
@@ -74,6 +77,7 @@ export function MeetingDetailPage() {
       </div>
     )
   }
+  if (meeting.data === undefined) return <FullPageLoading />
   return <MeetingDetail key={meeting.data.id} meeting={meeting.data} />
 }
 
@@ -124,11 +128,29 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const process = useProcess(id)
   const del = useDeleteMeeting()
 
+  const [queued, setQueued] = useState<{ at: string; since: number } | null>(null)
+  useMeeting(id, queued) // keeps polling while a re-run waits for a worker
+  const waiting = isQueued(meeting, queued?.at ?? null)
+  const [seekNonce, setSeekNonce] = useState(0)
   const [tab, setTab] = useState<Tab>(() => (parseSeekParam(location.search) !== null ? 'transcript' : 'summary'))
   const [activeSeg, setActiveSeg] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'move' | 'delete' | 'regenerate' | 'reprocess' | null>(null)
   const player = useRef<AudioPlayerHandle>(null)
+  // Controls that disappear (a dismissed row) hand focus to their section heading.
+  const focusAfter = useRef<string[] | null>(null)
+  useEffect(() => {
+    const list = focusAfter.current
+    if (!list) return
+    focusAfter.current = null
+    for (const sel of list) {
+      const el = document.querySelector<HTMLElement>(sel)
+      if (el) {
+        el.focus()
+        return
+      }
+    }
+  })
   const tabsId = useId()
   const fail = (action: DetailAction) => (err: unknown) => setNotice({ key: actionErrorKey(action, err), kind: 'error' })
 
@@ -143,9 +165,12 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     prevStatus.current = meeting.status
   }, [meeting.status, id, qc])
 
-  function seek(ms: number) {
+  function seek(ms: number, moveFocus = false) {
     setTab('transcript')
     setActiveSeg(nearestSegment(segments, ms)?.id ?? null)
+    setSeekNonce((n) => n + 1)
+    // the clicked control (to-do, suggestion, citation in another tab) may be unmounted
+    if (moveFocus) focusAfter.current = ['.transcript-row.active button', '#transcript-title']
     player.current?.seekTo(ms)
   }
 
@@ -169,26 +194,19 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   }
 
   function onCitation(c: Citation) {
-    if (c.meetingId === id) seek(c.startMs)
+    if (c.meetingId === id) seek(c.startMs) // the chat stays open: focus stays on the citation
     else void navigate(meetingSeekPath(c.meetingId, c.startMs))
   }
 
-  // Controls that disappear (a dismissed row) hand focus to their section heading.
-  const focusAfter = useRef<string | null>(null)
-  useEffect(() => {
-    const sel = focusAfter.current
-    if (!sel) return
-    focusAfter.current = null
-    document.querySelector<HTMLElement>(sel)?.focus()
-  })
 
   function setTodo(todoId: string, status: TodoStatus) {
-    if (status === 'dismissed') focusAfter.current = '#todos-title'
-    todoStatus.mutate({ id: todoId, status }, { onError: fail('save') })
+    if (status === 'dismissed') focusAfter.current = ['#todos-title']
+    // mutateAsync: a mutate() callback would be skipped if another to-do changed meanwhile
+    todoStatus.mutateAsync({ id: todoId, status }).catch(fail('save'))
   }
   function dismissSuggestion(sid: string) {
-    focusAfter.current = '#calendar-title'
-    dismiss.mutate(sid, { onError: fail('save') })
+    focusAfter.current = ['#calendar-title']
+    dismiss.mutateAsync(sid).catch(fail('save'))
   }
   function ics(s: CalendarSuggestion) {
     downloadIcs(fetchApi, s.id, s.title).catch(fail('ics'))
@@ -199,7 +217,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   }
   function runRegenerate() {
     setDialog(null)
-    focusAfter.current = '[data-focus="regenerate"]'
+    focusAfter.current = ['[data-focus="regenerate"]']
     regenerate.mutate(undefined, {
       onSuccess: () => setNotice({ key: 'detail.regenerate.done', kind: 'success' }),
       onError: fail('regenerate'),
@@ -207,9 +225,14 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   }
   function runProcess() {
     setDialog(null)
-    focusAfter.current = '#detail-title'
+    if (process.isPending) return
+    focusAfter.current = ['#detail-title']
+    const at = meeting.updated_at
     process.mutate(undefined, {
-      onSuccess: () => setNotice({ key: 'detail.reprocess.started', kind: 'success' }),
+      onSuccess: () => {
+        setQueued({ at, since: Date.now() })
+        setNotice({ key: 'detail.reprocess.started', kind: 'success' })
+      },
       onError: fail('process'),
     })
   }
@@ -217,7 +240,6 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const items: MenuItem[] = []
   if (canEdit) items.push({ key: 'rename', label: t('meetings.actions.rename'), onSelect: () => setDialog('rename') })
   if (canMove(role) && folders.isSuccess) items.push({ key: 'move', label: t('meetings.actions.move'), onSelect: () => setDialog('move') })
-  if (canReprocess(meeting, role) && done) items.push({ key: 'reprocess', label: t('detail.reprocess.action'), onSelect: () => setDialog('reprocess') })
   if (segments.length > 0) {
     for (const f of ['txt', 'md', 'srt'] as const) {
       items.push({ key: `export-${f}`, label: t('detail.export', { format: f.toUpperCase() }), onSelect: () => exportTranscript(f) })
@@ -294,7 +316,17 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
         </div>
       )}
 
-      {meeting.status === 'failed' && (
+      {waiting && (
+        <div className="state-card">
+          <LoaderCircle className="spin" size={20} aria-hidden="true" />
+          <div>
+            <strong>{t('detail.state.queuedTitle')}</strong>
+            <p>{t('detail.state.queuedBody')}</p>
+          </div>
+        </div>
+      )}
+
+      {meeting.status === 'failed' && !waiting && (
         <div className="state-card danger">
           <div>
             <strong>{t(failureKind(meeting.error_message) === 'quota' ? 'detail.failed.quotaTitle' : 'detail.failed.title')}</strong>
@@ -304,7 +336,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
             )}
           </div>
           {canReprocess(meeting, role) && (
-            <Button variant="primary" onClick={runProcess} aria-disabled={process.isPending} aria-busy={process.isPending}>
+            <Button variant="primary" onClick={() => !process.isPending && setDialog('reprocess')} aria-disabled={process.isPending} aria-busy={process.isPending}>
               <RefreshCw size={15} aria-hidden="true" />
               {process.isPending ? t('detail.reprocess.busy') : t('detail.reprocess.action')}
             </Button>
@@ -374,7 +406,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   segments={segments}
                   canEdit={canEdit}
                   onStatus={setTodo}
-                  onSource={seek}
+                  onSource={(ms) => seek(ms, true)}
                 />
               )}
               {tab === 'calendar' && (
@@ -386,7 +418,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   canEdit={canEdit}
                   onDismiss={dismissSuggestion}
                   onIcs={ics}
-                  onSource={seek}
+                  onSource={(ms) => seek(ms, true)}
                 />
               )}
               {tab === 'transcript' && (
@@ -396,6 +428,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   onRetry={() => void transcript.refetch()}
                   canSeek={audioUrl.isSuccess}
                   activeId={activeSeg}
+                  seekNonce={seekNonce}
                   onSeek={(s) => seek(s.start_ms)}
                 />
               )}
@@ -411,8 +444,8 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
           onClose={() => setDialog(null)}
           onSave={(next) => {
             setDialog(null)
-            focusAfter.current = '#detail-title'
-            if (next !== meeting.title) rename.mutate(next, { onError: fail('save') })
+            focusAfter.current = ['#detail-title']
+            if (next !== meeting.title) rename.mutateAsync(next).catch(fail('save'))
           }}
         />
       )}
@@ -424,7 +457,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
           onClose={() => setDialog(null)}
           onMove={(folderId) => {
             setDialog(null)
-            if (folderId !== meeting.folder_id) move.mutate(folderId, { onError: fail('save') })
+            if (folderId !== meeting.folder_id) move.mutateAsync(folderId).catch(fail('save'))
           }}
         />
       )}
@@ -435,10 +468,13 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
           onClose={() => setDialog(null)}
           onConfirm={() =>
             del.mutate(id, {
-              onSuccess: (r) => void navigate('/meetings', { state: { notice: r?.warning ? 'warning' : 'deleted' } }),
+              onSuccess: (r) => {
+                qc.removeQueries({ queryKey: detailKeys.meeting(id) })
+                void navigate('/meetings', { state: { notice: r?.warning ? 'warning' : 'deleted' } })
+              },
               onError: (err) => {
                 setDialog(null)
-                fail('save')(err)
+                fail('delete')(err)
               },
             })
           }

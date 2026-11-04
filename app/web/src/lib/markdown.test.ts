@@ -120,6 +120,18 @@ describe('parseMarkdown', () => {
   it('bounds very long input', () => {
     const blocks = parseMarkdown('x'.repeat(300_000))
     const first = blocks[0]
-    expect(first?.kind === 'paragraph' && first.inlines[0]?.text.length).toBe(200_000)
+    expect(first?.kind === 'paragraph' && first.inlines[0]?.text.length).toBe(20_000)
+  })
+
+  it('stays fast on hostile text (stray markers)', () => {
+    for (const unit of ['** ', '__a ', '~~a ', '[a ', '*a ', '`a ', '![a](']) {
+      const started = performance.now()
+      parseMarkdown(unit.repeat(60_000))
+      expect(performance.now() - started).toBeLessThan(1000)
+    }
+  })
+
+  it('a link with a space in its target stays text with its brackets', () => {
+    expect(parseInline('[a](b c)')).toEqual([{ kind: 'text', text: '[a](b c)' }])
   })
 })
