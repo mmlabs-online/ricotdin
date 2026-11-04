@@ -40,12 +40,12 @@
 | CAL-01 | Export .ics | ARC-07, ARC-12 | `GET /calendar-suggestions/{id}/ics` | done | Meeting detail | todo | ics | |
 | CAL-02 | Truthful time handling | ARC-07 | `GET /calendar-suggestions/{id}/ics` (422 without `proposed_at`) | done | Meeting detail | todo | ics | |
 | CAL-03 | To-do management | ARC-07 | `PATCH /todos/{id}`, `PATCH /calendar-suggestions/{id}` | done | Meeting detail | todo | — | |
-| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | done | Meetings list | todo | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
-| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | done | Meetings list, Meeting detail | todo | — | |
-| MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | done | Meetings list | todo | — | |
-| MMG-04 | Delete meeting | ARC-07 | `DELETE /meetings/{id}` | todo | Meetings list | todo | retention | audio deleted first, `warning` on failure |
-| AUT-01 | Sign up | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Register, Verify email | todo | auth-validate | |
-| AUT-02 | Log in | ARC-05 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` *(proposed)* | todo | Sign in, Forgot password, Reset password | in_progress | auth-validate | email or username; reset screens replace Supabase's hosted recovery. FE: Sign in + silent refresh + sign out done (ARC-11); forgot/reset screens ARC-13 |
+| MMG-01 | Meeting list | ARC-07 | `GET /meetings` *(proposed)* | done | Meetings list | done (13a) | — | pinned first (`pinned_at DESC NULLS LAST, created_at DESC`); v1 sorts in the browser (`sortMeetings`) — v2 sorts server-side and includes shared-folder meetings |
+| MMG-02 | Rename meeting | ARC-07 | `PATCH /meetings/{id}` | done | Meetings list, Meeting detail | list done (13a), detail 13b | — | |
+| MMG-03 | Pin meeting | ARC-07 | `PATCH /meetings/{id}/pin` | done | Meetings list | done (13a) | — | |
+| MMG-04 | Delete meeting | ARC-07 | `DELETE /meetings/{id}` | todo | Meetings list | done (13a) | retention | audio deleted first, `warning` on failure |
+| AUT-01 | Sign up | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Register, Verify email | done (13a) | auth-validate | |
+| AUT-02 | Log in | ARC-05 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` *(proposed)* | todo | Sign in, Forgot password, Reset password | done (13a) | auth-validate | email or username; reset screens replace Supabase's hosted recovery. FE: Sign in + silent refresh + sign out done (ARC-11); forgot/reset screens ARC-13 |
 | AUT-03 | Role authorization | ARC-05, ARC-11 | role claim in access JWT; JWKS `GET /.well-known/jwks.json` *(proposed)* | todo | Route guards | done | admin-guards | FE: `RequireRole` user/admin + return URL (ARC-11, `app/web/src/auth/guards.ts`) |
 | AUT-04 | Data isolation | ARC-02, ARC-07 | every meeting-scoped endpoint (app-layer check + RLS backstop) | in_progress | — | n/a | folder-shares | ARC-07 part 1: every endpoint checks access (role matrix test); part 2 adds the storage endpoints; `can_access_meeting` |
 | ADM-01 | User list | ARC-10 | `GET /admin/users` | todo | Admin › Users | todo | user-status, admin-guards, admin-adm, usage-by-user | per-user usage column |
@@ -73,7 +73,7 @@
 | OBS-02 | Structured logging | ARC-04 | — (core logging, secret redaction) | todo | — | n/a | — | |
 | OBS-03 | Uptime monitoring & alert | ARC-04, ARC-10, ARC-15 | `GET /health` (liveness), `GET /admin/health` (DB + provider checks, 200/503) | todo | Admin › Health | todo | admin-ext | ARC-00 `/health` is only a liveness stub; point the external uptime monitor at v2 at cutover (ARC-15) |
 | SEC-01 | Login rate-limiting | ARC-05 | `POST /auth/login` (rate limit) | todo | Sign in | todo | rate-limit | |
-| SEC-02 | Email verification | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Verify email | todo | auth-validate | SMTP |
+| SEC-02 | Email verification | ARC-05 | `POST /auth/register`, `POST /auth/verify-email` *(proposed)* | todo | Verify email | done (13a) | auth-validate | SMTP |
 | SEC-03 | RLS review | ARC-02 | — (RLS on `app.user_id` / `app.role`) | todo | — | n/a | folder-shares | integration tests `test_rls*.py` |
 | SEC-04 | Secret management | ARC-06 | `GET/POST /admin/keys`, `PATCH/DELETE /admin/keys/{id}` | todo | Admin › Keys | todo | provider-keys | never return ciphertext |
 | OPS-01 | CI + automated tests | ARC-00 | — (`ci-api.yml`, `ci-web.yml`) | done | — | done | — | delivered by ARC-00 |
@@ -81,7 +81,7 @@
 | OPS-06 | CI on dev branch | ARC-00 | — (CI triggers include `dev`) | done | — | done | — | delivered by ARC-00 |
 | OPS-07 | Release runbook + deploy verify | ARC-15 | `GET /version.json`, `GET /health` | todo | — | n/a | verify-deploy | runbook rewritten for v2 |
 | COM-01 | Recording notice/consent | ARC-07, ARC-12 | `POST /activity` (`recording_notice_ack`) | done | Record (notice dialog) | done | recording-notice, activity-log | 12 h ack per tab |
-| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | in_progress | Meetings list, Manage folders | todo | folder-shares, folder-delete-notice | all routes done except `DELETE /folders/{id}?deleteMeetings=true` (503 until ARC-07 part 2); moving a meeting = `PATCH /meetings/{id}` |
+| COM-05 | Sharing & collaboration | ARC-07 | `GET/POST /folders`, `PATCH/DELETE /folders/{id}`, `PUT /folders/reorder`, `GET/POST /folders/{id}/shares`, `PATCH/DELETE /folders/{id}/shares/{granteeId}`, `POST /users/lookup`, `PATCH /meetings/{id}` (`folder_id`), `POST /meetings` (`folder_id`) | in_progress | Meetings list, Manage folders | done (13a) | folder-shares, folder-delete-notice | all routes done except `DELETE /folders/{id}?deleteMeetings=true` (503 until ARC-07 part 2); moving a meeting = `PATCH /meetings/{id}` |
 | QUO-01 | Quota schema & balances | ARC-02, ARC-07 | `GET /profile` (`audio_seconds_remaining`, `agent_queries_remaining`) | done | Profile | todo | quota | balance stays in `GET /profile` for parity |
 | QUO-02 | Generate enforcement | ARC-08 | — (worker gate before Speechmatics), `POST /admin/pipeline/reconcile-quota` | todo | Meeting detail (`QUOTA_BLOCKED:` error) | todo | quota | |
 | QUO-03 | Ask-agent enforcement | ARC-09 | `POST /chat` (pre-check + deduct) | todo | Chat | todo | quota | |

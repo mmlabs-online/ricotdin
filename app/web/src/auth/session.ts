@@ -151,6 +151,26 @@ export class AuthSession {
     return confirmed
   }
 
+  /** Signed-out auth calls (register, verify, resend, forgot, reset): JSON to the auth origin,
+   * no cookie. Throws ApiError (code + status) on a non-2xx answer. */
+  async publicAuth(path: string, json: unknown): Promise<unknown> {
+    let res: Response
+    try {
+      res = await this.deps.fetch(`${this.authUrl}/auth${path}`, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+      })
+    } catch {
+      throw apiErrorFrom(0, null)
+    }
+    const body: unknown = await res.json().catch(() => null)
+    if (!res.ok) throw apiErrorFrom(res.status, body)
+    return body
+  }
+
   close(): void {
     this.deps.channel?.close()
   }

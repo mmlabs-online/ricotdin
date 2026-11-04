@@ -1,18 +1,16 @@
 import { useId, useRef, useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Languages } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { safeReturnTo } from '../auth/guards'
 import { signInErrorKey } from '../auth/signInErrors'
 import { FullPageLoading } from '../components/FullPageLoading'
-import { Logo } from '../components/Logo'
+import { AuthLayout } from '../components/AuthLayout'
 import { Button } from '../components/ui/Button'
-import { setLocale } from '../i18n'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 export function SignInPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { state, session } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -28,7 +26,6 @@ export function SignInPage() {
   const identifierRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
   useDocumentTitle('auth.submit')
-  const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
 
   if (state.status === 'loading') return <FullPageLoading />
   // 'unavailable': the form still works; a failed sign-in shows the network/generic error
@@ -61,23 +58,7 @@ export function SignInPage() {
   }
 
   return (
-    <div className="auth-page">
-      <header className="auth-top">
-        <div className="brand">
-          <Logo />
-          <span>{t('app.name')}</span>
-        </div>
-        <div className="language-switch" role="group" aria-label={t('language.label')}>
-          <Languages size={15} aria-hidden="true" />
-          <button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} lang="en" onClick={() => setLocale('en')}>
-            {t('language.en')}
-          </button>
-          <button type="button" className={language === 'vi' ? 'active' : ''} aria-pressed={language === 'vi'} lang="vi" onClick={() => setLocale('vi')}>
-            {t('language.vi')}
-          </button>
-        </div>
-      </header>
-      <main>
+    <AuthLayout>
         <form className="auth-card" onSubmit={(e) => void submit(e)} noValidate>
           <span className="eyebrow">{t('auth.welcome')}</span>
           <h1>{t('auth.title')}</h1>
@@ -117,12 +98,20 @@ export function SignInPage() {
               maxLength={1024}
             />
           </label>
-          <button type="button" className="forgot" disabled title={t('auth.comingSoon')}>
+          <Link className="forgot" to="/forgot-password">
             {t('auth.forgot')}
-          </button>
+          </Link>
           {errorKey && (
             <p key={attempt} id={errorId} className="auth-error" role="alert">
               {t(errorKey)}
+              {errorKey === 'auth.errors.email_not_verified' && (
+                <>
+                  {' '}
+                  <Link to="/verify-email" state={{ email: identifier.includes('@') ? identifier.trim() : '' }}>
+                    {t('auth.resendLink')}
+                  </Link>
+                </>
+              )}
             </p>
           )}
           <Button type="submit" variant="primary" className="full" disabled={busy} aria-busy={busy}>
@@ -130,12 +119,9 @@ export function SignInPage() {
           </Button>
           <small>
             {t('auth.newHere')}{' '}
-            <button type="button" disabled title={t('auth.comingSoon')}>
-              {t('auth.createAccount')}
-            </button>
+            <Link to="/register">{t('auth.createAccount')}</Link>
           </small>
         </form>
-      </main>
-    </div>
+    </AuthLayout>
   )
 }

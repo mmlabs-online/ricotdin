@@ -11,5 +11,8 @@ const assert = {
   match(value: string, pattern: RegExp, message?: string): void {
     expect(value, message).toMatch(pattern)
   },
+  deepEqual<T>(actual: T, expected: T, message?: string): void {
+    expect(actual, message).toEqual(expected)
+  },
 }
 export default assert
