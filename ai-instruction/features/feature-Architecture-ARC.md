@@ -793,7 +793,7 @@ Uses ARC-11 foundation + ARC-12 logic on top of ARC-05/07/08/09 endpoints.
 ---
 
 ### ARC-14 — Wire admin screens
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (14a PR #59 overview + users, 14b PR #60 pipeline / usage / activity / audit, 14c keys / storage / config + models / features / health / API docs + Playwright admin smoke)
 
 **User Story**  
 As an admin, I want every admin screen working against the v2 admin API.

@@ -181,7 +181,9 @@
       "unavailable": "Một dịch vụ tạm thời không khả dụng. Hãy thử lại sau.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
-      "conflict": "Không làm được ở trạng thái hiện tại (ví dụ đang chạy, hoặc thiếu tệp). Hãy tải lại và kiểm tra."
+      "conflict": "Không làm được ở trạng thái hiện tại (ví dụ đang chạy, hoặc thiếu tệp). Hãy tải lại và kiểm tra.",
+      "invalid": "Máy chủ từ chối giá trị này. Hãy kiểm tra rồi thử lại.",
+      "duplicate": "Đã tồn tại (ví dụ mã tính năng đã được dùng)."
     },
     "pagination": {
       "label": "Trang",
@@ -386,7 +388,10 @@
         "warning": "Cảnh báo",
         "error": "Lỗi",
         "unknown": "Không rõ"
-      }
+      },
+      "subtitle": "Kiểm tra cơ sở dữ liệu, kho tệp, key và tác vụ của worker.",
+      "checks": "Các mục kiểm tra",
+      "refresh": "Kiểm tra lại"
     },
     "pipeline": {
       "subtitle": "Các cuộc họp trong hàng đợi xử lý. \"Xử lý lại\" chạy lại cuộc họp bị lỗi hoặc bị treo.",
@@ -563,6 +568,211 @@
       "meeting_shared": "Chia sẻ cuộc họp",
       "meeting_unshared": "Bỏ chia sẻ cuộc họp",
       "other": "Sự kiện khác"
+    },
+    "keys": {
+      "subtitle": "API key của nhà cung cấp. Key đã lưu không thể xem lại; chỉ hiện nhãn và 4 ký tự cuối.",
+      "lastCheck": "Kiểm tra gần nhất {{time}}",
+      "neverChecked": "Chưa kiểm tra key lần nào",
+      "runCheck": "Kiểm tra ngay",
+      "checking": "Đang kiểm tra…",
+      "checked": "Đã kiểm tra: {{healthy}} tốt, {{unhealthy}} lỗi, {{unknown}} không rõ.",
+      "noKeys": "Chưa lưu key nào. Dùng cài đặt trên máy chủ nếu có.",
+      "masked": "••••{{last4}}",
+      "status": {
+        "active": "Đang dùng",
+        "disabled": "Đã tắt"
+      },
+      "health": {
+        "healthy": "Tốt",
+        "unhealthy": "Lỗi",
+        "unknown": "Chưa kiểm tra"
+      },
+      "lastUsed": "Dùng lần cuối {{time}}",
+      "neverUsed": "Chưa dùng",
+      "reason": "Lý do: {{reason}}",
+      "disable": "Tắt",
+      "enable": "Bật",
+      "delete": "Xóa",
+      "disableOne": "Tắt {{label}}",
+      "enableOne": "Bật {{label}}",
+      "deleteOne": "Xóa {{label}}",
+      "reasonLabel": "Lý do (không bắt buộc)",
+      "confirm": {
+        "disable": {
+          "title": "Tắt key này?",
+          "body": "{{label}} (••••{{last4}}) ngừng được dùng ngay. Tắt không phải thu hồi: key bị lộ phải thu hồi tại nhà cung cấp. Không thể tắt key đang dùng cuối cùng của một nhà cung cấp."
+        },
+        "enable": {
+          "title": "Bật key này?",
+          "body": "{{label}} (••••{{last4}}) được dùng lại cho các yêu cầu mới."
+        },
+        "delete": {
+          "title": "Xóa key này?",
+          "body": "{{label}} (••••{{last4}}) bị xóa hẳn. Không thể xóa key đang dùng cuối cùng của một nhà cung cấp."
+        }
+      },
+      "done": {
+        "disable": "Đã tắt key.",
+        "enable": "Đã bật key.",
+        "delete": "Đã xóa key."
+      },
+      "addTitle": "Thêm key",
+      "provider": "Nhà cung cấp",
+      "label": "Nhãn",
+      "key": "Key",
+      "add": "Lưu key",
+      "saved": "Đã lưu key. Không thể xem lại key này.",
+      "errors": {
+        "label": "Hãy nhập nhãn.",
+        "labelLong": "Nhãn tối đa 80 ký tự.",
+        "keyShort": "Key quá ngắn (ít nhất 8 ký tự).",
+        "keyLong": "Key quá dài (tối đa 512 ký tự).",
+        "keyChars": "Key không được chứa khoảng trắng hay ký tự đặc biệt.",
+        "lastActive": "Đây là key đang dùng cuối cùng của nhà cung cấp này. Hãy thêm key khác trước.",
+        "noSecret": "Máy chủ chưa lưu được key: chưa đặt KEY_ENCRYPTION_SECRET."
+      },
+      "secureTitle": "Key chỉ ghi, không đọc lại",
+      "secureBody": "Key được mã hóa khi lưu và không bao giờ gửi lại về trình duyệt."
+    },
+    "config": {
+      "subtitle": "Cài đặt chung. Mỗi thay đổi đều hỏi xác nhận và được ghi vào nhật ký kiểm toán.",
+      "title": "Cài đặt",
+      "empty": "Không có cài đặt.",
+      "none": "chưa đặt",
+      "on": "Bật",
+      "off": "Tắt",
+      "save": "Lưu",
+      "keepForever": "Để trống = giữ mãi",
+      "updated": "Đổi lúc {{time}}",
+      "keys": {
+        "retention": {
+          "name": "Thời gian giữ âm thanh (ngày)",
+          "help": "Bản ghi gốc cũ hơn số ngày này bị worker xóa mỗi ngày một lần. Bản ghi lời, ghi chú và chat vẫn giữ. Để trống = giữ mãi."
+        },
+        "hack": {
+          "name": "Sửa tua cho bản ghi từ trình duyệt",
+          "help": "Cho phép tua trong bản ghi làm trên trình duyệt, bằng cách tải cả tệp trước."
+        }
+      },
+      "confirmTitle": "Đổi \"{{name}}\"?",
+      "confirmBody": "Từ {{from}} thành {{to}}.",
+      "retentionWarning": "Ở lần chạy tới, worker sẽ xóa vĩnh viễn âm thanh của mọi cuộc họp cũ hơn {{days}} ngày. Không thể hoàn tác.",
+      "saved": "Đã lưu \"{{name}}\".",
+      "errors": {
+        "retention": "Nhập số ngày nguyên từ 1 đến 3650, hoặc để trống.",
+        "number": "Hãy nhập một số.",
+        "tooLong": "Tối đa 2000 ký tự."
+      }
+    },
+    "models": {
+      "title": "Mô hình AI",
+      "allowed": "Mô hình người dùng được chọn",
+      "default": "Mặc định của hệ thống",
+      "help": "Cuộc họp đã xử lý vẫn giữ mô hình đã dùng.",
+      "save": "Lưu mô hình",
+      "confirmTitle": "Lưu mô hình AI?",
+      "confirmDefault": "Mặc định: {{model}}.",
+      "confirmAllowed": "Người dùng được chọn: {{models}}.",
+      "saved": "Đã lưu mô hình AI.",
+      "errors": {
+        "empty": "Cho phép ít nhất một mô hình.",
+        "default": "Mô hình mặc định phải nằm trong danh sách được chọn."
+      }
+    },
+    "features": {
+      "subtitle": "Danh mục tính năng: trạng thái và ghi chú của từng tính năng.",
+      "search": "Tìm tính năng",
+      "searchPlaceholder": "Tìm theo mã, tên hoặc mô tả",
+      "module": "Mô-đun",
+      "allModules": "Mọi mô-đun",
+      "status": "Trạng thái",
+      "allStatuses": "Mọi trạng thái",
+      "statuses": {
+        "done": "Xong",
+        "partial": "Một phần",
+        "not_started": "Chưa làm"
+      },
+      "priority": "Ưu tiên",
+      "noPriority": "Không",
+      "priorities": {
+        "high": "Cao",
+        "medium": "Vừa",
+        "low": "Thấp"
+      },
+      "empty": "Không có tính năng nào khớp.",
+      "notFound": "Không tìm thấy tính năng này.",
+      "caption_one": "{{count}} tính năng",
+      "caption_other": "{{count}} tính năng",
+      "col": {
+        "key": "Mã",
+        "title": "Tên",
+        "status": "Trạng thái"
+      },
+      "editTitle": "Sửa {{key}}",
+      "close": "Đóng",
+      "meta": "{{module}} · đổi lúc {{time}} bởi {{by}}",
+      "description": "Mô tả",
+      "content": "Chi tiết (markdown, hiện dạng chữ)",
+      "changeNote": "Ghi chú thay đổi",
+      "lists": {
+        "note_tags": "Thẻ",
+        "depends_on": "Phụ thuộc",
+        "blocks": "Chặn",
+        "key_files": "Tệp chính"
+      },
+      "listHint": "Danh sách: mỗi dòng một mục.",
+      "save": "Lưu thay đổi",
+      "saved": "Đã lưu {{key}}.",
+      "noChanges": "Không có gì thay đổi.",
+      "createTitle": "Thêm tính năng",
+      "pickHint": "Chọn một tính năng trong danh sách để sửa, hoặc thêm mới.",
+      "create": {
+        "key": "Mã (TIỀN TỐ-SỐ)",
+        "module_prefix": "Tiền tố mô-đun",
+        "module_name": "Tên mô-đun",
+        "title": "Tên"
+      },
+      "createButton": "Thêm tính năng",
+      "created": "Đã thêm {{key}}.",
+      "errors": {
+        "required": "Hãy điền mã, tiền tố mô-đun, tên mô-đun và tên.",
+        "key": "Mã có dạng TIỀNTỐ-SỐ, ví dụ ARC-20.",
+        "prefix": "Tiền tố mô-đun gồm 1–10 chữ hoặc số.",
+        "title": "Hãy nhập tên."
+      }
+    },
+    "storage": {
+      "subtitle": "Bản ghi và ảnh đại diện được lưu trong Google Drive.",
+      "connection": "Google Drive",
+      "connected": "Đã kết nối",
+      "noAccount": "Chưa kết nối tài khoản",
+      "problem": {
+        "not_configured": "Chưa kết nối",
+        "token_refresh_failed": "Quyền truy cập hết hạn",
+        "root_missing": "Thiếu thư mục",
+        "shared_root": "Thư mục đang được chia sẻ",
+        "error": "Lỗi"
+      },
+      "files": "Tệp đã lưu",
+      "filesHint": "Bản ghi và ảnh đại diện",
+      "used": "Dung lượng app dùng",
+      "usedHint": "Tổng các tệp đã lưu",
+      "quota": "Dung lượng Drive",
+      "quotaOf": "trên {{limit}}",
+      "noLimit": "Drive không báo giới hạn",
+      "howTitle": "Kết nối hoặc kết nối lại Drive",
+      "howBody": "Drive được kết nối trên máy chủ bằng script connect_gdrive (xem hướng dẫn vận hành). Không đổi được từ trang này."
+    },
+    "docs": {
+      "subtitle": "Tài liệu API, khi được bật.",
+      "title": "Tài liệu API",
+      "on": "Có sẵn",
+      "off": "Đang tắt",
+      "swagger": "Tài liệu tương tác (Swagger)",
+      "redoc": "Tài liệu tham khảo (ReDoc)",
+      "openapi": "Tệp OpenAPI (JSON)",
+      "newTab": "(mở trong tab mới)",
+      "offHelp": "API chỉ phục vụ tài liệu khi máy chủ bật API_DOCS=1. Nên tắt ở môi trường thật nếu không cần."
     }
   },
   "error": {

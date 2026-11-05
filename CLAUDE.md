@@ -876,6 +876,20 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   bounded JSON text (`metadataText`). `useUrlState` + `AdminPagination` (`AdminParts`) and `LogFilters`
   (filters apply with a button, 3.2.2) are shared. `.table-scroll` is `position: relative` so sr-only
   cells cannot widen the page.
+  14c (ARC-14 done): `/admin/keys` (per provider, write-only: the key field is cleared after every
+  send and never re-rendered; enable / disable (+ reason) / delete confirmed; 422 →
+  `admin.keys.errors.lastActive`; "run check" = `POST /admin/keys/healthcheck`, 10/h for all admins),
+  `/admin/storage` (Drive connection + stored files, read only — Drive is connected with
+  `connect_gdrive`), `/admin/config` (each `app_config` row saved on its own with a confirm; retention
+  days warn that the next worker run deletes audio for good; `user_hack_audio_render` a switch; unknown
+  objects read only) + AI models (allow-list + default, `generationProblem`), `/admin/features`
+  (registry ≤ 200 rows filtered in the page, URL `module`/`status`/`q`/`key`; the editor PATCHes only
+  changed fields (`featureChanges`), lists one item per line), `/admin/health` (check messages shown
+  as text) and `/admin/docs` (probes `<api>/openapi.json`; links only when `API_DOCS=1`). Errors on
+  these screens go through `configErrorKey` (400/422 = invalid value, 409 = duplicate). The
+  placeholder `AdminSectionPage` is gone. **E2E:** `e2e/admin.spec.ts` (sign in as `e2e_admin`, users,
+  requeue the seeded failed meeting → the stand-in worker finishes it, key check + save a key, audit
+  rows); `tests/e2e_server.py` seeds the admin and the failed meeting (+ its `storage_objects` row).
 
 ## 1. What we are building
 

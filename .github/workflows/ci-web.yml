@@ -47,7 +47,7 @@ jobs:
         run: npm run build
 
   e2e:
-    name: e2e core flow (EN + VI)
+    name: e2e core flow (EN + VI) + admin smoke
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: web
