@@ -47,7 +47,7 @@ export function AdminActivityPage() {
           </Button>
         </p>
       )}
-      <section className="admin-card timeline-card" aria-label={t('admin.tabs.activity')}>
+      <section className="admin-card timeline-card">
         {feed.isPending ? (
           <p className="tab-note">{t('common.loading')}</p>
         ) : !feed.data ? (
@@ -71,7 +71,9 @@ export function AdminActivityPage() {
                     {a.meeting_title && <span className="bidi-isolate log-meeting">{displayText(a.meeting_title)}</span>}
                     {meta && <code className="log-meta">{displayText(meta)}</code>}
                   </span>
-                  <small>{f.dateTime(a.created_at)}</small>
+                  <small>
+                    <time dateTime={a.created_at}>{f.dateTime(a.created_at)}</time>
+                  </small>
                 </li>
               )
             })}

@@ -118,6 +118,7 @@ export function useClampPage(total: number | undefined, perPage: number, page: n
 
 export function AdminPagination({ page, perPage, total, onPage }: { page: number; perPage: number; total: number; onPage: (page: number) => void }) {
   const { t } = useTranslation()
+  if (total === 0) return null
   const from = total === 0 ? 0 : (page - 1) * perPage + 1
   const to = Math.min(total, page * perPage)
   return (

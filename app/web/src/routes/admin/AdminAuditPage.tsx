@@ -74,7 +74,9 @@ export function AdminAuditPage() {
                   const userTarget = a.target_type === 'user' && uuidOrNull(a.target_id)
                   return (
                     <tr key={a.id}>
-                      <td>{f.dateTime(a.created_at)}</td>
+                      <td>
+                        <time dateTime={a.created_at}>{f.dateTime(a.created_at)}</time>
+                      </td>
                       <th scope="row" className="bidi-isolate">
                         {a.actor_email ? displayText(a.actor_email) : t('admin.overview.system')}
                       </th>

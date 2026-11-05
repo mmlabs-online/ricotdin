@@ -80,7 +80,7 @@ export function AdminUsagePage() {
           )}
         </div>
       </form>
-      <p className="tab-note range-note">{t('admin.usage.showing', { from: applied.from, to: applied.to })}</p>
+      <p className="tab-note range-note">{t('admin.usage.showing', { from: f.day(applied.from), to: f.day(applied.to) })}</p>
 
       {usage.isPending ? (
         <p className="tab-note">{t('common.loading')}</p>
@@ -170,13 +170,14 @@ function UsageChart({ daily, unit, range }: { daily: DailyTotal[]; unit: 'tokens
   const name = useProviderName()
   const head = useId()
   const bars = dailyBars(daily, unit, range)
+  const [hover, setHover] = useState<(typeof bars.days)[number] | null>(null)
   const value = (q: number) => (unit === 'tokens' ? t('admin.usage.tokensValue', { n: f.number(Math.round(q)) }) : t('admin.usage.minutesValue', { n: f.minutes(q) }))
   const title = unit === 'tokens' ? 'admin.usage.chartTokens' : 'admin.usage.chartAudio'
   return (
     <section className="admin-card" aria-labelledby={head}>
       <div className="card-head">
         <h2 id={head}>{t(title)}</h2>
-        {bars.providers.length > 1 && (
+        {bars.providers.length > 0 && (
           <ul className="chart-legend" aria-label={t('admin.usage.legend')}>
             {bars.providers.map((p) => (
               <li key={p}>
@@ -190,19 +191,12 @@ function UsageChart({ daily, unit, range }: { daily: DailyTotal[]; unit: 'tokens
         <p className="tab-note">{t('admin.usage.noData')}</p>
       ) : (
         <>
-          <div className="usage-chart" role="img" aria-label={t('admin.usage.chartSummary', { days: bars.days.filter((d) => d.total > 0).length, max: value(bars.max) })}>
+          <div className="usage-chart" onMouseLeave={() => setHover(null)} role="img" aria-label={t('admin.usage.chartSummary', { days: bars.days.filter((d) => d.total > 0).length, max: value(bars.max) })}>
             {bars.days.map((d) => (
-              <div className="usage-day" key={d.date}>
+              <div className={d.date === hover?.date ? 'usage-day active' : 'usage-day'} key={d.date} onMouseEnter={() => setHover(d)}>
                 <div className="usage-stack" style={{ height: `${(d.total / bars.max) * 100}%` }}>
                   {d.parts.map((p) => (
                     <i key={p.provider} className={`series-${providerSlot(p.provider)}`} style={{ flexGrow: p.quantity }} />
-                  ))}
-                </div>
-                <div className="usage-tip" aria-hidden="true">
-                  <strong>{f.day(d.date)}</strong>
-                  {d.parts.length === 0 && <span>{t('admin.usage.noUsageDay')}</span>}
-                  {d.parts.map((p) => (
-                    <span key={p.provider}>{t('admin.usage.tipLine', { name: name(p.provider), value: value(p.quantity) })}</span>
                   ))}
                 </div>
               </div>
@@ -212,8 +206,19 @@ function UsageChart({ daily, unit, range }: { daily: DailyTotal[]; unit: 'tokens
             <span>{f.day(bars.days[0]?.date ?? range.from)}</span>
             <span>{f.day(bars.days[bars.days.length - 1]?.date ?? range.to)}</span>
           </div>
+          {/* the pointed day, below the chart (never over other content); keyboard users have the table */}
+          <p className="usage-dayline" aria-hidden="true">
+            {hover ? (
+              <>
+                <strong>{f.day(hover.date)}</strong>
+                {hover.parts.length === 0 ? <span>{t('admin.usage.noUsageDay')}</span> : hover.parts.map((p) => <span key={p.provider}>{t('admin.usage.tipLine', { name: name(p.provider), value: value(p.quantity) })}</span>)}
+              </>
+            ) : (
+              <span>{t('admin.usage.pointHint')}</span>
+            )}
+          </p>
           <details className="table-view">
-            <summary>{t('admin.usage.showTable')}</summary>
+            <summary>{t('admin.usage.showTableOf', { title: t(title) })}</summary>
             <div className="table-scroll" tabIndex={0} role="region" aria-label={t('admin.usage.tableOf', { title: t(title) })}>
               <table className="admin-table">
                 <thead>

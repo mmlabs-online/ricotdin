@@ -450,7 +450,10 @@
         }
       },
       "hoursMinutes": "{{h}} giờ {{m}} phút",
-      "minutesSeconds": "{{m}} phút {{s}} giây"
+      "minutesSeconds": "{{m}} phút {{s}} giây",
+      "pause": "Tạm dừng tự cập nhật",
+      "resume": "Tiếp tục tự cập nhật",
+      "autoRefreshPaused": "Đã tạm dừng tự cập nhật"
     },
     "usage": {
       "subtitle": "Số lần gọi nhà cung cấp AI trong một khoảng ngày. Token và phút âm thanh được tính riêng.",
@@ -482,7 +485,6 @@
       "chartSummary": "{{days}} ngày có sử dụng, ngày cao nhất {{max}}. Bảng bên dưới có đủ số liệu.",
       "tokensValue": "{{n}} token",
       "tipLine": "{{name}}: {{value}}",
-      "showTable": "Xem dạng bảng",
       "noData": "Không có sử dụng trong khoảng này.",
       "tokenTable": "Tính theo token",
       "audioTable": "Tính theo âm thanh",
@@ -516,7 +518,9 @@
       "files": "Tệp đã lưu",
       "stored": "Dung lượng đã dùng",
       "tableOf": "{{title}} (bảng)",
-      "noUsageDay": "Không có sử dụng"
+      "noUsageDay": "Không có sử dụng",
+      "showTableOf": "Xem {{title}} dạng bảng",
+      "pointHint": "Trỏ vào một ngày để xem số liệu. Bảng có đủ mọi giá trị."
     },
     "activity": {
       "subtitle": "Người dùng đã làm gì, mới nhất trước.",

@@ -28,11 +28,15 @@ export function AdminPipelinePage() {
   const url = useUrlState()
   const filter = pipelineFilter(url.get('status'))
   const page = url.page
-  const overview = usePipelineOverview()
-  const jobs = usePipelineJobs({ status: filter, page, perPage: PER_PAGE })
+  // 2.2.2: the admin can pause the 10 s refresh; it also waits while a confirm is open or a batch runs
+  const [paused, setPaused] = useState(false)
+  const [ask, setAsk] = useState<JobRow[] | null>(null) // meetings to requeue, asked not sent
+  const [running, setRunning] = useState(false) // a requeue batch is going (one request at a time)
+  const live = !paused && ask === null && !running
+  const overview = usePipelineOverview(live)
+  const jobs = usePipelineJobs({ status: filter, page, perPage: PER_PAGE }, live)
   const requeue = useRequeue()
   const refresh = useRefreshPipeline()
-  const [running, setRunning] = useState(false) // a requeue batch is going (one request at a time)
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true
@@ -40,7 +44,6 @@ export function AdminPipelinePage() {
       alive.current = false // leaving the page stops the batch: each requeue charges an owner
     }
   }, [])
-  const [ask, setAsk] = useState<JobRow[] | null>(null) // meetings to requeue, asked not sent
   const [notice, setNotice] = useNotice()
   const f = useFormatters()
   const ids = { caption: useId(), body: useId() }
@@ -73,6 +76,8 @@ export function AdminPipelinePage() {
     await refresh()
     if (!alive.current) return
     setRunning(false)
+    // the row's Requeue button may be gone now: keep focus on a control that stays
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-focus="requeue-all"]')?.focus())
     if (list.length === 1 && failed.length === 1) setNotice(adminErrorKey(lastError), 'error')
     else
       setNotice(failed.length ? 'admin.pipeline.requeuePartial' : 'admin.pipeline.requeued', failed.length ? 'warning' : 'success', {
@@ -99,9 +104,12 @@ export function AdminPipelinePage() {
       <NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />
       <p className="refresh-line">
         <span>
-          <span className="live-dot" aria-hidden="true" /> {t('admin.pipeline.autoRefresh')}
+          <span className={paused ? 'live-dot paused' : 'live-dot'} aria-hidden="true" /> {t(paused ? 'admin.pipeline.autoRefreshPaused' : 'admin.pipeline.autoRefresh')}
         </span>
         {jobs.dataUpdatedAt > 0 && <span>{t('admin.pipeline.updated', { time: f.time(jobs.dataUpdatedAt) })}</span>}
+        <Button variant="ghost" aria-pressed={paused} onClick={() => setPaused((v) => !v)}>
+          {t(paused ? 'admin.pipeline.resume' : 'admin.pipeline.pause')}
+        </Button>
       </p>
 
       <div className="pipeline-stats" role="group" aria-label={t('admin.pipeline.countsLabel')}>
@@ -130,7 +138,7 @@ export function AdminPipelinePage() {
             </button>
           ))}
         </div>
-        <Button variant="danger" onClick={() => eligible.length && !running && setAsk(eligible)} aria-disabled={eligible.length === 0 || running} aria-busy={running}>
+        <Button data-focus="requeue-all" variant="danger" onClick={() => eligible.length && !running && setAsk(eligible)} aria-disabled={eligible.length === 0 || running} aria-busy={running}>
           {t('admin.pipeline.requeueAll', { count: eligible.length })}
         </Button>
       </div>

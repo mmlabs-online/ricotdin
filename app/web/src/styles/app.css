@@ -358,9 +358,9 @@ ul.timeline { list-style: none; margin: 0; padding: 0; }
 
 /* Admin pipeline, usage, activity, audit (ARC-14b) */
 .admin-standalone {
-  /* categorical slots (dataviz reference palette, light; validated: adjacent CVD ΔE ≥ 9.2) — a
-     provider keeps its slot (lib/admin/ops.ts PROVIDER_ORDER); aqua < 3:1 → a table view exists */
-  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #008300; --series-5: #6250d6; --series-6: #8a8a85;
+  /* categorical slots (dataviz reference palette, light; validated; teal darkened to 3:1, adjacent CVD ΔE 7.2 → 2 px gaps + a table view as secondary
+     encoding) — a provider keeps its slot (lib/admin/ops.ts PROVIDER_ORDER) */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #14866a; --series-4: #008300; --series-5: #6250d6; --series-6: #8a8a85;
 }
 /* scoped to beat index.css `.chart-legend i` */
 .admin-standalone .series-1 { background: var(--series-1); } .admin-standalone .series-2 { background: var(--series-2); }
@@ -392,11 +392,9 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .usage-stack { width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
 .usage-stack i { display: block; min-height: 0; }
 .usage-stack i:last-child { border-radius: 4px 4px 0 0; }
-.usage-tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 2; min-width: 150px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 4px 14px rgb(0 0 0 / .12); font-size: 12px; flex-direction: column; gap: 2px; pointer-events: none; }
-.usage-day:hover .usage-tip { display: flex; }
-.usage-day:hover .usage-stack { opacity: .85; }
-.usage-day:first-child .usage-tip { left: 0; transform: none; }
-.usage-day:last-child .usage-tip { left: auto; right: 0; transform: none; }
+.usage-day.active .usage-stack { opacity: .8; }
+.usage-dayline { min-height: 2.6em; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.usage-dayline strong { color: var(--text); }
 .usage-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; }
 .table-view { margin-top: 12px; font-size: 13px; }
 .table-view summary { cursor: pointer; color: var(--primary); font-weight: 600; }
@@ -405,3 +403,5 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .log-meeting { font-size: 13px; color: var(--muted); }
 .filter-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 12px; overflow-wrap: anywhere; }
 @media (max-width: 767px) { .log-event { grid-template-columns: 1fr; } .pipeline-stats { grid-template-columns: 1fr 1fr; } }
+.live-dot.paused { background: var(--muted); }
+.refresh-line { align-items: center; }

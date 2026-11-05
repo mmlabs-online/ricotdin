@@ -450,7 +450,10 @@
         }
       },
       "hoursMinutes": "{{h}} h {{m}} min",
-      "minutesSeconds": "{{m}} min {{s}} s"
+      "minutesSeconds": "{{m}} min {{s}} s",
+      "pause": "Pause auto-refresh",
+      "resume": "Resume auto-refresh",
+      "autoRefreshPaused": "Auto-refresh paused"
     },
     "usage": {
       "subtitle": "AI provider calls for a date range. Tokens and audio minutes are counted separately.",
@@ -482,7 +485,6 @@
       "chartSummary": "{{days}} days with usage, highest day {{max}}. The table below has every value.",
       "tokensValue": "{{n}} tokens",
       "tipLine": "{{name}}: {{value}}",
-      "showTable": "Show as table",
       "noData": "No usage in this range.",
       "tokenTable": "Token-metered",
       "audioTable": "Audio-metered",
@@ -516,7 +518,9 @@
       "files": "Stored files",
       "stored": "Storage used",
       "tableOf": "{{title}} (table)",
-      "noUsageDay": "No usage"
+      "noUsageDay": "No usage",
+      "showTableOf": "Show {{title}} as a table",
+      "pointHint": "Point at a day to see its numbers. The table has every value."
     },
     "activity": {
       "subtitle": "What users did, newest first.",

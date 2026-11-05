@@ -65,12 +65,12 @@ const query = (params: Record<string, string | number | null | undefined>) => {
   return q.toString()
 }
 
-export function usePipelineJobs(p: { status: PipelineFilter; page: number; perPage: number }) {
+export function usePipelineJobs(p: { status: PipelineFilter; page: number; perPage: number }, live = true) {
   const fetchApi = useFetchApi()
   return useQuery({
     queryKey: ['admin', 'pipeline', 'jobs', p],
     placeholderData: keepPreviousData,
-    refetchInterval: PIPELINE_REFRESH_MS, // paused while the tab is hidden (TanStack default)
+    refetchInterval: live ? PIPELINE_REFRESH_MS : false, // also paused while the tab is hidden (TanStack default)
     queryFn: () =>
       apiJson<{ jobs: JobRow[]; total: number; page: number; perPage: number }>(
         fetchApi,
@@ -79,11 +79,11 @@ export function usePipelineJobs(p: { status: PipelineFilter; page: number; perPa
   })
 }
 
-export function usePipelineOverview() {
+export function usePipelineOverview(live = true) {
   const fetchApi = useFetchApi()
   return useQuery({
     queryKey: ['admin', 'pipeline', 'overview'],
-    refetchInterval: PIPELINE_REFRESH_MS,
+    refetchInterval: live ? PIPELINE_REFRESH_MS : false,
     queryFn: () =>
       apiJson<{ counts: Record<'pending' | 'processing' | 'done' | 'failed' | 'stuck', number>; avg_processing_secs: number | null; total: number }>(
         fetchApi,
