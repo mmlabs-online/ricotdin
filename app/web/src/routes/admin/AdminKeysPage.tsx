@@ -119,12 +119,12 @@ export function AdminKeysPage() {
                       </Status>
                       <Status type={healthStatusKind(k.health_status)}>
                         <span className="sr-only">{t('admin.keys.healthLabel')}</span>
-                        {t(`admin.keys.health.${k.health_status === 'healthy' || k.health_status === 'unhealthy' ? k.health_status : 'unknown'}`)}
+                        {t(`admin.keys.health.${k.health_status === 'healthy' || k.health_status === 'unhealthy' ? k.health_status : k.health_checked_at ? 'inconclusive' : 'unknown'}`)}
                       </Status>
                     </div>
                     <div className="key-detail">
                       <small>{k.last_used_at ? t('admin.keys.lastUsed', { time: f.dateTime(k.last_used_at) }) : t('admin.keys.neverUsed')}</small>
-                      {k.health_detail && <small className="bidi-isolate">{displayText(k.health_detail)}</small>}
+                      {k.health_checked_at && <small>{t('admin.keys.checkedAt', { time: f.dateTime(k.health_checked_at) })}</small>}
                       {k.status === 'disabled' && k.disabled_reason && <small className="bidi-isolate">{t('admin.keys.reason', { reason: displayText(k.disabled_reason) })}</small>}
                     </div>
                     <div className="key-actions">

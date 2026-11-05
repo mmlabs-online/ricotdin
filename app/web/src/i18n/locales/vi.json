@@ -595,7 +595,8 @@
       "health": {
         "healthy": "Tốt",
         "unhealthy": "Lỗi",
-        "unknown": "Chưa kiểm tra"
+        "unknown": "Chưa kiểm tra",
+        "inconclusive": "Chưa rõ"
       },
       "lastUsed": "Dùng lần cuối {{time}}",
       "neverUsed": "Chưa dùng",
@@ -646,7 +647,8 @@
       "secureBody": "Key được mã hóa khi lưu và không bao giờ gửi lại về trình duyệt.",
       "endingIn": "key kết thúc bằng {{last4}}",
       "statusLabel": "Trạng thái:",
-      "healthLabel": "Tình trạng:"
+      "healthLabel": "Tình trạng:",
+      "checkedAt": "Kiểm tra lúc {{time}}"
     },
     "config": {
       "subtitle": "Cài đặt chung. Mỗi thay đổi đều hỏi xác nhận và được ghi vào nhật ký kiểm toán.",

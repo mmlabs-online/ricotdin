@@ -11,7 +11,7 @@ const a = en.admin
 
 test.use({ locale: 'en-US' })
 
-test('admin: users, requeue, key check', async ({ page }) => {
+test('admin: users, requeue, keys, config, features', async ({ page }) => {
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/sign-in/)
   await page.locator('input[name=identifier]').fill(ADMIN)
@@ -56,8 +56,30 @@ test('admin: users, requeue, key check', async ({ page }) => {
   await expect(page.getByLabel(a.keys.key, { exact: true })).toHaveValue('')
   expect(await page.content()).not.toContain('e2e-secret-key-0000')
 
+  // config: a setting change asks first and is saved
+  await page.getByRole('link', { name: a.tabs.config }).click()
+  const seekFix = page.getByRole('switch', { name: new RegExp(a.config.keys.hack.name) })
+  await expect(seekFix).toHaveAttribute('aria-checked', 'false')
+  await seekFix.click()
+  await page.getByRole('dialog').getByRole('button', { name: a.config.save }).click()
+  await expect(seekFix).toHaveAttribute('aria-checked', 'true')
+
+  // features: add one, edit it (only the change is sent), the list shows it
+  await page.getByRole('link', { name: a.tabs.features }).click()
+  await page.getByLabel(a.features.create.key).fill('e2e-1')
+  await page.getByLabel(a.features.create.module_prefix).fill('E2E')
+  await page.getByLabel(a.features.create.module_name).fill('End to end')
+  await page.getByLabel(a.features.create.title).fill('Smoke feature')
+  await page.getByRole('button', { name: a.features.createButton }).click()
+  await expect(page.getByRole('heading', { name: 'Edit E2E-1' })).toBeFocused()
+  await page.getByLabel(a.features.status, { exact: true }).last().selectOption('done')
+  await page.getByRole('button', { name: a.features.save }).click()
+  await expect(page.locator('.notice-banner')).toContainText('E2E-1 saved.')
+
   // every admin action above is in the audit log
   await page.getByRole('link', { name: a.tabs.audit }).click()
   await expect(page.locator('.audit-table')).toContainText('meeting.requeue')
   await expect(page.locator('.audit-table')).toContainText('admin_config.create')
+  await expect(page.locator('.audit-table')).toContainText('config.update')
+  await expect(page.locator('.audit-table')).toContainText('feature.update')
 })

@@ -420,7 +420,8 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .setting-text { flex: 1 1 260px; min-width: 0; }
 .setting-text strong { font-size: 14px; overflow-wrap: anywhere; } .setting-text p, .setting-text small { font-size: 12px; color: var(--muted); }
 .setting-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.setting-form input { width: 180px; max-width: 100%; }
+.setting-form input { width: 180px; max-width: 100%; min-height: 40px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 10px; font-size: 14px; }
+.setting-form input[aria-invalid="true"] { border-color: var(--danger); }
 .toggle-btn { min-width: 70px; }
 .toggle-btn.on { background: var(--primary); color: #fff; border-color: var(--primary); }
 .models-form fieldset { border: 0; margin: 0 0 12px; padding: 0; }

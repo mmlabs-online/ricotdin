@@ -595,7 +595,8 @@
       "health": {
         "healthy": "Healthy",
         "unhealthy": "Failing",
-        "unknown": "Not checked"
+        "unknown": "Not checked",
+        "inconclusive": "Inconclusive"
       },
       "lastUsed": "Last used {{time}}",
       "neverUsed": "Never used",
@@ -646,7 +647,8 @@
       "secureBody": "Keys are encrypted at rest and never sent back to the browser.",
       "endingIn": "key ending in {{last4}}",
       "statusLabel": "Status:",
-      "healthLabel": "Health:"
+      "healthLabel": "Health:",
+      "checkedAt": "Checked {{time}}"
     },
     "config": {
       "subtitle": "Workspace settings. Each change asks first and is written to the audit log.",
