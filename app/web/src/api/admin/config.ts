@@ -66,8 +66,11 @@ export function useKeyMutations() {
   const qc = useQueryClient()
   const done = () => void qc.invalidateQueries({ queryKey: keysKey })
   return {
+    // the plaintext key is this mutation's variable: never keep it in the mutation cache
+    // (gcTime 0) and the form calls reset() as soon as the request settles
     add: useMutation({
       mutationFn: (v: { configKey: string; label: string; key: string }) => apiJson<{ key: KeyRow }>(fetchApi, '/admin/keys', { method: 'POST', body: v }),
+      gcTime: 0,
       onSettled: done,
     }),
     status: useMutation({

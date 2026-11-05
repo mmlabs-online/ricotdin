@@ -195,7 +195,8 @@ function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'succe
     add
       .mutateAsync({ configKey: `${provider}_api_key`, label: label.trim(), key: key.trim() })
       .then(() => {
-        setKey('') // the secret leaves the page at once
+        setKey('') // the secret leaves the page at once (field + mutation state)
+        add.reset()
         setLabel('')
         setSaved(true)
         setTries((n) => n + 1)
@@ -203,6 +204,7 @@ function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'succe
       })
       .catch((err: unknown) => {
         setKey('')
+        add.reset()
         onNotice(err instanceof ApiError && err.status === 503 ? 'admin.keys.errors.noSecret' : adminErrorKey(err), 'error')
       })
   }
@@ -236,6 +238,10 @@ function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'succe
             value={key}
             autoComplete="new-password"
             spellCheck={false}
+            // not a site password: keep password managers from offering to save it
+            data-1p-ignore=""
+            data-lpignore="true"
+            data-form-type="other"
             onChange={(e) => setKey(e.target.value)}
             aria-invalid={problem !== null && !labelBad}
             aria-describedby={problem !== null && !labelBad ? ids.note : undefined}
