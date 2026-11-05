@@ -115,7 +115,7 @@ export function AdminUsagePage() {
           </div>
           <UsageChart daily={usage.data.dailyTotals} unit="tokens" range={applied} />
           <UsageChart daily={usage.data.dailyTotals} unit="audio_seconds" range={applied} />
-          <div className="meter-grid">
+          <div className="meter-stack">
             <MeterTable rows={rows.filter((r) => r.unit === 'tokens')} unit="tokens" byOperation={showOperation} />
             <MeterTable rows={rows.filter((r) => r.unit === 'audio_seconds')} unit="audio_seconds" byOperation={showOperation} />
           </div>
@@ -281,6 +281,7 @@ function MeterTable({ rows, unit, byOperation }: { rows: UsageRow[]; unit: 'toke
                   <>
                     <th scope="col">{t('admin.usage.col.input')}</th>
                     <th scope="col">{t('admin.usage.col.output')}</th>
+                    <th scope="col">{t('admin.usage.col.total')}</th>
                   </>
                 ) : (
                   <th scope="col">{t('admin.usage.col.minutes')}</th>
@@ -303,6 +304,7 @@ function MeterTable({ rows, unit, byOperation }: { rows: UsageRow[]; unit: 'toke
                     <>
                       <td className="num">{f.number(r.total_input_tokens ?? 0)}</td>
                       <td className="num">{f.number(r.total_output_tokens ?? 0)}</td>
+                      <td className="num">{f.number(r.total_tokens ?? 0)}</td>
                     </>
                   ) : (
                     <td className="num">{f.minutes(r.total_audio_seconds ?? 0)}</td>

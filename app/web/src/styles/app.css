@@ -405,3 +405,4 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 @media (max-width: 767px) { .log-event { grid-template-columns: 1fr; } .pipeline-stats { grid-template-columns: 1fr 1fr; } }
 .live-dot.paused { background: var(--muted); }
 .refresh-line { align-items: center; }
+.meter-stack { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }

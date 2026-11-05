@@ -453,7 +453,8 @@
       "minutesSeconds": "{{m}} min {{s}} s",
       "pause": "Pause auto-refresh",
       "resume": "Resume auto-refresh",
-      "autoRefreshPaused": "Auto-refresh paused"
+      "autoRefreshPaused": "Auto-refresh paused",
+      "refreshFailed": "Refresh failed; showing the last list"
     },
     "usage": {
       "subtitle": "AI provider calls for a date range. Tokens and audio minutes are counted separately.",
@@ -500,7 +501,8 @@
         "output": "Output tokens",
         "minutes": "Minutes",
         "limited": "Rate-limited",
-        "errors": "Errors"
+        "errors": "Errors",
+        "total": "Total tokens"
       },
       "provider": {
         "gemini": "Gemini",

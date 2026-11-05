@@ -107,6 +107,7 @@ export function AdminPipelinePage() {
           <span className={paused ? 'live-dot paused' : 'live-dot'} aria-hidden="true" /> {t(paused ? 'admin.pipeline.autoRefreshPaused' : 'admin.pipeline.autoRefresh')}
         </span>
         {jobs.dataUpdatedAt > 0 && <span>{t('admin.pipeline.updated', { time: f.time(jobs.dataUpdatedAt) })}</span>}
+        {jobs.isError && jobs.data && <span className="attention-text">{t('admin.pipeline.refreshFailed')}</span>}
         <Button variant="ghost" aria-pressed={paused} onClick={() => setPaused((v) => !v)}>
           {t(paused ? 'admin.pipeline.resume' : 'admin.pipeline.pause')}
         </Button>

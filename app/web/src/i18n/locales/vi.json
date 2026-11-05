@@ -453,7 +453,8 @@
       "minutesSeconds": "{{m}} phút {{s}} giây",
       "pause": "Tạm dừng tự cập nhật",
       "resume": "Tiếp tục tự cập nhật",
-      "autoRefreshPaused": "Đã tạm dừng tự cập nhật"
+      "autoRefreshPaused": "Đã tạm dừng tự cập nhật",
+      "refreshFailed": "Cập nhật lỗi; đang hiện danh sách trước"
     },
     "usage": {
       "subtitle": "Số lần gọi nhà cung cấp AI trong một khoảng ngày. Token và phút âm thanh được tính riêng.",
@@ -500,7 +501,8 @@
         "output": "Token ra",
         "minutes": "Phút",
         "limited": "Bị giới hạn",
-        "errors": "Lỗi"
+        "errors": "Lỗi",
+        "total": "Tổng token"
       },
       "provider": {
         "gemini": "Gemini",
