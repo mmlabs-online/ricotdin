@@ -9,7 +9,7 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 COPY --chown=root:root deploy/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --chown=root:root deploy/security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY --chown=root:root --chmod=0755 deploy/15-ricotdin-config.envsh /docker-entrypoint.d/15-ricotdin-config.envsh
