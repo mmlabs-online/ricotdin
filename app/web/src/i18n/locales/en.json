@@ -172,6 +172,214 @@
       "features": "Features",
       "health": "Health",
       "docs": "API docs"
+    },
+    "errors": {
+      "refused": "The server refused this change. You cannot change your own account or remove the last admin, and only an active, verified account can become an admin.",
+      "forbidden": "Your admin rights could not be confirmed. Sign in again.",
+      "notFound": "This user no longer exists.",
+      "rateLimited": "Too many requests. Wait a little and try again.",
+      "unavailable": "A service is unavailable right now. Try again later.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "pagination": {
+      "label": "Pages",
+      "range": "{{from}}–{{to}} of {{total}}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "users": {
+      "subtitle": "Accounts, roles and access. Changes are written to the audit log.",
+      "search": "Search users",
+      "searchPlaceholder": "Search email or username",
+      "month": "Usage month",
+      "caption": "Users, with AI usage for {{month}}",
+      "selectAll": "Select every user on this page",
+      "select": "Select {{name}}",
+      "you": "You",
+      "never": "Never",
+      "empty": "No users yet.",
+      "noMatch": "No users match this search.",
+      "usageValue": "{{tokens}} tokens · {{h}} h {{m}} min",
+      "deleted": "User deleted.",
+      "deletedWarning": "User deleted, but some of their files could not be removed from storage.",
+      "col": {
+        "user": "User",
+        "username": "Username",
+        "role": "Role",
+        "status": "Status",
+        "meetings": "Meetings",
+        "usage": "Usage this month",
+        "lastSignIn": "Last sign-in",
+        "created": "Created"
+      },
+      "role": {
+        "user": "User",
+        "admin": "Admin"
+      },
+      "status": {
+        "active": "Active",
+        "unverified": "Unverified",
+        "disabled": "Disabled"
+      },
+      "actions": {
+        "makeAdmin": "Make admin",
+        "makeUser": "Make user",
+        "disable": "Disable",
+        "enable": "Enable",
+        "reset": "Send password reset",
+        "delete": "Delete user"
+      },
+      "bulk": {
+        "label": "Actions for the selected users",
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "clear": "Clear selection",
+        "apply": "Apply",
+        "confirmTitle_one": "Change {{count}} user?",
+        "confirmTitle_other": "Change {{count}} users?",
+        "confirm": {
+          "disable": "They are signed out on every device and cannot sign in until enabled. You are never included.",
+          "enable": "They can sign in again.",
+          "role_admin": "They get full admin access. Only active, verified accounts can be promoted; if one cannot, nothing changes.",
+          "role_user": "They lose admin access. The last remaining admin cannot be demoted; if that would happen, nothing changes."
+        },
+        "done": "Done: {{processed}} changed.",
+        "partial": "{{processed}} changed, {{failed}} not found."
+      },
+      "handle": "@{{name}}"
+    },
+    "userDetail": {
+      "title": "User",
+      "back": "Back to users",
+      "notFound": "User not found",
+      "actions": "Account actions",
+      "activity": "Recent activity",
+      "noActivity": "No activity recorded yet.",
+      "promoteHint": "Only an active, verified account can become an admin.",
+      "selfHint": "You cannot change your own role or status, or delete yourself.",
+      "done": {
+        "promote": "The user is now an admin. It applies at their next sign-in refresh (within 15 minutes).",
+        "demote": "The user is no longer an admin. Admin pages stop working for them at once.",
+        "disable": "The user is disabled and signed out everywhere.",
+        "enable": "The user can sign in again.",
+        "reset": "A password reset link was emailed.",
+        "resetNoMail": "The reset link could not be emailed: mail is not set up on the server."
+      },
+      "confirm": {
+        "promote": {
+          "title": "Make this user an admin?",
+          "body": "{{name}} will get full admin access, including every meeting and every setting.",
+          "action": "Make admin"
+        },
+        "demote": {
+          "title": "Remove admin access?",
+          "body": "{{name}} will become a normal user.",
+          "action": "Remove access"
+        },
+        "disable": {
+          "title": "Disable this account?",
+          "body": "{{name}} is signed out on every device and cannot sign in until you enable the account again.",
+          "action": "Disable"
+        },
+        "enable": {
+          "title": "Enable this account?",
+          "body": "{{name}} can sign in again.",
+          "action": "Enable"
+        },
+        "reset": {
+          "title": "Send a password reset?",
+          "body": "{{name}} receives an email with a link to choose a new password. Their current password keeps working until then.",
+          "action": "Send email"
+        },
+        "delete": {
+          "title": "Delete this user permanently?",
+          "body": "{{name}} and everything they own are deleted: meetings, recordings, transcripts, folders and chats. This cannot be undone.",
+          "action": "Delete permanently"
+        }
+      }
+    },
+    "quota": {
+      "title": "Balance",
+      "grantTitle": "Add to the balance",
+      "minutes": "Audio minutes",
+      "queries": "Chat questions",
+      "note": "Note (optional)",
+      "grant": "Add",
+      "granted": "The balance was updated.",
+      "history": "Recent changes",
+      "noHistory": "No changes yet.",
+      "minutesDelta": "{{value}} min",
+      "col": {
+        "when": "When",
+        "reason": "Reason",
+        "audio": "Audio",
+        "queries": "Questions"
+      },
+      "reason": {
+        "topup": "Top-up",
+        "admin_grant": "Admin grant",
+        "generate": "Processing",
+        "agent_query": "Chat question",
+        "refund": "Refund",
+        "adjustment": "Adjustment",
+        "other": "Other"
+      },
+      "errors": {
+        "empty": "Enter minutes or questions to add.",
+        "negative": "Values cannot be negative.",
+        "number": "Enter numbers only.",
+        "whole": "Chat questions must be a whole number.",
+        "tooLarge": "That is more than one grant allows (100,000 minutes, 1,000,000 questions)."
+      }
+    },
+    "overview": {
+      "allOk": "All systems operational",
+      "degraded": "Something needs attention",
+      "users": "Users",
+      "usersHint": "All accounts",
+      "meetings": "Meetings",
+      "successRate": "{{rate}}% processed successfully",
+      "noRuns": "None processed yet",
+      "inProgress": "In progress",
+      "inProgressHint": "Uploading or processing",
+      "avgTime": "Average processing",
+      "avgTimeHint": "Upload to results",
+      "minutes": "{{m}} min",
+      "pipeline": "Pipeline",
+      "viewPipeline": "View monitor",
+      "health": "System health",
+      "viewHealth": "View health",
+      "recent": "Recent admin activity",
+      "viewAudit": "View audit log",
+      "noRecent": "No admin actions yet.",
+      "system": "System",
+      "auditLine": "{{actor}} · {{action}}",
+      "count": {
+        "processing": "Processing",
+        "pending": "Waiting",
+        "stuck": "Stuck",
+        "failed": "Failed",
+        "done": "Done"
+      }
+    },
+    "health": {
+      "check": {
+        "database": "Database",
+        "storage": "Google Drive storage",
+        "key_encryption": "Key encryption",
+        "worker": "Worker tasks",
+        "gemini": "Gemini",
+        "speechmatics": "Speechmatics",
+        "openai": "OpenAI",
+        "grok": "Grok"
+      },
+      "status": {
+        "ok": "OK",
+        "warning": "Warning",
+        "error": "Error",
+        "unknown": "Unknown"
+      }
     }
   },
   "error": {

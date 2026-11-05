@@ -306,3 +306,45 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .chat-head h1:focus { outline: none; }
 .chat-head h1:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 @media (max-width: 767px) { html { scroll-padding-bottom: 120px; } }
+/* --- Admin users + overview (ARC-14a) --- */
+.admin-panel { min-width: 0; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
+.admin-table th { color: var(--text); font-size: 12px; font-weight: 600; background: var(--surface-subtle); }
+.admin-table tr:last-child td { border-bottom: 0; }
+.admin-table td.num { font-variant-numeric: tabular-nums; }
+.admin-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+.user-link { color: var(--text); font-weight: 600; text-decoration: none; unicode-bidi: isolate; }
+.user-link:hover { text-decoration: underline; }
+.user-cell strong, .user-cell small { font-size: 12px; }
+.you-badge, .role-badge { display: inline-block; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: 700; background: var(--primary-soft); color: var(--primary); margin-left: 6px; }
+.role-badge { margin-left: 0; background: var(--surface-subtle); color: var(--text); }
+.admin-toolbar { flex-wrap: wrap; }
+.admin-toolbar .search input { font-size: 13px; }
+.admin-toolbar input[type="month"] { min-height: 40px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 8px; }
+.toolbar-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--primary-soft); font-size: 13px; }
+.bulk-bar > span { font-weight: 600; margin-right: auto; }
+.pagination { font-size: 12px; }
+.fact-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 16px; }
+.fact-list dt { color: var(--muted); font-size: 12px; }
+.fact-list dd { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.card-head h2 { font-size: 16px; display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.card-link { color: var(--primary); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.card-link:hover { text-decoration: underline; }
+.grant-form { margin: 16px 0; }
+.count-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin: 0; }
+.count-list > div { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }
+.count-list > div.attention { border-color: var(--danger); }
+.count-list dt { color: var(--muted); font-size: 12px; }
+.count-list dd { margin: 4px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.health-list { list-style: none; margin: 0; padding: 0; }
+.health-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 42px; border-top: 1px solid var(--border); font-size: 13px; }
+ul.timeline { list-style: none; margin: 0; padding: 0; }
+.event strong { font-size: 13px; overflow-wrap: anywhere; }
+.event small { font-size: 12px; }
+.event-badge { font-size: 11px; }
+.stat-card > span, .stat-card > small { font-size: 12px; }
+@media (max-width: 767px) { .admin-kpis { grid-template-columns: 1fr 1fr; } .event { grid-template-columns: 1fr; gap: 4px; padding: 8px 0; } }
