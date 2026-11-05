@@ -19,7 +19,10 @@ V1_PROVIDERS = ("r2", "supabase")
 MAX_BYTES: dict[Kind, int] = {"audio": 1024 * 1024 * 1024, "avatar": 5 * 1024 * 1024}
 
 _MD5 = re.compile(r"[0-9a-f]{32}")
-_ALLOWED_HINT = re.compile(r"(audio|video)/[a-z0-9.+-]+|image/(jpeg|png|webp)")
+_KIND_TYPES: dict[Kind, re.Pattern[str]] = {
+    "audio": re.compile(r"(audio|video)/[a-z0-9.+-]{1,64}"),
+    "avatar": re.compile(r"image/(jpeg|png|webp)"),
+}
 _BY_EXTENSION = {
     "webm": "audio/webm", "ogg": "audio/ogg", "oga": "audio/ogg", "opus": "audio/ogg",
     "mp3": "audio/mpeg", "m4a": "audio/mp4", "aac": "audio/aac", "wav": "audio/wav",
@@ -80,11 +83,13 @@ def plan_object_copies(rows: Iterable[FileRow], mapped: Mapping[str, Mapped]) ->
 
 
 def same_file(mapped: Mapped, size: int | None, md5: str | None) -> bool:
-    """Whether the mapped Drive file is the source file: the size must be known and equal, the
-    md5 equal when both sides have one."""
-    if size is None or size != mapped.size:
+    """Whether the mapped Drive file is the source file: sizes equal when the source has one,
+    md5s equal when both sides have one, and at least one of the two actually compared."""
+    if size is not None and size != mapped.size:
         return False
-    return md5 is None or mapped.md5 is None or md5 == mapped.md5
+    if md5 is not None and mapped.md5 is not None:
+        return md5 == mapped.md5
+    return size is not None
 
 
 def etag_md5(etag: str | None) -> str | None:
@@ -93,15 +98,18 @@ def etag_md5(etag: str | None) -> str | None:
     return value if _MD5.fullmatch(value) else None
 
 
-def content_type_for(key: str, hint: str | None) -> str | None:
-    """The source's media type when it is one Drive storage accepts, else from the extension;
-    None = not a media file (not copied)."""
-    if hint and _ALLOWED_HINT.match(hint.split(";", 1)[0].strip().lower()):
-        return hint
+def content_type_for(key: str, hint: str | None, kind: Kind) -> str | None:
+    """The source's base media type when it fits the file kind (audio/video for meetings, the
+    avatar image types), else the one of the extension; None = not copied."""
+    allowed = _KIND_TYPES[kind]
+    base = (hint or "").split(";", 1)[0].strip().lower()
+    if allowed.fullmatch(base):
+        return base
     name = key.rsplit("/", 1)[-1]
     if "." not in name:
         return None
-    return _BY_EXTENSION.get(name.rsplit(".", 1)[-1].lower())
+    by_ext = _BY_EXTENSION.get(name.rsplit(".", 1)[-1].lower())
+    return by_ext if by_ext and allowed.fullmatch(by_ext) else None
 
 
 def storage_digest(entries: Sequence[tuple[str, int, str | None]]) -> str:

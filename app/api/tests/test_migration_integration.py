@@ -265,6 +265,23 @@ def test_blocked_source_writes_nothing() -> None:
         assert _q(tgt, "SELECT count(*) FROM users") == [(0,)]
 
 
+def test_cli_exits_2_on_a_wrong_drive_folder(
+    dbs: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts.migrate_from_supabase import host_of, main
+
+    src, tgt = dbs
+    monkeypatch.setenv("SUPABASE_DB_URL", src)
+    monkeypatch.setenv("MIGRATION_TARGET_DATABASE_URL", tgt)
+    monkeypatch.setenv("KEY_ENCRYPTION_SECRET", MASTER.hex())
+    monkeypatch.setenv("SUPABASE_URL", "https://ref.supabase.test")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "not-used")
+    before = _q(tgt, "SELECT count(*) FROM users")
+    argv = ["--confirm-target", host_of(tgt), "--confirm-drive-folder", "another-folder-0002"]
+    assert main(argv) == 2
+    assert _q(tgt, "SELECT count(*) FROM users") == before
+
+
 def test_dry_run_writes_nothing(dbs: tuple[str, str]) -> None:
     src, _ = dbs
     with scratch_database("mig_dry") as tgt:
@@ -463,12 +480,14 @@ def test_storage_recovery_ownership_size_and_missing_config(dbs: tuple[str, str]
             )
             result = copy(FakeSupabase(), None)
             assert result.already_in_drive == [LEGACY_KEY] and result.copied == []
+            # Named by row id: a forged key is arbitrary text and never printed.
             assert sorted(result.rejected) == sorted(
                 [
-                    "evil/key.webm: not its row's own key",
-                    f"{_avatar_of(conn, USER)}: not its row's own key",
+                    f"meeting {M_MISSING}: not its row's own key",
+                    f"profile {USER}: not its row's own key",
                 ]
             )
+            assert not any("evil" in r for r in result.rejected)
             assert f"{R2_KEY}: no usable r2 source configuration" in result.failed
             assert _q(tgt, "SELECT storage_provider FROM meetings WHERE id = %s", M_LEGACY) == [
                 ("gdrive",)
@@ -491,12 +510,6 @@ def test_storage_recovery_ownership_size_and_missing_config(dbs: tuple[str, str]
             assert _q(tgt, "SELECT storage_provider FROM meetings WHERE id = %s", M_LEGACY) == [
                 ("supabase",)
             ]
-
-
-def _avatar_of(conn: psycopg.Connection[Any], user: str) -> str:
-    row = conn.execute("SELECT avatar_key FROM profiles WHERE id = %s", (user,)).fetchone()
-    assert row is not None
-    return str(row[0])
 
 
 def test_preflight_blocks_type_drift_and_an_old_revision(dbs: tuple[str, str]) -> None:

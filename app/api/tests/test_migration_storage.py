@@ -63,6 +63,9 @@ def test_same_file_compares_size_and_md5_when_known() -> None:
     assert not same_file(m, 5, "b" * 32)
     assert same_file(Mapped(5, None), 5, "b" * 32)
     assert not same_file(m, None, None)  # nothing to compare: never assume
+    assert same_file(m, None, "a" * 32)  # Supabase object without a size: md5 decides
+    assert not same_file(m, None, "b" * 32)
+    assert not same_file(Mapped(5, None), None, "a" * 32)
 
 
 def test_etag_md5_only_for_a_single_part_upload() -> None:
@@ -72,15 +75,20 @@ def test_etag_md5_only_for_a_single_part_upload() -> None:
     assert etag_md5("") is None
 
 
-def test_content_type_from_the_source_hint_else_the_extension() -> None:
-    assert content_type_for("a/b.webm", "audio/webm;codecs=opus") == "audio/webm;codecs=opus"
-    assert content_type_for("a/b.mp3", None) == "audio/mpeg"
-    assert content_type_for("a/b.m4a", "application/octet-stream") == "audio/mp4"
-    assert content_type_for("a/b.mp4", "") == "video/mp4"
-    assert content_type_for(AV, None) == "image/png"
-    assert content_type_for("avatars/x/y.jpg", None) == "image/jpeg"
-    assert content_type_for("a/b", None) is None  # no extension, no hint: not copied
-    assert content_type_for("a/b.exe", "application/x-msdownload") is None
+def test_content_type_is_the_base_type_and_fits_the_file_kind() -> None:
+    assert content_type_for("a/b.webm", "audio/webm;codecs=opus", "audio") == "audio/webm"
+    assert content_type_for("a/b.mp3", None, "audio") == "audio/mpeg"
+    assert content_type_for("a/b.m4a", "application/octet-stream", "audio") == "audio/mp4"
+    assert content_type_for("a/b.mp4", "", "audio") == "video/mp4"
+    assert content_type_for(AV, None, "avatar") == "image/png"
+    assert content_type_for("avatars/x/y.jpg", "IMAGE/JPEG", "avatar") == "image/jpeg"
+    assert content_type_for("a/b", None, "audio") is None  # no extension, no hint
+    assert content_type_for("a/b.exe", "application/x-msdownload", "audio") is None
+    # never a prefix match, never a type of the other kind
+    assert content_type_for("a/b", "image/pngfoo", "avatar") is None
+    assert content_type_for("a/b.webm", "image/png", "audio") == "audio/webm"
+    assert content_type_for("a/b.png", "image/png", "audio") is None
+    assert content_type_for(AV, "video/mp4", "avatar") == "image/png"
 
 
 def test_storage_digest_is_order_independent_and_content_sensitive() -> None:

@@ -111,7 +111,7 @@ class Report:
             lines.append(
                 f"- Already in Drive (checked against the source): {len(s.already_in_drive)}"
             )
-            lines.append(f"- v2 files (left alone): {s.v2_files}")
+            lines.append(f"- Meetings already on gdrive (left alone): {s.v2_files}")
             lines.append(f"- Unreferenced Supabase objects (not copied): {s.unreferenced_objects}")
             lines.append(f"- Missing at source: {len(s.missing_at_source)}")
             lines += [f"  - `{k}`" for k in s.missing_at_source]

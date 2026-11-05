@@ -22,7 +22,8 @@ read from its v1 store — legacy Supabase Storage, or the v1 R2 bucket with the
 ``storage_config`` credentials; both only read, never written — and uploaded server-side into the
 target's ``drive_config`` root folder, which must equal ``--confirm-drive-folder`` (checked before
 anything is written). Size and md5 are verified, the key is mapped in ``storage_objects`` and the
-meeting moves to ``gdrive``; a re-run compares mapped files with their source instead.
+meeting moves to ``gdrive``. A re-run leaves ``gdrive`` meetings alone; a key that is mapped but
+not marked yet (an interrupted run, every avatar) is compared with its source, never re-uploaded.
 Output is a Markdown report (hosts, counts, digests, row ids, storage keys): never a secret, an
 email address or meeting content. Database errors are reported by class and
 SQLSTATE only (their server message can quote row values).
@@ -34,6 +35,7 @@ import contextlib
 import functools
 import hashlib
 import http.client
+import logging
 import os
 import sys
 import tempfile
@@ -47,7 +49,7 @@ from urllib.parse import quote, urlsplit
 
 import httpx2
 import psycopg
-from anyio.from_thread import start_blocking_portal
+from anyio.from_thread import BlockingPortal, start_blocking_portal
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import BotoCoreError, ClientError
 from psycopg import sql
@@ -562,22 +564,31 @@ class GoogleDriveTarget:
     ) -> None:
         self._cfg, self._tgt, self._master, self._transport = cfg, tgt, master, transport
         self._stack = contextlib.ExitStack()
+        self._portal: BlockingPortal | None = None
+        self._storage: DriveStorage | None = None
 
     def __repr__(self) -> str:
         return "GoogleDriveTarget()"
 
     def __enter__(self) -> "GoogleDriveTarget":
-        self._portal = self._stack.enter_context(start_blocking_portal())
-        client = DriveClient(self._cfg, transport=self._transport)
-        self._stack.callback(self._portal.call, client.aclose)
-        signer = MediaTokenSigner(derive_media_key(self._master))  # unused by upload_file
-        self._storage = DriveStorage(client, _TargetObjectMap(self._tgt), signer)
+        try:
+            portal = self._stack.enter_context(start_blocking_portal())
+            client = DriveClient(self._cfg, transport=self._transport)
+            self._stack.callback(portal.call, client.aclose)
+            signer = MediaTokenSigner(derive_media_key(self._master))  # unused by upload_file
+            self._storage = DriveStorage(client, _TargetObjectMap(self._tgt), signer)
+            self._portal = portal
+        except BaseException:
+            self._stack.close()
+            raise
         return self
 
     def __exit__(self, *exc: object) -> None:
         self._stack.close()
 
     def upload(self, key: str, path: Path, content_type: str, max_bytes: int) -> Mapped:
+        if self._portal is None or self._storage is None:
+            raise CopyError("drive target used outside its context")
         upload = functools.partial(self._storage.upload_file, max_bytes=max_bytes)
         try:
             obj = self._portal.call(upload, key, path, content_type)
@@ -624,13 +635,13 @@ def _copy_one(step: Step, source: SourceStore, target: DriveTarget, have: Mapped
     """True = the file is in Drive and matches its source (copied now, or by an earlier run)."""
     row = step.row
     head = source.head(row.key)
-    if head is None:
-        return False
+    if head is None or head.size == 0:
+        return False  # nothing to copy (an empty v1 file is listed as missing)
     if have is not None:
         if not same_file(have, head.size, head.md5):
             raise CopyError("the Drive copy differs from the source (delete the key, re-run)")
         return True
-    content_type = content_type_for(row.key, head.content_type)
+    content_type = content_type_for(row.key, head.content_type, row.kind)
     if content_type is None:
         raise CopyError("not a media file type")
     limit = MAX_BYTES[row.kind]
@@ -675,12 +686,16 @@ def copy_storage(
     for step in plan_object_copies(rows, mapped):
         row = step.row
         if step.action == "reject":
+            # The key failed the ownership pattern, so it is arbitrary user text: name the row.
             why = (
                 "not its row's own key"
                 if row.provider in (*V1_PROVIDERS, "gdrive")
-                else ("unknown storage provider")
+                else "unknown storage provider"
             )
-            result.rejected.append(f"{row.key}: {why}")
+            where = (
+                f"meeting {row.meeting_id}" if row.kind == "audio" else f"profile {row.owner_id}"
+            )
+            result.rejected.append(f"{where}: {why}")
             continue
         if step.action == "skip":
             result.v2_files += 1
@@ -860,6 +875,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="preflight + source digests only")
     parser.add_argument("--report", default="migration-report.md", help="report file (Markdown)")
     args = parser.parse_args(argv)
+    # Debug/info logs of these libraries carry signed headers, upload session URIs and tokens.
+    for name in ("botocore", "boto3", "s3transfer", "urllib3", "httpx2", "httpcore2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     source_url = _env("SUPABASE_DB_URL")
     target_url = _env("MIGRATION_TARGET_DATABASE_URL")
@@ -893,6 +911,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except psycopg.Error as exc:
         print(f"database error: {db_error(exc)} (message withheld)", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - codes only, never a message or a traceback
+        print(f"unexpected error: {type(exc).__name__} (message withheld)", file=sys.stderr)
         return 2
     text = report.render()
     Path(args.report).write_text(text, encoding="utf-8")
