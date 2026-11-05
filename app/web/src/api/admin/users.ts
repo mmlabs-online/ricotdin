@@ -86,11 +86,19 @@ export function useUserActivity(id: string) {
   })
 }
 
-/** Any change to a user: refresh the lists and that user. */
-function useUserMutation<V, R = unknown>(request: (v: V) => Promise<R>) {
+type Detail = AdminUser & { meeting_count: number }
+
+/** Any change to a user: refresh the lists and that user. `patch` writes the answer into the
+ * detail at once, so the old control never comes back before the refetch lands. */
+function useUserMutation<V, R = unknown>(request: (v: V) => Promise<R>, patch?: (v: V) => { id: string; change: (old: Detail) => Partial<Detail> }) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: request,
+    onSuccess: (_r, v) => {
+      if (!patch) return
+      const { id, change } = patch(v)
+      qc.setQueryData<Detail>(adminKeys.user(id), (old) => (old ? { ...old, ...change(old) } : old))
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: adminKeys.users })
     },
@@ -99,19 +107,33 @@ function useUserMutation<V, R = unknown>(request: (v: V) => Promise<R>) {
 
 export function useUserMutations() {
   const fetchApi = useFetchApi()
+  const qc = useQueryClient()
   return {
-    role: useUserMutation(({ id, role }: { id: string; role: 'user' | 'admin' }) =>
-      apiJson(fetchApi, `/admin/users/${enc(id)}/role`, { method: 'PATCH', body: { role } }),
+    role: useUserMutation(
+      ({ id, role }: { id: string; role: 'user' | 'admin' }) => apiJson(fetchApi, `/admin/users/${enc(id)}/role`, { method: 'PATCH', body: { role } }),
+      ({ id, role }) => ({ id, change: () => ({ role }) }),
     ),
-    status: useUserMutation(({ id, disabled }: { id: string; disabled: boolean }) =>
-      apiJson(fetchApi, `/admin/users/${enc(id)}/status`, { method: 'PATCH', body: { disabled } }),
+    status: useUserMutation(
+      ({ id, disabled }: { id: string; disabled: boolean }) => apiJson(fetchApi, `/admin/users/${enc(id)}/status`, { method: 'PATCH', body: { disabled } }),
+      ({ id, disabled }) => ({
+        id,
+        change: (old) => ({ disabled, status: disabled ? 'disabled' : old.email_confirmed ? 'active' : 'unverified' }),
+      }),
     ),
     reset: useUserMutation((id: string) =>
       apiJson<{ ok: boolean; email_sent?: boolean }>(fetchApi, `/admin/users/${enc(id)}/reset-password`, { method: 'POST' }),
     ),
-    remove: useUserMutation((id: string) =>
-      apiJson<{ ok: boolean; storageWarnings?: string[] }>(fetchApi, `/admin/users/${enc(id)}`, { method: 'DELETE' }),
-    ),
+    // the user is gone: drop their detail, quota and activity instead of refetching them (404)
+    remove: useMutation({
+      mutationFn: (id: string) => apiJson<{ ok: boolean; storageWarnings?: string[] }>(fetchApi, `/admin/users/${enc(id)}`, { method: 'DELETE' }),
+      onSuccess: (_r, id) => {
+        void qc.cancelQueries({ queryKey: adminKeys.user(id) })
+        qc.removeQueries({ queryKey: adminKeys.user(id) })
+      },
+      onSettled: () => {
+        void qc.invalidateQueries({ queryKey: adminKeys.users, refetchType: 'active' })
+      },
+    }),
     bulk: useUserMutation((v: { ids: string[]; action: 'disable' | 'enable' | 'set_role'; role?: 'user' | 'admin' }) =>
       apiJson<unknown>(fetchApi, '/admin/users/bulk', { method: 'POST', body: v }),
     ),
@@ -152,6 +174,10 @@ export function useOverview() {
         }
         const body: unknown = await res.json().catch(() => null)
         if (!res.ok && res.status !== 503) throw apiErrorFrom(res.status, body)
+        // a proxy's 503 page or an empty answer is an error, not "degraded"
+        if (typeof body !== 'object' || body === null || typeof (body as { checks?: unknown }).checks !== 'object') {
+          throw apiErrorFrom(res.ok ? 500 : res.status, null)
+        }
         return body
       },
     }),

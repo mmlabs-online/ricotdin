@@ -1,6 +1,6 @@
 // Admin › Users (ARC-14a, Make UsersAdmin): search, usage month, bulk disable / enable / role.
 import { useEffect, useId, useState, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAdminUsers, useUserMutations, type AdminUserRow } from '../../api/admin/users'
@@ -8,7 +8,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import { AdminHead, NoticeBanner, UserStatusBadge, useFormatters, useNotice } from '../../components/admin/AdminParts'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
-import { adminErrorKey, bulkSummary, monthValue } from '../../lib/admin/users'
+import { adminErrorKey, BULK_MAX, bulkSummary, monthValue } from '../../lib/admin/users'
 import { quotaParts } from '../../lib/profile/profile'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -21,11 +21,35 @@ export function AdminUsersPage() {
   useDocumentTitle('admin.tabs.users')
   const { state } = useAuth()
   const me = state.status === 'signedIn' ? state.user.id : ''
-  const [draft, setDraft] = useState('')
-  const [search, setSearch] = useState('')
-  const [month, setMonth] = useState(() => monthValue(new Date()) ?? '')
-  const [page, setPage] = useState(1)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // page, search and month live in the URL, so Back from a user detail returns to the same list
+  const [params, setParams] = useSearchParams()
+  const [thisMonth] = useState(() => monthValue(new Date()) ?? '')
+  const page = Math.max(1, Math.min(10_000, Number.parseInt(params.get('page') ?? '', 10) || 1))
+  const search = (params.get('q') ?? '').slice(0, 200)
+  const month = monthValue(params.get('month') ?? '') ?? thisMonth
+  const setList = (next: { page?: number; q?: string; month?: string }) => {
+    const p = new URLSearchParams(params)
+    const put = (k: string, v: string | undefined, empty: string) => (v === undefined ? undefined : v === empty ? p.delete(k) : p.set(k, v))
+    put('page', next.page === undefined ? undefined : String(next.page), '1')
+    put('q', next.q, '')
+    put('month', next.month, thisMonth)
+    setParams(p, { replace: true, preventScrollReset: true })
+  }
+  const [draft, setDraft] = useState(search)
+  const [monthDraft, setMonthDraft] = useState(month)
+  // selected ids → email (shown in the confirm), kept only for the list they were picked on
+  const listKey = `${page}|${search}|${month}`
+  const [picked, setPicked] = useState<{ key: string; ids: Map<string, string> }>({ key: listKey, ids: new Map() })
+  const selected = picked.key === listKey ? picked.ids : new Map<string, string>()
+  const setSelected = (next: Map<string, string> | ((prev: Map<string, string>) => Map<string, string>)) =>
+    setPicked((p) => ({ key: listKey, ids: typeof next === 'function' ? next(p.key === listKey ? p.ids : new Map()) : next }))
+  // the URL changed (Back, a link): show its values in the fields
+  const [shown, setShown] = useState({ search, month })
+  if (shown.search !== search || shown.month !== month) {
+    setShown({ search, month })
+    setDraft(search)
+    setMonthDraft(month)
+  }
   const [bulk, setBulk] = useState<Bulk | null>(null)
   const [notice, setNotice] = useNotice()
   // a user deleted from the detail page reports here (router state, cleared so a reload is quiet)
@@ -35,7 +59,7 @@ export function AdminUsersPage() {
   useEffect(() => {
     if (arrived !== 'deleted' && arrived !== 'deletedWarning') return
     setNotice(arrived === 'deleted' ? 'admin.users.deleted' : 'admin.users.deletedWarning', arrived === 'deleted' ? 'success' : 'warning')
-    void navigate('.', { replace: true, state: null })
+    void navigate({ search: location.search }, { replace: true, state: null })
   }, [arrived, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
   const list = useAdminUsers({ page, perPage: PER_PAGE, search, month })
   const { bulk: bulkMutation } = useUserMutations()
@@ -46,32 +70,47 @@ export function AdminUsersPage() {
   const total = list.data?.total ?? 0
   const selectable = users.filter((u) => u.id !== me)
   const allChecked = selectable.length > 0 && selectable.every((u) => selected.has(u.id))
+  const bulkBusy = bulkMutation.isPending
+  // a page past the end (users removed meanwhile): go to the last one
+  const lastPage = Math.max(1, Math.ceil(total / PER_PAGE))
+  useEffect(() => {
+    if (list.data && page > lastPage) setList({ page: lastPage })
+  }, [list.data, page, lastPage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function submitSearch(e: FormEvent) {
     e.preventDefault()
-    setSearch(draft.trim())
-    setPage(1)
-    setSelected(new Set())
+    setList({ q: draft.trim(), page: 1 })
   }
 
-  function toggle(id: string) {
+  function applyMonth(v: string) {
+    const m = monthValue(v)
+    if (m && m !== month) setList({ month: m, page: 1 })
+  }
+
+  function toggle(id: string, email: string) {
     setSelected((prev) => {
-      const next = new Set(prev)
+      const next = new Map(prev)
       if (next.has(id)) next.delete(id)
-      else next.add(id)
+      else if (next.size < BULK_MAX) next.set(id, email)
       return next
     })
   }
 
+  function askBulk(b: Bulk) {
+    if (!bulkBusy) setBulk(b)
+  }
+
   function runBulk() {
-    if (!bulk || bulkMutation.isPending) return
-    const chosen = [...selected]
+    if (!bulk || bulkBusy) return
+    const chosen = [...selected.keys()]
     setBulk(null)
     bulkMutation
       .mutateAsync({ ids: chosen, ...bulk })
       .then((res) => {
         const s = bulkSummary(res)
-        setSelected(new Set())
+        setSelected(new Map())
+        // the bulk bar (and the button that opened the dialog) is gone: keep focus on the list
+        requestAnimationFrame(() => document.getElementById(ids.all)?.focus())
         setNotice(s.failed > 0 ? 'admin.users.bulk.partial' : 'admin.users.bulk.done', s.failed > 0 ? 'warning' : 'success', s)
       })
       .catch((err: unknown) => setNotice(adminErrorKey(err), 'error'))
@@ -102,25 +141,27 @@ export function AdminUsersPage() {
         <input
           id={ids.month}
           type="month"
-          value={month}
+          value={monthDraft}
+          min="1970-01"
+          max="2100-12"
+          // a browser without a month picker shows a text box: apply only a complete value
           onChange={(e) => {
-            const v = monthValue(e.target.value)
-            if (v) {
-              setMonth(v)
-              setPage(1)
-            }
+            setMonthDraft(e.target.value)
+            applyMonth(e.target.value)
           }}
+          onBlur={() => setMonthDraft(month)}
+          onKeyDown={(e) => e.key === 'Enter' && applyMonth(monthDraft)}
         />
       </div>
 
       {selected.size > 0 && (
         <div className="bulk-bar" role="group" aria-label={t('admin.users.bulk.label')}>
           <span>{t('admin.users.bulk.selected', { count: selected.size })}</span>
-          <Button onClick={() => setBulk({ action: 'disable' })}>{t('admin.users.actions.disable')}</Button>
-          <Button onClick={() => setBulk({ action: 'enable' })}>{t('admin.users.actions.enable')}</Button>
-          <Button onClick={() => setBulk({ action: 'set_role', role: 'admin' })}>{t('admin.users.actions.makeAdmin')}</Button>
-          <Button onClick={() => setBulk({ action: 'set_role', role: 'user' })}>{t('admin.users.actions.makeUser')}</Button>
-          <Button variant="ghost" onClick={() => setSelected(new Set())}>
+          <Button onClick={() => askBulk({ action: 'disable' })} aria-disabled={bulkBusy}>{t('admin.users.actions.disable')}</Button>
+          <Button onClick={() => askBulk({ action: 'enable' })} aria-disabled={bulkBusy}>{t('admin.users.actions.enable')}</Button>
+          <Button onClick={() => askBulk({ action: 'set_role', role: 'admin' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeAdmin')}</Button>
+          <Button onClick={() => askBulk({ action: 'set_role', role: 'user' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeUser')}</Button>
+          <Button variant="ghost" onClick={() => !bulkBusy && setSelected(new Map())} aria-disabled={bulkBusy}>
             {t('admin.users.bulk.clear')}
           </Button>
         </div>
@@ -138,7 +179,7 @@ export function AdminUsersPage() {
       ) : (
         <div className="table-scroll">
           <table className="admin-table">
-            <caption className="sr-only">{t('admin.users.caption', { month })}</caption>
+            <caption className="sr-only">{t('admin.users.caption', { month: list.data?.month ?? month })}</caption>
             <thead>
               <tr>
                 <th scope="col">
@@ -147,7 +188,7 @@ export function AdminUsersPage() {
                     type="checkbox"
                     checked={allChecked}
                     aria-label={t('admin.users.selectAll')}
-                    onChange={() => setSelected(allChecked ? new Set() : new Set(selectable.map((u) => u.id)))}
+                    onChange={() => setSelected(allChecked ? new Map() : new Map(selectable.slice(0, BULK_MAX).map((u) => [u.id, u.email])))}
                   />
                 </th>
                 <th scope="col">{t('admin.users.col.user')}</th>
@@ -167,7 +208,7 @@ export function AdminUsersPage() {
                   <tr key={u.id}>
                     <td>
                       {!self && (
-                        <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id)} aria-label={t('admin.users.select', { name })} />
+                        <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id, u.email)} aria-label={t('admin.users.select', { name })} />
                       )}
                     </td>
                     <td>
@@ -201,10 +242,10 @@ export function AdminUsersPage() {
 
       <nav className="pagination" aria-label={t('admin.pagination.label')}>
         <span>{t('admin.pagination.range', { from, to, total })}</span>
-        <Button onClick={() => page > 1 && setPage((p) => p - 1)} aria-disabled={page <= 1}>
+        <Button onClick={() => page > 1 && setList({ page: page - 1 })} aria-disabled={page <= 1}>
           {t('admin.pagination.previous')}
         </Button>
-        <Button onClick={() => to < total && setPage((p) => p + 1)} aria-disabled={to >= total}>
+        <Button onClick={() => to < total && setList({ page: page + 1 })} aria-disabled={to >= total}>
           {t('admin.pagination.next')}
         </Button>
       </nav>
@@ -214,6 +255,13 @@ export function AdminUsersPage() {
           <p className="modal-copy" id="bulk-body">
             {t(`admin.users.bulk.confirm.${bulk.action === 'set_role' ? `role_${bulk.role}` : bulk.action}`, { count: selected.size })}
           </p>
+          <ul className="bulk-names">
+            {[...selected.values()].map((email) => (
+              <li key={email} className="bidi-isolate">
+                {displayText(email)}
+              </li>
+            ))}
+          </ul>
           <div className="modal-actions">
             <Button variant="ghost" onClick={() => setBulk(null)}>
               {t('common.cancel')}

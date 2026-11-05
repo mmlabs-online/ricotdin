@@ -239,10 +239,10 @@
         "confirmTitle_one": "Change {{count}} user?",
         "confirmTitle_other": "Change {{count}} users?",
         "confirm": {
-          "disable": "They are signed out on every device and cannot sign in until enabled. You are never included.",
+          "disable": "They cannot sign in again until enabled, and the admin pages refuse them at once. A session already open keeps working for up to 15 minutes. You are never included.",
           "enable": "They can sign in again.",
           "role_admin": "They get full admin access. Only active, verified accounts can be promoted; if one cannot, nothing changes.",
-          "role_user": "They lose admin access. The last remaining admin cannot be demoted; if that would happen, nothing changes."
+          "role_user": "They lose the admin pages at once; other admin-level access ends within 15 minutes. The last remaining admin cannot be demoted; if that would happen, nothing changes."
         },
         "done": "Done: {{processed}} changed.",
         "partial": "{{processed}} changed, {{failed}} not found."
@@ -274,12 +274,12 @@
         },
         "demote": {
           "title": "Remove admin access?",
-          "body": "{{name}} will become a normal user.",
+          "body": "{{name}} will become a normal user. The admin pages refuse them at once; other admin-level access ends within 15 minutes.",
           "action": "Remove access"
         },
         "disable": {
           "title": "Disable this account?",
-          "body": "{{name}} is signed out on every device and cannot sign in until you enable the account again.",
+          "body": "{{name}} cannot sign in again until you enable the account. A session already open keeps working for up to 15 minutes.",
           "action": "Disable"
         },
         "enable": {
@@ -331,7 +331,9 @@
         "number": "Enter numbers only.",
         "whole": "Chat questions must be a whole number.",
         "tooLarge": "That is more than one grant allows (100,000 minutes, 1,000,000 questions)."
-      }
+      },
+      "confirmTitle": "Add this quota?",
+      "confirmBody": "Add {{minutes}} audio minutes and {{queries}} questions to {{name}}? This cannot be undone here."
     },
     "overview": {
       "allOk": "All systems operational",
@@ -372,7 +374,8 @@
         "gemini": "Gemini",
         "speechmatics": "Speechmatics",
         "openai": "OpenAI",
-        "grok": "Grok"
+        "grok": "Grok",
+        "other": "Other check"
       },
       "status": {
         "ok": "OK",

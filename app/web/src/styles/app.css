@@ -326,6 +326,7 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .toolbar-label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--primary-soft); font-size: 13px; }
 .bulk-bar > span { font-weight: 600; margin-right: auto; }
+.bulk-names { max-height: 180px; overflow-y: auto; margin: 0 0 12px; padding-left: 20px; font-size: 13px; overflow-wrap: anywhere; }
 .pagination { font-size: 12px; }
 .fact-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 16px; }
 .fact-list dt { color: var(--muted); font-size: 12px; }

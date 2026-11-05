@@ -11,7 +11,7 @@ import { FullPageLoading } from '../../components/FullPageLoading'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { ApiError } from '../../api/errors'
-import { adminErrorKey, grantProblem, ledgerReasonKey, userActions } from '../../lib/admin/users'
+import { adminErrorKey, grantAmount, grantProblem, ledgerReasonKey, userActions } from '../../lib/admin/users'
 import { quotaParts } from '../../lib/profile/profile'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -124,24 +124,15 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
           </div>
         </dl>
         <div className="action-row" role="group" aria-label={t('admin.userDetail.actions')}>
-          {user.role === 'user' && actions.changeRole && (
-            <Button onClick={() => ask('promote')} aria-disabled={!actions.promote || busy}>
-              {t('admin.users.actions.makeAdmin')}
+          {/* one button per pair whose label flips, so focus stays on it after the change */}
+          {actions.changeRole && (
+            <Button onClick={() => ask(user.role === 'user' ? 'promote' : 'demote')} aria-disabled={(user.role === 'user' && !actions.promote) || busy}>
+              {t(user.role === 'user' ? 'admin.users.actions.makeAdmin' : 'admin.users.actions.makeUser')}
             </Button>
           )}
-          {user.role === 'admin' && actions.changeRole && (
-            <Button onClick={() => ask('demote')} aria-disabled={busy}>
-              {t('admin.users.actions.makeUser')}
-            </Button>
-          )}
-          {actions.disable && (
-            <Button onClick={() => ask('disable')} aria-disabled={busy}>
-              {t('admin.users.actions.disable')}
-            </Button>
-          )}
-          {actions.enable && (
-            <Button onClick={() => ask('enable')} aria-disabled={busy}>
-              {t('admin.users.actions.enable')}
+          {(actions.disable || actions.enable) && (
+            <Button onClick={() => ask(actions.disable ? 'disable' : 'enable')} aria-disabled={busy}>
+              {t(actions.disable ? 'admin.users.actions.disable' : 'admin.users.actions.enable')}
             </Button>
           )}
           <Button onClick={() => ask('reset')} aria-disabled={busy}>
@@ -157,7 +148,7 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
         {user.id === me && <p className="tab-note">{t('admin.userDetail.selfHint')}</p>}
       </section>
 
-      <QuotaCard userId={user.id} onNotice={setNotice} />
+      <QuotaCard userId={user.id} name={name} onNotice={setNotice} />
       <ActivityCard userId={user.id} />
 
       {confirm && (
@@ -183,7 +174,9 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
   )
 }
 
-function QuotaCard({ userId, onNotice }: { userId: string; onNotice: (key: string | null, kind?: 'success' | 'warning' | 'error') => void }) {
+type Grant = { audio_minutes?: number; agent_queries?: number; note?: string }
+
+function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; onNotice: (key: string | null, kind?: 'success' | 'warning' | 'error') => void }) {
   const { t } = useTranslation()
   const quota = useUserQuota(userId)
   const { grant } = useUserMutations()
@@ -192,6 +185,7 @@ function QuotaCard({ userId, onNotice }: { userId: string; onNotice: (key: strin
   const [queries, setQueries] = useState('')
   const [note, setNote] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  const [pending, setPending] = useState<Grant | null>(null) // asked, not sent yet
   const ids = { minutes: useId(), queries: useId(), note: useId(), err: useId() }
 
   function submit(e: FormEvent) {
@@ -200,13 +194,18 @@ function QuotaCard({ userId, onNotice }: { userId: string; onNotice: (key: strin
     const p = grantProblem(minutes, queries)
     setProblem(p)
     if (p) return
+    const m = grantAmount(minutes)
+    const q = grantAmount(queries)
+    // a grant cannot be undone from here and costs provider spend: ask first
+    setPending({ ...(m ? { audio_minutes: m } : {}), ...(q ? { agent_queries: q } : {}), ...(note.trim() ? { note: note.trim() } : {}) })
+  }
+
+  function send() {
+    if (!pending || grant.isPending) return
+    const body = pending
+    setPending(null)
     grant
-      .mutateAsync({
-        id: userId,
-        ...(minutes.trim() ? { audio_minutes: Number(minutes) } : {}),
-        ...(queries.trim() ? { agent_queries: Number(queries) } : {}),
-        ...(note.trim() ? { note: note.trim() } : {}),
-      })
+      .mutateAsync({ id: userId, ...body })
       .then(() => {
         setMinutes('')
         setQueries('')
@@ -260,6 +259,21 @@ function QuotaCard({ userId, onNotice }: { userId: string; onNotice: (key: strin
               {t('admin.quota.grant')}
             </Button>
           </form>
+          {pending && (
+            <Modal title={t('admin.quota.confirmTitle')} onClose={() => setPending(null)} describedBy="grant-body">
+              <p className="modal-copy" id="grant-body">
+                {t('admin.quota.confirmBody', { name, minutes: f.number(pending.audio_minutes ?? 0), queries: f.number(pending.agent_queries ?? 0) })}
+              </p>
+              <div className="modal-actions">
+                <Button variant="ghost" onClick={() => setPending(null)}>
+                  {t('common.cancel')}
+                </Button>
+                <Button variant="primary" onClick={send}>
+                  {t('admin.quota.grant')}
+                </Button>
+              </div>
+            </Modal>
+          )}
           <h3 className="subhead">{t('admin.quota.history')}</h3>
           {quota.data.ledger.length === 0 ? (
             <p className="tab-note">{t('admin.quota.noHistory')}</p>

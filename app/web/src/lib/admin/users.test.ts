@@ -3,7 +3,9 @@ import { ApiError } from '../../api/errors'
 import {
   adminErrorKey,
   bulkSummary,
+  grantAmount,
   grantProblem,
+  BULK_MAX,
   healthSummary,
   ledgerReasonKey,
   monthValue,
@@ -54,6 +56,9 @@ describe('grantProblem', () => {
     expect(grantProblem('', '1000001')).toBe('admin.quota.errors.tooLarge')
     expect(grantProblem('60', '')).toBeNull()
     expect(grantProblem('', '10')).toBeNull()
+    expect(grantProblem('1,5', '')).toBeNull() // Vietnamese decimal comma
+    expect(grantAmount('1,5')).toBe(1.5)
+    expect(grantAmount(' ')).toBeUndefined()
   })
 })
 
@@ -93,6 +98,8 @@ describe('monthValue', () => {
     expect(monthValue('2026-02')).toBe('2026-02')
     expect(monthValue('2026-13')).toBeNull()
     expect(monthValue('x')).toBeNull()
+    expect(monthValue('1969-12')).toBeNull() // the API answers the current month outside 1970–2100
+    expect(monthValue('2101-01')).toBeNull()
   })
 })
 
@@ -103,6 +110,18 @@ describe('healthSummary', () => {
       status: 'degraded', checks: [{ name: 'drive', status: 'error' }, { name: 'worker', status: 'warning' }],
     })
     expect(healthSummary(null)).toEqual({ status: 'unknown', checks: [] })
+    // provider key checks are named `keys:<config key>` by the API
+    expect(healthSummary({ status: 'ok', checks: { 'keys:gemini_api_key': { status: 'ok' }, 'keys:speechmatics_api_key': { status: 'warning' } } }).checks).toEqual([
+      { name: 'gemini', status: 'ok' },
+      { name: 'speechmatics', status: 'warning' },
+    ])
+    expect(healthSummary({ checks: { 'a:b.c': { status: 'ok' } } }).checks[0]?.name).toBe('other')
     expect(healthSummary({ status: 5, checks: { a: { status: 'odd' } } })).toEqual({ status: 'unknown', checks: [{ name: 'a', status: 'unknown' }] })
+  })
+})
+
+describe('BULK_MAX', () => {
+  it('matches the API cap (BULK_MAX_IDS)', () => {
+    expect(BULK_MAX).toBe(50)
   })
 })

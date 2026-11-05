@@ -239,10 +239,10 @@
         "confirmTitle_one": "Thay đổi {{count}} người dùng?",
         "confirmTitle_other": "Thay đổi {{count}} người dùng?",
         "confirm": {
-          "disable": "Họ bị đăng xuất trên mọi thiết bị và không đăng nhập được cho đến khi được mở khóa. Bạn không bao giờ nằm trong danh sách.",
+          "disable": "Họ không đăng nhập lại được cho tới khi được kích hoạt, và bị chặn khỏi trang quản trị ngay. Phiên đang mở vẫn dùng được tối đa 15 phút. Không bao giờ gồm chính bạn.",
           "enable": "Họ đăng nhập lại được.",
           "role_admin": "Họ có toàn quyền quản trị. Chỉ tài khoản đang hoạt động, đã xác minh mới được cấp; nếu có người không đủ điều kiện thì không có gì thay đổi.",
-          "role_user": "Họ mất quyền quản trị. Không thể bỏ quyền của quản trị viên cuối cùng; nếu vậy thì không có gì thay đổi."
+          "role_user": "Họ mất trang quản trị ngay; quyền quản trị còn lại hết trong vòng 15 phút. Không thể hạ quyền admin cuối cùng; nếu vậy sẽ không có gì thay đổi."
         },
         "done": "Xong: đã thay đổi {{processed}}.",
         "partial": "Đã thay đổi {{processed}}, {{failed}} không tìm thấy."
@@ -274,12 +274,12 @@
         },
         "demote": {
           "title": "Bỏ quyền quản trị?",
-          "body": "{{name}} sẽ trở thành người dùng thường.",
+          "body": "{{name}} sẽ thành người dùng thường. Trang quản trị chặn ngay; quyền quản trị còn lại hết trong vòng 15 phút.",
           "action": "Bỏ quyền"
         },
         "disable": {
           "title": "Khóa tài khoản này?",
-          "body": "{{name}} bị đăng xuất trên mọi thiết bị và không đăng nhập được cho đến khi bạn mở khóa.",
+          "body": "{{name}} không đăng nhập lại được cho tới khi bạn kích hoạt lại tài khoản. Phiên đang mở vẫn dùng được tối đa 15 phút.",
           "action": "Khóa"
         },
         "enable": {
@@ -331,7 +331,9 @@
         "number": "Chỉ nhập số.",
         "whole": "Lượt hỏi phải là số nguyên.",
         "tooLarge": "Vượt mức một lần nạp (100.000 phút, 1.000.000 lượt hỏi)."
-      }
+      },
+      "confirmTitle": "Cộng hạn mức này?",
+      "confirmBody": "Cộng {{minutes}} phút âm thanh và {{queries}} lượt hỏi cho {{name}}? Không hoàn tác được tại đây."
     },
     "overview": {
       "allOk": "Mọi hệ thống hoạt động bình thường",
@@ -372,7 +374,8 @@
         "gemini": "Gemini",
         "speechmatics": "Speechmatics",
         "openai": "OpenAI",
-        "grok": "Grok"
+        "grok": "Grok",
+        "other": "Mục khác"
       },
       "status": {
         "ok": "Ổn",

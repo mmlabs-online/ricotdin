@@ -41,11 +41,18 @@ export function userActions(user: AdminUser, me: string): UserActions {
 export const MAX_GRANT_MINUTES = 100_000 // app/domain/admin.py
 export const MAX_GRANT_QUERIES = 1_000_000
 
+export const BULK_MAX = 50 // app/domain/admin.py BULK_MAX_IDS
+
+/** A typed grant amount (a decimal comma is accepted); undefined = left empty. */
+export function grantAmount(s: string): number | undefined {
+  const v = s.trim()
+  return v === '' ? undefined : Number(v.replace(',', '.'))
+}
+
 /** Client check of a quota grant (minutes, queries as typed); null = send it. */
 export function grantProblem(minutes: string, queries: string): string | null {
-  const read = (s: string) => (s.trim() === '' ? 0 : Number(s))
-  const m = read(minutes)
-  const q = read(queries)
+  const m = grantAmount(minutes) ?? 0
+  const q = grantAmount(queries) ?? 0
   if (!Number.isFinite(m) || !Number.isFinite(q)) return 'admin.quota.errors.number'
   if (m < 0 || q < 0) return 'admin.quota.errors.negative'
   if (!Number.isInteger(q)) return 'admin.quota.errors.whole'
@@ -84,7 +91,10 @@ export function ledgerReasonKey(reason: string): string {
 export function monthValue(v: Date | string): string | null {
   if (v instanceof Date) return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`
   const m = /^(\d{4})-(\d{2})$/.exec(v)
-  return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? v : null
+  if (!m) return null
+  const year = Number(m[1])
+  const month = Number(m[2])
+  return year >= 1970 && year <= 2100 && month >= 1 && month <= 12 ? v : null // API month_range
 }
 
 export type CheckStatus = 'ok' | 'warning' | 'error' | 'unknown'
@@ -94,9 +104,16 @@ export function healthSummary(body: unknown): { status: 'ok' | 'degraded' | 'unk
   const b = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
   const status = b.status === 'ok' || b.status === 'degraded' ? b.status : 'unknown'
   const raw = typeof b.checks === 'object' && b.checks !== null ? (b.checks as Record<string, unknown>) : {}
-  const checks = Object.entries(raw).map(([name, c]) => {
+  const checks = Object.entries(raw).map(([id, c]) => {
     const s = (c as { status?: unknown } | null)?.status
-    return { name, status: (s === 'ok' || s === 'warning' || s === 'error' ? s : 'unknown') as CheckStatus }
+    return { name: checkName(id), status: (s === 'ok' || s === 'warning' || s === 'error' ? s : 'unknown') as CheckStatus }
   })
   return { status, checks }
+}
+
+/** API check id → a locale key part: `keys:gemini_api_key` → `gemini`; anything odd → `other`
+ * (the id is also free of `:` / `.`, which i18next reads as separators). */
+function checkName(id: string): string {
+  const name = id.replace(/^keys:/, '').replace(/_api_key$/, '')
+  return /^[a-z][a-z0-9_]{0,40}$/.test(name) ? name : 'other'
 }
