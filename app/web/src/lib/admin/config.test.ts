@@ -3,6 +3,8 @@ import { ApiError } from '../../api/errors'
 import {
   KEY_PROVIDERS,
   configErrorKey,
+  healthMessage,
+  keyGroups,
   configKind,
   featureChanges,
   featureCreateProblem,
@@ -92,6 +94,8 @@ describe('features', () => {
     expect(featureChanges(f, { ...f, title: 'U', note_tags: ['x', 'y'] })).toEqual({ title: 'U', note_tags: ['x', 'y'] })
     expect(featureChanges(f, { ...f, description: '' })).toEqual({}) // empty = still nothing
     expect(featureChanges(f, { ...f, content: '' })).toEqual({ content: null })
+    // a stored list with blanks / repeats is not "changed" just because the editor tidied it
+    expect(featureChanges({ ...f, blocks: ['a', '', 'a'] }, { ...f, blocks: ['a'] })).toEqual({})
   })
 
   it('a new feature needs a PREFIX-ID key, a prefix, a module name and a title', () => {
@@ -110,7 +114,30 @@ describe('configErrorKey', () => {
     expect(configErrorKey(e(400))).toBe('admin.errors.invalid')
     expect(configErrorKey(e(422))).toBe('admin.errors.invalid')
     expect(configErrorKey(e(409))).toBe('admin.errors.duplicate')
+    expect(configErrorKey(e(404))).toBe('admin.errors.gone') // deleted by another admin meanwhile
     expect(configErrorKey(e(403))).toBe('admin.errors.forbidden')
     expect(configErrorKey(e(0))).toBe('admin.errors.network')
+  })
+})
+
+describe('keyGroups', () => {
+  it('known providers first (always shown), then any provider the API returns', () => {
+    const rows = [{ config_key: 'deepseek_api_key' }, { config_key: 'gemini_api_key' }, { config_key: 'bad' }]
+    expect(keyGroups(rows)).toEqual(['gemini', 'openai', 'grok', 'speechmatics', 'deepseek'])
+    expect(keyGroups([])).toEqual(['gemini', 'openai', 'grok', 'speechmatics'])
+  })
+})
+
+describe('healthMessage', () => {
+  it('maps the API messages to locale keys; unknown text is not shown', () => {
+    expect(healthMessage('keys:gemini_api_key', 'no active key')).toEqual({ key: 'admin.health.msg.noActiveKey' })
+    expect(healthMessage('keys:gemini_api_key', 'every active key failed its check')).toEqual({ key: 'admin.health.msg.allKeysFailing' })
+    expect(healthMessage('key_encryption', 'KEY_ENCRYPTION_SECRET is not set')).toEqual({ key: 'admin.health.msg.noSecret' })
+    expect(healthMessage('worker', 'stale or failing tasks: key_health, retention_purge')).toEqual({ key: 'admin.health.msg.tasks', values: { tasks: 'key_health, retention_purge' } })
+    expect(healthMessage('storage', 'not_configured')).toEqual({ key: 'admin.storage.problem.not_configured' })
+    expect(healthMessage('storage', 'weird')).toEqual({ key: 'admin.storage.problem.error' })
+    expect(healthMessage('database', 'OperationalError')).toEqual({ key: 'admin.health.msg.database' })
+    expect(healthMessage('x', 'anything else')).toBeNull()
+    expect(healthMessage('x', undefined)).toBeNull()
   })
 })

@@ -183,7 +183,8 @@
       "generic": "Something went wrong. Please try again.",
       "conflict": "This cannot be done in the current state (for example it is already running, or a file is missing). Refresh and check.",
       "invalid": "The server refused this value. Check it and try again.",
-      "duplicate": "This already exists (for example the feature key is taken)."
+      "duplicate": "This already exists (for example the feature key is taken).",
+      "gone": "This item no longer exists (another admin may have removed it). The list has been refreshed."
     },
     "pagination": {
       "label": "Pages",
@@ -391,7 +392,14 @@
       },
       "subtitle": "Checks of the database, file storage, keys and worker tasks.",
       "checks": "Checks",
-      "refresh": "Check again"
+      "refresh": "Check again",
+      "msg": {
+        "noActiveKey": "No active key.",
+        "allKeysFailing": "Every active key failed its last check.",
+        "noSecret": "KEY_ENCRYPTION_SECRET is not set on the server.",
+        "tasks": "Overdue or failing: {{tasks}}",
+        "database": "The database did not answer."
+      }
     },
     "pipeline": {
       "subtitle": "Meetings in the processing queue. Requeue runs a failed or stuck meeting again.",
@@ -662,7 +670,8 @@
         "retention": "Enter a whole number of days from 1 to 3650, or leave it empty.",
         "number": "Enter a number.",
         "tooLong": "Use at most 2000 characters."
-      }
+      },
+      "noChanges": "Nothing changed."
     },
     "models": {
       "title": "AI models",
@@ -772,7 +781,8 @@
       "redoc": "Reference (ReDoc)",
       "openapi": "OpenAPI document (JSON)",
       "newTab": "(opens in a new tab)",
-      "offHelp": "The API serves its reference only when the server setting API_DOCS=1 is on. Keep it off in production unless you need it."
+      "offHelp": "The API serves its reference only when the server setting API_DOCS=1 is on. Keep it off in production unless you need it.",
+      "unreachable": "The API could not be reached to check its reference. Try again later."
     }
   },
   "error": {

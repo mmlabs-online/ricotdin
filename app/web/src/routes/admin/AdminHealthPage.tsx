@@ -5,6 +5,7 @@ import { useHealthReport, useStorageStatus } from '../../api/admin/config'
 import { AdminHead, useFormatters } from '../../components/admin/AdminParts'
 import { Button } from '../../components/ui/Button'
 import { Status } from '../../components/ui/Status'
+import { healthMessage } from '../../lib/admin/config'
 import { adminErrorKey, healthSummary } from '../../lib/admin/users'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -18,9 +19,10 @@ export function AdminHealthPage() {
   const f = useFormatters()
   const health = healthSummary(report.data)
   const raw = (report.data ?? {}) as { checks?: Record<string, { message?: unknown }> }
+  // the API's messages are a fixed English set: shown through locale keys, never as server text
   const message = (id: string) => {
-    const m = raw.checks?.[id]?.message
-    return typeof m === 'string' ? displayText(m.slice(0, 200)) : null
+    const m = healthMessage(id, raw.checks?.[id]?.message)
+    return m ? t(m.key, m.values) : null
   }
   const ids = Object.keys(raw.checks ?? {})
 
@@ -52,7 +54,7 @@ export function AdminHealthPage() {
               return (
                 <li key={`${c.name}-${i}`}>
                   <span className="task-name">
-                    <strong>{t(`admin.health.check.${c.name}`)}</strong>
+                    <strong>{c.name === 'other' ? displayText(ids[i] ?? '') : t(`admin.health.check.${c.name}`)}</strong>
                     {detail && <small className="bidi-isolate">{detail}</small>}
                   </span>
                   <Status type={c.status === 'ok' ? 'success' : c.status === 'warning' ? 'processing' : 'danger'}>{t(`admin.health.status.${c.status}`)}</Status>

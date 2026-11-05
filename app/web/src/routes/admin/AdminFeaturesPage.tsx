@@ -1,7 +1,8 @@
 // Admin › Features (ARC-14c, v1 §9h): the feature registry. List with module / status / search
 // filters (in the URL), an edit panel that sends only changed fields, and a create form. Feature
 // text is shown as text (§0.9), the content field as a plain textarea.
-import { useId, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useFeatureMutations, useFeatures, type Feature } from '../../api/admin/config'
 import { AdminHead, NoticeBanner, useFormatters, useNotice, useUrlState } from '../../components/admin/AdminParts'
@@ -24,6 +25,11 @@ export function AdminFeaturesPage() {
   const features = useFeatures()
   const [notice, setNotice] = useNotice()
   const [draft, setDraft] = useState(url.get('q') ?? '')
+  const [seenQ, setSeenQ] = useState(url.get('q') ?? '')
+  if (seenQ !== (url.get('q') ?? '')) {
+    setSeenQ(url.get('q') ?? '')
+    setDraft(url.get('q') ?? '')
+  }
   const ids = { search: useId(), module: useId(), status: useId(), caption: useId() }
   const module = url.get('module') ?? ''
   const status = url.get('status') ?? ''
@@ -113,7 +119,7 @@ export function AdminFeaturesPage() {
                     {shown.map((f) => (
                       <tr key={f.id} aria-current={f.key === selected ? 'true' : undefined}>
                         <th scope="row">
-                          <button type="button" className="link-button" onClick={() => url.set({ key: f.key })}>
+                          <button type="button" className="link-button" data-feature={f.key} onClick={() => url.set({ key: f.key })}>
                             {displayText(f.key)}
                           </button>
                         </th>
@@ -130,7 +136,16 @@ export function AdminFeaturesPage() {
           </div>
           <div>
             {current ? (
-              <FeatureEditor key={`${current.id}|${current.updated_at}`} feature={current} onNotice={setNotice} onClose={() => url.set({ key: null })} />
+              <FeatureEditor
+                key={current.id}
+                feature={current}
+                onNotice={setNotice}
+                onClose={() => {
+                  url.set({ key: null })
+                  // back to the row that opened the editor
+                  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-feature="${CSS.escape(current.key)}"]`)?.focus())
+                }}
+              />
             ) : selected ? (
               <p className="tab-note">{t('admin.features.notFound')}</p>
             ) : (
@@ -167,8 +182,18 @@ function FeatureEditor({ feature, onNotice, onClose }: { feature: Feature; onNot
   const f = useFormatters()
   const { update } = useFeatureMutations()
   const original = fieldsOf(feature)
+  const listsOf = (o: FeatureFields) => Object.fromEntries(FEATURE_ARRAYS.map((k) => [k, listText(o[k])])) as Record<(typeof FEATURE_ARRAYS)[number], string>
   const [draft, setDraft] = useState(original)
-  const [lists, setLists] = useState(() => Object.fromEntries(FEATURE_ARRAYS.map((k) => [k, listText(original[k])])) as Record<(typeof FEATURE_ARRAYS)[number], string>)
+  const [lists, setLists] = useState(() => listsOf(original))
+  // a saved version replaces the draft without remounting (focus stays on Save)
+  const [seen, setSeen] = useState(feature.updated_at)
+  if (seen !== feature.updated_at) {
+    setSeen(feature.updated_at)
+    setDraft(original)
+    setLists(listsOf(original))
+  }
+  const headRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => headRef.current?.focus(), []) // opening a feature moves focus to its editor
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const id = useId()
@@ -200,7 +225,9 @@ function FeatureEditor({ feature, onNotice, onClose }: { feature: Feature; onNot
   return (
     <section className="admin-card feature-editor" aria-labelledby={head}>
       <div className="card-head">
-        <h2 id={head}>{t('admin.features.editTitle', { key: displayText(feature.key) })}</h2>
+        <h2 id={head} ref={headRef} tabIndex={-1}>
+          {t('admin.features.editTitle', { key: displayText(feature.key) })}
+        </h2>
         <Button variant="ghost" onClick={onClose}>
           {t('admin.features.close')}
         </Button>
@@ -275,10 +302,14 @@ function FeatureEditor({ feature, onNotice, onClose }: { feature: Feature; onNot
 function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; onNotice: Notify; onCreated: (key: string) => void }) {
   const { t } = useTranslation()
   const { create } = useFeatureMutations()
+  const qc = useQueryClient()
   const [v, setV] = useState({ key: '', module_prefix: '', module_name: '', title: '', status: 'not_started' })
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const id = useId()
+  // the one field at fault (3.3.1): the first empty one, or the key / prefix
+  const badField =
+    problem === 'admin.features.errors.key' ? 'key' : problem === 'admin.features.errors.prefix' ? 'module_prefix' : problem ? (['key', 'module_prefix', 'module_name', 'title'] as const).find((k) => !v[k].trim()) : undefined
   const set = (k: keyof typeof v, value: string) =>
     setV((d) => {
       const next = { ...d, [k]: value }
@@ -296,11 +327,17 @@ function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; o
     const p = featureCreateProblem(v)
     setProblem(p)
     setTries((n) => n + 1)
-    if (p) return
+    if (p) {
+      const field = p === 'admin.features.errors.key' ? 'key' : p === 'admin.features.errors.prefix' ? 'module_prefix' : (['key', 'module_prefix', 'module_name', 'title'] as const).find((k) => !v[k].trim())
+      document.getElementById(`${id}-${field ?? 'key'}`)?.focus()
+      return
+    }
     const key = v.key.trim().toUpperCase()
     create
       .mutateAsync({ ...v, key, module_prefix: v.module_prefix.trim().toUpperCase(), module_name: v.module_name.trim(), title: v.title.trim() })
-      .then(() => {
+      .then((res) => {
+        // show the new row at once (no "not found" flash before the refetch)
+        qc.setQueryData<Feature[]>(['admin', 'features'], (old) => (old ? [...old, res.feature] : old))
         onNotice('admin.features.created', 'success', { key })
         onCreated(key)
       })
@@ -317,7 +354,7 @@ function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; o
         {(['key', 'module_prefix', 'module_name', 'title'] as const).map((k) => (
           <div className="field-row" key={k}>
             <label htmlFor={`${id}-${k}`}>{t(`admin.features.create.${k}`)}</label>
-            <input id={`${id}-${k}`} value={v[k]} maxLength={k === 'title' ? 300 : k === 'module_name' ? 200 : 21} onChange={(e) => set(k, e.target.value)} aria-invalid={problem !== null} aria-describedby={problem ? `${id}-err` : undefined} />
+            <input id={`${id}-${k}`} value={v[k]} maxLength={k === 'title' ? 300 : k === 'module_name' ? 200 : 21} onChange={(e) => set(k, e.target.value)} aria-invalid={badField === k} aria-describedby={badField === k ? `${id}-err` : undefined} />
           </div>
         ))}
         <div className="field-row">

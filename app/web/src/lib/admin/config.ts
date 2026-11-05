@@ -9,6 +9,7 @@ import { adminErrorKey } from './users'
 export function configErrorKey(err: unknown): string {
   if (err instanceof ApiError && (err.status === 400 || err.status === 422)) return 'admin.errors.invalid'
   if (err instanceof ApiError && err.status === 409) return 'admin.errors.duplicate'
+  if (err instanceof ApiError && err.status === 404) return 'admin.errors.gone'
   return adminErrorKey(err)
 }
 
@@ -21,6 +22,17 @@ export type KeyProvider = (typeof KEY_PROVIDERS)[number]
 export function providerOfKey(configKey: string): KeyProvider | null {
   const p = configKey.replace(/_api_key$/, '')
   return configKey.endsWith('_api_key') && (KEY_PROVIDERS as readonly string[]).includes(p) ? (p as KeyProvider) : null
+}
+
+/** Provider groups on the keys page: the known ones always, then any other provider whose
+ * `<name>_api_key` rows the API returns (a catalog provider added later still shows up). */
+export function keyGroups(rows: readonly { config_key: string }[]): string[] {
+  const extra = new Set<string>()
+  for (const r of rows) {
+    const m = /^([a-z][a-z0-9_-]{0,40})_api_key$/.exec(r.config_key)
+    if (m?.[1] && !(KEY_PROVIDERS as readonly string[]).includes(m[1])) extra.add(m[1])
+  }
+  return [...KEY_PROVIDERS, ...[...extra].sort()]
 }
 
 export function keyProblem(v: { label: string; key: string }): string | null {
@@ -119,7 +131,7 @@ export function featureChanges(original: FeatureFields, draft: FeatureFields): P
   if (original.status !== draft.status) out.status = draft.status
   if ((original.priority ?? null) !== (draft.priority ?? null)) out.priority = draft.priority
   for (const k of FEATURE_ARRAYS) {
-    if (original[k].join('\n') !== draft[k].join('\n')) out[k] = draft[k]
+    if (parseList(original[k].join('\n')).join('\n') !== draft[k].join('\n')) out[k] = draft[k]
   }
   return out as Partial<FeatureFields>
 }
@@ -128,5 +140,23 @@ export function featureCreateProblem(v: { key: string; module_prefix: string; mo
   if (!v.key.trim() || !v.module_prefix.trim() || !v.module_name.trim() || !v.title.trim()) return 'admin.features.errors.required'
   if (!/^[A-Z][A-Z0-9]{0,9}-[A-Z0-9]{1,10}$/.test(v.key.trim().toUpperCase())) return 'admin.features.errors.key'
   if (!/^[A-Z][A-Z0-9]{0,9}$/.test(v.module_prefix.trim().toUpperCase())) return 'admin.features.errors.prefix'
+  return null
+}
+
+// --- health ---------------------------------------------------------------------------------------
+
+const DRIVE_PROBLEMS = new Set(['not_configured', 'error', 'token_refresh_failed', 'root_missing', 'shared_root'])
+
+/** The API's check messages (app/routers/admin/config.py `health`) as locale keys: a fixed set,
+ * only the task names travel as data. Anything else is not shown (server text never is, §0.10). */
+export function healthMessage(id: string, message: unknown): { key: string; values?: Record<string, string> } | null {
+  if (typeof message !== 'string' || !message) return null
+  if (id === 'storage') return { key: `admin.storage.problem.${DRIVE_PROBLEMS.has(message) ? message : 'error'}` }
+  if (id === 'database') return { key: 'admin.health.msg.database' }
+  if (message === 'no active key') return { key: 'admin.health.msg.noActiveKey' }
+  if (message === 'every active key failed its check') return { key: 'admin.health.msg.allKeysFailing' }
+  if (message === 'KEY_ENCRYPTION_SECRET is not set') return { key: 'admin.health.msg.noSecret' }
+  const tasks = /^stale or failing tasks: ([a-z_, ]{1,200})$/.exec(message)
+  if (tasks?.[1]) return { key: 'admin.health.msg.tasks', values: { tasks: tasks[1] } }
   return null
 }

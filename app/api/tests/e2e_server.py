@@ -208,7 +208,8 @@ def seed(url: str) -> None:
                 "INSERT INTO profiles (id, username, role) VALUES (%s, %s, %s)",
                 (uid[0], username, role),
             )
-            owner = owner or uid[0]
+            if username == "e2e_user":
+                owner = uid[0]
             conn.execute(
                 "SELECT quota_apply_movement(%s, 36000, 50, 'admin_grant', %s, false, NULL, NULL, "
                 "'{}'::jsonb)",

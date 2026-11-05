@@ -41,7 +41,7 @@ export function AdminConfigPage() {
         ) : (
           <ul className="setting-list">
             {config.data.map((row) => (
-              <SettingRow key={`${row.key}|${JSON.stringify(row.value)}`} row={row} onNotice={setNotice} />
+              <SettingRow key={row.key} row={row} onNotice={setNotice} />
             ))}
           </ul>
         )}
@@ -51,13 +51,19 @@ export function AdminConfigPage() {
   )
 }
 
-/** One setting. Remounted (key) when the stored value changes, so the field shows it. */
+/** One setting. A new stored value replaces the draft (kept mounted, so focus stays put). */
 function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
   const { t } = useTranslation()
   const f = useFormatters()
   const save = useSaveConfig()
   const kind = configKind(row.key, row.value)
-  const [draft, setDraft] = useState(row.value === null || row.value === undefined ? '' : String(row.value))
+  const stored = row.value === null || row.value === undefined ? '' : String(row.value)
+  const [draft, setDraft] = useState(stored)
+  const [seen, setSeen] = useState(stored)
+  if (seen !== stored) {
+    setSeen(stored)
+    setDraft(stored)
+  }
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const [ask, setAsk] = useState<{ value: unknown } | null>(null)
@@ -76,7 +82,10 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
       return
     }
     setProblem(null)
-    if (parsed.value === row.value) return
+    if (parsed.value === row.value) {
+      onNotice('admin.config.noChanges', 'warning')
+      return
+    }
     setAsk({ value: parsed.value })
   }
 
@@ -120,7 +129,7 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
           <input
             id={ids.input}
             value={draft}
-            inputMode={kind === 'string' ? 'text' : 'numeric'}
+            inputMode={kind === 'retention' ? 'numeric' : kind === 'number' ? 'decimal' : 'text'}
             placeholder={kind === 'retention' ? t('admin.config.keepForever') : undefined}
             onChange={(e) => setDraft(e.target.value)}
             aria-invalid={problem !== null}
@@ -169,9 +178,12 @@ function ModelsCard({ onNotice }: { onNotice: Notify }) {
       {gen.isPending ? (
         <p className="tab-note">{t('common.loading')}</p>
       ) : !gen.data ? (
-        <p className="tab-note">{t(adminErrorKey(gen.error))}</p>
+        <div className="tab-note">
+          <p>{t(adminErrorKey(gen.error))}</p>
+          <Button onClick={() => void gen.refetch()}>{t('common.tryAgain')}</Button>
+        </div>
       ) : (
-        <ModelsForm key={JSON.stringify([gen.data.allowedModels, gen.data.systemDefault])} data={gen.data} onNotice={onNotice} />
+        <ModelsForm data={gen.data} onNotice={onNotice} />
       )}
     </section>
   )
@@ -184,6 +196,14 @@ function ModelsForm({ data, onNotice }: { data: GenerationConfig; onNotice: Noti
   const save = useSaveGeneration()
   const [allowed, setAllowed] = useState<ModelPick[]>(data.allowedModels)
   const [def, setDef] = useState<ModelPick>(data.systemDefault)
+  // saved values replace the draft without remounting (focus stays on Save)
+  const storedKey = JSON.stringify([data.allowedModels, data.systemDefault])
+  const [seen, setSeen] = useState(storedKey)
+  if (seen !== storedKey) {
+    setSeen(storedKey)
+    setAllowed(data.allowedModels)
+    setDef(data.systemDefault)
+  }
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const [ask, setAsk] = useState(false)
@@ -201,7 +221,9 @@ function ModelsForm({ data, onNotice }: { data: GenerationConfig; onNotice: Noti
     const p = generationProblem(allowed, def)
     setProblem(p)
     setTries((n) => n + 1)
-    if (!p && changed) setAsk(true)
+    if (p) return
+    if (!changed) onNotice('admin.config.noChanges', 'warning')
+    else setAsk(true)
   }
 
   function send() {
@@ -245,7 +267,7 @@ function ModelsForm({ data, onNotice }: { data: GenerationConfig; onNotice: Noti
         )}
       </div>
       <p className="tab-note">{t('admin.models.help')}</p>
-      <Button type="submit" variant="primary" aria-disabled={save.isPending || !changed}>
+      <Button type="submit" variant="primary" aria-disabled={save.isPending}>
         {t('admin.models.save')}
       </Button>
       {ask && (

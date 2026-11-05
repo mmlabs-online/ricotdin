@@ -33,10 +33,14 @@ test('admin: users, requeue, key check', async ({ page }) => {
   await page.getByRole('link', { name: a.tabs.pipeline }).click()
   await page.getByRole('group', { name: a.pipeline.filterLabel }).getByRole('button', { name: a.pipeline.status.failed }).click()
   await expect(page).toHaveURL(/status=failed/)
-  await page.getByRole('button', { name: `Requeue ${FAILED}` }).click()
-  await expect(page.getByRole('dialog')).toContainText(a.pipeline.confirmBody_one.slice(0, 40))
-  await page.getByRole('dialog').getByRole('button', { name: a.pipeline.requeue }).click()
-  await expect(page.locator('.notice-banner')).toContainText('1 meeting queued again.')
+  // (a CI retry after a requeue finds the meeting done already: the seed is one meeting per server)
+  const requeue = page.getByRole('button', { name: `Requeue ${FAILED}` })
+  if (test.info().retry === 0 || (await requeue.count()) > 0) {
+    await requeue.click()
+    await expect(page.getByRole('dialog')).toContainText(a.pipeline.confirmBody_one.slice(0, 40))
+    await page.getByRole('dialog').getByRole('button', { name: a.pipeline.requeue }).click()
+    await expect(page.locator('.notice-banner')).toContainText('1 meeting queued again.')
+  }
   await page.getByRole('group', { name: a.pipeline.filterLabel }).getByRole('button', { name: a.pipeline.status.done }).click()
   await expect(page.getByRole('rowheader', { name: FAILED })).toBeVisible({ timeout: 20_000 })
 

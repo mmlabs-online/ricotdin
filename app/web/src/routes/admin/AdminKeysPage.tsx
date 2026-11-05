@@ -9,14 +9,21 @@ import { AdminHead, NoticeBanner, useFormatters, useNotice } from '../../compone
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Status } from '../../components/ui/Status'
-import { healthStatusKind, KEY_PROVIDERS, keyProblem, providerOfKey, type KeyProvider } from '../../lib/admin/config'
-import { adminErrorKey } from '../../lib/admin/users'
+import { configErrorKey, healthStatusKind, keyGroups, keyProblem } from '../../lib/admin/config'
 import { ApiError } from '../../api/errors'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 
 /** 422 on disable / delete = the provider's last active key (the API keeps one). */
-const keyErrorKey = (err: unknown) => (err instanceof ApiError && err.status === 422 ? 'admin.keys.errors.lastActive' : adminErrorKey(err))
+const keyErrorKey = (err: unknown) => (err instanceof ApiError && err.status === 422 ? 'admin.keys.errors.lastActive' : configErrorKey(err))
+const providerOf = (configKey: string) => configKey.replace(/_api_key$/, '')
+
+const KNOWN_NAMES = new Set(['gemini', 'openai', 'grok', 'speechmatics'])
+function useProviderName() {
+  const { t } = useTranslation()
+  // a provider added to the API catalog later shows under its own name until it gets a label
+  return (p: string) => (KNOWN_NAMES.has(p) ? t(`admin.usage.provider.${p}`) : displayText(p))
+}
 
 type Ask = { kind: 'disable' | 'enable' | 'delete'; row: KeyRow }
 
@@ -33,7 +40,9 @@ export function AdminKeysPage() {
   const ids = { body: useId(), reason: useId() }
   const busy = m.status.isPending || m.remove.isPending
 
-  const byProvider = (p: KeyProvider) => (keys.data ?? []).filter((k) => providerOfKey(k.config_key) === p)
+  const groups = keyGroups(keys.data ?? [])
+  const byProvider = (p: string) => (keys.data ?? []).filter((k) => k.config_key === `${p}_api_key`)
+  const name = useProviderName()
 
   function run() {
     if (!ask || busy) return
@@ -50,7 +59,7 @@ export function AdminKeysPage() {
         // enable / disable: the same button stays (its label flips); a deleted row is gone, so focus
         // its provider's heading (stable, tabIndex -1)
         requestAnimationFrame(() =>
-          (kind === 'delete' ? document.getElementById(`keys-${providerOfKey(row.config_key) ?? ''}`) : document.querySelector<HTMLElement>(`${opener} button`))?.focus(),
+          (kind === 'delete' ? document.getElementById(`keys-${providerOf(row.config_key)}`) : document.querySelector<HTMLElement>(`${opener} button`))?.focus(),
         )
       })
       .catch((err: unknown) => setNotice(keyErrorKey(err), 'error'))
@@ -61,7 +70,7 @@ export function AdminKeysPage() {
     m.check
       .mutateAsync()
       .then((r) => setNotice('admin.keys.checked', 'success', { healthy: r.summary.healthy ?? 0, unhealthy: r.summary.unhealthy ?? 0, unknown: r.summary.unknown ?? 0 }))
-      .catch((err: unknown) => setNotice(adminErrorKey(err), 'error'))
+      .catch((err: unknown) => setNotice(configErrorKey(err), 'error'))
   }
 
   return (
@@ -79,14 +88,16 @@ export function AdminKeysPage() {
         <p className="tab-note">{t('common.loading')}</p>
       ) : !keys.data ? (
         <div className="tab-note">
-          <p>{t(adminErrorKey(keys.error))}</p>
+          <p>{t(configErrorKey(keys.error))}</p>
           <Button onClick={() => void keys.refetch()}>{t('common.tryAgain')}</Button>
         </div>
       ) : (
-        KEY_PROVIDERS.map((p) => (
+        groups.map((p) => (
           <section className="admin-card provider-card" key={p} aria-labelledby={`keys-${p}`}>
             <div className="card-head">
-              <h2 id={`keys-${p}`} tabIndex={-1}>{t(`admin.usage.provider.${p}`)}</h2>
+              <h2 id={`keys-${p}`} tabIndex={-1}>
+                {name(p)}
+              </h2>
             </div>
             {byProvider(p).length === 0 ? (
               <p className="tab-note">{t('admin.keys.noKeys')}</p>
@@ -132,7 +143,7 @@ export function AdminKeysPage() {
         ))
       )}
 
-      <AddKeyForm onNotice={setNotice} />
+      <AddKeyForm providers={groups} onNotice={setNotice} />
 
       <div className="secure-note">
         <ShieldCheck size={18} aria-hidden="true" />
@@ -167,10 +178,11 @@ export function AdminKeysPage() {
   )
 }
 
-function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'success' | 'warning' | 'error') => void }) {
+function AddKeyForm({ providers, onNotice }: { providers: string[]; onNotice: (key: string | null, kind?: 'success' | 'warning' | 'error') => void }) {
   const { t } = useTranslation()
   const { add } = useKeyMutations()
-  const [provider, setProvider] = useState<KeyProvider>('gemini')
+  const [provider, setProvider] = useState('gemini')
+  const name = useProviderName()
   const [label, setLabel] = useState('')
   const [key, setKey] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -205,7 +217,7 @@ function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'succe
       .catch((err: unknown) => {
         setKey('')
         add.reset()
-        onNotice(err instanceof ApiError && err.status === 503 ? 'admin.keys.errors.noSecret' : adminErrorKey(err), 'error')
+        onNotice(err instanceof ApiError && err.status === 503 ? 'admin.keys.errors.noSecret' : configErrorKey(err), 'error')
       })
   }
 
@@ -217,10 +229,10 @@ function AddKeyForm({ onNotice }: { onNotice: (key: string | null, kind?: 'succe
       <form className="grant-form" onSubmit={submit} noValidate autoComplete="off">
         <div className="field-row">
           <label htmlFor={ids.provider}>{t('admin.keys.provider')}</label>
-          <select id={ids.provider} value={provider} onChange={(e) => setProvider(e.target.value as KeyProvider)}>
-            {KEY_PROVIDERS.map((p) => (
+          <select id={ids.provider} value={provider} onChange={(e) => setProvider(e.target.value)}>
+            {providers.map((p) => (
               <option key={p} value={p}>
-                {t(`admin.usage.provider.${p}`)}
+                {name(p)}
               </option>
             ))}
           </select>

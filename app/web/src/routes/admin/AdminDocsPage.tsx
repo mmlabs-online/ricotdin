@@ -30,6 +30,8 @@ export function AdminDocsPage() {
         </div>
         {docs.isPending ? (
           <p className="tab-note">{t('common.loading')}</p>
+        ) : docs.isError ? (
+          <p className="tab-note">{t('admin.docs.unreachable')}</p>
         ) : docs.data ? (
           <ul className="docs-links">
             <li>

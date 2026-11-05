@@ -886,7 +886,13 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   (registry ≤ 200 rows filtered in the page, URL `module`/`status`/`q`/`key`; the editor PATCHes only
   changed fields (`featureChanges`), lists one item per line), `/admin/health` (check messages shown
   as text) and `/admin/docs` (probes `<api>/openapi.json`; links only when `API_DOCS=1`). Errors on
-  these screens go through `configErrorKey` (400/422 = invalid value, 409 = duplicate). The
+  these screens go through `configErrorKey` (400/422 = invalid value, 404 = gone, 409 = duplicate;
+  the keys page maps 422 to `lastActive` first). Health messages are a fixed English set from the
+  API, shown through `healthMessage` locale keys (unknown text is not shown). The keys page groups
+  by `keyGroups` (known providers + any `<name>_api_key` the API returns), so a catalog provider
+  added later still appears — give it an `admin.usage.provider.<name>` label. The plaintext key lives
+  only in the field + the `add` mutation (`gcTime: 0`, `reset()` after it settles). Settings, models
+  and the feature editor take a new saved value without remounting (focus stays on Save). The
   placeholder `AdminSectionPage` is gone. **E2E:** `e2e/admin.spec.ts` (sign in as `e2e_admin`, users,
   requeue the seeded failed meeting → the stand-in worker finishes it, key check + save a key, audit
   rows); `tests/e2e_server.py` seeds the admin and the failed meeting (+ its `storage_objects` row).

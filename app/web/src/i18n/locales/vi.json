@@ -183,7 +183,8 @@
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
       "conflict": "Không làm được ở trạng thái hiện tại (ví dụ đang chạy, hoặc thiếu tệp). Hãy tải lại và kiểm tra.",
       "invalid": "Máy chủ từ chối giá trị này. Hãy kiểm tra rồi thử lại.",
-      "duplicate": "Đã tồn tại (ví dụ mã tính năng đã được dùng)."
+      "duplicate": "Đã tồn tại (ví dụ mã tính năng đã được dùng).",
+      "gone": "Mục này không còn nữa (có thể admin khác đã xóa). Danh sách đã được tải lại."
     },
     "pagination": {
       "label": "Trang",
@@ -391,7 +392,14 @@
       },
       "subtitle": "Kiểm tra cơ sở dữ liệu, kho tệp, key và tác vụ của worker.",
       "checks": "Các mục kiểm tra",
-      "refresh": "Kiểm tra lại"
+      "refresh": "Kiểm tra lại",
+      "msg": {
+        "noActiveKey": "Không có key đang dùng.",
+        "allKeysFailing": "Mọi key đang dùng đều lỗi ở lần kiểm tra gần nhất.",
+        "noSecret": "Máy chủ chưa đặt KEY_ENCRYPTION_SECRET.",
+        "tasks": "Quá hạn hoặc lỗi: {{tasks}}",
+        "database": "Cơ sở dữ liệu không phản hồi."
+      }
     },
     "pipeline": {
       "subtitle": "Các cuộc họp trong hàng đợi xử lý. \"Xử lý lại\" chạy lại cuộc họp bị lỗi hoặc bị treo.",
@@ -662,7 +670,8 @@
         "retention": "Nhập số ngày nguyên từ 1 đến 3650, hoặc để trống.",
         "number": "Hãy nhập một số.",
         "tooLong": "Tối đa 2000 ký tự."
-      }
+      },
+      "noChanges": "Không có gì thay đổi."
     },
     "models": {
       "title": "Mô hình AI",
@@ -772,7 +781,8 @@
       "redoc": "Tài liệu tham khảo (ReDoc)",
       "openapi": "Tệp OpenAPI (JSON)",
       "newTab": "(mở trong tab mới)",
-      "offHelp": "API chỉ phục vụ tài liệu khi máy chủ bật API_DOCS=1. Nên tắt ở môi trường thật nếu không cần."
+      "offHelp": "API chỉ phục vụ tài liệu khi máy chủ bật API_DOCS=1. Nên tắt ở môi trường thật nếu không cần.",
+      "unreachable": "Không kết nối được API để kiểm tra tài liệu. Hãy thử lại sau."
     }
   },
   "error": {
