@@ -47,8 +47,8 @@ export interface paths {
         };
         /**
          * Activity
-         * @description ``?userId&eventType&from&to&page&perPage``: the activity feed with the meeting title
-         *     (never meeting content).
+         * @description ``?userId&eventType&from&to&page&perPage``: the activity feed with the user's email and the
+         *     meeting title (never meeting content).
          */
         get: operations["activity_admin_activity_get"];
         put?: never;
