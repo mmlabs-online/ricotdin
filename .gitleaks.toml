@@ -6,11 +6,17 @@ useDefault = true
 
 [allowlist]
 description = "Fake keys in tests and fixtures; type annotations"
+# Named files only (never a whole directory): a real key pasted into another test still fails.
 paths = [
-  # pytest / vitest data: fake keys, redaction samples, v1 crypto fixtures (encrypted fakes)
-  '''^app/api/tests/''',
-  '''^app/web/src/.*\.test\.tsx?$''',
-  '''^app/web/e2e/''',
+  # fake keys, redaction samples and encrypted v1 crypto fixtures
+  '''^app/api/tests/fixtures/v1/crypto_v1\.json$''',
+  '''^app/api/tests/test_admin_config_integration\.py$''',
+  '''^app/api/tests/test_admin_config_rules\.py$''',
+  '''^app/api/tests/test_core_redact\.py$''',
+  '''^app/api/tests/test_core_redact_more\.py$''',
+  '''^app/api/tests/test_core_sentry\.py$''',
+  '''^app/api/tests/test_domain_uploads\.py$''',
+  '''^app/web/src/lib/admin/config\.test\.ts$''',
 ]
 regexTarget = "line"
 regexes = [

@@ -5,7 +5,10 @@ name: Release
 #   2. the full API and web CI (ci-api.yml, ci-web.yml, reused as-is);
 #   3. build + push mingming21400/ricotdin-api:vX.Y.Z (API and worker share it) and
 #      mingming21400/ricotdin-web:vX.Y.Z (+ latest when it is the highest version);
-#   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest.
+#   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest in
+#      apps/ricotdin/release-v2.env (v1 hotfix releases from release/1.1 still rewrite release.env:
+#      separate files, so a v1 hotfix can never drop the v2 pins). A prerelease tag
+#      (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
 # Deploy = review + merge that PR (OPS-04). A tag runs the workflow file of the tagged commit,
 # so v1 hotfix tags (v1.x on release/1.1) keep using the v1 release.yml of that branch.
 on:
@@ -122,10 +125,12 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
-      # Writes ONLY apps/ricotdin/release.env (the deployment repo's pr-scope.yml requires it).
-      # DEPLOY_REPO_TOKEN: fine-grained PAT on mmlabs-online/deployment only,
-      # Contents + Pull requests read/write.
+      # Writes ONLY apps/ricotdin/release-v2.env (the deployment repo's pr-scope.yml must allow
+      # it). DEPLOY_REPO_TOKEN: fine-grained PAT on mmlabs-online/deployment only,
+      # Contents + Pull requests read/write. The deployment repo must dismiss stale approvals on
+      # new commits: a re-run for the same tag force-pushes the release branch.
       - name: Open deployment PR
+        if: ${{ !contains(github.ref_name, '-') }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
           API_DIGEST: ${{ steps.api.outputs.digest }}
@@ -133,7 +138,7 @@ jobs:
         run: |
           TAG="$GITHUB_REF_NAME"
           BRANCH="release/$APP-$TAG"
-          FILE="apps/$APP/release.env"
+          FILE="apps/$APP/release-v2.env"
           if [ -z "$API_DIGEST" ] || [ -z "$WEB_DIGEST" ]; then
             echo "::error::build-push-action returned no digest"
             exit 1

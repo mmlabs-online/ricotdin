@@ -918,14 +918,17 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   then reuses `ci-api.yml` + `ci-web.yml` (`workflow_call`), builds `mingming21400/ricotdin-api`
   (API **and** worker: one image, the worker is `command: python -m app.worker`) and
   `mingming21400/ricotdin-web`, and opens the deployment PR writing `RICOTDIN_API_IMAGE`,
-  `RICOTDIN_WEB_IMAGE` (both `:tag@digest`) and `RICOTDIN_VERSION` to `apps/ricotdin/release.env`.
+  `RICOTDIN_WEB_IMAGE` (both `:tag@digest`) and `RICOTDIN_VERSION` to
+  `apps/ricotdin/release-v2.env` — its own file, because v1 hotfix releases rewrite all of
+  `release.env` (the deployment repo's `pr-scope.yml` must allow it, ARC-15 part 2). A prerelease
+  tag (`v2.0.0-rc1`) only pushes images, no deployment PR.
   A v1 tag on `dev` fails the guard; v1 hotfix tags are cut on `release/1.1`, whose own
   `release.yml` still builds v1 (a tag runs the workflow file of the tagged commit).
 - **Pinning:** every GitHub Action by commit SHA (`# vN` comment), the v2 base images
   (`python`, `node`, `nginx-unprivileged`, `uv`) by digest; `.github/dependabot.yml` opens monthly
   PRs into `dev` to move them. Never add an action by tag.
-- **Secrets scan:** `.gitleaks.toml` (default rules; allowlist only for test paths and one type
-  annotation) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
+- **Secrets scan:** `.gitleaks.toml` (default rules; allowlist = named test files with fake keys + one
+  type annotation — add a file only after checking its "secret" is fake) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
   commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
   not rescanned: a finding there is rotated at the provider, never allowlisted.
 - **Known history finding (2026-11-05):** commits of 2026-06-09/10/13 (`README.md`, on `main` and
