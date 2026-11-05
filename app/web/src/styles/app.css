@@ -433,7 +433,8 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .feature-form textarea { min-height: 2.6em; resize: vertical; }
 .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .link-button { border: 0; background: none; padding: 0; color: var(--primary); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.admin-table tr[aria-current="true"] { background: var(--primary-soft); }
+.admin-table tr.row-open { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
+.admin-table tr.row-open .link-button { text-decoration-thickness: 2px; }
 .docs-links li { padding: 8px 0; }
 @media (max-width: 1023px) { .feature-split { grid-template-columns: 1fr; } }
 @media (max-width: 767px) { .key-item { grid-template-columns: 1fr; } .field-pair { grid-template-columns: 1fr; } }

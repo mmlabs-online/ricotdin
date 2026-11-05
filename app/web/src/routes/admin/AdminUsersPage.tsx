@@ -140,7 +140,7 @@ export function AdminUsersPage() {
             {t('admin.users.search')}
           </label>
           <input id={ids.search} type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t('admin.users.searchPlaceholder')} maxLength={200} />
-          <button type="submit" className="sr-only">
+          <button type="submit" className="sr-only" tabIndex={-1}>
             {t('admin.users.searchSubmit')}
           </button>
         </form>

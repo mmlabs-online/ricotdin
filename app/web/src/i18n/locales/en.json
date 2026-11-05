@@ -399,7 +399,9 @@
         "noSecret": "KEY_ENCRYPTION_SECRET is not set on the server.",
         "tasks": "Overdue or failing: {{tasks}}",
         "database": "The database did not answer."
-      }
+      },
+      "recheckOk": "Checked again: everything is OK.",
+      "recheckBad": "Checked again: something needs attention."
     },
     "pipeline": {
       "subtitle": "Meetings in the processing queue. Requeue runs a failed or stuck meeting again.",
@@ -637,10 +639,14 @@
         "keyLong": "The key is too long (at most 512 characters).",
         "keyChars": "The key cannot contain spaces or special characters.",
         "lastActive": "This is the last active key of its provider. Add another key first.",
-        "noSecret": "The server cannot store keys: KEY_ENCRYPTION_SECRET is not set."
+        "noSecret": "The server cannot store keys: KEY_ENCRYPTION_SECRET is not set.",
+        "keyEmpty": "Enter the key."
       },
       "secureTitle": "Keys are write-only",
-      "secureBody": "Keys are encrypted at rest and never sent back to the browser."
+      "secureBody": "Keys are encrypted at rest and never sent back to the browser.",
+      "endingIn": "key ending in {{last4}}",
+      "statusLabel": "Status:",
+      "healthLabel": "Health:"
     },
     "config": {
       "subtitle": "Workspace settings. Each change asks first and is written to the audit log.",
@@ -671,7 +677,8 @@
         "number": "Enter a number.",
         "tooLong": "Use at most 2000 characters."
       },
-      "noChanges": "Nothing changed."
+      "noChanges": "Nothing changed.",
+      "saveOne": "Save {{name}}"
     },
     "models": {
       "title": "AI models",
@@ -744,11 +751,15 @@
       "createButton": "Add feature",
       "created": "{{key}} added.",
       "errors": {
-        "required": "Fill in the key, module prefix, module name and title.",
-        "key": "The key looks like PREFIX-ID, for example ARC-20.",
-        "prefix": "The module prefix is 1–10 letters or digits.",
-        "title": "Enter a title."
-      }
+        "key": "Enter a key such as ARC-20.",
+        "title": "Enter a title.",
+        "module_prefix": "Enter a module prefix.",
+        "module_name": "Enter a module name.",
+        "keyFormat": "The key looks like PREFIX-ID, for example ARC-20.",
+        "prefixFormat": "The module prefix is 1–10 letters or digits."
+      },
+      "shown_one": "{{count}} feature shown",
+      "shown_other": "{{count}} features shown"
     },
     "storage": {
       "subtitle": "Recordings and avatars are stored in Google Drive.",

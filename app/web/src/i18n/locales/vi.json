@@ -399,7 +399,9 @@
         "noSecret": "Máy chủ chưa đặt KEY_ENCRYPTION_SECRET.",
         "tasks": "Quá hạn hoặc lỗi: {{tasks}}",
         "database": "Cơ sở dữ liệu không phản hồi."
-      }
+      },
+      "recheckOk": "Đã kiểm tra lại: mọi thứ ổn.",
+      "recheckBad": "Đã kiểm tra lại: có mục cần xem."
     },
     "pipeline": {
       "subtitle": "Các cuộc họp trong hàng đợi xử lý. \"Xử lý lại\" chạy lại cuộc họp bị lỗi hoặc bị treo.",
@@ -637,10 +639,14 @@
         "keyLong": "Key quá dài (tối đa 512 ký tự).",
         "keyChars": "Key không được chứa khoảng trắng hay ký tự đặc biệt.",
         "lastActive": "Đây là key đang dùng cuối cùng của nhà cung cấp này. Hãy thêm key khác trước.",
-        "noSecret": "Máy chủ chưa lưu được key: chưa đặt KEY_ENCRYPTION_SECRET."
+        "noSecret": "Máy chủ chưa lưu được key: chưa đặt KEY_ENCRYPTION_SECRET.",
+        "keyEmpty": "Hãy nhập key."
       },
       "secureTitle": "Key chỉ ghi, không đọc lại",
-      "secureBody": "Key được mã hóa khi lưu và không bao giờ gửi lại về trình duyệt."
+      "secureBody": "Key được mã hóa khi lưu và không bao giờ gửi lại về trình duyệt.",
+      "endingIn": "key kết thúc bằng {{last4}}",
+      "statusLabel": "Trạng thái:",
+      "healthLabel": "Tình trạng:"
     },
     "config": {
       "subtitle": "Cài đặt chung. Mỗi thay đổi đều hỏi xác nhận và được ghi vào nhật ký kiểm toán.",
@@ -671,7 +677,8 @@
         "number": "Hãy nhập một số.",
         "tooLong": "Tối đa 2000 ký tự."
       },
-      "noChanges": "Không có gì thay đổi."
+      "noChanges": "Không có gì thay đổi.",
+      "saveOne": "Lưu {{name}}"
     },
     "models": {
       "title": "Mô hình AI",
@@ -744,11 +751,15 @@
       "createButton": "Thêm tính năng",
       "created": "Đã thêm {{key}}.",
       "errors": {
-        "required": "Hãy điền mã, tiền tố mô-đun, tên mô-đun và tên.",
-        "key": "Mã có dạng TIỀNTỐ-SỐ, ví dụ ARC-20.",
-        "prefix": "Tiền tố mô-đun gồm 1–10 chữ hoặc số.",
-        "title": "Hãy nhập tên."
-      }
+        "key": "Hãy nhập mã, ví dụ ARC-20.",
+        "title": "Hãy nhập tên.",
+        "module_prefix": "Hãy nhập tiền tố mô-đun.",
+        "module_name": "Hãy nhập tên mô-đun.",
+        "keyFormat": "Mã có dạng TIỀNTỐ-SỐ, ví dụ ARC-20.",
+        "prefixFormat": "Tiền tố mô-đun gồm 1–10 chữ hoặc số."
+      },
+      "shown_one": "Đang hiện {{count}} tính năng",
+      "shown_other": "Đang hiện {{count}} tính năng"
     },
     "storage": {
       "subtitle": "Bản ghi và ảnh đại diện được lưu trong Google Drive.",

@@ -40,6 +40,7 @@ export function keyProblem(v: { label: string; key: string }): string | null {
   const key = v.key.trim()
   if (!label) return 'admin.keys.errors.label'
   if (label.length > 80) return 'admin.keys.errors.labelLong'
+  if (!key) return 'admin.keys.errors.keyEmpty'
   if (key.length < 8) return 'admin.keys.errors.keyShort'
   if (key.length > 512) return 'admin.keys.errors.keyLong'
   if (!/^[\x21-\x7e]+$/.test(key)) return 'admin.keys.errors.keyChars' // the key travels in an HTTP header
@@ -136,11 +137,24 @@ export function featureChanges(original: FeatureFields, draft: FeatureFields): P
   return out as Partial<FeatureFields>
 }
 
+export const FEATURE_CREATE_FIELDS = ['key', 'module_prefix', 'module_name', 'title'] as const
+
+/** The first problem of the create form, one message per field: `admin.features.errors.<field>`
+ * for an empty one, `keyFormat` / `prefixFormat` for a malformed one. */
 export function featureCreateProblem(v: { key: string; module_prefix: string; module_name: string; title: string }): string | null {
-  if (!v.key.trim() || !v.module_prefix.trim() || !v.module_name.trim() || !v.title.trim()) return 'admin.features.errors.required'
-  if (!/^[A-Z][A-Z0-9]{0,9}-[A-Z0-9]{1,10}$/.test(v.key.trim().toUpperCase())) return 'admin.features.errors.key'
-  if (!/^[A-Z][A-Z0-9]{0,9}$/.test(v.module_prefix.trim().toUpperCase())) return 'admin.features.errors.prefix'
+  const empty = FEATURE_CREATE_FIELDS.find((k) => !v[k].trim())
+  if (empty) return `admin.features.errors.${empty}`
+  if (!/^[A-Z][A-Z0-9]{0,9}-[A-Z0-9]{1,10}$/.test(v.key.trim().toUpperCase())) return 'admin.features.errors.keyFormat'
+  if (!/^[A-Z][A-Z0-9]{0,9}$/.test(v.module_prefix.trim().toUpperCase())) return 'admin.features.errors.prefixFormat'
   return null
+}
+
+/** The create-form field a problem is about (for aria-invalid + focus). */
+export function featureProblemField(problem: string | null): (typeof FEATURE_CREATE_FIELDS)[number] | null {
+  if (!problem) return null
+  if (problem.endsWith('keyFormat')) return 'key'
+  if (problem.endsWith('prefixFormat')) return 'module_prefix'
+  return FEATURE_CREATE_FIELDS.find((k) => problem.endsWith(`.${k}`)) ?? null
 }
 
 // --- health ---------------------------------------------------------------------------------------

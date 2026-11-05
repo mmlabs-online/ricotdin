@@ -8,7 +8,7 @@ import { useFeatureMutations, useFeatures, type Feature } from '../../api/admin/
 import { AdminHead, NoticeBanner, useFormatters, useNotice, useUrlState } from '../../components/admin/AdminParts'
 import { Button } from '../../components/ui/Button'
 import { Status } from '../../components/ui/Status'
-import { FEATURE_ARRAYS, featureChanges, featureCreateProblem, listText, parseList, type FeatureFields } from '../../lib/admin/config'
+import { FEATURE_ARRAYS, FEATURE_CREATE_FIELDS, featureChanges, featureCreateProblem, featureProblemField, listText, parseList, type FeatureFields } from '../../lib/admin/config'
 import { configErrorKey } from '../../lib/admin/config'
 import { adminErrorKey } from '../../lib/admin/users'
 import { displayText } from '../../lib/text'
@@ -44,6 +44,10 @@ export function AdminFeaturesPage() {
       (!q || f.key.toLowerCase().includes(q) || f.title.toLowerCase().includes(q) || (f.description ?? '').toLowerCase().includes(q)),
   )
   const current = all.find((f) => f.key === selected) ?? null
+  // announce the count only once a filter changed
+  const filterKey = `${module}|${status}|${q}`
+  const [firstFilter] = useState(filterKey)
+  const filtered = filterKey !== firstFilter
 
   return (
     <>
@@ -62,7 +66,7 @@ export function AdminFeaturesPage() {
             {t('admin.features.search')}
           </label>
           <input id={ids.search} type="search" value={draft} maxLength={100} onChange={(e) => setDraft(e.target.value)} placeholder={t('admin.features.searchPlaceholder')} />
-          <button type="submit" className="sr-only">
+          <button type="submit" className="sr-only" tabIndex={-1}>
             {t('admin.users.searchSubmit')}
           </button>
         </form>
@@ -90,6 +94,10 @@ export function AdminFeaturesPage() {
         </select>
       </div>
 
+      {/* the count after a filter change (4.1.3); empty on first load */}
+      <p className="sr-only" role="status">
+        {filtered ? t('admin.features.shown', { count: shown.length }) : ''}
+      </p>
       {features.isPending ? (
         <p className="tab-note">{t('common.loading')}</p>
       ) : !features.data ? (
@@ -117,9 +125,9 @@ export function AdminFeaturesPage() {
                   </thead>
                   <tbody>
                     {shown.map((f) => (
-                      <tr key={f.id} aria-current={f.key === selected ? 'true' : undefined}>
+                      <tr key={f.id} className={f.key === selected ? 'row-open' : undefined}>
                         <th scope="row">
-                          <button type="button" className="link-button" data-feature={f.key} onClick={() => url.set({ key: f.key })}>
+                          <button type="button" className="link-button" data-feature={f.key} aria-current={f.key === selected ? 'true' : undefined} onClick={() => url.set({ key: f.key })}>
                             {displayText(f.key)}
                           </button>
                         </th>
@@ -267,15 +275,15 @@ function FeatureEditor({ feature, onNotice, onClose }: { feature: Feature; onNot
           <label htmlFor={`${id}-desc`}>{t('admin.features.description')}</label>
           <textarea id={`${id}-desc`} rows={3} maxLength={5000} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} />
         </div>
+        <p className="tab-note" id={`${id}-listhint`}>
+          {t('admin.features.listHint')}
+        </p>
         {FEATURE_ARRAYS.map((k) => (
           <div className="field-row" key={k}>
             <label htmlFor={`${id}-${k}`}>{t(`admin.features.lists.${k}`)}</label>
             <textarea id={`${id}-${k}`} rows={2} value={lists[k]} onChange={(e) => setLists((l) => ({ ...l, [k]: e.target.value }))} aria-describedby={`${id}-listhint`} />
           </div>
         ))}
-        <p className="tab-note" id={`${id}-listhint`}>
-          {t('admin.features.listHint')}
-        </p>
         <div className="field-row">
           <label htmlFor={`${id}-content`}>{t('admin.features.content')}</label>
           <textarea id={`${id}-content`} rows={10} maxLength={200000} value={draft.content ?? ''} onChange={(e) => set('content', e.target.value)} spellCheck={false} />
@@ -307,9 +315,7 @@ function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; o
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const id = useId()
-  // the one field at fault (3.3.1): the first empty one, or the key / prefix
-  const badField =
-    problem === 'admin.features.errors.key' ? 'key' : problem === 'admin.features.errors.prefix' ? 'module_prefix' : problem ? (['key', 'module_prefix', 'module_name', 'title'] as const).find((k) => !v[k].trim()) : undefined
+  const badField = featureProblemField(problem) // the one field at fault (3.3.1)
   const set = (k: keyof typeof v, value: string) =>
     setV((d) => {
       const next = { ...d, [k]: value }
@@ -328,8 +334,7 @@ function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; o
     setProblem(p)
     setTries((n) => n + 1)
     if (p) {
-      const field = p === 'admin.features.errors.key' ? 'key' : p === 'admin.features.errors.prefix' ? 'module_prefix' : (['key', 'module_prefix', 'module_name', 'title'] as const).find((k) => !v[k].trim())
-      document.getElementById(`${id}-${field ?? 'key'}`)?.focus()
+      document.getElementById(`${id}-${featureProblemField(p) ?? 'key'}`)?.focus()
       return
     }
     const key = v.key.trim().toUpperCase()
@@ -351,7 +356,7 @@ function FeatureCreate({ modules, onNotice, onCreated }: { modules: Feature[]; o
       </div>
       <p className="tab-note">{t('admin.features.pickHint')}</p>
       <form onSubmit={submit} noValidate className="feature-form">
-        {(['key', 'module_prefix', 'module_name', 'title'] as const).map((k) => (
+        {FEATURE_CREATE_FIELDS.map((k) => (
           <div className="field-row" key={k}>
             <label htmlFor={`${id}-${k}`}>{t(`admin.features.create.${k}`)}</label>
             <input id={`${id}-${k}`} value={v[k]} maxLength={k === 'title' ? 300 : k === 'module_name' ? 200 : 21} onChange={(e) => set(k, e.target.value)} aria-invalid={badField === k} aria-describedby={badField === k ? `${id}-err` : undefined} />

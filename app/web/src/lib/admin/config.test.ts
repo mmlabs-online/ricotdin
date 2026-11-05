@@ -31,6 +31,7 @@ describe('provider keys', () => {
     expect(keyProblem({ ...ok, label: '  ' })).toBe('admin.keys.errors.label')
     expect(keyProblem({ ...ok, label: 'x'.repeat(81) })).toBe('admin.keys.errors.labelLong')
     expect(keyProblem({ ...ok, key: 'short' })).toBe('admin.keys.errors.keyShort')
+    expect(keyProblem({ ...ok, key: '  ' })).toBe('admin.keys.errors.keyEmpty')
     expect(keyProblem({ ...ok, key: 'k'.repeat(513) })).toBe('admin.keys.errors.keyLong')
     expect(keyProblem({ ...ok, key: 'has space 123' })).toBe('admin.keys.errors.keyChars')
     expect(keyProblem({ ...ok, key: 'ключ12345678' })).toBe('admin.keys.errors.keyChars')
@@ -102,9 +103,13 @@ describe('features', () => {
     const ok = { key: 'ARC-20', module_prefix: 'ARC', module_name: 'Architecture', title: 'X' }
     expect(featureCreateProblem(ok)).toBeNull()
     expect(featureCreateProblem({ ...ok, key: 'arc-20' })).toBeNull() // upper-cased like the API
-    expect(featureCreateProblem({ ...ok, key: 'ARC20' })).toBe('admin.features.errors.key')
-    expect(featureCreateProblem({ ...ok, module_prefix: 'A-B' })).toBe('admin.features.errors.prefix')
-    expect(featureCreateProblem({ ...ok, title: ' ' })).toBe('admin.features.errors.required')
+    expect(featureCreateProblem({ ...ok, key: 'ARC20' })).toBe('admin.features.errors.keyFormat')
+    expect(featureCreateProblem({ ...ok, module_prefix: 'A-B' })).toBe('admin.features.errors.prefixFormat')
+    // one message per field (3.3.3): the first empty one is named
+    expect(featureCreateProblem({ ...ok, title: ' ' })).toBe('admin.features.errors.title')
+    expect(featureCreateProblem({ ...ok, module_prefix: '' })).toBe('admin.features.errors.module_prefix')
+    expect(featureCreateProblem({ ...ok, key: '', module_name: '' })).toBe('admin.features.errors.key')
+    expect(featureCreateProblem({ ...ok, module_name: '' })).toBe('admin.features.errors.module_name')
   })
 })
 

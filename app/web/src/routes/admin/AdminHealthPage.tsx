@@ -2,7 +2,7 @@
 // keys from the last check, worker tasks; 503 when degraded) and the Drive connection + stored files.
 import { useTranslation } from 'react-i18next'
 import { useHealthReport, useStorageStatus } from '../../api/admin/config'
-import { AdminHead, useFormatters } from '../../components/admin/AdminParts'
+import { AdminHead, NoticeBanner, useFormatters, useNotice } from '../../components/admin/AdminParts'
 import { Button } from '../../components/ui/Button'
 import { Status } from '../../components/ui/Status'
 import { healthMessage } from '../../lib/admin/config'
@@ -18,6 +18,15 @@ export function AdminHealthPage() {
   const report = useHealthReport()
   const f = useFormatters()
   const health = healthSummary(report.data)
+  const [notice, setNotice] = useNotice()
+  function recheck() {
+    if (report.isFetching) return
+    void report.refetch().then((r) => {
+      const s = healthSummary(r.data)
+      if (r.isError && !r.data) setNotice(adminErrorKey(r.error), 'error')
+      else setNotice(s.status === 'ok' ? 'admin.health.recheckOk' : 'admin.health.recheckBad', s.status === 'ok' ? 'success' : 'warning')
+    })
+  }
   const raw = (report.data ?? {}) as { checks?: Record<string, { message?: unknown }> }
   // the API's messages are a fixed English set: shown through locale keys, never as server text
   const message = (id: string) => {
@@ -33,9 +42,10 @@ export function AdminHealthPage() {
           <Status type={health.status === 'ok' ? 'success' : 'danger'}>{t(health.status === 'ok' ? 'admin.overview.allOk' : 'admin.overview.degraded')}</Status>
         )}
       </AdminHead>
+      <NoticeBanner notice={notice} onDismiss={() => setNotice(null)} />
       <div className="admin-toolbar">
         {report.dataUpdatedAt > 0 && <span className="last-check">{t('admin.pipeline.updated', { time: f.time(report.dataUpdatedAt) })}</span>}
-        <Button onClick={() => void report.refetch()} aria-busy={report.isFetching}>
+        <Button onClick={recheck} aria-busy={report.isFetching} aria-disabled={report.isFetching}>
           {t('admin.health.refresh')}
         </Button>
       </div>

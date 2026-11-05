@@ -107,11 +107,18 @@ export function AdminKeysPage() {
                   <li className="key-item" key={k.id} data-key-row={k.id}>
                     <div className="key-name">
                       <strong className="bidi-isolate">{displayText(k.label)}</strong>
-                      <small>{t('admin.keys.masked', { last4: displayText(k.last4) })}</small>
+                      <small>
+                        <span aria-hidden="true">{t('admin.keys.masked', { last4: displayText(k.last4) })}</span>
+                        <span className="sr-only">{t('admin.keys.endingIn', { last4: displayText(k.last4) })}</span>
+                      </small>
                     </div>
                     <div className="key-meta">
-                      <Status type={k.status === 'active' ? 'success' : 'danger'}>{t(`admin.keys.status.${k.status}`)}</Status>
+                      <Status type={k.status === 'active' ? 'success' : 'danger'}>
+                        <span className="sr-only">{t('admin.keys.statusLabel')}</span>
+                        {t(`admin.keys.status.${k.status}`)}
+                      </Status>
                       <Status type={healthStatusKind(k.health_status)}>
+                        <span className="sr-only">{t('admin.keys.healthLabel')}</span>
                         {t(`admin.keys.health.${k.health_status === 'healthy' || k.health_status === 'unhealthy' ? k.health_status : 'unknown'}`)}
                       </Status>
                     </div>

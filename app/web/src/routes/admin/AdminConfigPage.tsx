@@ -1,7 +1,7 @@
 // Admin › Config (ARC-14c, Make ConfigAdmin): app settings (each saved on its own, every change
 // asks first — the retention days delete audio on the worker's next run) and the AI model
 // allow-list + system default.
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppConfig, useGenerationConfig, useSaveConfig, useSaveGeneration, type ConfigRow, type GenerationConfig } from '../../api/admin/config'
 import { AdminHead, NoticeBanner, useFormatters, useNotice } from '../../components/admin/AdminParts'
@@ -67,7 +67,8 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const [ask, setAsk] = useState<{ value: unknown } | null>(null)
-  const ids = { input: useId(), err: useId(), body: useId(), desc: useId() }
+  const ids = { input: useId(), err: useId(), body: useId(), desc: useId(), name: useId(), state: useId() }
+  const inputRef = useRef<HTMLInputElement>(null)
   const known = KNOWN.has(row.key)
   const name = known ? t(`admin.config.keys.${row.key === 'user_hack_audio_render' ? 'hack' : 'retention'}.name`) : displayText(row.key)
   const help = known ? t(`admin.config.keys.${row.key === 'user_hack_audio_render' ? 'hack' : 'retention'}.help`) : row.description ? displayText(row.description) : null
@@ -79,6 +80,7 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
     setTries((n) => n + 1)
     if ('error' in parsed) {
       setProblem(parsed.error)
+      inputRef.current?.focus()
       return
     }
     setProblem(null)
@@ -104,7 +106,9 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
   return (
     <li className="setting-row">
       <div className="setting-text">
-        <strong className="bidi-isolate">{name}</strong>
+        <strong className="bidi-isolate" id={ids.name}>
+          {name}
+        </strong>
         {help && <p id={ids.desc}>{help}</p>}
         {row.updated_at && <small>{t('admin.config.updated', { time: f.dateTime(row.updated_at) })}</small>}
       </div>
@@ -112,12 +116,15 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
         <Button
           role="switch"
           aria-checked={row.value === true}
+          // name = the setting + its state (2.5.3: the visible On/Off stays in the name); it asks first
+          aria-labelledby={`${ids.name} ${ids.state}`}
+          aria-haspopup="dialog"
           aria-describedby={help ? ids.desc : undefined}
           className={row.value === true ? 'toggle-btn on' : 'toggle-btn'}
           onClick={() => !save.isPending && setAsk({ value: row.value !== true })}
           aria-disabled={save.isPending}
         >
-          {t(row.value === true ? 'admin.config.on' : 'admin.config.off')}
+          <span id={ids.state}>{t(row.value === true ? 'admin.config.on' : 'admin.config.off')}</span>
         </Button>
       ) : kind === 'readonly' ? (
         <code className="log-meta">{displayText(JSON.stringify(row.value) ?? '')}</code>
@@ -128,6 +135,7 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
           </label>
           <input
             id={ids.input}
+            ref={inputRef}
             value={draft}
             inputMode={kind === 'retention' ? 'numeric' : kind === 'number' ? 'decimal' : 'text'}
             placeholder={kind === 'retention' ? t('admin.config.keepForever') : undefined}
@@ -135,7 +143,7 @@ function SettingRow({ row, onNotice }: { row: ConfigRow; onNotice: Notify }) {
             aria-invalid={problem !== null}
             aria-describedby={[help ? ids.desc : '', problem ? ids.err : ''].filter(Boolean).join(' ') || undefined}
           />
-          <Button type="submit" aria-disabled={save.isPending}>
+          <Button type="submit" aria-disabled={save.isPending} aria-label={t('admin.config.saveOne', { name })}>
             {t('admin.config.save')}
           </Button>
           <div id={ids.err} className="usage-error">
@@ -251,7 +259,7 @@ function ModelsForm({ data, onNotice }: { data: GenerationConfig; onNotice: Noti
       </fieldset>
       <div className="field-row">
         <label htmlFor={ids.def}>{t('admin.models.default')}</label>
-        <select id={ids.def} value={pickId(def)} onChange={(e) => setDef(data.registeredModels.find((m) => pickId(m) === e.target.value) ?? def)} aria-invalid={problem === 'admin.models.errors.default'}>
+        <select id={ids.def} value={pickId(def)} onChange={(e) => setDef(data.registeredModels.find((m) => pickId(m) === e.target.value) ?? def)} aria-invalid={problem === 'admin.models.errors.default'} aria-describedby={problem === 'admin.models.errors.default' ? ids.err : undefined}>
           {data.registeredModels.map((m) => (
             <option key={pickId(m)} value={pickId(m)}>
               {displayText(m.label)}
