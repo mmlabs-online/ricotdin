@@ -138,6 +138,8 @@ neonctl branches delete rehearsal-YYYYMMDD --project-id dark-grass-92968821
 - A v1 meeting whose file is missing or rejected keeps `storage_provider` `r2` / `supabase`; v2
   cannot play or process it (the worker fails such a job). **Go-live check (ARC-15):** read the
   "Missing at source" and "Rejected" lists of the final report and accept each one.
+  Count what stays on v1 and accept that number explicitly:
+  `SELECT count(*) FROM meetings WHERE audio_path IS NOT NULL AND storage_provider <> 'gdrive';`
 - A crash in the middle of an upload (after Drive has the file, before `storage_objects` maps it)
   leaves an unmapped file in the Drive folder; the re-run uploads it again. Such files are never
   served; delete them by hand if a run was interrupted (the orphan sweeper is an open follow-up).
