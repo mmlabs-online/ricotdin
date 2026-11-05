@@ -38,7 +38,7 @@ export function AdminShell() {
           <div className="admin-shell">
             <nav className="admin-nav" aria-label={t('admin.sections')}>
               {ADMIN_SECTIONS.map(({ slug, key, icon: Icon }) => (
-                <NavLink key={key} to={slug ? `/admin/${slug}` : '/admin'} end className={({ isActive }) => (isActive ? 'active' : '')}>
+                <NavLink key={key} to={slug ? `/admin/${slug}` : '/admin'} end={!slug} className={({ isActive }) => (isActive ? 'active' : '')}>
                   <Icon size={16} aria-hidden="true" />
                   <span>{t(`admin.tabs.${key}`)}</span>
                 </NavLink>

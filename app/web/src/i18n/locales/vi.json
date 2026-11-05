@@ -172,6 +172,219 @@
       "features": "Tính năng",
       "health": "Tình trạng",
       "docs": "Tài liệu API"
+    },
+    "errors": {
+      "refused": "Máy chủ từ chối thay đổi này. Bạn không thể thay đổi tài khoản của chính mình hay gỡ quản trị viên cuối cùng, và chỉ tài khoản đang hoạt động, đã xác minh mới được làm quản trị viên.",
+      "forbidden": "Không xác nhận được quyền quản trị của bạn. Hãy đăng nhập lại.",
+      "notFound": "Người dùng này không còn tồn tại.",
+      "rateLimited": "Quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.",
+      "unavailable": "Một dịch vụ tạm thời không khả dụng. Hãy thử lại sau.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    },
+    "pagination": {
+      "label": "Trang",
+      "range": "{{from}}–{{to}} / {{total}}",
+      "previous": "Trước",
+      "next": "Sau"
+    },
+    "users": {
+      "subtitle": "Tài khoản, quyền và truy cập. Mọi thay đổi được ghi vào nhật ký quản trị.",
+      "search": "Tìm người dùng",
+      "searchPlaceholder": "Tìm email hoặc tên người dùng",
+      "month": "Tháng sử dụng",
+      "caption": "Người dùng, kèm mức dùng AI tháng {{month}}",
+      "selectAll": "Chọn mọi người dùng trên trang này",
+      "select": "Chọn {{name}}",
+      "you": "Bạn",
+      "never": "Chưa bao giờ",
+      "empty": "Chưa có người dùng.",
+      "noMatch": "Không có người dùng nào khớp.",
+      "usageValue": "{{tokens}} token · {{h}} giờ {{m}} phút",
+      "deleted": "Đã xóa người dùng.",
+      "deletedWarning": "Đã xóa người dùng, nhưng một số tệp của họ chưa xóa được khỏi kho lưu trữ.",
+      "col": {
+        "user": "Người dùng",
+        "username": "Tên người dùng",
+        "role": "Quyền",
+        "status": "Trạng thái",
+        "meetings": "Cuộc họp",
+        "usage": "Mức dùng tháng này",
+        "lastSignIn": "Đăng nhập gần nhất",
+        "created": "Ngày tạo"
+      },
+      "role": {
+        "user": "Người dùng",
+        "admin": "Quản trị viên"
+      },
+      "status": {
+        "active": "Hoạt động",
+        "unverified": "Chưa xác minh",
+        "disabled": "Đã khóa"
+      },
+      "actions": {
+        "makeAdmin": "Cấp quyền quản trị",
+        "makeUser": "Bỏ quyền quản trị",
+        "disable": "Khóa",
+        "enable": "Mở khóa",
+        "reset": "Gửi link đặt lại mật khẩu",
+        "delete": "Xóa người dùng"
+      },
+      "bulk": {
+        "label": "Thao tác cho người dùng đã chọn",
+        "selected_one": "Đã chọn {{count}}",
+        "selected_other": "Đã chọn {{count}}",
+        "clear": "Bỏ chọn",
+        "apply": "Áp dụng",
+        "confirmTitle_one": "Thay đổi {{count}} người dùng?",
+        "confirmTitle_other": "Thay đổi {{count}} người dùng?",
+        "confirm": {
+          "disable": "Họ không đăng nhập lại được cho tới khi được kích hoạt, và bị chặn khỏi trang quản trị ngay. Phiên đang mở vẫn dùng được tối đa 15 phút. Không bao giờ gồm chính bạn.",
+          "enable": "Họ đăng nhập lại được.",
+          "role_admin": "Họ có toàn quyền quản trị. Chỉ tài khoản đang hoạt động, đã xác minh mới được cấp; nếu có người không đủ điều kiện thì không có gì thay đổi.",
+          "role_user": "Họ mất trang quản trị ngay; quyền quản trị còn lại hết trong vòng 15 phút. Không thể hạ quyền admin cuối cùng; nếu vậy sẽ không có gì thay đổi."
+        },
+        "done": "Xong: đã thay đổi {{processed}}.",
+        "partial": "Đã thay đổi {{processed}}, {{failed}} không tìm thấy."
+      },
+      "handle": "@{{name}}",
+      "searchSubmit": "Tìm"
+    },
+    "userDetail": {
+      "title": "Người dùng",
+      "back": "Quay lại danh sách",
+      "notFound": "Không tìm thấy người dùng",
+      "actions": "Thao tác tài khoản",
+      "activity": "Hoạt động gần đây",
+      "noActivity": "Chưa có hoạt động nào.",
+      "promoteHint": "Chỉ tài khoản đang hoạt động, đã xác minh mới được làm quản trị viên.",
+      "selfHint": "Bạn không thể đổi quyền, trạng thái hay xóa chính mình.",
+      "done": {
+        "promote": "Người dùng đã là quản trị viên. Áp dụng ở lần làm mới phiên kế tiếp (trong 15 phút).",
+        "demote": "Người dùng không còn là quản trị viên. Các trang quản trị ngừng hoạt động với họ ngay.",
+        "disable": "Đã khóa và đăng xuất người dùng khỏi mọi thiết bị.",
+        "enable": "Người dùng đăng nhập lại được.",
+        "reset": "Đã gửi email link đặt lại mật khẩu.",
+        "resetNoMail": "Không gửi được email: máy chủ chưa cấu hình gửi mail."
+      },
+      "confirm": {
+        "promote": {
+          "title": "Cấp quyền quản trị?",
+          "body": "{{name}} sẽ có toàn quyền quản trị, gồm mọi cuộc họp và mọi cài đặt.",
+          "action": "Cấp quyền"
+        },
+        "demote": {
+          "title": "Bỏ quyền quản trị?",
+          "body": "{{name}} sẽ thành người dùng thường. Trang quản trị chặn ngay; quyền quản trị còn lại hết trong vòng 15 phút.",
+          "action": "Bỏ quyền"
+        },
+        "disable": {
+          "title": "Khóa tài khoản này?",
+          "body": "{{name}} không đăng nhập lại được cho tới khi bạn kích hoạt lại tài khoản. Phiên đang mở vẫn dùng được tối đa 15 phút.",
+          "action": "Khóa"
+        },
+        "enable": {
+          "title": "Mở khóa tài khoản?",
+          "body": "{{name}} đăng nhập lại được.",
+          "action": "Mở khóa"
+        },
+        "reset": {
+          "title": "Gửi link đặt lại mật khẩu?",
+          "body": "{{name}} nhận email có link để đặt mật khẩu mới. Mật khẩu hiện tại vẫn dùng được cho đến lúc đó.",
+          "action": "Gửi email"
+        },
+        "delete": {
+          "title": "Xóa vĩnh viễn người dùng này?",
+          "body": "{{name}} và mọi thứ họ sở hữu sẽ bị xóa: cuộc họp, bản ghi âm, bản ghi lời, thư mục và chat. Không thể hoàn tác.",
+          "action": "Xóa vĩnh viễn"
+        }
+      }
+    },
+    "quota": {
+      "title": "Số dư",
+      "grantTitle": "Nạp thêm",
+      "minutes": "Số phút âm thanh",
+      "queries": "Lượt hỏi",
+      "note": "Ghi chú (tùy chọn)",
+      "grant": "Nạp",
+      "granted": "Đã cập nhật số dư.",
+      "history": "Thay đổi gần đây",
+      "noHistory": "Chưa có thay đổi.",
+      "minutesDelta": "{{value}} phút",
+      "col": {
+        "when": "Thời điểm",
+        "reason": "Lý do",
+        "audio": "Âm thanh",
+        "queries": "Lượt hỏi"
+      },
+      "reason": {
+        "topup": "Nạp tiền",
+        "admin_grant": "Quản trị viên nạp",
+        "generate": "Xử lý",
+        "agent_query": "Câu hỏi chat",
+        "refund": "Hoàn lại",
+        "adjustment": "Điều chỉnh",
+        "other": "Khác"
+      },
+      "errors": {
+        "empty": "Hãy nhập số phút hoặc lượt hỏi cần nạp.",
+        "negative": "Không được nhập số âm.",
+        "number": "Chỉ nhập số.",
+        "whole": "Lượt hỏi phải là số nguyên.",
+        "tooLarge": "Vượt mức một lần nạp (100.000 phút, 1.000.000 lượt hỏi).",
+        "grouping": "Nhập số không có dấu phân cách hàng nghìn (ví dụ 1000)."
+      },
+      "confirmTitle": "Cộng hạn mức này?",
+      "confirmBody": "Cộng {{minutes}} phút âm thanh và {{queries}} lượt hỏi cho {{name}}? Không hoàn tác được tại đây."
+    },
+    "overview": {
+      "allOk": "Mọi hệ thống hoạt động bình thường",
+      "degraded": "Có mục cần chú ý",
+      "users": "Người dùng",
+      "usersHint": "Tất cả tài khoản",
+      "meetings": "Cuộc họp",
+      "successRate": "{{rate}}% xử lý thành công",
+      "noRuns": "Chưa xử lý cuộc họp nào",
+      "inProgress": "Đang chạy",
+      "inProgressHint": "Đang tải lên hoặc xử lý",
+      "avgTime": "Thời gian xử lý trung bình",
+      "avgTimeHint": "Từ tải lên đến có kết quả",
+      "minutes": "{{m}} phút",
+      "pipeline": "Xử lý",
+      "viewPipeline": "Xem theo dõi",
+      "health": "Tình trạng hệ thống",
+      "viewHealth": "Xem tình trạng",
+      "recent": "Thao tác quản trị gần đây",
+      "viewAudit": "Xem nhật ký",
+      "noRecent": "Chưa có thao tác quản trị.",
+      "system": "Hệ thống",
+      "auditLine": "{{actor}} · {{action}}",
+      "count": {
+        "processing": "Đang xử lý",
+        "pending": "Đang chờ",
+        "stuck": "Bị kẹt",
+        "failed": "Thất bại",
+        "done": "Xong"
+      }
+    },
+    "health": {
+      "check": {
+        "database": "Cơ sở dữ liệu",
+        "storage": "Lưu trữ Google Drive",
+        "key_encryption": "Mã hóa khóa",
+        "worker": "Tác vụ worker",
+        "gemini": "Gemini",
+        "speechmatics": "Speechmatics",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "other": "Mục khác"
+      },
+      "status": {
+        "ok": "Ổn",
+        "warning": "Cảnh báo",
+        "error": "Lỗi",
+        "unknown": "Không rõ"
+      }
     }
   },
   "error": {

@@ -14,6 +14,11 @@ import { RecordPage } from '../routes/RecordPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
 import { ADMIN_SECTIONS } from './adminSections'
+import { AdminOverviewPage } from '../routes/admin/AdminOverviewPage'
+import { AdminUserDetailPage } from '../routes/admin/AdminUserDetailPage'
+import { AdminUsersPage } from '../routes/admin/AdminUsersPage'
+
+const WIRED = new Set(['users'])
 import { AdminShell } from './AdminShell'
 import { AppShell } from './AppShell'
 
@@ -33,9 +38,17 @@ export function createRouter() {
         </RequireRole>
       ),
       errorElement: <ErrorScreen />,
-      children: ADMIN_SECTIONS.map(({ slug, key }) =>
-        slug ? { path: slug, element: <AdminSectionPage sectionKey={key} /> } : { index: true, element: <AdminSectionPage sectionKey={key} /> },
-      ).concat([{ path: '*', element: <StatusPage kind="notFound" /> }]),
+      children: [
+        // wired screens first (ARC-14); the rest stay placeholders until their round
+        { index: true, element: <AdminOverviewPage /> },
+        { path: 'users', element: <AdminUsersPage /> },
+        { path: 'users/:userId', element: <AdminUserDetailPage /> },
+        ...ADMIN_SECTIONS.filter(({ slug }) => slug && !WIRED.has(slug)).map(({ slug, key }) => ({
+          path: slug,
+          element: <AdminSectionPage sectionKey={key} />,
+        })),
+        { path: '*', element: <StatusPage kind="notFound" /> },
+      ],
     },
     {
       path: '/',

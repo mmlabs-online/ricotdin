@@ -846,6 +846,22 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   focuses the active transcript line; form results are a fresh node each time (`useNote`, keyed
   alerts) so the same message is announced again; each password error marks only its own field
   (`passwordField`). Open: `--border-strong` field borders are below 3:1 app-wide (1.4.11).
+- **Admin screens (ARC-14, three PRs: 14a overview + users + user detail, 14b pipeline / usage /
+  activity / audit, 14c keys / storage / config / features / health + Playwright admin smoke).** Data in
+  `src/api/admin/*.ts` (keys under `['admin', …]`, cleared with the rest of the cache on a user change),
+  pure rules in `src/lib/admin/*.ts`, shared parts in `components/admin/AdminParts.tsx` (`AdminHead`
+  focuses `#admin-title` when a page opens; `useNotice` + `NoticeBanner` announce a repeated notice
+  again). Every admin error goes through `adminErrorKey` (status → `admin.errors.*`; 400/422 =
+  "refused", the API's guard text is never shown). 14a rules: `/admin/users` keeps page / `q` / `month`
+  in the URL (Back from a detail returns there); the bulk selection belongs to the visible list (cleared
+  on page / search / month change, ≤ 50 = `BULK_MAX_IDS`, never your own row) and its confirm lists the
+  emails; every user action and every quota grant asks first; role / status answers are written into
+  the detail cache at once and paired controls are one button whose label flips (focus stays); a
+  delete drops that user's queries and returns with router state `{notice}`; `/admin/health` is read
+  even on 503 (degraded) but a body without `checks` is an error; `keys:<provider>_api_key` checks map
+  to provider names (`healthSummary`). Confirm texts say that a disable / demotion locks the admin API
+  at once and the rest within 15 min (§0.3). In dark mode the admin area keeps its light palette
+  (`.admin-standalone`), so its primary buttons keep white text; modals are portaled outside it.
 
 ## 1. What we are building
 
