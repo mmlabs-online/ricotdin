@@ -988,7 +988,7 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 ---
 
 ### ARC-18 — Migration copies files to Google Drive
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (code, 2026-11-05) — the done check (two rehearsals with the Drive copy, owner) is pending and also closes ARC-03
 
 **User Story**  
 As the owner, I want the v1 → v2 migration to copy every audio file and avatar (v1 R2 bucket and legacy Supabase Storage) into Google Drive so that no file is lost at cutover.
@@ -1033,6 +1033,20 @@ ARC-03 copies only legacy Supabase Storage objects into R2 and assumes R2 files 
 **Key files (expected)**
 - `app/api/scripts/migrate_from_supabase.py`, `app/api/app/migration/{plan,report,storage_plan}.py`
 - `app/api/tests/test_migration_storage.py`, `docs/ops/v2-migration-rehearsal.md`
+
+**As built**
+- `storage_plan.py`: `plan_object_copies` → copy / check (already mapped: compare with the source)
+  / skip (v2 `gdrive` row) / unmapped (gdrive row missing from the map: failure) / reject;
+  `same_file`, `etag_md5` (single-part ETags only), `content_type_for`, `storage_digest`, limits
+  `MAX_BYTES` (audio 1 GB, avatar 5 MB).
+- Script: `SnapshotSource` (Supabase metadata from the source snapshot) + `SupabaseStorage`,
+  `R2Source` (HEAD/GET), `GoogleDriveTarget` (`DriveStorage.upload_file` on one event loop in a
+  background thread; the map is the target's `storage_objects`). `--r2-bucket` is gone.
+- Avatars have no provider column: they are compared with R2 on every re-run ("Already in Drive").
+- Tests: `test_migration_storage.py` (pure), `test_migration_integration.py` (fake Drive behind the
+  real `DriveStorage`, read-only fake sources: both sources copied, re-run uploads nothing, forged
+  keys rejected, wrong folder exits before any write, md5 mismatch keeps the v1 provider),
+  `test_migration_transform.py` (R2 source never writes; errors are codes only).
 
 ---
 
