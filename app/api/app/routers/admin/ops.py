@@ -344,8 +344,8 @@ async def ai_usage(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, A
 
 @router.get("/activity")
 async def activity(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
-    """``?userId&eventType&from&to&page&perPage``: the activity feed with the meeting title
-    (never meeting content)."""
+    """``?userId&eventType&from&to&page&perPage``: the activity feed with the user's email and the
+    meeting title (never meeting content)."""
     f = parse_activity_filters(request.query_params)
     clauses, args = [], {"u": f.user_id, "e": f.event_type, "s": f.start, "t": f.end}
     if f.user_id:
@@ -368,10 +368,11 @@ async def activity(request: Request, admin: CurrentAdmin, db: Db) -> dict[str, A
             await conn.execute(
                 text(
                     "SELECT a.id, a.created_at, a.user_id, a.event_type, a.meeting_id, "  # noqa: S608
-                    "m.title AS meeting_title, a.target_user_id, a.metadata, a.ip, a.user_agent "
-                    "FROM public.activity_log a LEFT JOIN public.meetings m ON m.id = "
-                    f"a.meeting_id WHERE {where} ORDER BY a.created_at DESC, a.id DESC "
-                    "LIMIT :lim OFFSET :off"
+                    "m.title AS meeting_title, u.email AS user_email, a.target_user_id, "
+                    "a.metadata, a.ip, a.user_agent FROM public.activity_log a "
+                    "LEFT JOIN public.meetings m ON m.id = a.meeting_id "
+                    f"LEFT JOIN public.users u ON u.id = a.user_id WHERE {where} "
+                    "ORDER BY a.created_at DESC, a.id DESC LIMIT :lim OFFSET :off"
                 ),
                 {**args, "lim": f.per_page, "off": (f.page - 1) * f.per_page},
             )

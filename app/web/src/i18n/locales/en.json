@@ -180,7 +180,8 @@
       "rateLimited": "Too many requests. Wait a little and try again.",
       "unavailable": "A service is unavailable right now. Try again later.",
       "network": "No connection to the server. Check your network and try again.",
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "conflict": "This cannot be done in the current state (for example it is already running, or a file is missing). Refresh and check."
     },
     "pagination": {
       "label": "Pages",
@@ -298,7 +299,8 @@
           "body": "{{name}} and everything they own are deleted: meetings, recordings, transcripts, folders and chats. This cannot be undone.",
           "action": "Delete permanently"
         }
-      }
+      },
+      "viewActivity": "View all activity"
     },
     "quota": {
       "title": "Balance",
@@ -385,6 +387,175 @@
         "error": "Error",
         "unknown": "Unknown"
       }
+    },
+    "pipeline": {
+      "subtitle": "Meetings in the processing queue. Requeue runs a failed or stuck meeting again.",
+      "autoRefresh": "Refreshes every 10 s",
+      "updated": "Updated {{time}}",
+      "countsLabel": "Meetings by status",
+      "filterLabel": "Show meetings",
+      "avgTime": "Avg. processing time",
+      "all": "All",
+      "duration": "{{h}}:{{m}}:{{s}}",
+      "status": {
+        "pending": "Pending",
+        "processing": "Processing",
+        "stuck": "Stuck",
+        "failed": "Failed",
+        "done": "Done"
+      },
+      "jobStatus": {
+        "queued": "queued",
+        "running": "running",
+        "done": "done",
+        "failed": "failed",
+        "other": "unknown"
+      },
+      "jobState": "{{status}} · {{step}} · try {{attempts}}",
+      "requeueAll_one": "Requeue {{count}} on this page",
+      "requeueAll_other": "Requeue {{count}} on this page",
+      "requeue": "Requeue",
+      "requeueOne": "Requeue {{title}}",
+      "confirmTitle_one": "Requeue this meeting?",
+      "confirmTitle_other": "Requeue {{count}} meetings?",
+      "confirmBody_one": "It is processed again from the start, and the owner is charged audio minutes again. Its current transcript and notes stay until the new run replaces them.",
+      "confirmBody_other": "Each is processed again from the start, and each owner is charged audio minutes again. Current transcripts and notes stay until the new runs replace them.",
+      "requeued_one": "{{count}} meeting queued again.",
+      "requeued_other": "{{count}} meetings queued again.",
+      "requeuePartial": "{{count}} queued again, {{failed}} refused (already running, or its audio is missing).",
+      "empty": "No meetings here.",
+      "caption": "Meetings in the processing pipeline",
+      "col": {
+        "status": "Status",
+        "meeting": "Meeting",
+        "owner": "Owner",
+        "created": "Created",
+        "duration": "Length",
+        "job": "Latest job",
+        "error": "Error",
+        "actions": "Actions"
+      },
+      "tasks": {
+        "title": "Worker tasks",
+        "none": "The worker has not run any task yet.",
+        "last": "Last finished {{time}}",
+        "never": "Never finished",
+        "stale": "Overdue",
+        "name": {
+          "key_health": "API key health check",
+          "retention_purge": "Audio retention purge",
+          "wallet_reconcile": "Quota reconcile",
+          "stuck_meetings": "Stuck meeting check",
+          "other": "{{name}}"
+        }
+      },
+      "hoursMinutes": "{{h}} h {{m}} min",
+      "minutesSeconds": "{{m}} min {{s}} s"
+    },
+    "usage": {
+      "subtitle": "AI provider calls for a date range. Tokens and audio minutes are counted separately.",
+      "from": "From",
+      "to": "To",
+      "byOperation": "Break down by operation",
+      "apply": "Apply",
+      "showing": "Showing {{from}} to {{to}} (UTC).",
+      "errors": {
+        "date": "Choose both dates.",
+        "order": "The start date must be before the end date.",
+        "tooLong": "Choose at most {{days}} days.",
+        "filterDates": "Check the dates: the start must be before the end."
+      },
+      "aiCalls": "AI calls (tokens)",
+      "totalTokens": "{{n}} tokens in total",
+      "inOut": "Input / output tokens",
+      "inOutValue": "{{input}} / {{output}}",
+      "tokensOnly": "Text and embedding models",
+      "audio": "Audio transcribed",
+      "minutesValue": "{{n}} min",
+      "audioCalls": "{{n}} transcription calls",
+      "limitedErrors": "Rate-limited / errors",
+      "limitedErrorsValue": "{{limited}} / {{errors}}",
+      "ofCalls": "Of {{n}} calls",
+      "chartTokens": "Tokens per day",
+      "chartAudio": "Audio minutes per day",
+      "legend": "Providers",
+      "chartSummary": "{{days}} days with usage, highest day {{max}}. The table below has every value.",
+      "tokensValue": "{{n}} tokens",
+      "tipLine": "{{name}}: {{value}}",
+      "showTable": "Show as table",
+      "noData": "No usage in this range.",
+      "tokenTable": "Token-metered",
+      "audioTable": "Audio-metered",
+      "keyLabel": "{{label}} ••••{{last4}}",
+      "envKey": "Server setting",
+      "col": {
+        "date": "Date",
+        "model": "Provider / model",
+        "operation": "Operation",
+        "key": "Key",
+        "calls": "Calls",
+        "input": "Input tokens",
+        "output": "Output tokens",
+        "minutes": "Minutes",
+        "limited": "Rate-limited",
+        "errors": "Errors"
+      },
+      "provider": {
+        "gemini": "Gemini",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "speechmatics": "Speechmatics",
+        "gemini-embedding": "Gemini embeddings"
+      },
+      "meetingsTitle": "Meetings and storage",
+      "meetingsTotal": "Meetings",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "failureRate": "Failed",
+      "percent": "{{n}} %",
+      "files": "Stored files",
+      "stored": "Storage used",
+      "tableOf": "{{title}} (table)"
+    },
+    "activity": {
+      "subtitle": "What users did, newest first.",
+      "type": "Event",
+      "allTypes": "All events",
+      "forUser": "Showing one user: {{email}}",
+      "allUsers": "Show all users",
+      "empty": "No activity matches these filters.",
+      "deletedUser": "Deleted user"
+    },
+    "audit": {
+      "subtitle": "Every change made by an admin, newest first.",
+      "action": "Action starts with",
+      "forActor": "Showing one admin: {{email}}",
+      "allActors": "Show all admins",
+      "empty": "No entries match these filters.",
+      "userTarget": "User",
+      "col": {
+        "when": "When",
+        "actor": "Admin",
+        "action": "Action",
+        "target": "Target",
+        "details": "Details",
+        "ip": "IP address"
+      }
+    },
+    "events": {
+      "login": "Signed in",
+      "logout": "Signed out",
+      "record_start": "Started recording",
+      "record_stop": "Stopped recording",
+      "recording_notice_ack": "Accepted recording notice",
+      "meeting_created": "Meeting created",
+      "meeting_deleted": "Meeting deleted",
+      "processing_done": "Processing done",
+      "processing_failed": "Processing failed",
+      "chat_message": "Asked a question",
+      "meeting_shared": "Meeting shared",
+      "meeting_unshared": "Meeting unshared",
+      "other": "Other event"
     }
   },
   "error": {

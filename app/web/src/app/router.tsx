@@ -14,11 +14,15 @@ import { RecordPage } from '../routes/RecordPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
 import { ADMIN_SECTIONS } from './adminSections'
+import { AdminActivityPage } from '../routes/admin/AdminActivityPage'
+import { AdminAuditPage } from '../routes/admin/AdminAuditPage'
 import { AdminOverviewPage } from '../routes/admin/AdminOverviewPage'
+import { AdminPipelinePage } from '../routes/admin/AdminPipelinePage'
+import { AdminUsagePage } from '../routes/admin/AdminUsagePage'
 import { AdminUserDetailPage } from '../routes/admin/AdminUserDetailPage'
 import { AdminUsersPage } from '../routes/admin/AdminUsersPage'
 
-const WIRED = new Set(['users'])
+const WIRED = new Set(['users', 'pipeline', 'usage', 'activity', 'audit'])
 import { AdminShell } from './AdminShell'
 import { AppShell } from './AppShell'
 
@@ -43,6 +47,10 @@ export function createRouter() {
         { index: true, element: <AdminOverviewPage /> },
         { path: 'users', element: <AdminUsersPage /> },
         { path: 'users/:userId', element: <AdminUserDetailPage /> },
+        { path: 'pipeline', element: <AdminPipelinePage /> },
+        { path: 'usage', element: <AdminUsagePage /> },
+        { path: 'activity', element: <AdminActivityPage /> },
+        { path: 'audit', element: <AdminAuditPage /> },
         ...ADMIN_SECTIONS.filter(({ slug }) => slug && !WIRED.has(slug)).map(({ slug, key }) => ({
           path: slug,
           element: <AdminSectionPage sectionKey={key} />,

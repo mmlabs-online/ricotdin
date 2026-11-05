@@ -11,6 +11,7 @@ import { FullPageLoading } from '../../components/FullPageLoading'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { ApiError } from '../../api/errors'
+import { eventKey } from '../../lib/admin/ops'
 import { adminErrorKey, grantAmount, grantProblem, ledgerReasonKey, userActions } from '../../lib/admin/users'
 import { quotaParts } from '../../lib/profile/profile'
 import { displayText } from '../../lib/text'
@@ -350,6 +351,9 @@ function ActivityCard({ userId }: { userId: string }) {
     <section className="admin-card" aria-labelledby="activity-head">
       <div className="card-head">
         <h2 id="activity-head">{t('admin.userDetail.activity')}</h2>
+        <Link className="card-link" to={`/admin/activity?userId=${encodeURIComponent(userId)}`}>
+          {t('admin.userDetail.viewActivity')}
+        </Link>
       </div>
       {activity.isPending ? (
         <p className="tab-note">{t('common.loading')}</p>
@@ -361,7 +365,7 @@ function ActivityCard({ userId }: { userId: string }) {
         <ul className="timeline">
           {activity.data.map((a) => (
             <li className="event" key={a.id}>
-              <span className="event-badge">{displayText(a.event_type)}</span>
+              <span className="event-badge">{t(eventKey(a.event_type))}</span>
               <strong className="bidi-isolate">{a.meeting_title ? displayText(a.meeting_title) : '—'}</strong>
               <small>{f.dateTime(a.created_at)}</small>
             </li>
