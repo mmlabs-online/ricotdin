@@ -1,6 +1,6 @@
 // Admin › User detail (ARC-14a): role, disable / enable, password reset mail, delete, quota grant
 // and history, recent activity. Every action asks first; the API enforces every guard (§0.9).
-import { useId, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +56,7 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
   const m = useUserMutations()
   const f = useFormatters()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
+  const ids = { promoteHint: useId(), confirmBody: useId() }
   const [notice, setNotice] = useNotice()
   const actions = userActions(user, me)
   const name = displayText(user.email)
@@ -96,7 +97,7 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
       <section className="admin-card" aria-labelledby="user-head">
         <div className="card-head">
           <h2 id="user-head" className="bidi-isolate">
-            {name}
+            {name}{' '}
             {user.id === me && <span className="you-badge">{t('admin.users.you')}</span>}
           </h2>
           <UserStatusBadge status={user.status} />
@@ -126,7 +127,9 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
         <div className="action-row" role="group" aria-label={t('admin.userDetail.actions')}>
           {/* one button per pair whose label flips, so focus stays on it after the change */}
           {actions.changeRole && (
-            <Button onClick={() => ask(user.role === 'user' ? 'promote' : 'demote')} aria-disabled={(user.role === 'user' && !actions.promote) || busy}>
+            <Button onClick={() => ask(user.role === 'user' ? 'promote' : 'demote')} aria-disabled={(user.role === 'user' && !actions.promote) || busy}
+              aria-describedby={user.role === 'user' && !actions.promote ? ids.promoteHint : undefined}
+            >
               {t(user.role === 'user' ? 'admin.users.actions.makeAdmin' : 'admin.users.actions.makeUser')}
             </Button>
           )}
@@ -144,7 +147,11 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
             </Button>
           )}
         </div>
-        {user.role === 'user' && actions.changeRole && !actions.promote && <p className="tab-note">{t('admin.userDetail.promoteHint')}</p>}
+        {user.role === 'user' && actions.changeRole && !actions.promote && (
+          <p className="tab-note" id={ids.promoteHint}>
+            {t('admin.userDetail.promoteHint')}
+          </p>
+        )}
         {user.id === me && <p className="tab-note">{t('admin.userDetail.selfHint')}</p>}
       </section>
 
@@ -155,9 +162,9 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
         <Modal
           title={t(`admin.userDetail.confirm.${confirm}.title`)}
           onClose={() => setConfirm(null)}
-          describedBy="confirm-body"
+          describedBy={ids.confirmBody}
         >
-          <p className="modal-copy" id="confirm-body">
+          <p className="modal-copy" id={ids.confirmBody}>
             {t(`admin.userDetail.confirm.${confirm}.body`, { name })}
           </p>
           <div className="modal-actions">
@@ -186,14 +193,28 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
   const [note, setNote] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
   const [pending, setPending] = useState<Grant | null>(null) // asked, not sent yet
-  const ids = { minutes: useId(), queries: useId(), note: useId(), err: useId() }
+  const [tries, setTries] = useState(0) // keys the error / result node, so a repeat is announced
+  const [done, setDone] = useState(false)
+  const minutesRef = useRef<HTMLInputElement>(null)
+  const queriesRef = useRef<HTMLInputElement>(null)
+  // which field is at fault: each checked alone (an empty pair is the minutes field's problem)
+  const fieldBad = (p: string | null) => p !== null && p !== 'admin.quota.errors.empty'
+  const minutesBad = problem !== null && (fieldBad(grantProblem(minutes, '')) || problem === 'admin.quota.errors.empty')
+  const queriesBad = problem !== null && fieldBad(grantProblem('', queries))
+  const ids = { minutes: useId(), queries: useId(), note: useId(), err: useId(), history: useId() }
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (grant.isPending) return
     const p = grantProblem(minutes, queries)
     setProblem(p)
-    if (p) return
+    setDone(false)
+    setTries((n) => n + 1)
+    if (p) {
+      const minutesWrong = p === 'admin.quota.errors.empty' || fieldBad(grantProblem(minutes, ''))
+      ;(minutesWrong ? minutesRef : queriesRef).current?.focus()
+      return
+    }
     const m = grantAmount(minutes)
     const q = grantAmount(queries)
     // a grant cannot be undone from here and costs provider spend: ask first
@@ -210,6 +231,8 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
         setMinutes('')
         setQueries('')
         setNote('')
+        setDone(true)
+        setTries((n) => n + 1)
         onNotice('admin.quota.granted')
       })
       .catch((err: unknown) => onNotice(adminErrorKey(err), 'error'))
@@ -242,19 +265,29 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
             <h3 className="subhead">{t('admin.quota.grantTitle')}</h3>
             <div className="field-row">
               <label htmlFor={ids.minutes}>{t('admin.quota.minutes')}</label>
-              <input id={ids.minutes} inputMode="decimal" value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-invalid={problem !== null} aria-describedby={problem ? ids.err : undefined} />
+              <input id={ids.minutes} ref={minutesRef} inputMode="decimal" value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-invalid={minutesBad} aria-describedby={minutesBad ? ids.err : undefined} />
             </div>
             <div className="field-row">
               <label htmlFor={ids.queries}>{t('admin.quota.queries')}</label>
-              <input id={ids.queries} inputMode="numeric" value={queries} onChange={(e) => setQueries(e.target.value)} aria-invalid={problem !== null} aria-describedby={problem ? ids.err : undefined} />
+              <input id={ids.queries} ref={queriesRef} inputMode="numeric" value={queries} onChange={(e) => setQueries(e.target.value)} aria-invalid={queriesBad} aria-describedby={queriesBad ? ids.err : undefined} />
             </div>
             <div className="field-row">
               <label htmlFor={ids.note}>{t('admin.quota.note')}</label>
               <input id={ids.note} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
             </div>
-            <p id={ids.err} className="form-note error" role="alert">
-              {problem ? t(problem) : ''}
-            </p>
+            {/* the result also next to the form (the page banner is off-screen when zoomed in) */}
+            <div id={ids.err}>
+              {problem && (
+                <p key={tries} className="form-note error" role="alert">
+                  {t(problem)}
+                </p>
+              )}
+              {done && (
+                <p key={tries} className="form-note">
+                  {t('admin.quota.granted')}
+                </p>
+              )}
+            </div>
             <Button type="submit" variant="primary" aria-disabled={grant.isPending} aria-busy={grant.isPending}>
               {t('admin.quota.grant')}
             </Button>
@@ -274,11 +307,13 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
               </div>
             </Modal>
           )}
-          <h3 className="subhead">{t('admin.quota.history')}</h3>
+          <h3 className="subhead" id={ids.history}>
+            {t('admin.quota.history')}
+          </h3>
           {quota.data.ledger.length === 0 ? (
             <p className="tab-note">{t('admin.quota.noHistory')}</p>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-labelledby={ids.history}>
               <table className="admin-table">
                 <thead>
                   <tr>

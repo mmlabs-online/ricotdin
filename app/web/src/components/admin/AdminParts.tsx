@@ -1,12 +1,21 @@
 // Small building blocks shared by the admin screens (ARC-14).
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/Button'
 import { Status } from '../ui/Status'
 
+/** Moves focus to the page heading when a page opens (route change), so keyboard and screen
+ * reader users start at the top of the new page. */
+export function useFocusTitle() {
+  useEffect(() => {
+    document.getElementById('admin-title')?.focus({ preventScroll: true })
+  }, [])
+}
+
 export function AdminHead({ titleKey, subtitleKey, children }: { titleKey: string; subtitleKey?: string; children?: ReactNode }) {
   const { t } = useTranslation()
+  useFocusTitle()
   return (
     <div className="page-head admin-heading">
       <div>
@@ -36,7 +45,8 @@ export function NoticeBanner({ notice, onDismiss }: { notice: Notice | null; onD
   return (
     <>
       <p className="sr-only" role="status">
-        {notice && notice.kind !== 'error' ? t(notice.key, notice.values) : ''}
+        {/* a fresh node per notice, so the same text is announced again */}
+        {notice && notice.kind !== 'error' && <span key={notice.n}>{t(notice.key, notice.values)}</span>}
       </p>
       {notice && (
         <div key={notice.n} className={`notice-banner ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : undefined}>

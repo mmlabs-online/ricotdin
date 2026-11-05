@@ -313,6 +313,7 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .admin-table th, .admin-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap; }
 .admin-table th { color: var(--text); font-size: 12px; font-weight: 600; background: var(--surface-subtle); }
 .admin-table tr:last-child td { border-bottom: 0; }
+.admin-table tbody th { background: none; font-size: inherit; font-weight: inherit; }
 .admin-table td.num { font-variant-numeric: tabular-nums; }
 .admin-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
 .user-link { color: var(--text); font-weight: 600; text-decoration: none; unicode-bidi: isolate; }
@@ -326,6 +327,10 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .toolbar-label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--primary-soft); font-size: 13px; }
 .bulk-bar > span { font-weight: 600; margin-right: auto; }
+/* admin keeps its light palette in dark mode (index.css .admin-standalone): keep light button text */
+.dark .admin-standalone .button-primary { color: #fff; }
+.bulk-bar .button-ghost { color: var(--text); }
+.table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .bulk-names { max-height: 180px; overflow-y: auto; margin: 0 0 12px; padding-left: 20px; font-size: 13px; overflow-wrap: anywhere; }
 .pagination { font-size: 12px; }
 .fact-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 16px; }

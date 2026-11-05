@@ -247,7 +247,8 @@
         "done": "Xong: đã thay đổi {{processed}}.",
         "partial": "Đã thay đổi {{processed}}, {{failed}} không tìm thấy."
       },
-      "handle": "@{{name}}"
+      "handle": "@{{name}}",
+      "searchSubmit": "Tìm"
     },
     "userDetail": {
       "title": "Người dùng",

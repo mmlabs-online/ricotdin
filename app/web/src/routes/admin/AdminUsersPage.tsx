@@ -1,5 +1,5 @@
 // Admin › Users (ARC-14a, Make UsersAdmin): search, usage month, bulk disable / enable / role.
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -64,12 +64,18 @@ export function AdminUsersPage() {
   const list = useAdminUsers({ page, perPage: PER_PAGE, search, month })
   const { bulk: bulkMutation } = useUserMutations()
   const f = useFormatters()
-  const ids = { search: useId(), month: useId(), all: useId() }
+  const ids = { search: useId(), month: useId(), all: useId(), caption: useId(), bulkBody: useId() }
+  const allRef = useRef<HTMLInputElement>(null)
 
   const users = list.data?.users ?? []
   const total = list.data?.total ?? 0
   const selectable = users.filter((u) => u.id !== me)
   const allChecked = selectable.length > 0 && selectable.every((u) => selected.has(u.id))
+  const someChecked = !allChecked && selectable.some((u) => selected.has(u.id))
+  useEffect(() => {
+    if (allRef.current) allRef.current.indeterminate = someChecked
+  })
+  const focusList = () => requestAnimationFrame(() => document.getElementById(ids.all)?.focus())
   const bulkBusy = bulkMutation.isPending
   // a page past the end (users removed meanwhile): go to the last one
   const lastPage = Math.max(1, Math.ceil(total / PER_PAGE))
@@ -110,7 +116,7 @@ export function AdminUsersPage() {
         const s = bulkSummary(res)
         setSelected(new Map())
         // the bulk bar (and the button that opened the dialog) is gone: keep focus on the list
-        requestAnimationFrame(() => document.getElementById(ids.all)?.focus())
+        focusList()
         setNotice(s.failed > 0 ? 'admin.users.bulk.partial' : 'admin.users.bulk.done', s.failed > 0 ? 'warning' : 'success', s)
       })
       .catch((err: unknown) => setNotice(adminErrorKey(err), 'error'))
@@ -134,6 +140,9 @@ export function AdminUsersPage() {
             {t('admin.users.search')}
           </label>
           <input id={ids.search} type="search" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t('admin.users.searchPlaceholder')} maxLength={200} />
+          <button type="submit" className="sr-only">
+            {t('admin.users.searchSubmit')}
+          </button>
         </form>
         <label htmlFor={ids.month} className="toolbar-label">
           {t('admin.users.month')}
@@ -154,6 +163,9 @@ export function AdminUsersPage() {
         />
       </div>
 
+      <p className="sr-only" role="status">
+        {selected.size > 0 ? t('admin.users.bulk.selected', { count: selected.size }) : ''}
+      </p>
       {selected.size > 0 && (
         <div className="bulk-bar" role="group" aria-label={t('admin.users.bulk.label')}>
           <span>{t('admin.users.bulk.selected', { count: selected.size })}</span>
@@ -161,7 +173,15 @@ export function AdminUsersPage() {
           <Button onClick={() => askBulk({ action: 'enable' })} aria-disabled={bulkBusy}>{t('admin.users.actions.enable')}</Button>
           <Button onClick={() => askBulk({ action: 'set_role', role: 'admin' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeAdmin')}</Button>
           <Button onClick={() => askBulk({ action: 'set_role', role: 'user' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeUser')}</Button>
-          <Button variant="ghost" onClick={() => !bulkBusy && setSelected(new Map())} aria-disabled={bulkBusy}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (bulkBusy) return
+              setSelected(new Map())
+              focusList()
+            }}
+            aria-disabled={bulkBusy}
+          >
             {t('admin.users.bulk.clear')}
           </Button>
         </div>
@@ -177,14 +197,15 @@ export function AdminUsersPage() {
       ) : users.length === 0 ? (
         <p className="tab-note">{t(search ? 'admin.users.noMatch' : 'admin.users.empty')}</p>
       ) : (
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-labelledby={ids.caption}>
           <table className="admin-table">
-            <caption className="sr-only">{t('admin.users.caption', { month: list.data?.month ?? month })}</caption>
+            <caption className="sr-only" id={ids.caption}>{t('admin.users.caption', { month: list.data?.month ?? month })}</caption>
             <thead>
               <tr>
                 <th scope="col">
                   <input
                     id={ids.all}
+                    ref={allRef}
                     type="checkbox"
                     checked={allChecked}
                     aria-label={t('admin.users.selectAll')}
@@ -211,7 +232,7 @@ export function AdminUsersPage() {
                         <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id, u.email)} aria-label={t('admin.users.select', { name })} />
                       )}
                     </td>
-                    <td>
+                    <th scope="row">
                       <div className="user-cell">
                         <div>
                           <Link to={`/admin/users/${encodeURIComponent(u.id)}`} className="user-link">
@@ -221,7 +242,7 @@ export function AdminUsersPage() {
                         </div>
                         {self && <span className="you-badge">{t('admin.users.you')}</span>}
                       </div>
-                    </td>
+                    </th>
                     <td>
                       <span className="role-badge">{t(`admin.users.role.${u.role}`)}</span>
                     </td>
@@ -241,7 +262,7 @@ export function AdminUsersPage() {
       )}
 
       <nav className="pagination" aria-label={t('admin.pagination.label')}>
-        <span>{t('admin.pagination.range', { from, to, total })}</span>
+        <span aria-live="polite">{t('admin.pagination.range', { from, to, total })}</span>
         <Button onClick={() => page > 1 && setList({ page: page - 1 })} aria-disabled={page <= 1}>
           {t('admin.pagination.previous')}
         </Button>
@@ -251,8 +272,8 @@ export function AdminUsersPage() {
       </nav>
 
       {bulk && (
-        <Modal title={t('admin.users.bulk.confirmTitle', { count: selected.size })} onClose={() => setBulk(null)} describedBy="bulk-body">
-          <p className="modal-copy" id="bulk-body">
+        <Modal title={t('admin.users.bulk.confirmTitle', { count: selected.size })} onClose={() => setBulk(null)} describedBy={ids.bulkBody}>
+          <p className="modal-copy" id={ids.bulkBody}>
             {t(`admin.users.bulk.confirm.${bulk.action === 'set_role' ? `role_${bulk.role}` : bulk.action}`, { count: selected.size })}
           </p>
           <ul className="bulk-names">

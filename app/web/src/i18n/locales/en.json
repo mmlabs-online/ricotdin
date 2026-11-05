@@ -247,7 +247,8 @@
         "done": "Done: {{processed}} changed.",
         "partial": "{{processed}} changed, {{failed}} not found."
       },
-      "handle": "@{{name}}"
+      "handle": "@{{name}}",
+      "searchSubmit": "Search"
     },
     "userDetail": {
       "title": "User",
