@@ -53,11 +53,11 @@
 | ADM-03 | Safety constraints | ARC-10 | same as ADM-02 + `POST /admin/users/bulk` | todo | Admin › Users | done (ARC-14a) | admin-guards, admin-adm | v1 bulk skips the last-admin guard (only `excludeSelf` protects the caller; a race between two admins remains) — **v2: guard bulk too** (defense in depth) |
 | ADM-04 | Pipeline & job monitoring | ARC-10 | `GET /admin/pipeline/overview`, `GET /admin/pipeline/jobs`, `POST /admin/pipeline/{id}/requeue` | todo | Admin › Pipeline | done (ARC-14b) | admin-pipeline, admin-adm | |
 | ADM-05 | Cost & AI quota monitoring | ARC-10 | `GET /admin/ai-usage`, `GET /admin/usage` | todo | Admin › Usage | done (ARC-14b) | usage-log, admin-ext | never mix units |
-| ADM-06 | Storage management | ARC-10 | `GET/POST /admin/storage`, `PATCH/DELETE /admin/storage/{id}`, `GET /admin/storage/orphans`, `POST /admin/storage/cleanup` | todo | Admin › Storage | todo | storage-config, admin-ext | |
+| ADM-06 | Storage management | ARC-10 | `GET/POST /admin/storage`, `PATCH/DELETE /admin/storage/{id}`, `GET /admin/storage/orphans`, `POST /admin/storage/cleanup` | todo | Admin › Storage | done (ARC-14c) | storage-config, admin-ext | |
 | ADM-07 | Audit log | ARC-10 | `GET /admin/audit-logs` | todo | Admin › Audit | done (ARC-14b) | admin-adm | |
-| ADM-08 | System health | ARC-10 | `GET /admin/health` | todo | Admin › Health | todo | admin-ext | |
+| ADM-08 | System health | ARC-10 | `GET /admin/health` | todo | Admin › Health | done (ARC-14c) | admin-ext | |
 | ADM-09 | Extended user management | ARC-10 | `GET /admin/users/{id}`, `POST /admin/users/bulk`, `GET /admin/activity` | todo | Admin › Users, User detail | done (ARC-14a) | admin-ext, user-status, usage-by-user | |
-| ADM-10 | Config & feature flags | ARC-10 | `GET /admin/config`, `PATCH /admin/config/{key}`, `GET/PATCH /admin/generation-config` | todo | Admin › Config | todo | aip-control-plane | |
+| ADM-10 | Config & feature flags | ARC-10 | `GET /admin/config`, `PATCH /admin/config/{key}`, `GET/PATCH /admin/generation-config` | todo | Admin › Config | done (ARC-14c) | aip-control-plane | |
 | PRF-01 | Profile page & account info | ARC-07 | `GET /profile` | in_progress | Profile | done (13c) | — | `avatar_url` is null until ARC-07 part 2 |
 | PRF-02 | Edit display name & username | ARC-07 | `PATCH /profile` | done | Profile | done (13c) | auth-validate | username unique |
 | PRF-03 | Change password | ARC-05 | `POST /profile/change-password` | todo | Profile | done (13c) | auth-validate | current password required |

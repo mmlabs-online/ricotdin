@@ -1,7 +1,6 @@
 import { Navigate, createBrowserRouter } from 'react-router'
 import { RequireRole } from '../auth/RequireAuth'
 import { ErrorScreen } from '../components/ErrorScreen'
-import { AdminSectionPage } from '../routes/AdminSectionPage'
 import { ChatPage } from '../routes/ChatPage'
 import { ProfilePage } from '../routes/ProfilePage'
 import { MeetingDetailPage } from '../routes/MeetingDetailPage'
@@ -13,16 +12,19 @@ import { MeetingsPage } from '../routes/MeetingsPage'
 import { RecordPage } from '../routes/RecordPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
-import { ADMIN_SECTIONS } from './adminSections'
 import { AdminActivityPage } from '../routes/admin/AdminActivityPage'
 import { AdminAuditPage } from '../routes/admin/AdminAuditPage'
+import { AdminConfigPage } from '../routes/admin/AdminConfigPage'
+import { AdminDocsPage } from '../routes/admin/AdminDocsPage'
+import { AdminFeaturesPage } from '../routes/admin/AdminFeaturesPage'
+import { AdminHealthPage, AdminStoragePage } from '../routes/admin/AdminHealthPage'
+import { AdminKeysPage } from '../routes/admin/AdminKeysPage'
 import { AdminOverviewPage } from '../routes/admin/AdminOverviewPage'
 import { AdminPipelinePage } from '../routes/admin/AdminPipelinePage'
 import { AdminUsagePage } from '../routes/admin/AdminUsagePage'
 import { AdminUserDetailPage } from '../routes/admin/AdminUserDetailPage'
 import { AdminUsersPage } from '../routes/admin/AdminUsersPage'
 
-const WIRED = new Set(['users', 'pipeline', 'usage', 'activity', 'audit'])
 import { AdminShell } from './AdminShell'
 import { AppShell } from './AppShell'
 
@@ -43,7 +45,6 @@ export function createRouter() {
       ),
       errorElement: <ErrorScreen />,
       children: [
-        // wired screens first (ARC-14); the rest stay placeholders until their round
         { index: true, element: <AdminOverviewPage /> },
         { path: 'users', element: <AdminUsersPage /> },
         { path: 'users/:userId', element: <AdminUserDetailPage /> },
@@ -51,10 +52,12 @@ export function createRouter() {
         { path: 'usage', element: <AdminUsagePage /> },
         { path: 'activity', element: <AdminActivityPage /> },
         { path: 'audit', element: <AdminAuditPage /> },
-        ...ADMIN_SECTIONS.filter(({ slug }) => slug && !WIRED.has(slug)).map(({ slug, key }) => ({
-          path: slug,
-          element: <AdminSectionPage sectionKey={key} />,
-        })),
+        { path: 'keys', element: <AdminKeysPage /> },
+        { path: 'storage', element: <AdminStoragePage /> },
+        { path: 'config', element: <AdminConfigPage /> },
+        { path: 'features', element: <AdminFeaturesPage /> },
+        { path: 'health', element: <AdminHealthPage /> },
+        { path: 'docs', element: <AdminDocsPage /> },
         { path: '*', element: <StatusPage kind="notFound" /> },
       ],
     },

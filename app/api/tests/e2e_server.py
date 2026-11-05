@@ -44,7 +44,8 @@ from app.services.storage.base import StorageHealth, StoredObject
 from tests.conftest import alembic_upgrade
 
 PASSWORD = "correct horse battery"  # noqa: S105 - the test account of a scratch database
-USERS = (("e2e@example.com", "e2e_user"),)
+USERS = (("e2e@example.com", "e2e_user", "user"), ("e2e-admin@example.com", "e2e_admin", "admin"))
+FAILED_TITLE = "Quarterly review (failed)"  # the admin suite requeues it
 DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id="
 VECTOR = "[" + ",".join(["0.036"] * 768) + "]"
 SEGMENTS = (
@@ -195,22 +196,43 @@ async def fake_worker(url: str) -> None:
 
 def seed(url: str) -> None:
     with psycopg.connect(url, autocommit=True) as conn:
-        for email, username in USERS:
+        owner = None
+        for email, username, role in USERS:
             uid = conn.execute(
                 "INSERT INTO users (email, password_hash, role, email_verified_at) "
-                "VALUES (%s, %s, 'user', now()) RETURNING id",
-                (email, hash_password(PASSWORD)),
+                "VALUES (%s, %s, %s, now()) RETURNING id",
+                (email, hash_password(PASSWORD), role),
             ).fetchone()
             assert uid is not None  # noqa: S101 - test-only script
             conn.execute(
-                "INSERT INTO profiles (id, username, role) VALUES (%s, %s, 'user')",
-                (uid[0], username),
+                "INSERT INTO profiles (id, username, role) VALUES (%s, %s, %s)",
+                (uid[0], username, role),
             )
+            if username == "e2e_user":
+                owner = uid[0]
             conn.execute(
                 "SELECT quota_apply_movement(%s, 36000, 50, 'admin_grant', %s, false, NULL, NULL, "
                 "'{}'::jsonb)",
                 (uid[0], f"e2e:{uuid.uuid4()}"),
             )
+        # a failed meeting of the first user whose file is stored: the admin suite requeues it
+        mid = uuid.uuid4()
+        key = f"{owner}/{mid}.webm"
+        conn.execute(
+            "INSERT INTO meetings (id, user_id, title, status, audio_path, storage_provider, "
+            "error_message) VALUES (%s, %s, %s, 'failed', %s, 'gdrive', 'Processing failed.')",
+            (mid, owner, FAILED_TITLE, key),
+        )
+        conn.execute(
+            "INSERT INTO storage_objects (key, file_id, size_bytes, content_type) "
+            "VALUES (%s, %s, 4096, 'audio/webm')",
+            (key, f"e2e-{mid}"),
+        )
+        conn.execute(
+            "INSERT INTO jobs (meeting_id, status, step, attempts, last_error) "
+            "VALUES (%s, 'failed', 'transcribe_poll', 3, 'e2e: provider returned 503')",
+            (mid,),
+        )
 
 
 def _exit_on_term(signum: int, frame: object) -> None:

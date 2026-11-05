@@ -181,7 +181,10 @@
       "unavailable": "A service is unavailable right now. Try again later.",
       "network": "No connection to the server. Check your network and try again.",
       "generic": "Something went wrong. Please try again.",
-      "conflict": "This cannot be done in the current state (for example it is already running, or a file is missing). Refresh and check."
+      "conflict": "This cannot be done in the current state (for example it is already running, or a file is missing). Refresh and check.",
+      "invalid": "The server refused this value. Check it and try again.",
+      "duplicate": "This already exists (for example the feature key is taken).",
+      "gone": "This item no longer exists (another admin may have removed it). The list has been refreshed."
     },
     "pagination": {
       "label": "Pages",
@@ -386,7 +389,19 @@
         "warning": "Warning",
         "error": "Error",
         "unknown": "Unknown"
-      }
+      },
+      "subtitle": "Checks of the database, file storage, keys and worker tasks.",
+      "checks": "Checks",
+      "refresh": "Check again",
+      "msg": {
+        "noActiveKey": "No active key.",
+        "allKeysFailing": "Every active key failed its last check.",
+        "noSecret": "KEY_ENCRYPTION_SECRET is not set on the server.",
+        "tasks": "Overdue or failing: {{tasks}}",
+        "database": "The database did not answer."
+      },
+      "recheckOk": "Checked again: everything is OK.",
+      "recheckBad": "Checked again: something needs attention."
     },
     "pipeline": {
       "subtitle": "Meetings in the processing queue. Requeue runs a failed or stuck meeting again.",
@@ -563,6 +578,224 @@
       "meeting_shared": "Meeting shared",
       "meeting_unshared": "Meeting unshared",
       "other": "Other event"
+    },
+    "keys": {
+      "subtitle": "Provider API keys. A saved key can never be viewed again; only its label and last 4 characters are shown.",
+      "lastCheck": "Last health check {{time}}",
+      "neverChecked": "Keys have not been checked yet",
+      "runCheck": "Run health check now",
+      "checking": "Checking…",
+      "checked": "Health check done: {{healthy}} healthy, {{unhealthy}} failing, {{unknown}} unknown.",
+      "noKeys": "No stored key. The server setting is used if one is set.",
+      "masked": "••••{{last4}}",
+      "status": {
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "unhealthy": "Failing",
+        "unknown": "Not checked",
+        "inconclusive": "Inconclusive"
+      },
+      "lastUsed": "Last used {{time}}",
+      "neverUsed": "Never used",
+      "reason": "Reason: {{reason}}",
+      "disable": "Disable",
+      "enable": "Enable",
+      "delete": "Delete",
+      "disableOne": "Disable {{label}}",
+      "enableOne": "Enable {{label}}",
+      "deleteOne": "Delete {{label}}",
+      "reasonLabel": "Reason (optional)",
+      "confirm": {
+        "disable": {
+          "title": "Disable this key?",
+          "body": "{{label}} (••••{{last4}}) stops being used at once. Disabling does not revoke it: revoke a leaked key at the provider. The last active key of a provider cannot be disabled."
+        },
+        "enable": {
+          "title": "Enable this key?",
+          "body": "{{label}} (••••{{last4}}) is used again for new requests."
+        },
+        "delete": {
+          "title": "Delete this key?",
+          "body": "{{label}} (••••{{last4}}) is removed for good. The last active key of a provider cannot be deleted."
+        }
+      },
+      "done": {
+        "disable": "Key disabled.",
+        "enable": "Key enabled.",
+        "delete": "Key deleted."
+      },
+      "addTitle": "Add a key",
+      "provider": "Provider",
+      "label": "Label",
+      "key": "Key",
+      "add": "Save key",
+      "saved": "Key saved. It cannot be viewed again.",
+      "errors": {
+        "label": "Enter a label.",
+        "labelLong": "Use at most 80 characters for the label.",
+        "keyShort": "The key is too short (at least 8 characters).",
+        "keyLong": "The key is too long (at most 512 characters).",
+        "keyChars": "The key cannot contain spaces or special characters.",
+        "lastActive": "This is the last active key of its provider. Add another key first.",
+        "noSecret": "The server cannot store keys: KEY_ENCRYPTION_SECRET is not set.",
+        "keyEmpty": "Enter the key."
+      },
+      "secureTitle": "Keys are write-only",
+      "secureBody": "Keys are encrypted at rest and never sent back to the browser.",
+      "endingIn": "key ending in {{last4}}",
+      "statusLabel": "Status:",
+      "healthLabel": "Health:",
+      "checkedAt": "Checked {{time}}"
+    },
+    "config": {
+      "subtitle": "Workspace settings. Each change asks first and is written to the audit log.",
+      "title": "Settings",
+      "empty": "No settings.",
+      "none": "not set",
+      "on": "On",
+      "off": "Off",
+      "save": "Save",
+      "keepForever": "Empty = keep forever",
+      "updated": "Changed {{time}}",
+      "keys": {
+        "retention": {
+          "name": "Audio retention (days)",
+          "help": "Original recordings older than this are deleted by the worker once a day. Transcripts, notes and chats stay. Empty = keep forever."
+        },
+        "hack": {
+          "name": "Seek fix for browser recordings",
+          "help": "Lets the player seek in recordings made in the browser, by downloading the whole file first."
+        }
+      },
+      "confirmTitle": "Change \"{{name}}\"?",
+      "confirmBody": "From {{from}} to {{to}}.",
+      "retentionWarning": "On its next run the worker permanently deletes the audio of every meeting older than {{days}} days. This cannot be undone.",
+      "saved": "\"{{name}}\" saved.",
+      "errors": {
+        "retention": "Enter a whole number of days from 1 to 3650, or leave it empty.",
+        "number": "Enter a number.",
+        "tooLong": "Use at most 2000 characters."
+      },
+      "noChanges": "Nothing changed.",
+      "saveOne": "Save {{name}}"
+    },
+    "models": {
+      "title": "AI models",
+      "allowed": "Models users can choose",
+      "default": "System default",
+      "help": "Existing meetings keep the model they were processed with.",
+      "save": "Save models",
+      "confirmTitle": "Save the AI models?",
+      "confirmDefault": "System default: {{model}}.",
+      "confirmAllowed": "Users can choose: {{models}}.",
+      "saved": "AI models saved.",
+      "errors": {
+        "empty": "Allow at least one model.",
+        "default": "The system default must be one of the allowed models."
+      }
+    },
+    "features": {
+      "subtitle": "The feature registry: status and notes for every tracked feature.",
+      "search": "Search features",
+      "searchPlaceholder": "Search key, title or description",
+      "module": "Module",
+      "allModules": "All modules",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "statuses": {
+        "done": "Done",
+        "partial": "Partial",
+        "not_started": "Not started"
+      },
+      "priority": "Priority",
+      "noPriority": "None",
+      "priorities": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "empty": "No feature matches.",
+      "notFound": "This feature was not found.",
+      "caption_one": "{{count}} feature",
+      "caption_other": "{{count}} features",
+      "col": {
+        "key": "Key",
+        "title": "Title",
+        "status": "Status"
+      },
+      "editTitle": "Edit {{key}}",
+      "close": "Close",
+      "meta": "{{module}} · changed {{time}} by {{by}}",
+      "description": "Description",
+      "content": "Details (markdown, shown as text)",
+      "changeNote": "Change note",
+      "lists": {
+        "note_tags": "Tags",
+        "depends_on": "Depends on",
+        "blocks": "Blocks",
+        "key_files": "Key files"
+      },
+      "listHint": "Lists: one item per line.",
+      "save": "Save changes",
+      "saved": "{{key}} saved.",
+      "noChanges": "Nothing changed.",
+      "createTitle": "Add a feature",
+      "pickHint": "Pick a feature in the list to edit it, or add a new one.",
+      "create": {
+        "key": "Key (PREFIX-ID)",
+        "module_prefix": "Module prefix",
+        "module_name": "Module name",
+        "title": "Title"
+      },
+      "createButton": "Add feature",
+      "created": "{{key}} added.",
+      "errors": {
+        "key": "Enter a key such as ARC-20.",
+        "title": "Enter a title.",
+        "module_prefix": "Enter a module prefix.",
+        "module_name": "Enter a module name.",
+        "keyFormat": "The key looks like PREFIX-ID, for example ARC-20.",
+        "prefixFormat": "The module prefix is 1–10 letters or digits."
+      },
+      "shown_one": "{{count}} feature shown",
+      "shown_other": "{{count}} features shown"
+    },
+    "storage": {
+      "subtitle": "Recordings and avatars are stored in Google Drive.",
+      "connection": "Google Drive",
+      "connected": "Connected",
+      "noAccount": "No account connected",
+      "problem": {
+        "not_configured": "Not connected",
+        "token_refresh_failed": "Access expired",
+        "root_missing": "Folder missing",
+        "shared_root": "Folder is shared",
+        "error": "Error"
+      },
+      "files": "Stored files",
+      "filesHint": "Recordings and avatars",
+      "used": "Space used by the app",
+      "usedHint": "Sum of the stored files",
+      "quota": "Drive usage",
+      "quotaOf": "of {{limit}}",
+      "noLimit": "No quota limit reported",
+      "howTitle": "Connecting or reconnecting Drive",
+      "howBody": "Drive is connected on the server with the connect_gdrive script (see the operations guide). It cannot be changed from this page."
+    },
+    "docs": {
+      "subtitle": "The API reference, when it is turned on.",
+      "title": "API reference",
+      "on": "Available",
+      "off": "Turned off",
+      "swagger": "Interactive docs (Swagger)",
+      "redoc": "Reference (ReDoc)",
+      "openapi": "OpenAPI document (JSON)",
+      "newTab": "(opens in a new tab)",
+      "offHelp": "The API serves its reference only when the server setting API_DOCS=1 is on. Keep it off in production unless you need it.",
+      "unreachable": "The API could not be reached to check its reference. Try again later."
     }
   },
   "error": {
