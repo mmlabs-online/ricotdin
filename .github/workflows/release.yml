@@ -1,9 +1,16 @@
 name: Release
 
-# Push tag dạng vX.Y.Z (tạo trên nhánh release/X.Y) -> kiểm tra lại code,
-# build image mingming21400/ricotdin:vX.Y.Z (+ latest nếu là version cao nhất),
-# rồi mở PR "ricotdin vX.Y.Z" trên mmlabs-online/deployment (ghim image theo digest).
-# Deploy = review + merge PR đó (OPS-04).
+# v2 (ARC-15). Push a tag vX.Y.Z (X >= 2) created on release/X.Y →
+#   1. guard: tag on release/X.Y, same version in app/api/pyproject.toml and app/web/package.json;
+#   2. the full API and web CI (ci-api.yml, ci-web.yml, reused as-is);
+#   3. build + push mingming21400/ricotdin-api:vX.Y.Z (API and worker share it) and
+#      mingming21400/ricotdin-web:vX.Y.Z (+ latest when it is the highest version);
+#   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest in
+#      apps/ricotdin/release-v2.env (v1 hotfix releases from release/1.1 still rewrite release.env:
+#      separate files, so a v1 hotfix can never drop the v2 pins). A prerelease tag
+#      (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
+# Deploy = review + merge that PR (OPS-04). A tag runs the workflow file of the tagged commit,
+# so v1 hotfix tags (v1.x on release/1.1) keep using the v1 release.yml of that branch.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
@@ -13,136 +20,127 @@ permissions:
 
 env:
   APP: ricotdin
-  IMAGE: mingming21400/ricotdin
-  VAR: RICOTDIN_IMAGE
-  VERSION_VAR: RICOTDIN_VERSION
+  API_IMAGE: mingming21400/ricotdin-api
+  WEB_IMAGE: mingming21400/ricotdin-web
   DEPLOY_REPO: mmlabs-online/deployment
 
 jobs:
-  verify:
-    name: lint · typecheck · test
+  guard:
+    name: tag · branch · version
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0   # cần toàn bộ lịch sử để kiểm tra branch chứa tag
+          fetch-depth: 0 # the branch check needs the history
 
-      # Tag vX.Y.Z chỉ được gắn trên commit thuộc nhánh release/X.Y
-      - name: Check tag is on release/X.Y
+      - name: Check the tag
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          BRANCH="release/${TAG_VERSION%.*}"
+          MAJOR="${TAG_VERSION%%.*}"
+          if [ "$MAJOR" -lt 2 ]; then
+            echo "::error::$GITHUB_REF_NAME is a v1 tag: tag it on release/1.1, whose release.yml builds v1"
+            exit 1
+          fi
+          BRANCH="release/$(echo "$TAG_VERSION" | cut -d. -f1,2)"
           if ! git branch -r --contains "$GITHUB_SHA" | grep -qx "  origin/$BRANCH"; then
-            echo "::error::Tag $GITHUB_REF_NAME phải nằm trên nhánh $BRANCH"
+            echo "::error::Tag $GITHUB_REF_NAME must be on branch $BRANCH"
             exit 1
           fi
+          API_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' app/api/pyproject.toml | head -1)"
+          WEB_VERSION="$(node -p "require('./app/web/package.json').version")"
+          for pair in "app/api/pyproject.toml:$API_VERSION" "app/web/package.json:$WEB_VERSION"; do
+            if [ "${pair#*:}" != "$TAG_VERSION" ]; then
+              echo "::error::${pair%%:*} has version ${pair#*:}, tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
 
-      # Tag phải khớp version trong legacy/package.json (vd. v1.0.0 <-> "1.0.0"); v1 nằm trong legacy/ từ ARC-00
-      - name: Check tag matches package.json
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION="$(node -p "require('./legacy/package.json').version")"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME không khớp package.json version $PKG_VERSION"
-            exit 1
-          fi
+  verify-api:
+    needs: guard
+    uses: ./.github/workflows/ci-api.yml
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: legacy/package-lock.json
-
-      - name: Install dependencies
-        working-directory: legacy
-        run: npm ci
-
-      - name: Lint
-        working-directory: legacy
-        run: npm run lint
-
-      - name: Type-check
-        working-directory: legacy
-        run: npm run typecheck
-
-      - name: Test
-        working-directory: legacy
-        run: npm run test
-        env:
-          # Giá trị giả, giống ci.yml — test là hàm thuần, không gọi mạng.
-          KEY_ENCRYPTION_SECRET: "0000000000000000000000000000000000000000000000000000000000000000"
-          NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321"
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy-anon-key"
-          SUPABASE_SERVICE_ROLE_KEY: "dummy-service-role-key"
-          GEMINI_API_KEY: "dummy-gemini-key"
+  verify-web:
+    needs: guard
+    uses: ./.github/workflows/ci-web.yml
 
   build:
-    name: build & push image · open deployment PR
-    needs: verify
+    name: build & push images · open deployment PR
+    needs: [verify-api, verify-web]
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0   # cần danh sách tag để xác định version cao nhất
+          fetch-depth: 0 # the tag list decides "latest"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Tag image: 'vX.Y.Z' (cố định). Deploy dùng digest, không dùng tag.
-      # 'latest' chỉ gắn khi đây là version cao nhất — hotfix cho dòng cũ không kéo latest lùi lại.
-      # Chỉ xét tag thuần vX.Y.Z: tag prerelease (vd. v1.1.0-rc1) không bao giờ nhận latest.
+      # 'vX.Y.Z' is fixed; deploys use the digest, never a tag. 'latest' only for the highest
+      # plain vX.Y.Z (a hotfix on an older line or a prerelease never moves it).
       - name: Compute tags
         id: meta
         run: |
           HIGHEST="$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
-          {
-            echo "tags<<EOF"
-            echo "$IMAGE:$GITHUB_REF_NAME"
-            if [ "$GITHUB_REF_NAME" = "$HIGHEST" ]; then echo "$IMAGE:latest"; fi
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          for name in api web; do
+            image="$API_IMAGE"; [ "$name" = web ] && image="$WEB_IMAGE"
+            {
+              echo "$name<<EOF"
+              echo "$image:$GITHUB_REF_NAME"
+              if [ "$GITHUB_REF_NAME" = "$HIGHEST" ]; then echo "$image:latest"; fi
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          done
 
-      # Tag release KHÔNG được bake vào image (image được promote theo digest);
-      # runtime đọc RICOTDIN_VERSION từ release.env, BUILD_COMMIT là fallback.
-      - name: Build & push
-        id: build
-        uses: docker/build-push-action@v6
+      # The release tag is never baked in (images are promoted by digest): the API reads
+      # RICOTDIN_VERSION from release.env at runtime, BUILD_COMMIT is the fallback.
+      - name: Build & push API image (API + worker)
+        id: api
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: legacy/Dockerfile
+          file: app/api/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.api }}
           build-args: |
-            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             BUILD_COMMIT=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
-      # Chỉ ghi apps/ricotdin/release.env (pr-scope.yml của repo deployment bắt buộc).
-      # DEPLOY_REPO_TOKEN: fine-grained PAT, chỉ mmlabs-online/deployment,
-      # Contents + Pull requests read/write.
+      - name: Build & push web image
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: app/web
+          file: app/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.web }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # Writes ONLY apps/ricotdin/release-v2.env (the deployment repo's pr-scope.yml must allow
+      # it). DEPLOY_REPO_TOKEN: fine-grained PAT on mmlabs-online/deployment only,
+      # Contents + Pull requests read/write. The deployment repo must dismiss stale approvals on
+      # new commits: a re-run for the same tag force-pushes the release branch.
       - name: Open deployment PR
+        if: ${{ !contains(github.ref_name, '-') }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
         run: |
           TAG="$GITHUB_REF_NAME"
           BRANCH="release/$APP-$TAG"
-          FILE="apps/$APP/release.env"
-          if [ -z "$DIGEST" ]; then
-            echo "::error::build-push-action không trả về digest"
+          FILE="apps/$APP/release-v2.env"
+          if [ -z "$API_DIGEST" ] || [ -z "$WEB_DIGEST" ]; then
+            echo "::error::build-push-action returned no digest"
             exit 1
           fi
 
@@ -156,26 +154,25 @@ jobs:
           mkdir -p "apps/$APP"
           {
             echo "# Written by the $APP release workflow for $TAG (commit $GITHUB_SHA). Do not edit by hand."
-            echo "$VAR=$IMAGE:$TAG@$DIGEST"
-            echo "$VERSION_VAR=$TAG"
+            echo "RICOTDIN_API_IMAGE=$API_IMAGE:$TAG@$API_DIGEST"
+            echo "RICOTDIN_WEB_IMAGE=$WEB_IMAGE:$TAG@$WEB_DIGEST"
+            echo "RICOTDIN_VERSION=$TAG"
           } > "$FILE"
 
-          # git add (không phải commit -am): file là mới ở lần release đầu tiên.
           git add "$FILE"
-          # Chạy lại sau khi PR đã merge: release.env đã đúng, không có gì để commit.
+          # A re-run after the PR was merged: release.env is already right, nothing to commit.
           if git diff --cached --quiet; then
-            echo "$FILE đã đúng cho $TAG trên nhánh mặc định — bỏ qua."
+            echo "$FILE is already right for $TAG on the default branch — skipping."
             exit 0
           fi
           git commit -m "$APP $TAG"
-          # --force: chạy lại workflow cho cùng tag sẽ ghi đè nhánh cũ.
+          # --force: re-running the workflow for the same tag rewrites the release branch.
           git push --force -u origin "$BRANCH"
 
-          # Chỉ tính PR đang mở (gh pr view cũng trả về PR đã đóng/merge).
           OPEN_PR="$(gh pr list --head "$BRANCH" --state open --json url -q '.[0].url')"
           if [ -n "$OPEN_PR" ]; then
-            echo "PR đang mở $OPEN_PR — đã cập nhật nhánh."
+            echo "Open PR $OPEN_PR — branch updated."
           else
             gh pr create --title "$APP $TAG" --head "$BRANCH" \
-              --body "Deploy \`$IMAGE:$TAG@$DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+              --body "Deploy \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
           fi

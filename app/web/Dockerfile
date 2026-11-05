@@ -2,14 +2,14 @@
 #   docker build -t ricotdin-web app/web
 # One image for every environment: the API origin comes from RICOTDIN_API_URL at container start
 # (served as /config.json and put into the CSP), never from the build.
-FROM node:22-alpine AS build
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
 COPY --chown=root:root deploy/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --chown=root:root deploy/security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY --chown=root:root --chmod=0755 deploy/15-ricotdin-config.envsh /docker-entrypoint.d/15-ricotdin-config.envsh
