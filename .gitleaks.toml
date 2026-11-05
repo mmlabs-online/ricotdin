@@ -1,0 +1,19 @@
+# gitleaks (ARC-15): default rules + allowlist for test data that only LOOKS like a secret.
+# CI (secrets-scan.yml) and the pre-commit hook read this file. Never allowlist a real secret:
+# rotate it at the provider instead (a leaked value stays in git history).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake keys in tests and fixtures; type annotations"
+paths = [
+  # pytest / vitest data: fake keys, redaction samples, v1 crypto fixtures (encrypted fakes)
+  '''^app/api/tests/''',
+  '''^app/web/src/.*\.test\.tsx?$''',
+  '''^app/web/e2e/''',
+]
+regexTarget = "line"
+regexes = [
+  # dataclass field annotation in app/api/app/auth/jwt.py
+  '''private_key: Ed25519PrivateKey''',
+]

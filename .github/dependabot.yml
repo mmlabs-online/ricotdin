@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned GitHub Actions and the digest-pinned v2 base images current (ARC-15).
+# Monthly PRs into dev; review them like any other change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: docker
+    directories: [/app/api, /app/web]
+    target-branch: dev
+    schedule:
+      interval: monthly

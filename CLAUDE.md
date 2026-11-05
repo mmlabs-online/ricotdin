@@ -911,6 +911,28 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   requeue the seeded failed meeting → the stand-in worker finishes it, key check + save a key, audit
   rows); `tests/e2e_server.py` seeds the admin and the failed meeting (+ its `storage_objects` row).
 
+### 0.11 v2 release & supply chain (ARC-15, part 1)
+
+- **`release.yml` is v2 from `dev` on:** tag `vX.Y.Z` (X ≥ 2) on `release/X.Y`; the guard job
+  requires the same version in `app/api/pyproject.toml` and `app/web/package.json` (bump both),
+  then reuses `ci-api.yml` + `ci-web.yml` (`workflow_call`), builds `mingming21400/ricotdin-api`
+  (API **and** worker: one image, the worker is `command: python -m app.worker`) and
+  `mingming21400/ricotdin-web`, and opens the deployment PR writing `RICOTDIN_API_IMAGE`,
+  `RICOTDIN_WEB_IMAGE` (both `:tag@digest`) and `RICOTDIN_VERSION` to `apps/ricotdin/release.env`.
+  A v1 tag on `dev` fails the guard; v1 hotfix tags are cut on `release/1.1`, whose own
+  `release.yml` still builds v1 (a tag runs the workflow file of the tagged commit).
+- **Pinning:** every GitHub Action by commit SHA (`# vN` comment), the v2 base images
+  (`python`, `node`, `nginx-unprivileged`, `uv`) by digest; `.github/dependabot.yml` opens monthly
+  PRs into `dev` to move them. Never add an action by tag.
+- **Secrets scan:** `.gitleaks.toml` (default rules; allowlist only for test paths and one type
+  annotation) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
+  commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
+  not rescanned: a finding there is rotated at the provider, never allowlisted.
+- **Known history finding (2026-11-05):** commits of 2026-06-09/10/13 (`README.md`, on `main` and
+  `release/1.0`/`1.1`) contain a Supabase `service_role` JWT, the anon JWT and a Gemini API key.
+  Rotate them (Supabase: JWT secret rotation / new API keys; Google: delete the key); history is
+  not rewritten.
+
 ## 1. What we are building
 
 A **meeting assistant** web app (MVP). The user records a meeting in the

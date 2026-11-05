@@ -1,0 +1,7 @@
+# Local hooks (ARC-15). Install once: `pipx install pre-commit && pre-commit install`.
+# gitleaks checks the staged changes before every commit (same rules as CI: .gitleaks.toml).
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
