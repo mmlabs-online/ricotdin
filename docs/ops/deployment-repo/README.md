@@ -41,11 +41,16 @@ runnable for a rollback until ARC-16.
 - **cloudflared:** two public hostnames, sibling subdomains of one site:
   - `api.<domain>` → `http://ricotdin-api:8000`;
   - `app.<domain>` → `http://ricotdin-web:8080`.
-  - `FORWARDED_ALLOW_IPS` = the `web` network subnet (`docker network inspect web`).
+  - `FORWARDED_ALLOW_IPS` = **only cloudflared's address**, never the whole `web` subnet. Other
+    containers share that network: trusting all of it lets any of them forge `X-Forwarded-For`
+    and slip past the per-client login and register limits. Give cloudflared a fixed
+    `ipv4_address` in `proxy/compose.yml` and put that one address here.
   - Strip query strings for `/media` from the tunnel / access logs.
   - `WEB_ORIGIN` and `ALLOWED_ORIGINS` = `https://app.<domain>`.
-- **autoheal** restarts containers labelled `autoheal=true` once they turn unhealthy. It holds
-  the Docker socket, so it is pinned by digest.
+- **autoheal** restarts containers labelled `autoheal=true` once they turn unhealthy. It acts on
+  **every** container on the host with that label, not only this project. It holds the Docker
+  socket, which is host root, so it is pinned by digest and has no network.
+  - Follow-up: put a docker-socket-proxy in front of it that allows only list and restart.
 - **Order and rollback:** `docs/ops/v2-cutover.md` in ricotdin.
 
 ## How a release deploys

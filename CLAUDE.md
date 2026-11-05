@@ -933,9 +933,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
   not rescanned: a finding there is rotated at the provider, never allowlisted.
 - **Backup (part 2) replaces v1 OPS-03:** `backup.yml` dumps Neon `main` with pg_dump 18
-  (`--format=custom`, secret `NEON_BACKUP_DATABASE_URL`: a `pg_read_all_data` login, direct URL),
-  checks the archive lists `public.meetings`, age-encrypts it, then (only then) `uv run` installs
-  packages and `scripts/backup_r2.py` uploads `db-v2/ricotdin-v2-db-<UTC>.dump.age` (IfNoneMatch)
+  (`--format=custom`, secret `NEON_BACKUP_DATABASE_URL`: a `BYPASSRLS` + `pg_read_all_data` login —
+  pg_dump fails on RLS tables without BYPASSRLS — direct URL), checks the archive lists
+  `public.meetings`, age-encrypts it; a second job that never sees the DB secret installs packages
+  (artifact = the encrypted file only) and `scripts/backup_r2.py` uploads `db-v2/ricotdin-v2-db-<UTC>.dump.age` (IfNoneMatch)
   and prunes after 30 days (`app/ops/backup_plan.py`, pure, tests `test_backup_plan.py`; never the
   newest, never v1's `db/` keys). Roles/logins are not in the dump (migrations +
   `provision_db_roles`). Runbook `docs/ops/backup-restore.md`. The v1 `SUPABASE_DB_URL` secret is

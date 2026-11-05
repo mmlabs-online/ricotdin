@@ -43,12 +43,15 @@ provider keys. Data deleted in the app stays in backups for up to 30 days.
    bucket only). Optional: add a lifecycle rule on `db-v2/` (~35 days) as a second line of defence.
 3. **Backup login on Neon `main`** (the owner runs this in the Neon SQL editor):
    ```sql
-   CREATE ROLE ricotdin_backup_login LOGIN PASSWORD '<generated>' CONNECTION LIMIT 2;
+   CREATE ROLE ricotdin_backup_login LOGIN BYPASSRLS PASSWORD '<generated>' CONNECTION LIMIT 2;
    GRANT pg_read_all_data TO ricotdin_backup_login;
    ```
+   `BYPASSRLS` is required. pg_dump turns row security off, so without it the dump stops at the
+   first RLS table ("query would be affected by row-level security policy"; checked on PG 18).
+   The login can read everything but write nothing. If Neon refuses `BYPASSRLS` to your role, ask
+   Neon support or use a dedicated branch. Never the owner URL: it can change the schema and data.
    - Use the **direct** connection string, not `-pooler`, with `sslmode=require`.
    - Never use the app / service / worker logins.
-   - If `pg_read_all_data` cannot be granted on the plan, use the owner URL. Rotate it after any doubt.
 4. **GitHub Environment `backup`:**
    - *Deployment branches*: `main` + `dev`.
    - Add these **environment secrets**:
@@ -83,15 +86,25 @@ psql "$TARGET_OWNER_URL" -c "select (select count(*) from meetings) meetings,
   (select version_num from alembic.alembic_version) revision;"
 ```
 
-- **Group roles:** `ricotdin_app`, `ricotdin_service` and `ricotdin_worker` must exist on the target
-  before `pg_restore`, or the grants fail. A fresh Neon branch made from `main` has them. Otherwise
-  create them first with `alembic upgrade 0002_runtime_roles` against an empty database.
+- **Group roles:** `ricotdin_app`, `ricotdin_service` and `ricotdin_worker` are cluster-wide and
+  must exist before `pg_restore`, or the grants fail. A Neon branch made from `main` already has
+  them. On a new project, run `alembic upgrade head` once against a **separate scratch database**
+  of the same project (that creates the roles), drop it, then restore into the empty one.
+- **Database-level privileges are not in the dump** (pg_dump without `--create`). Re-apply them
+  after the restore, then check:
+  ```sql
+  REVOKE TEMPORARY ON DATABASE <db> FROM PUBLIC;   -- 0001 baseline, R8
+  SELECT has_database_privilege('ricotdin_app', current_database(), 'TEMP');  -- must be false
+  ```
 - **Files:** the restored `storage_objects` rows point at the same Google Drive files. A restore
   to production therefore needs no file copy, as long as `drive_config` still holds a working token.
 - Delete the decrypted files afterwards.
 
-Tested on 2026-11-05 against a Postgres 18 scratch database at revision `0006`: dump, list and
-`pg_restore --exit-on-error` into an empty database gave 27 tables at the same revision.
+Tested on 2026-11-05 against a Postgres 18 scratch database at revision `0006`, in three checks:
+- dump, list and `pg_restore --exit-on-error` into an empty database gave 27 tables at the same
+  revision;
+- a `pg_read_all_data` login without `BYPASSRLS` fails at the first RLS table;
+- the same login with it dumps everything.
 
 ## Secret rotation
 

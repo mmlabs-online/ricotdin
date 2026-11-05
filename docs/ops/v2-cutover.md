@@ -44,7 +44,9 @@ Pick a quiet time and tell users the window (≈ 1 h, v1 unavailable).
    `docker compose -p ricotdin -f apps/ricotdin/compose.yml stop`. Supabase stays up and unchanged.
 2. **Final v1 dump by hand**, kept offline:
    `pg_dump --dbname "$SUPABASE_DB_URL" --format=custom -f v1-final.dump`.
-   Encrypt it with `age -r <AGE_RECIPIENT>`.
+   Use a pg_dump at least as new as Supabase's Postgres. Encrypt it with `age -r <AGE_RECIPIENT>`,
+   then delete the plaintext `v1-final.dump`. The URL shows in `ps` on your machine; use a
+   `.pgpass` entry instead of a password in the URL if others share the computer.
 3. **Final migration into `main`.** Do this **before v2 accepts any login**: a re-run overwrites
    `users.*`.
    ```bash
@@ -64,6 +66,9 @@ Pick a quiet time and tell users the window (≈ 1 h, v1 unavailable).
      WHERE w.audio_seconds_remaining <> coalesce(l.a, 0)
         OR w.agent_queries_remaining <> coalesce(l.q, 0);
      ```
+   - Migrated meetings still `processing` (the worker's `stuck_meetings` task fails them on its
+     first run, with the timeout message):
+     `SELECT count(*) FROM meetings WHERE status = 'processing';`
 5. **Release:**
    - PR `release/2.0` ← `main` if needed;
    - tag `v2.0.0` → the `Release` workflow → the deployment PR `ricotdin v2.0.0`;
@@ -101,10 +106,13 @@ Pick a quiet time and tell users the window (≈ 1 h, v1 unavailable).
 **Before v2 accepted real writes:**
 1. In cloudflared, point the hostnames back to v1 (`http://ricotdin:3000`).
 2. Start v1 again: `docker compose -p ricotdin … start`.
-3. Stop v2: `docker compose -p ricotdin-v2 … stop`, or revert `apps/ricotdin-v2/release.env`.
+3. Stop v2: `docker compose -p ricotdin-v2 -f apps/ricotdin-v2/compose.yml stop`. Reverting
+   `release.env` does not stop anything: the deploy workflow then finds nothing to deploy.
 
-Neon `main` and the Drive folder can stay as they are. The next attempt re-runs the final
-migration (it upserts; delete stale v2-only rows first if v2 was used).
+Before the next attempt, **reset Neon `main`** to an empty database at head: restore it to a
+point before the first final migration, or create a fresh branch and run `alembic upgrade head`.
+The migration only upserts, so rows deleted in v1 after the rollback would otherwise survive in
+v2. The Drive folder can stay: copied files are compared with their source, never duplicated.
 
 **After real writes:** there is no automatic path back. Either fix forward on v2 (hotfix
 `v2.0.x` from `release/2.0`), or accept losing the v2 writes and roll back as above.

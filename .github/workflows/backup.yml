@@ -10,14 +10,17 @@
 # Secrets live in the GitHub Environment `backup` (deployment branches: main + dev — `schedule`
 # runs from the default branch `dev`):
 #   NEON_BACKUP_DATABASE_URL      DIRECT (not -pooler) URL of the Neon `main` branch, sslmode=require;
-#                                 a login that can read everything (pg_read_all_data), never the
-#                                 app/service/worker logins
+#                                 ricotdin_backup_login (BYPASSRLS + pg_read_all_data: pg_dump turns
+#                                 row security off and fails without BYPASSRLS), never the owner or
+#                                 the app/service/worker logins
 #   AGE_RECIPIENT                 age public key (age1…); the private key stays offline
 #   R2_BACKUP_ACCOUNT_ID, R2_BACKUP_ACCESS_KEY_ID, R2_BACKUP_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET
 #                                 token scoped to the backup bucket only (Object Read & Write)
 #
-# Supply-chain ordering: the dump + encryption run BEFORE any Python package is installed, so
-# package code only ever sees the R2 token. Actions are pinned by commit SHA.
+# Two jobs: `dump` holds only the DB URL + the age public key and installs no package; it hands the
+# ENCRYPTED file to `upload` as a 1-day artifact. `upload` holds only the R2 token, so code from
+# the Python packages it installs can never reach the database credential (GitHub-hosted runner
+# steps have sudo: secrets of one job are readable by any code in that job). Actions by commit SHA.
 
 name: db-backup
 
@@ -34,12 +37,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  backup:
+  dump:
     runs-on: ubuntu-latest
     environment: backup
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # pg_dump must be at least the server's major version (Neon: Postgres 18).
       - name: Install pg_dump 18 and age
@@ -55,13 +60,9 @@ jobs:
         env:
           NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
           AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
-          R2_BACKUP_ACCOUNT_ID: ${{ secrets.R2_BACKUP_ACCOUNT_ID }}
-          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
-          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
-          R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
         run: |
           missing=0
-          for v in NEON_BACKUP_DATABASE_URL AGE_RECIPIENT R2_BACKUP_ACCOUNT_ID R2_BACKUP_ACCESS_KEY_ID R2_BACKUP_SECRET_ACCESS_KEY R2_BACKUP_BUCKET; do
+          for v in NEON_BACKUP_DATABASE_URL AGE_RECIPIENT; do
             if [ -z "${!v}" ]; then echo "::error::missing secret $v"; missing=1; fi
           done
           case "$AGE_RECIPIENT" in age1*) ;; *) echo "::error::AGE_RECIPIENT must be an age public key (age1…)"; missing=1 ;; esac
@@ -83,19 +84,48 @@ jobs:
               if v:
                   print(f"::add-mask::{v}")
           PY
+          mkdir -p "$RUNNER_TEMP/out"
           out="$RUNNER_TEMP/backup.dump"
           # (libpq takes a URL only as --dbname; the runner is single-use and the secret masked)
           /usr/lib/postgresql/18/bin/pg_dump --dbname="$NEON_BACKUP_DATABASE_URL" \
             --format=custom --compress=6 --no-password --file="$out"
           test -s "$out" || { echo "::error::the dump is empty"; exit 1; }
-          # A readable archive with the tables we expect, before it is encrypted and sent.
-          /usr/lib/postgresql/18/bin/pg_restore --list "$out" | grep -q 'TABLE DATA public meetings' \
+          # A readable archive with the data we expect, before it is encrypted and sent. The list
+          # goes to a file first: `grep -q` on a pipe would SIGPIPE pg_restore under pipefail.
+          /usr/lib/postgresql/18/bin/pg_restore --list "$out" > "$RUNNER_TEMP/toc.txt"
+          grep -q 'TABLE DATA public meetings' "$RUNNER_TEMP/toc.txt" \
             || { echo "::error::the dump has no public.meetings data"; exit 1; }
-          age -r "$AGE_RECIPIENT" -o "$out.age" "$out"
-          rm -f "$out"
-          ls -l "$out.age"
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/out/backup.dump.age" "$out"
+          rm -f "$out" "$RUNNER_TEMP/toc.txt"
+          ls -l "$RUNNER_TEMP/out/backup.dump.age"
 
-      # Python packages are installed only now: the DB URL and the plaintext dump are already gone.
+      - name: Hand over the encrypted file
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backup-encrypted
+          path: ${{ runner.temp }}/out/backup.dump.age
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Remove local files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup.dump" "$RUNNER_TEMP/toc.txt" "$RUNNER_TEMP/out"
+
+  upload:
+    needs: dump
+    runs-on: ubuntu-latest
+    environment: backup
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backup-encrypted
+          path: ${{ runner.temp }}/in
+
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           version: '0.11.17'
@@ -107,7 +137,7 @@ jobs:
           R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
           R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
-        run: uv run --frozen --no-dev python -m scripts.backup_r2 upload "$RUNNER_TEMP/backup.dump.age"
+        run: uv run --frozen --no-dev python -m scripts.backup_r2 upload "$RUNNER_TEMP/in/backup.dump.age"
 
       # Runs only when every step above succeeded (default `if: success()`).
       - name: Prune backups older than 30 days
@@ -119,7 +149,3 @@ jobs:
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
           BACKUP_RETENTION_DAYS: '30'
         run: uv run --frozen --no-dev python -m scripts.backup_r2 prune
-
-      - name: Remove local files
-        if: always()
-        run: rm -f "$RUNNER_TEMP/backup.dump" "$RUNNER_TEMP/backup.dump.age"

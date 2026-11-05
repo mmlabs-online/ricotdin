@@ -57,18 +57,28 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Both pins: same tag, by digest, from the two v2 repositories (never the v1 image).
-          version="$(sed -n 's/^RICOTDIN_VERSION=//p' "$APP_DIR/release.env")"
-          api="$(sed -n 's/^RICOTDIN_API_IMAGE=//p' "$APP_DIR/release.env")"
-          webimg="$(sed -n 's/^RICOTDIN_WEB_IMAGE=//p' "$APP_DIR/release.env")"
-          for pair in "api:$api" "web:$webimg"; do
-            name="${pair%%:*}"; value="${pair#*:}"
-            pattern="^mingming21400/ricotdin-$name:v[2-9][0-9]*\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$"
-            if ! [[ "$value" =~ $pattern ]] || [[ "$value" != "mingming21400/ricotdin-$name:$version@sha256:"* ]]; then
-              echo "::error::The $name pin in $APP_DIR/release.env is not mingming21400/ricotdin-$name:$version@sha256:<digest>. Nothing was started."
-              exit 1
+          # release.env holds the three pins and comments, nothing else (compose --env-file would
+          # honour any other key, e.g. COMPOSE_*). Both images: same tag, by digest, v2 repos only.
+          check_release_env() {
+            local file="$1" version api webimg pair name value pattern
+            if grep -vqE '^(#.*|RICOTDIN_API_IMAGE=.*|RICOTDIN_WEB_IMAGE=.*|RICOTDIN_VERSION=v[2-9][0-9]*\.[0-9]+\.[0-9]+|)$' "$file"; then
+              echo "::error::$file holds a line other than the three pins. Nothing was started."
+              return 1
             fi
-          done
+            version="$(sed -n 's/^RICOTDIN_VERSION=//p' "$file")"
+            api="$(sed -n 's/^RICOTDIN_API_IMAGE=//p' "$file")"
+            webimg="$(sed -n 's/^RICOTDIN_WEB_IMAGE=//p' "$file")"
+            for pair in "api:$api" "web:$webimg"; do
+              name="${pair%%:*}"; value="${pair#*:}"
+              pattern="^mingming21400/ricotdin-$name:v[2-9][0-9]*\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$"
+              if [ -z "$version" ] || ! [[ "$value" =~ $pattern ]] || [[ "$value" != "mingming21400/ricotdin-$name:$version@sha256:"* ]]; then
+                echo "::error::The $name pin in $file is not mingming21400/ricotdin-$name:$version@sha256:<digest>. Nothing was started."
+                return 1
+              fi
+            done
+          }
+          check_release_env "$APP_DIR/release.env"
+          version="$(sed -n 's/^RICOTDIN_VERSION=//p' "$APP_DIR/release.env")"
           image="$version"
           previous=""
           # BEFORE is empty on workflow_dispatch: no previous release, so a failure is not restored.
@@ -117,6 +127,30 @@ jobs:
             exit 1
           fi
           git restore --source="$BEFORE" --staged --worktree -- "$APP_DIR"
+          # release.env holds the three pins and comments, nothing else (compose --env-file would
+          # honour any other key, e.g. COMPOSE_*). Both images: same tag, by digest, v2 repos only.
+          check_release_env() {
+            local file="$1" version api webimg pair name value pattern
+            if grep -vqE '^(#.*|RICOTDIN_API_IMAGE=.*|RICOTDIN_WEB_IMAGE=.*|RICOTDIN_VERSION=v[2-9][0-9]*\.[0-9]+\.[0-9]+|)$' "$file"; then
+              echo "::error::$file holds a line other than the three pins. Nothing was restored."
+              return 1
+            fi
+            version="$(sed -n 's/^RICOTDIN_VERSION=//p' "$file")"
+            api="$(sed -n 's/^RICOTDIN_API_IMAGE=//p' "$file")"
+            webimg="$(sed -n 's/^RICOTDIN_WEB_IMAGE=//p' "$file")"
+            for pair in "api:$api" "web:$webimg"; do
+              name="${pair%%:*}"; value="${pair#*:}"
+              pattern="^mingming21400/ricotdin-$name:v[2-9][0-9]*\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$"
+              if [ -z "$version" ] || ! [[ "$value" =~ $pattern ]] || [[ "$value" != "mingming21400/ricotdin-$name:$version@sha256:"* ]]; then
+                echo "::error::The $name pin in $file is not mingming21400/ricotdin-$name:$version@sha256:<digest>. Nothing was restored."
+                return 1
+              fi
+            done
+          }
+          if ! check_release_env "$APP_DIR/release.env"; then
+            echo "result=restore-failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
           compose=(docker compose -p "$PROJECT" -f "$APP_DIR/compose.yml" --env-file "$APP_DIR/release.env")
           if ! "${compose[@]}" pull || ! "${compose[@]}" up -d --wait --wait-timeout 180; then
             echo "::error::$FAILED failed its health check, and restoring $PREVIOUS failed too. Nothing was pushed."

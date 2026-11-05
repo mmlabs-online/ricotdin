@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
     # DATABASE_URL_APP, DATABASE_URL_SERVICE, DATABASE_URL_WORKER (the /media lookup),
     # JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS,
-    # FORWARDED_ALLOW_IPS (the `web` network subnet, docker network inspect web), SENTRY_DSN,
+    # FORWARDED_ALLOW_IPS (ONLY cloudflared's fixed address, never the shared `web` subnet), SENTRY_DSN,
     # optional provider key fallbacks. Never API_DOCS=1 in production.
     env_file: [/etc/mmlabs/ricotdin-api.env]
     environment:
@@ -30,11 +30,11 @@ services:
     stop_grace_period: 30s
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
+    pids_limit: 256
     labels: [autoheal=true]
     networks:
       tunnel:
         aliases: [ricotdin-api]
-      default: {}
 
   worker:
     image: ${RICOTDIN_API_IMAGE:?RICOTDIN_API_IMAGE is unset}
@@ -72,13 +72,15 @@ services:
     # image HEALTHCHECK: GET /healthz
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
+    pids_limit: 128
     labels: [autoheal=true]
     networks:
       tunnel:
         aliases: [ricotdin-web]
 
   # Plain compose never restarts an UNHEALTHY container (only an exited one). autoheal restarts
-  # the ones labelled autoheal=true in this project. It needs the Docker socket: pinned by digest.
+  # EVERY container on the host labelled autoheal=true. The Docker socket is host root: pinned by
+  # digest, no network (follow-up: a socket proxy allowing only list + restart).
   autoheal:
     image: willfarrell/autoheal:1.2.0@sha256:31f580ef0279eaced5b38d631b08c474d70d8403c1c2fdd6ddcf2e879d5f3f7c
     restart: unless-stopped
