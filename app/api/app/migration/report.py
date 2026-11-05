@@ -19,13 +19,19 @@ class TableResult:
 
 @dataclass
 class StorageResult:
+    """v1 files → Google Drive (ARC-18). Reasons are fixed codes, never Drive / S3 messages."""
+
     copied: list[str] = field(default_factory=list)
-    already_on_r2: list[str] = field(default_factory=list)
+    already_in_drive: list[str] = field(default_factory=list)  # mapped by an earlier run
+    v2_files: int = 0  # already gdrive rows, left alone
     missing_at_source: list[str] = field(default_factory=list)
+    rejected: list[str] = field(default_factory=list)  # "<key>: <reason>" (never copied)
     failed: list[str] = field(default_factory=list)  # "<key>: <reason>"
-    unreferenced_objects: int = 0
+    unreferenced_objects: int = 0  # legacy Supabase objects no row names
     skipped: bool = False
-    bucket: str | None = None
+    drive_folder: str | None = None
+    mapped: int = 0  # referenced keys in storage_objects after the run
+    digest: str | None = None  # storage_digest of those (key, size, md5)
 
 
 @dataclass
@@ -96,20 +102,24 @@ class Report:
         lines.append(f"- OK: {len(self.secrets_ok)}")
         lines += [f"- ❌ {s}" for s in self.secrets_failed]
         s = self.storage
-        lines += ["", "## Legacy Supabase audio → R2", ""]
+        lines += ["", "## v1 files (Supabase Storage, R2) → Google Drive", ""]
         if s.skipped:
             lines.append("- ❌ Skipped (--skip-storage): the run is incomplete.")
         else:
-            lines.append(f"- Destination bucket: `{s.bucket or '-'}`")
+            lines.append(f"- Drive folder: `{s.drive_folder or '-'}`")
             lines.append(f"- Copied: {len(s.copied)}")
-            lines.append(f"- Already on R2: {len(s.already_on_r2)}")
             lines.append(
-                f"- Unreferenced objects in the bucket (not copied): {s.unreferenced_objects}"
+                f"- Already in Drive (checked against the source): {len(s.already_in_drive)}"
             )
+            lines.append(f"- Meetings already on gdrive (left alone): {s.v2_files}")
+            lines.append(f"- Unreferenced Supabase objects (not copied): {s.unreferenced_objects}")
             lines.append(f"- Missing at source: {len(s.missing_at_source)}")
             lines += [f"  - `{k}`" for k in s.missing_at_source]
+            lines.append(f"- Rejected (not copied): {len(s.rejected)}")
+            lines += [f"  - `{r}`" for r in s.rejected]
             lines.append(f"- Failed: {len(s.failed)}")
             lines += [f"  - ❌ `{f}`" for f in s.failed]
+            lines.append(f"- Mapped in storage_objects: {s.mapped}, digest `{s.digest or '-'}`")
         if self.notes:
             lines += ["", "## Notes", ""]
             lines += [f"- {n}" for n in self.notes]

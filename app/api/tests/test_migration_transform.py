@@ -173,7 +173,7 @@ def test_upsert_sql_for_a_table_that_is_only_key_does_nothing_on_conflict() -> N
     assert sql.endswith('ON CONFLICT ("id") DO NOTHING')
 
 
-def test_meetings_upsert_never_moves_copied_audio_back_to_supabase() -> None:
+def test_meetings_upsert_never_moves_audio_copied_to_drive_back_to_v1() -> None:
     sql = upsert_sql(
         "meetings",
         ["id", "audio_path", "storage_provider"],
@@ -181,8 +181,8 @@ def test_meetings_upsert_never_moves_copied_audio_back_to_supabase() -> None:
         ["id"],
     )
     assert (
-        '"storage_provider" = CASE WHEN t."storage_provider" = \'r2\' AND '
-        't."audio_path" IS NOT DISTINCT FROM EXCLUDED."audio_path" THEN \'r2\' '
+        '"storage_provider" = CASE WHEN t."storage_provider" = \'gdrive\' AND '
+        't."audio_path" IS NOT DISTINCT FROM EXCLUDED."audio_path" THEN \'gdrive\' '
         'ELSE EXCLUDED."storage_provider" END'
     ) in sql
 
@@ -259,17 +259,26 @@ def test_report_passes_only_when_everything_matches() -> None:
     assert not _report(source_only_tables=["provider_keys"]).passed
     assert not _report(storage=StorageResult(skipped=True)).passed
     assert not _report(dry_run=True).passed
-    # Missing at source is reported, not a failure (spec).
+    # Missing at source and forged keys are reported, not a failure (spec).
     assert _report(storage=StorageResult(missing_at_source=["u/m.webm"])).passed
+    assert _report(storage=StorageResult(rejected=["evil/k.webm: not its row's key"])).passed
 
 
 def test_report_renders_markdown_with_verdict() -> None:
     text = _report(
-        storage=StorageResult(copied=["u/m.webm"], missing_at_source=["u/x.webm"])
+        storage=StorageResult(
+            copied=["u/m.webm"],
+            missing_at_source=["u/x.webm"],
+            rejected=["evil/k.webm: not its row's key"],
+            drive_folder="folder123",
+            digest="ab" * 32,
+            mapped=1,
+        )
     ).render()
     assert "| users | 2 | 2 | ✅ |" in text
-    assert "u/x.webm" in text
-    assert "Destination bucket" in text
+    assert "u/x.webm" in text and "evil/k.webm" in text
+    assert "Drive folder: `folder123`" in text
+    assert "`" + "ab" * 32 + "`" in text
     assert text.rstrip().endswith("**Result: PASS**")
     bad = _report(tables=[TableResult("users", 2, 1, "aa", "ab")]).render()
     assert "| users | 2 | 1 | ❌ |" in bad
@@ -289,40 +298,71 @@ def test_column_drift_reports_names_and_types_ignoring_schema_prefix() -> None:
     assert column_drift("t", {"a": "text"}, {"a": "text"}) == []
 
 
-def test_r2_target_maps_every_boto_failure_to_a_code_only_copy_error(tmp_path: object) -> None:
+def test_r2_source_is_read_only_and_maps_every_boto_failure_to_a_code_only_error(
+    tmp_path: object,
+) -> None:
     from pathlib import Path
 
-    from boto3.exceptions import S3UploadFailedError
-    from botocore.exceptions import EndpointConnectionError
+    from botocore.exceptions import ClientError, EndpointConnectionError
 
     from app.services.storage.config import R2Config
-    from scripts.migrate_from_supabase import CopyError, R2Target
+    from scripts.migrate_from_supabase import CopyError, R2Source
 
-    class Boom:
-        def __init__(self, exc: Exception) -> None:
-            self.exc = exc
+    calls: list[str] = []
 
-        def upload_file(self, *_a: object, **_k: object) -> None:
-            raise self.exc
+    class Body:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
 
-        def head_object(self, **_k: object) -> None:
-            raise self.exc
+        def read(self, n: int) -> bytes:
+            out, self.data = self.data[:n], self.data[n:]
+            return out
 
-    t = R2Target(R2Config("0123456789abcdef0123456789abcdef", "AKID", "secret", "bucket"))
-    path = Path(str(tmp_path)) / "audio"
+        def close(self) -> None:
+            pass
+
+    class Client:
+        def __init__(self, exc: Exception | None = None, data: bytes = b"abc") -> None:
+            self.exc, self.data = exc, data
+
+        def __getattr__(self, name: str) -> object:
+            def call(**_k: object) -> object:
+                calls.append(name)
+                if self.exc:
+                    raise self.exc
+                if name == "head_object":
+                    return {"ContentLength": 3, "ETag": '"' + "a" * 32 + '"'}
+                return {"Body": Body(self.data)}
+
+            return call
+
+    s = R2Source(R2Config("0123456789abcdef0123456789abcdef", "AKID", "secret", "bucket"))
+    path = Path(str(tmp_path)) / "f"
+    s._client = Client()  # type: ignore[assignment]
+    head = s.head("k")
+    assert head is not None and (head.size, head.md5) == (3, "a" * 32)
+    s.download("k", path, 10)
+    assert path.read_bytes() == b"abc"
+    with pytest.raises(CopyError, match="larger than the limit"):
+        s.download("k", path, 2)
+    missing = ClientError({"Error": {"Code": "404", "Message": "bucket/k gone"}}, "HeadObject")
+    s._client = Client(missing)  # type: ignore[assignment]
+    assert s.head("k") is None
     for exc, reason in (
-        (
-            S3UploadFailedError("Failed to upload C:/tmp/x to bucket/key: boom"),
-            "S3UploadFailedError",
-        ),
         (EndpointConnectionError(endpoint_url="https://x"), "EndpointConnectionError"),
+        (
+            ClientError({"Error": {"Code": "AccessDenied", "Message": "secret"}}, "Get"),
+            "AccessDenied",
+        ),
     ):
-        t._client = Boom(exc)  # type: ignore[assignment]
+        s._client = Client(exc)  # type: ignore[assignment]
         with pytest.raises(CopyError) as info:
-            t.upload(path, "k", "audio/webm")
-        assert str(info.value) == f"r2 upload {reason}"
-        with pytest.raises(CopyError):
-            t.size("k")
+            s.download("k", path, 10)
+        assert str(info.value) == f"r2 download {reason}"
+        with pytest.raises(CopyError) as info:
+            s.head("k")
+        assert str(info.value) == f"r2 head {reason}"
+    assert set(calls) == {"head_object", "get_object"}  # never a write or a delete
 
 
 def test_supabase_download_refuses_redirects() -> None:

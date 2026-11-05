@@ -259,7 +259,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   - The shared `DriveClient` is never closed under live streams: a failed config lookup only
     raises; a reconnect retires the old client, which is closed at shutdown.
 
-### 0.5 v1 → v2 data migration (ARC-03)
+### 0.5 v1 → v2 data migration (ARC-03, files ARC-18)
 
 - `app/api/scripts/migrate_from_supabase.py` is an owner-run CLI; the pure logic lives in
   `app/migration/`. Runbook and rehearsal log: `docs/ops/v2-migration-rehearsal.md`.
@@ -268,8 +268,20 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   - `MIGRATION_TARGET_DATABASE_URL`, an owner URL; never `DATABASE_URL`;
   - `KEY_ENCRYPTION_SECRET`.
   None of these is an app runtime variable.
-- **Run** with `--confirm-target <host>` plus either `--r2-bucket <bucket>` or `--skip-storage`.
-  Rehearsals copy audio into a separate `ricotdin-rehearsal` bucket, never into production.
+- **Run** with `--confirm-target <host>` plus either `--confirm-drive-folder <folder id>` or
+  `--skip-storage`. The folder id must equal the target's `drive_config.root_folder_id` (checked
+  before anything is written, exit 2). Rehearsals connect a separate `ricotdin-rehearsal` Drive
+  folder to their branch (`connect_gdrive --folder ricotdin-rehearsal`), never production.
+- **Files (ARC-18):** every `meetings.audio_path` and `profiles.avatar_key` of the migrated rows,
+  ownership-checked (`storage_plan.plan_object_copies`; a forged key is *rejected*, never read),
+  read from its v1 store — `supabase` rows from Supabase Storage, `r2` rows and every avatar from
+  the v1 R2 bucket (credentials of the migrated `storage_config`) — HEAD/GET only, never a write
+  or delete; streamed to a temp file under a limit (audio 1 GB, avatar 5 MB), size + md5 checked,
+  uploaded with `DriveStorage.upload_file` (Drive md5 = local md5) and mapped in
+  `storage_objects`; then the meeting → `gdrive`. A mapped key is compared with its source
+  (`same_file`), never re-uploaded; a mismatch fails and is left alone. `upsert_sql` keeps
+  `gdrive` on a re-run while `audio_path` is unchanged. Reasons in the report are fixed codes
+  (`drive upload <AppError.code>`, `r2 head <S3 code>`): never Drive / S3 messages.
 - **Source:** one `REPEATABLE READ READ ONLY` snapshot; Supabase is never written.
 - **Target:**
   - Upsert by primary key, in foreign-key order, one transaction per table, with user triggers
@@ -283,8 +295,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     `V2_ONLY_TABLES` in the script, or every run is blocked (BUG-020);
     `test_bug020_every_table_created_after_the_baseline_is_v2_only` enforces it.
 - **Report:**
-  - Order-independent digests per table, plus secrets and storage results.
-  - PASS needs a full run (storage not skipped).
+  - Order-independent digests per table, plus secrets and file results (copied / already in
+    Drive / v2 files / missing / rejected / failed, mapped count + `storage_digest`).
+  - PASS needs a full run (files not skipped) and no file failure; missing and rejected files
+    are listed, not failures.
   - Database errors appear only as class and SQLSTATE. Never print psycopg messages: their
     DETAIL quotes row values.
   - Report files (`migration-report*.md`) are git-ignored.
@@ -534,8 +548,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
     `last_finished_at`); each stuck meeting is handled in its own savepoint; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
     run when `KEY_ENCRYPTION_SECRET` is unset; one bad key is `unknown`, never fatal.
 - **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
-  `start` until ARC-18 has copied their files to Drive — run the ARC-18 copy before starting the
-  worker (or keep the worker stopped until then).
+  `start` until the migration has copied their files to Drive (ARC-18, `--confirm-drive-folder`) —
+  run the full migration before starting the worker (or keep the worker stopped until then).
 - **ffmpeg/ffprobe on untrusted files** (`audio.py`): `-protocol_whitelist file`, `-format_whitelist`
   of our upload demuxers (an HLS/concat playlist disguised as audio is refused), stdin `/dev/null`,
   a minimal environment (`PATH`, `LANG`/`LC_ALL=C`: no database URL, no `KEY_ENCRYPTION_SECRET`),

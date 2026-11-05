@@ -50,8 +50,8 @@ def select_sql(table: str, columns: Sequence[str]) -> str:
 def upsert_sql(table: str, columns: Sequence[str], types: Sequence[str], pk: Sequence[str]) -> str:
     """INSERT … ON CONFLICT (pk) DO UPDATE every other column (idempotent re-runs).
 
-    ``meetings.storage_provider``: a row whose audio was already copied to R2 (same
-    ``audio_path``) stays ``r2`` when v1 still says ``supabase``.
+    ``meetings.storage_provider``: a row whose audio was already copied to Google Drive (same
+    ``audio_path``, ARC-18) stays ``gdrive`` when v1 still says ``r2`` / ``supabase``.
     """
     if len(columns) != len(types):
         raise ValueError("columns and types differ in length")
@@ -63,8 +63,8 @@ def upsert_sql(table: str, columns: Sequence[str], types: Sequence[str], pk: Seq
             continue
         if table == "meetings" and c == "storage_provider":
             sets.append(
-                f"{_q(c)} = CASE WHEN t.{_q(c)} = 'r2' AND "
-                f't."audio_path" IS NOT DISTINCT FROM EXCLUDED."audio_path" THEN \'r2\' '
+                f"{_q(c)} = CASE WHEN t.{_q(c)} = 'gdrive' AND "
+                f't."audio_path" IS NOT DISTINCT FROM EXCLUDED."audio_path" THEN \'gdrive\' '
                 f"ELSE EXCLUDED.{_q(c)} END"
             )
         else:
