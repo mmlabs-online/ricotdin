@@ -557,5 +557,97 @@
       "network": "No connection to the server. Your question was not sent.",
       "generic": "The question could not be answered. Please try again."
     }
+  },
+  "chatPage": {
+    "new": "New chat",
+    "newStarted": "New chat started.",
+    "askAbout": "Ask about",
+    "scopes": "Chat scope",
+    "all": "All meetings",
+    "folderUnknown": "Folder not available",
+    "folderUnknownBody": "This folder was deleted or is no longer shared with you. Pick another scope.",
+    "scopeLine": "Answers come from {{scope}} and link back to the source.",
+    "emptyTitle": "What would you like to know?",
+    "emptyAll": "Ask about decisions, action items or past discussions in any meeting you can open.",
+    "emptyFolder": "Ask about the meetings in this folder.",
+    "inputLabel": "Your question",
+    "placeholder": "Ask about decisions, action items, or past discussions…",
+    "hint": "Enter sends, Shift+Enter adds a line. Ricotdin answers only from meetings you can access.",
+    "citation": "{{title}} · {{time}}",
+    "citationUnknown": "Meeting · {{time}}",
+    "switch": "Show",
+    "notReady": "The conversation is still loading. Try again in a moment.",
+    "separator": ", "
+  },
+  "profile": {
+    "details": {
+      "title": "Personal details",
+      "body": "Your identity across the workspace.",
+      "username": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "save": "Save changes",
+      "saved": "Your details were saved.",
+      "unchanged": "Nothing to save."
+    },
+    "avatar": {
+      "upload": "Upload photo",
+      "uploading": "Uploading… {{percent}}%",
+      "hint": "JPEG, PNG or WebP, up to 2 MB.",
+      "saved": "Your photo was updated.",
+      "alt": "Your profile photo"
+    },
+    "password": {
+      "title": "Password",
+      "body": "Changing it signs you out on every other device.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "submit": "Change password",
+      "changed": "Password changed. Other devices were signed out.",
+      "currentRequired": "Enter your current password.",
+      "mismatch": "The new passwords do not match.",
+      "same": "The new password must be different from the current one."
+    },
+    "appearance": {
+      "title": "Appearance",
+      "body": "Choose how Ricotdin looks for you on this device.",
+      "mode": "Light or dark",
+      "light": "Light",
+      "lightHint": "Clean and bright",
+      "dark": "Dark",
+      "darkHint": "Easy on the eyes",
+      "color": "Color theme"
+    },
+    "model": {
+      "title": "AI model",
+      "body": "Used for new meetings you upload. An administrator decides which models are available.",
+      "label": "Default model",
+      "systemDefault": "System default",
+      "save": "Save model",
+      "saved": "Default model saved."
+    },
+    "usage": {
+      "title": "Balance",
+      "body": "What you can still use. Ask an administrator to top it up.",
+      "audio": "Audio minutes left",
+      "audioValue": "{{h}} h {{m}} min",
+      "questions": "Chat questions left",
+      "questionsValue_one": "{{count}} question",
+      "questionsValue_other": "{{count}} questions",
+      "meetings": "Your meetings",
+      "folders": "Your folders"
+    },
+    "errors": {
+      "usernameTaken": "That username is taken. Choose another.",
+      "invalid": "Check the fields and try again.",
+      "wrongPassword": "Your current password is incorrect.",
+      "passwordChanged": "Your password was just changed elsewhere. Try again.",
+      "passwordRejected": "That new password is not accepted. Choose a longer one.",
+      "modelNotAllowed": "That model is no longer available. Choose another.",
+      "rateLimited": "Too many attempts. Wait a few minutes and try again.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
   }
 }

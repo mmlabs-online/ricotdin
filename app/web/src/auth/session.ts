@@ -40,6 +40,8 @@ export type SessionDeps = {
 /** How long a tab whose refresh got 401 waits for another tab's token (no Web Locks). */
 const RACE_WAIT_MS = 1500
 const RACE_WINDOW_MS = 10_000
+/** A cookie-replacing call (password change) waits longer: losing its answer signs the user out. */
+const COOKIE_CALL_TIMEOUT_MS = 60_000
 /** An auth call must not hold the cross-tab lock forever when the API hangs. */
 const AUTH_TIMEOUT_MS = 15_000
 
@@ -169,6 +171,30 @@ export class AuthSession {
     const body: unknown = await res.json().catch(() => null)
     if (!res.ok) throw apiErrorFrom(res.status, body)
     return body
+  }
+
+  /** A signed-in call whose answer replaces the refresh cookie (`/profile/change-password` ends
+   * every session and starts a new one for this browser). It goes to a PATH on the auth origin,
+   * the host the refresh cookie belongs to (host-only), carries the cookie jar, and runs under the
+   * cross-tab refresh lock so no refresh presents the old cookie meanwhile. The token is made fresh
+   * BEFORE the lock (a refresh inside it would wait for itself); no retry. Rejects on a network
+   * error or a path that is not a plain absolute path. */
+  async postWithCookie(path: string, json: unknown): Promise<Response> {
+    if (!/^\/[A-Za-z0-9/_-]*$/.test(path) || path.startsWith('//')) throw new Error('postWithCookie: bad path')
+    const token = await this.getToken()
+    const run = async () => {
+      // a refresh of this tab still in flight could store its (now revoked) cookie after ours
+      await this.inflight?.catch(() => false)
+      return this.deps.fetch(`${this.authUrl}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(json),
+        // the server hashes twice; an answer lost to a timeout would also lose the new cookie
+        signal: AbortSignal.timeout(COOKIE_CALL_TIMEOUT_MS),
+      })
+    }
+    return this.deps.locks ? this.deps.locks.request(REFRESH_LOCK, run) : run()
   }
 
   close(): void {

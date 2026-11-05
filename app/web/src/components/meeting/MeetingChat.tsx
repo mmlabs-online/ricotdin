@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAskMeeting, useMeetingChat } from '../../api/meetingDetail'
 import { chatErrorKey, MAX_QUESTION, questionProblem, type Citation } from '../../lib/chat/chat'
 import { formatClock } from '../../lib/media/seek'
-import { Markdown } from '../Markdown'
+import { ChatMessages } from '../chat/ChatMessages'
 import { Button } from '../ui/Button'
 
 export function MeetingChat({
@@ -100,49 +100,15 @@ export function MeetingChat({
         </div>
       ) : (
         <div className="detail-chat-messages" ref={listRef} tabIndex={0} role="region" aria-label={t('detail.chat.history')}>
-          {messages.map((m) =>
-            m.role === 'user' ? (
-              <div key={m.id} className="user-bubble">
-                <span className="sr-only">{t('chat.you')}</span>
-                {m.content}
-              </div>
-            ) : (
-              <div key={m.id} className="assistant-row">
-                <div className="ai-avatar" aria-hidden="true">
-                  <Sparkles size={14} />
-                </div>
-                <div className="answer">
-                  <span className="sr-only">{t('chat.assistant')}</span>
-                  <Markdown source={m.content} />
-                  {m.citations.length > 0 && (
-                    <ul className="citations" aria-label={t('chat.sources')}>
-                      {m.citations.map((c) => (
-                        <li key={c.chunkId}>
-                          <button type="button" onClick={() => onCitation(c)} aria-label={t('chat.playFrom', { time: formatClock(c.startMs / 1000) })}>
-                            {formatClock(c.startMs / 1000)} <Play size={11} aria-hidden="true" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            ),
-          )}
-          {asked && (
-            <>
-              <div className="user-bubble pending">
-                <span className="sr-only">{t('chat.you')}</span>
-                {asked}
-              </div>
-              <div className="assistant-row">
-                <div className="ai-avatar" aria-hidden="true">
-                  <Sparkles size={14} />
-                </div>
-                <p className="answer thinking">{t('chat.thinking')}</p>
-              </div>
-            </>
-          )}
+          <ChatMessages
+            messages={messages}
+            asked={asked}
+            renderCitation={(c) => (
+              <button type="button" onClick={() => onCitation(c)} aria-label={t('chat.playFrom', { time: formatClock(c.startMs / 1000) })}>
+                {formatClock(c.startMs / 1000)} <Play size={11} aria-hidden="true" />
+              </button>
+            )}
+          />
         </div>
       )}
       {error && (

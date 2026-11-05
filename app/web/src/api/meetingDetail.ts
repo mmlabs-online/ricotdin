@@ -234,6 +234,7 @@ export function useAskMeeting(meetingId: string) {
     // caller's own callbacks (which drop the "sending" bubble) must run as soon as the answer is in.
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key, exact: true })
+      void qc.invalidateQueries({ queryKey: ['profile'], exact: true }) // questions left
     },
   })
 }

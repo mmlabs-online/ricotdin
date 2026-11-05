@@ -2,8 +2,9 @@ import { Navigate, createBrowserRouter } from 'react-router'
 import { RequireRole } from '../auth/RequireAuth'
 import { ErrorScreen } from '../components/ErrorScreen'
 import { AdminSectionPage } from '../routes/AdminSectionPage'
+import { ChatPage } from '../routes/ChatPage'
+import { ProfilePage } from '../routes/ProfilePage'
 import { MeetingDetailPage } from '../routes/MeetingDetailPage'
-import { PlaceholderPage } from '../routes/PlaceholderPage'
 import { ForgotPasswordPage } from '../routes/auth/ForgotPasswordPage'
 import { RegisterPage } from '../routes/auth/RegisterPage'
 import { ResetPasswordPage } from '../routes/auth/ResetPasswordPage'
@@ -49,11 +50,8 @@ export function createRouter() {
         { path: 'meetings', element: <MeetingsPage /> },
         { path: 'meetings/:meetingId', element: <MeetingDetailPage /> },
         { path: 'record', element: <RecordPage /> },
-        { path: 'chat', element: <PlaceholderPage titleKey="page.chat.title" subtitleKey="page.chat.subtitle" /> },
-        {
-          path: 'profile',
-          element: <PlaceholderPage eyebrowKey="page.profile.eyebrow" titleKey="page.profile.title" subtitleKey="page.profile.subtitle" />,
-        },
+        { path: 'chat', element: <ChatPage /> },
+        { path: 'profile', element: <ProfilePage /> },
         { path: '*', element: <StatusPage kind="notFound" /> },
       ],
     },

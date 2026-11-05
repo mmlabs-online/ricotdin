@@ -247,3 +247,62 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 .transcript-row.active .speaker { color: var(--text); }
 .button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; transform: none; }
 .modal-field .field-error { color: var(--danger); font-weight: 400; font-size: 12px; margin: 0; }
+/* --- Chat lists (ARC-13c) --- */
+.chat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.chat-list > .user-bubble { align-self: flex-end; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-scope-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.chat-scope-list .chat-link { display: flex; gap: 6px; align-items: center; text-decoration: none; font-size: 13px; min-height: 36px; }
+.chat-scope-list .chat-link:hover { color: var(--text); background: var(--surface-subtle); }
+.chat-link .badge { margin-left: auto; }
+.chat-scope-select select { min-height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 8px; font-size: 13px; max-width: 220px; }
+.chat-head h1 { font-size: 18px; } .chat-head p { font-size: 12px; }
+.conversation { display: flex; flex-direction: column; min-width: 0; }
+.messages { overflow-y: auto; max-height: calc(100vh - 330px); min-height: 240px; }
+.messages .user-bubble { font-size: 14px; }
+.messages .answer .markdown { font-size: 14px; }
+.chat-empty { margin: auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; }
+.chat-empty p { color: var(--muted); font-size: 13px; margin: 0; }
+.chat-error { color: var(--danger); font-size: 12px; margin: 0 28px; }
+.composer textarea { font-size: 14px; min-height: 44px; }
+.composer small { font-size: 11px; }
+.composer:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+.citation-link { border: 1px solid var(--border); color: var(--primary); background: var(--surface); border-radius: 99px; padding: 6px 10px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; text-decoration: none; min-height: 28px; }
+.citation-link:hover { text-decoration: underline; }
+@media (max-width: 767px) {
+  .chat-history { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--border); }
+  .chat-history .eyebrow, .chat-history nav { display: none; }
+  .chat-history .button.full { width: auto; }
+  .messages { max-height: none; }
+}
+/* --- Profile (ARC-13c) --- */
+.settings-card h2 { font-size: 16px; margin: 0 0 4px; }
+.settings-card .subhead { font-size: 14px; margin: 22px 0 10px; }
+.field-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 600; }
+.field-row input, .field-row select { max-width: 420px; min-height: 44px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); padding: 0 10px; font-size: 14px; font-weight: 400; }
+.field-row input[readonly] { background: var(--surface-subtle); color: var(--muted); }
+.field-row input[aria-invalid="true"] { border-color: var(--danger); }
+.form-note { font-size: 13px; margin: 0 0 10px; }
+.form-note:empty { display: none; }
+.form-note.error { color: var(--danger); }
+.form-note.success { color: var(--success); }
+.avatar-img { object-fit: cover; padding: 0; }
+.avatar-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.avatar-actions small { color: var(--muted); font-size: 12px; }
+.theme-grid strong, .theme-choice-grid strong { font-size: 13px; }
+.theme-grid button span { font-size: 12px; }
+.usage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0; }
+.usage-list > div { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.usage-list dt { color: var(--muted); font-size: 12px; }
+.usage-list dd { margin: 6px 0 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) { .theme-choice-grid { grid-template-columns: repeat(2, 1fr); } }
+/* ARC-13c accessibility review */
+.form-note:empty { display: block; margin: 0; } /* the empty alert stays rendered (4.1.3) */
+.theme-grid button { position: relative; }
+.mode-check { position: absolute; top: 12px; right: 12px; }
+.chat-scope-select { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chat-scope-select label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.chat-scope-select .button { min-height: 36px; }
+.chat-head { height: auto; min-height: 76px; gap: 12px; flex-wrap: wrap; }
+.chat-head h1:focus { outline: none; }
+.chat-head h1:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+@media (max-width: 767px) { html { scroll-padding-bottom: 120px; } }

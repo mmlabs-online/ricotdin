@@ -753,7 +753,7 @@ These features have no server equivalent and are not in the Figma Make output: R
 ---
 
 ### ARC-13 — Wire user screens
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (3 PRs: #56, #57, 13c; Playwright core flow EN/VI runs in CI against a local stack — the staging run moves to ARC-15)
 
 **User Story**  
 As a user, I want every user screen of the new design (auth, meetings, folders, record, meeting detail, chat, profile) working against the v2 API.

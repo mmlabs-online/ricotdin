@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
-import { chatErrorKey, normalizeChat, normalizeMessage, questionProblem, MAX_QUESTION } from './chat'
+import { chatErrorKey, chatScope, normalizeChat, normalizeMessage, questionProblem, readStoredSession, storedSessionValue, MAX_QUESTION } from './chat'
 
 const raw = (over: Record<string, unknown> = {}) => ({
   id: 'msg1',
@@ -82,5 +82,28 @@ describe('chatErrorKey', () => {
     expect(chatErrorKey(e(404))).toBe('chat.errors.forbidden')
     expect(chatErrorKey(e(0, 'network'))).toBe('chat.errors.network')
     expect(chatErrorKey(e(500))).toBe('chat.errors.generic')
+  })
+})
+
+describe('chatScope', () => {
+  it('a folder from ?folder=, else all meetings', () => {
+    expect(chatScope('?folder=f1')).toEqual({ kind: 'folder', folderId: 'f1' })
+    expect(chatScope('')).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=')).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=' + 'x'.repeat(100))).toEqual({ kind: 'all' })
+    expect(chatScope('?folder=a/b')).toEqual({ kind: 'all' })
+  })
+})
+
+describe('stored "all meetings" session', () => {
+  const sid = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  it('is read back only for the same user and a uuid', () => {
+    const raw = storedSessionValue('u1', sid)
+    expect(readStoredSession(raw, 'u1')).toBe(sid)
+    expect(readStoredSession(raw, 'u2')).toBeNull() // another account signed in in this tab
+    expect(readStoredSession(null, 'u1')).toBeNull()
+    expect(readStoredSession(JSON.stringify({ u: 'u1', s: '../x' }), 'u1')).toBeNull()
+    expect(readStoredSession(sid, 'u1')).toBeNull() // old format
+    expect(readStoredSession('{bad json', 'u1')).toBeNull()
   })
 })
