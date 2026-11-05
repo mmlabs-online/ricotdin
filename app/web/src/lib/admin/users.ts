@@ -68,6 +68,7 @@ export function adminErrorKey(err: unknown): string {
   if (err.status === 400 || err.status === 422) return 'admin.errors.refused'
   if (err.status === 401 || err.status === 403) return 'admin.errors.forbidden'
   if (err.status === 404) return 'admin.errors.notFound'
+  if (err.status === 409) return 'admin.errors.conflict'
   if (err.status === 429) return 'admin.errors.rateLimited'
   if (err.status === 503) return 'admin.errors.unavailable'
   return 'admin.errors.generic'

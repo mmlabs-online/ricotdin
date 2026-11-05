@@ -330,6 +330,7 @@ html { scroll-padding-top: 150px; } /* top bar + sticky player never hide the fo
 /* admin keeps its light palette in dark mode (index.css .admin-standalone): keep light button text */
 .dark .admin-standalone .button-primary { color: #fff; }
 .bulk-bar .button-ghost { color: var(--text); }
+.table-scroll { position: relative; } /* keeps sr-only cells (absolutely positioned) inside the scroll box */
 .table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .bulk-names { max-height: 180px; overflow-y: auto; margin: 0 0 12px; padding-left: 20px; font-size: 13px; overflow-wrap: anywhere; }
 .pagination { font-size: 12px; }
@@ -354,3 +355,54 @@ ul.timeline { list-style: none; margin: 0; padding: 0; }
 .event-badge { font-size: 11px; }
 .stat-card > span, .stat-card > small { font-size: 12px; }
 @media (max-width: 767px) { .admin-kpis { grid-template-columns: 1fr 1fr; } .event { grid-template-columns: 1fr; gap: 4px; padding: 8px 0; } }
+
+/* Admin pipeline, usage, activity, audit (ARC-14b) */
+.admin-standalone {
+  /* categorical slots (dataviz reference palette, light; validated; teal darkened to 3:1, adjacent CVD ΔE 7.2 → 2 px gaps + a table view as secondary
+     encoding) — a provider keeps its slot (lib/admin/ops.ts PROVIDER_ORDER) */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #14866a; --series-4: #008300; --series-5: #6250d6; --series-6: #8a8a85;
+}
+/* scoped to beat index.css `.chart-legend i` */
+.admin-standalone .series-1 { background: var(--series-1); } .admin-standalone .series-2 { background: var(--series-2); }
+.admin-standalone .series-3 { background: var(--series-3); } .admin-standalone .series-4 { background: var(--series-4); }
+.admin-standalone .series-5 { background: var(--series-5); } .admin-standalone .series-6 { background: var(--series-6); }
+.pipeline-stats button[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.pipeline-stats .stat-static { min-height: 64px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.pipeline-stats .stat-static span { color: var(--muted); font-size: 11px; }
+.pipeline-stats span, .refresh-line { font-size: 12px; }
+.filter-tabs button[aria-pressed="true"] { color: var(--text); background: var(--surface-subtle); font-weight: 600; }
+.filter-tabs button { color: var(--text); font-size: 13px; }
+.admin-table .wrap, .admin-table .error-cell { white-space: normal; min-width: 180px; max-width: 320px; overflow-wrap: anywhere; }
+.admin-table .error-cell { font-size: 12px; color: var(--muted); }
+.admin-table .cell-sub { display: block; color: var(--muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
+.admin-table code, .log-meta { font-size: 11px; background: var(--surface-subtle); border-radius: 4px; padding: 2px 4px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.attention-text { color: var(--danger); font-weight: 600; }
+.task-name { display: flex; flex-direction: column; gap: 2px; }
+.task-name small { color: var(--muted); font-size: 12px; }
+.usage-range, .log-filters { flex-wrap: wrap; }
+.usage-error { flex-basis: 100%; }
+.usage-error:empty { display: none; }
+.range-note { margin: 0 0 12px; }
+.toggle-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+ul.chart-legend { list-style: none; margin: 0; padding: 0; flex-wrap: wrap; font-size: 12px; color: var(--text); }
+ul.chart-legend li { display: flex; align-items: center; gap: 6px; }
+ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.usage-chart { height: 180px; display: flex; align-items: flex-end; gap: 2px; padding-top: 12px; border-bottom: 1px solid var(--border-strong); }
+.usage-day { position: relative; flex: 1 1 0; min-width: 3px; height: 100%; display: flex; align-items: flex-end; }
+.usage-stack { width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
+.usage-stack i { display: block; min-height: 0; }
+.usage-stack i:last-child { border-radius: 4px 4px 0 0; }
+.usage-day.active .usage-stack { opacity: .8; }
+.usage-dayline { min-height: 2.6em; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.usage-dayline strong { color: var(--text); }
+.usage-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; }
+.table-view { margin-top: 12px; font-size: 13px; }
+.table-view summary { cursor: pointer; color: var(--primary); font-weight: 600; }
+.log-event { grid-template-columns: 150px 1fr auto; align-items: start; }
+.log-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.log-meeting { font-size: 13px; color: var(--muted); }
+.filter-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 12px; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .log-event { grid-template-columns: 1fr; } .pipeline-stats { grid-template-columns: 1fr 1fr; } }
+.live-dot.paused { background: var(--muted); }
+.refresh-line { align-items: center; }
+.meter-stack { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }

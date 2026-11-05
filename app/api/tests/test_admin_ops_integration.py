@@ -230,6 +230,9 @@ def test_activity_feed_filters(
     body = client.get(f"/admin/activity?userId={uid}", headers=admin).json()
     assert body["total"] == 2 and body["rows"][0]["event_type"] == "chat_message"
     assert body["rows"][0]["meeting_title"] == "T" and body["rows"][0]["metadata"] == {"k": 1}
+    # the feed names the user (ARC-14b): the account's email, read like the audit actor
+    email = _sql(world["db"], "SELECT email FROM users WHERE id = %s", uid)[0][0]
+    assert body["rows"][0]["user_email"] == email
     assert "SECRET" not in str(body)
     only = client.get(f"/admin/activity?userId={uid}&eventType=login", headers=admin).json()
     assert only["total"] == 1

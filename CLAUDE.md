@@ -862,6 +862,20 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   to provider names (`healthSummary`). Confirm texts say that a disable / demotion locks the admin API
   at once and the rest within 15 min (§0.3). In dark mode the admin area keeps its light palette
   (`.admin-standalone`), so its primary buttons keep white text; modals are portaled outside it.
+  14b: `/admin/pipeline` (status in the URL, jobs + overview refetched every 10 s — paused in a hidden
+  tab, while a confirm is open or a batch runs, and by a "Pause auto-refresh" toggle (2.2.2); requeue only where `canRequeue` — failed, or processing + `is_stuck`, no queued/running job —
+  one request at a time, single or "this page", always confirmed: a new job charges the owner again;
+  409 → `admin.errors.conflict`), `/admin/usage` (`from`/`to`/`by` in the URL, ≤ 400 days, date-only
+  `to` = whole day; `usageSummary` never adds tokens and audio seconds; two daily charts, one per unit,
+  stacked by provider with fixed colour slots `--series-N` from `PROVIDER_ORDER` — validated with the
+  dataviz script, teal darkened to 3:1; the pointed day shows in a line under the chart, never over
+  content; every chart has a named table view, the keyboard path; empty days are 0 bars and day
+  labels are UTC (`f.day`)); after a requeue focus moves to `[data-focus="requeue-all"]`; a batch stops
+  when the page is left (each requeue charges an owner), `/admin/activity` (`userId`/`type`/dates; event labels via `eventKey`, the API
+  now returns `user_email`) and `/admin/audit` (`actor`/`action` prefix/dates). Metadata renders as
+  bounded JSON text (`metadataText`). `useUrlState` + `AdminPagination` (`AdminParts`) and `LogFilters`
+  (filters apply with a button, 3.2.2) are shared. `.table-scroll` is `position: relative` so sr-only
+  cells cannot widen the page.
 
 ## 1. What we are building
 

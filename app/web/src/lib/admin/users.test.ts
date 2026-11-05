@@ -73,6 +73,7 @@ describe('adminErrorKey', () => {
   it('maps statuses', () => {
     expect(adminErrorKey(e(400))).toBe('admin.errors.refused')
     expect(adminErrorKey(e(404))).toBe('admin.errors.notFound')
+    expect(adminErrorKey(e(409))).toBe('admin.errors.conflict') // e.g. requeue: running, or audio missing
     expect(adminErrorKey(e(403))).toBe('admin.errors.forbidden')
     expect(adminErrorKey(e(429))).toBe('admin.errors.rateLimited')
     expect(adminErrorKey(e(503))).toBe('admin.errors.unavailable')

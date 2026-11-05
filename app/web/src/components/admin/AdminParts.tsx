@@ -1,5 +1,6 @@
 // Small building blocks shared by the admin screens (ARC-14).
 import { useEffect, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/Button'
@@ -73,5 +74,62 @@ export function useFormatters() {
     date: (iso: string | null) => (iso ? new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(iso)) : null),
     dateTime: (iso: string | null) => (iso ? new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)) : null),
     number: (n: number) => new Intl.NumberFormat(lang).format(n),
+    /** audio seconds as minutes, one decimal below 10 min (30 s is not 0) */
+    minutes: (sec: number) => new Intl.NumberFormat(lang, { maximumFractionDigits: sec < 600 ? 1 : 0 }).format(sec / 60),
+    bytes: (b: number) => {
+      const units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
+      let v = Math.max(0, b)
+      let i = 0
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024
+        i += 1
+      }
+      return new Intl.NumberFormat(lang, { style: 'unit', unit: units[i], unitDisplay: 'narrow', maximumFractionDigits: i ? 1 : 0 }).format(v)
+    },
+    /** a `YYYY-MM-DD` the API grouped in UTC, shown as that same day */
+    day: (ymd: string) => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${ymd}T00:00:00Z`)),
+    time: (ms: number) => new Intl.DateTimeFormat(lang, { timeStyle: 'medium' }).format(new Date(ms)),
   }
+}
+
+/** List filters kept in the URL (Back from a detail returns to the same list). Empty values and
+ * page 1 are left out of the address. */
+export function useUrlState() {
+  const [params, setParams] = useSearchParams()
+  const page = Math.max(1, Math.min(10_000, Number.parseInt(params.get('page') ?? '', 10) || 1))
+  const set = (next: Record<string, string | number | null>) => {
+    const p = new URLSearchParams(params)
+    for (const [k, v] of Object.entries(next)) {
+      if (v === null || v === '' || (k === 'page' && v === 1)) p.delete(k)
+      else p.set(k, String(v))
+    }
+    setParams(p, { replace: true, preventScrollReset: true })
+  }
+  return { get: (k: string) => params.get(k), page, set }
+}
+
+/** A page past the end (rows removed meanwhile, or a hand-edited `?page=`): go to the last one. */
+export function useClampPage(total: number | undefined, perPage: number, page: number, shown: number, go: (page: number) => void) {
+  const last = Math.max(1, Math.ceil((total ?? 0) / perPage))
+  useEffect(() => {
+    if (total !== undefined && shown === 0 && page > last) go(last)
+  }, [total, shown, page, last]) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+export function AdminPagination({ page, perPage, total, onPage }: { page: number; perPage: number; total: number; onPage: (page: number) => void }) {
+  const { t } = useTranslation()
+  if (total === 0) return null
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1
+  const to = Math.min(total, page * perPage)
+  return (
+    <nav className="pagination" aria-label={t('admin.pagination.label')}>
+      <span aria-live="polite">{t('admin.pagination.range', { from, to, total })}</span>
+      <Button onClick={() => page > 1 && onPage(page - 1)} aria-disabled={page <= 1}>
+        {t('admin.pagination.previous')}
+      </Button>
+      <Button onClick={() => to < total && onPage(page + 1)} aria-disabled={to >= total}>
+        {t('admin.pagination.next')}
+      </Button>
+    </nav>
+  )
 }

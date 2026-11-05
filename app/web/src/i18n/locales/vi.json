@@ -180,7 +180,8 @@
       "rateLimited": "Quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.",
       "unavailable": "Một dịch vụ tạm thời không khả dụng. Hãy thử lại sau.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
-      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "conflict": "Không làm được ở trạng thái hiện tại (ví dụ đang chạy, hoặc thiếu tệp). Hãy tải lại và kiểm tra."
     },
     "pagination": {
       "label": "Trang",
@@ -298,7 +299,8 @@
           "body": "{{name}} và mọi thứ họ sở hữu sẽ bị xóa: cuộc họp, bản ghi âm, bản ghi lời, thư mục và chat. Không thể hoàn tác.",
           "action": "Xóa vĩnh viễn"
         }
-      }
+      },
+      "viewActivity": "Xem mọi hoạt động"
     },
     "quota": {
       "title": "Số dư",
@@ -385,6 +387,182 @@
         "error": "Lỗi",
         "unknown": "Không rõ"
       }
+    },
+    "pipeline": {
+      "subtitle": "Các cuộc họp trong hàng đợi xử lý. \"Xử lý lại\" chạy lại cuộc họp bị lỗi hoặc bị treo.",
+      "autoRefresh": "Tự cập nhật mỗi 10 giây",
+      "updated": "Cập nhật lúc {{time}}",
+      "countsLabel": "Cuộc họp theo trạng thái",
+      "filterLabel": "Hiện cuộc họp",
+      "avgTime": "Thời gian xử lý TB",
+      "all": "Tất cả",
+      "duration": "{{h}}:{{m}}:{{s}}",
+      "status": {
+        "pending": "Đang chờ",
+        "processing": "Đang xử lý",
+        "stuck": "Bị treo",
+        "failed": "Thất bại",
+        "done": "Xong"
+      },
+      "jobStatus": {
+        "queued": "đang chờ",
+        "running": "đang chạy",
+        "done": "xong",
+        "failed": "lỗi",
+        "other": "không rõ"
+      },
+      "jobState": "{{status}} · {{step}} · lần {{attempts}}",
+      "requeueAll_one": "Xử lý lại {{count}} cuộc ở trang này",
+      "requeueAll_other": "Xử lý lại {{count}} cuộc ở trang này",
+      "requeue": "Xử lý lại",
+      "requeueOne": "Xử lý lại {{title}}",
+      "confirmTitle_one": "Xử lý lại cuộc họp này?",
+      "confirmTitle_other": "Xử lý lại {{count}} cuộc họp?",
+      "confirmBody_one": "Cuộc họp được xử lý lại từ đầu và chủ cuộc họp bị trừ số phút âm thanh thêm lần nữa. Bản ghi lời và ghi chú hiện tại vẫn giữ cho tới khi lần chạy mới thay thế.",
+      "confirmBody_other": "Mỗi cuộc họp được xử lý lại từ đầu và mỗi chủ cuộc họp bị trừ số phút âm thanh thêm lần nữa. Bản ghi lời và ghi chú hiện tại vẫn giữ cho tới khi lần chạy mới thay thế.",
+      "requeued_one": "Đã xếp lại {{count}} cuộc họp.",
+      "requeued_other": "Đã xếp lại {{count}} cuộc họp.",
+      "requeuePartial": "Đã xếp lại {{count}}; {{failed}} bị từ chối (đang chạy, hoặc thiếu tệp âm thanh): {{titles}}.",
+      "empty": "Không có cuộc họp nào.",
+      "caption": "Cuộc họp trong hàng đợi xử lý",
+      "col": {
+        "status": "Trạng thái",
+        "meeting": "Cuộc họp",
+        "owner": "Chủ sở hữu",
+        "created": "Tạo lúc",
+        "duration": "Độ dài",
+        "job": "Lượt xử lý gần nhất",
+        "error": "Lỗi",
+        "actions": "Thao tác"
+      },
+      "tasks": {
+        "title": "Tác vụ của worker",
+        "none": "Worker chưa chạy tác vụ nào.",
+        "last": "Xong lần cuối {{time}}",
+        "never": "Chưa xong lần nào",
+        "stale": "Quá hạn",
+        "name": {
+          "key_health": "Kiểm tra API key",
+          "retention_purge": "Xóa âm thanh hết hạn lưu",
+          "wallet_reconcile": "Đối soát hạn mức",
+          "stuck_meetings": "Kiểm tra cuộc họp bị treo",
+          "other": "{{name}}"
+        }
+      },
+      "hoursMinutes": "{{h}} giờ {{m}} phút",
+      "minutesSeconds": "{{m}} phút {{s}} giây",
+      "pause": "Tạm dừng tự cập nhật",
+      "resume": "Tiếp tục tự cập nhật",
+      "autoRefreshPaused": "Đã tạm dừng tự cập nhật",
+      "refreshFailed": "Cập nhật lỗi; đang hiện danh sách trước"
+    },
+    "usage": {
+      "subtitle": "Số lần gọi nhà cung cấp AI trong một khoảng ngày. Token và phút âm thanh được tính riêng.",
+      "from": "Từ",
+      "to": "Đến",
+      "byOperation": "Tách theo thao tác",
+      "apply": "Áp dụng",
+      "showing": "Đang xem {{from}} đến {{to}} (UTC).",
+      "errors": {
+        "date": "Hãy chọn cả hai ngày.",
+        "order": "Ngày bắt đầu phải trước ngày kết thúc.",
+        "tooLong": "Chọn tối đa {{days}} ngày.",
+        "filterDates": "Kiểm tra lại ngày: ngày bắt đầu phải trước ngày kết thúc."
+      },
+      "aiCalls": "Lần gọi AI (token)",
+      "totalTokens": "Tổng {{n}} token",
+      "inOut": "Token vào / ra",
+      "inOutValue": "{{input}} / {{output}}",
+      "tokensOnly": "Mô hình văn bản và embedding",
+      "audio": "Âm thanh đã chép lời",
+      "minutesValue": "{{n}} phút",
+      "audioCalls": "{{n}} lần chép lời",
+      "limitedErrors": "Bị giới hạn / lỗi",
+      "limitedErrorsValue": "{{limited}} / {{errors}}",
+      "ofCalls": "Trên {{n}} lần gọi",
+      "chartTokens": "Token mỗi ngày",
+      "chartAudio": "Phút âm thanh mỗi ngày",
+      "legend": "Nhà cung cấp",
+      "chartSummary": "{{days}} ngày có sử dụng, ngày cao nhất {{max}}. Bảng bên dưới có đủ số liệu.",
+      "tokensValue": "{{n}} token",
+      "tipLine": "{{name}}: {{value}}",
+      "noData": "Không có sử dụng trong khoảng này.",
+      "tokenTable": "Tính theo token",
+      "audioTable": "Tính theo âm thanh",
+      "keyLabel": "{{label}} ••••{{last4}}",
+      "envKey": "Cài đặt máy chủ",
+      "col": {
+        "date": "Ngày",
+        "model": "Nhà cung cấp / mô hình",
+        "operation": "Thao tác",
+        "key": "Key",
+        "calls": "Lần gọi",
+        "input": "Token vào",
+        "output": "Token ra",
+        "minutes": "Phút",
+        "limited": "Bị giới hạn",
+        "errors": "Lỗi",
+        "total": "Tổng token"
+      },
+      "provider": {
+        "gemini": "Gemini",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "speechmatics": "Speechmatics",
+        "gemini-embedding": "Gemini embedding"
+      },
+      "meetingsTitle": "Cuộc họp và lưu trữ",
+      "meetingsTotal": "Cuộc họp",
+      "last7": "7 ngày qua",
+      "last30": "30 ngày qua",
+      "failureRate": "Thất bại",
+      "percent": "{{n}} %",
+      "files": "Tệp đã lưu",
+      "stored": "Dung lượng đã dùng",
+      "tableOf": "{{title}} (bảng)",
+      "noUsageDay": "Không có sử dụng",
+      "showTableOf": "Xem {{title}} dạng bảng",
+      "pointHint": "Trỏ vào một ngày để xem số liệu. Bảng có đủ mọi giá trị."
+    },
+    "activity": {
+      "subtitle": "Người dùng đã làm gì, mới nhất trước.",
+      "type": "Sự kiện",
+      "allTypes": "Mọi sự kiện",
+      "forUser": "Đang xem một người dùng: {{email}}",
+      "allUsers": "Xem mọi người dùng",
+      "empty": "Không có hoạt động nào khớp bộ lọc.",
+      "deletedUser": "Người dùng đã xóa"
+    },
+    "audit": {
+      "subtitle": "Mọi thay đổi do admin thực hiện, mới nhất trước.",
+      "action": "Thao tác bắt đầu bằng",
+      "forActor": "Đang xem một admin: {{email}}",
+      "allActors": "Xem mọi admin",
+      "empty": "Không có mục nào khớp bộ lọc.",
+      "userTarget": "Người dùng",
+      "col": {
+        "when": "Thời điểm",
+        "actor": "Admin",
+        "action": "Thao tác",
+        "target": "Đối tượng",
+        "details": "Chi tiết",
+        "ip": "Địa chỉ IP"
+      }
+    },
+    "events": {
+      "login": "Đăng nhập",
+      "logout": "Đăng xuất",
+      "record_start": "Bắt đầu ghi âm",
+      "record_stop": "Dừng ghi âm",
+      "recording_notice_ack": "Xác nhận thông báo ghi âm",
+      "meeting_created": "Tạo cuộc họp",
+      "meeting_deleted": "Xóa cuộc họp",
+      "processing_done": "Xử lý xong",
+      "processing_failed": "Xử lý thất bại",
+      "chat_message": "Đặt câu hỏi",
+      "meeting_shared": "Chia sẻ cuộc họp",
+      "meeting_unshared": "Bỏ chia sẻ cuộc họp",
+      "other": "Sự kiện khác"
     }
   },
   "error": {
