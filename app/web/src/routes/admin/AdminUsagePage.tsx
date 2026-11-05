@@ -30,6 +30,12 @@ export function AdminUsagePage() {
   const storage = useStorageUsage()
   const f = useFormatters()
   const [draft, setDraft] = useState({ from: applied.from, to: applied.to, byOperation })
+  // the URL changed (Back / a link): show its values in the fields
+  const [shown, setShown] = useState(`${applied.from}|${applied.to}|${byOperation}`)
+  if (shown !== `${applied.from}|${applied.to}|${byOperation}`) {
+    setShown(`${applied.from}|${applied.to}|${byOperation}`)
+    setDraft({ from: applied.from, to: applied.to, byOperation })
+  }
   const [problem, setProblem] = useState<string | null>(null)
   const [tries, setTries] = useState(0)
   const ids = { from: useId(), to: useId(), op: useId(), err: useId() }
@@ -44,7 +50,9 @@ export function AdminUsagePage() {
 
   const rows = usage.data?.rows ?? []
   const s = usageSummary(rows)
-  const minutes = (sec: number) => f.number(Math.round(sec / 60))
+  const minutes = (sec: number) => f.minutes(sec)
+  // the operation column follows the data shown (the previous answer stays while the next loads)
+  const showOperation = rows.some((r) => r.operation !== null)
 
   return (
     <>
@@ -105,11 +113,11 @@ export function AdminUsagePage() {
               <small>{t('admin.usage.ofCalls', { n: f.number(s.calls) })}</small>
             </div>
           </div>
-          <UsageChart daily={usage.data.dailyTotals} unit="tokens" />
-          <UsageChart daily={usage.data.dailyTotals} unit="audio_seconds" />
+          <UsageChart daily={usage.data.dailyTotals} unit="tokens" range={applied} />
+          <UsageChart daily={usage.data.dailyTotals} unit="audio_seconds" range={applied} />
           <div className="meter-grid">
-            <MeterTable rows={rows.filter((r) => r.unit === 'tokens')} unit="tokens" byOperation={byOperation} />
-            <MeterTable rows={rows.filter((r) => r.unit === 'audio_seconds')} unit="audio_seconds" byOperation={byOperation} />
+            <MeterTable rows={rows.filter((r) => r.unit === 'tokens')} unit="tokens" byOperation={showOperation} />
+            <MeterTable rows={rows.filter((r) => r.unit === 'audio_seconds')} unit="audio_seconds" byOperation={showOperation} />
           </div>
         </>
       )}
@@ -156,13 +164,13 @@ export function AdminUsagePage() {
 }
 
 /** Daily stacked bars for one unit. Hover shows the day; the same numbers are in the table view. */
-function UsageChart({ daily, unit }: { daily: DailyTotal[]; unit: 'tokens' | 'audio_seconds' }) {
+function UsageChart({ daily, unit, range }: { daily: DailyTotal[]; unit: 'tokens' | 'audio_seconds'; range: { from: string; to: string } }) {
   const { t } = useTranslation()
   const f = useFormatters()
   const name = useProviderName()
   const head = useId()
-  const bars = dailyBars(daily, unit)
-  const value = (q: number) => (unit === 'tokens' ? t('admin.usage.tokensValue', { n: f.number(Math.round(q)) }) : t('admin.usage.minutesValue', { n: f.number(Math.round(q / 60)) }))
+  const bars = dailyBars(daily, unit, range)
+  const value = (q: number) => (unit === 'tokens' ? t('admin.usage.tokensValue', { n: f.number(Math.round(q)) }) : t('admin.usage.minutesValue', { n: f.minutes(q) }))
   const title = unit === 'tokens' ? 'admin.usage.chartTokens' : 'admin.usage.chartAudio'
   return (
     <section className="admin-card" aria-labelledby={head}>
@@ -178,20 +186,21 @@ function UsageChart({ daily, unit }: { daily: DailyTotal[]; unit: 'tokens' | 'au
           </ul>
         )}
       </div>
-      {bars.days.length === 0 ? (
+      {bars.max === 0 ? (
         <p className="tab-note">{t('admin.usage.noData')}</p>
       ) : (
         <>
-          <div className="usage-chart" role="img" aria-label={t('admin.usage.chartSummary', { days: bars.days.length, max: value(bars.max) })}>
+          <div className="usage-chart" role="img" aria-label={t('admin.usage.chartSummary', { days: bars.days.filter((d) => d.total > 0).length, max: value(bars.max) })}>
             {bars.days.map((d) => (
               <div className="usage-day" key={d.date}>
-                <div className="usage-stack" style={{ height: `${bars.max ? (d.total / bars.max) * 100 : 0}%` }}>
+                <div className="usage-stack" style={{ height: `${(d.total / bars.max) * 100}%` }}>
                   {d.parts.map((p) => (
                     <i key={p.provider} className={`series-${providerSlot(p.provider)}`} style={{ flexGrow: p.quantity }} />
                   ))}
                 </div>
                 <div className="usage-tip" aria-hidden="true">
-                  <strong>{f.date(`${d.date}T00:00:00Z`)}</strong>
+                  <strong>{f.day(d.date)}</strong>
+                  {d.parts.length === 0 && <span>{t('admin.usage.noUsageDay')}</span>}
                   {d.parts.map((p) => (
                     <span key={p.provider}>{t('admin.usage.tipLine', { name: name(p.provider), value: value(p.quantity) })}</span>
                   ))}
@@ -200,8 +209,8 @@ function UsageChart({ daily, unit }: { daily: DailyTotal[]; unit: 'tokens' | 'au
             ))}
           </div>
           <div className="usage-axis" aria-hidden="true">
-            <span>{f.date(`${bars.days[0]?.date}T00:00:00Z`)}</span>
-            <span>{f.date(`${bars.days[bars.days.length - 1]?.date}T00:00:00Z`)}</span>
+            <span>{f.day(bars.days[0]?.date ?? range.from)}</span>
+            <span>{f.day(bars.days[bars.days.length - 1]?.date ?? range.to)}</span>
           </div>
           <details className="table-view">
             <summary>{t('admin.usage.showTable')}</summary>
@@ -218,9 +227,9 @@ function UsageChart({ daily, unit }: { daily: DailyTotal[]; unit: 'tokens' | 'au
                   </tr>
                 </thead>
                 <tbody>
-                  {bars.days.map((d) => (
+                  {bars.days.filter((d) => d.total > 0).map((d) => (
                     <tr key={d.date}>
-                      <th scope="row">{f.date(`${d.date}T00:00:00Z`)}</th>
+                      <th scope="row">{f.day(d.date)}</th>
                       {bars.providers.map((p) => {
                         const part = d.parts.find((x) => x.provider === p)
                         return (
@@ -291,7 +300,7 @@ function MeterTable({ rows, unit, byOperation }: { rows: UsageRow[]; unit: 'toke
                       <td className="num">{f.number(r.total_output_tokens ?? 0)}</td>
                     </>
                   ) : (
-                    <td className="num">{f.number(Math.round((r.total_audio_seconds ?? 0) / 60))}</td>
+                    <td className="num">{f.minutes(r.total_audio_seconds ?? 0)}</td>
                   )}
                   <td className={`num${r.rate_limited_count ? ' attention-text' : ''}`}>{f.number(r.rate_limited_count)}</td>
                   <td className={`num${r.error_count ? ' attention-text' : ''}`}>{f.number(r.error_count)}</td>

@@ -115,12 +115,20 @@ export interface DailyTotal {
   quantity: number
 }
 
-/** One stacked bar per day for one unit (tokens and audio are separate charts). */
-export function dailyBars(rows: readonly DailyTotal[], unit: 'tokens' | 'audio_seconds') {
+/** One stacked bar per day for one unit (tokens and audio are separate charts). With a range,
+ * every day of it gets a bar (0 when empty, ≤ 400 days) so the time axis stays continuous. */
+export function dailyBars(rows: readonly DailyTotal[], unit: 'tokens' | 'audio_seconds', range?: { from: string; to: string }) {
   const days = new Map<string, Map<string, number>>()
   const providers = new Set<string>()
+  const filled = Boolean(range && dateInput(range.from) && dateInput(range.to))
+  if (range && filled) {
+    for (let t = Date.parse(range.to), i = 0; t >= Date.parse(range.from) && i < MAX_RANGE_DAYS; t -= DAY, i += 1) {
+      days.set(iso(new Date(t)), new Map())
+    }
+  }
   for (const r of rows) {
     if (r.unit !== unit || !dateInput(r.date) || typeof r.provider !== 'string' || !Number.isFinite(r.quantity) || r.quantity < 0) continue
+    if (filled && !days.has(r.date)) continue
     providers.add(r.provider)
     const day = days.get(r.date) ?? new Map<string, number>()
     day.set(r.provider, (day.get(r.provider) ?? 0) + r.quantity)

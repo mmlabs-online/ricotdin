@@ -389,8 +389,8 @@ ul.chart-legend li { display: flex; align-items: center; gap: 6px; }
 ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .usage-chart { height: 180px; display: flex; align-items: flex-end; gap: 2px; padding-top: 12px; border-bottom: 1px solid var(--border-strong); }
 .usage-day { position: relative; flex: 1 1 0; min-width: 3px; height: 100%; display: flex; align-items: flex-end; }
-.usage-stack { width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; min-height: 2px; }
-.usage-stack i { display: block; min-height: 1px; }
+.usage-stack { width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
+.usage-stack i { display: block; min-height: 0; }
 .usage-stack i:last-child { border-radius: 4px 4px 0 0; }
 .usage-tip { display: none; position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 2; min-width: 150px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 4px 14px rgb(0 0 0 / .12); font-size: 12px; flex-direction: column; gap: 2px; pointer-events: none; }
 .usage-day:hover .usage-tip { display: flex; }

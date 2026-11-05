@@ -1,9 +1,9 @@
 // Admin › Pipeline (ARC-14b, Make PipelineAdmin): status counts, jobs by status, requeue of failed
 // or stuck meetings (each asks first: a new run charges the owner's quota, §0.7), worker tasks.
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { usePipelineJobs, usePipelineOverview, useRequeue, useSchedulers, type JobRow } from '../../api/admin/ops'
-import { AdminHead, AdminPagination, NoticeBanner, useFormatters, useNotice, useUrlState } from '../../components/admin/AdminParts'
+import { usePipelineJobs, usePipelineOverview, useRefreshPipeline, useRequeue, useSchedulers, type JobRow } from '../../api/admin/ops'
+import { AdminHead, AdminPagination, NoticeBanner, useClampPage, useFormatters, useNotice, useUrlState } from '../../components/admin/AdminParts'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Status } from '../../components/ui/Status'
@@ -31,6 +31,15 @@ export function AdminPipelinePage() {
   const overview = usePipelineOverview()
   const jobs = usePipelineJobs({ status: filter, page, perPage: PER_PAGE })
   const requeue = useRequeue()
+  const refresh = useRefreshPipeline()
+  const [running, setRunning] = useState(false) // a requeue batch is going (one request at a time)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false // leaving the page stops the batch: each requeue charges an owner
+    }
+  }, [])
   const [ask, setAsk] = useState<JobRow[] | null>(null) // meetings to requeue, asked not sent
   const [notice, setNotice] = useNotice()
   const f = useFormatters()
@@ -40,26 +49,37 @@ export function AdminPipelinePage() {
   const eligible = rows.filter(canRequeue)
   const counts = overview.data?.counts
   const setFilter = (s: PipelineFilter) => url.set({ status: s === 'all' ? null : s, page: 1 })
+  useClampPage(jobs.data?.total, PER_PAGE, page, rows.length, (p) => url.set({ page: p }))
 
   async function run() {
-    if (!ask || requeue.isPending) return
+    if (!ask || running) return
     const list = ask
     setAsk(null)
+    setRunning(true)
     let ok = 0
-    let failed = 0
+    const failed: string[] = []
     let lastError: unknown = null
     // one at a time: each is its own audited change, and the API refuses concurrent ones (409)
     for (const j of list) {
+      if (!alive.current) return
       try {
         await requeue.mutateAsync(j.id)
         ok += 1
       } catch (err) {
-        failed += 1
+        failed.push(displayText(j.title))
         lastError = err
       }
     }
-    if (list.length === 1 && failed === 1) setNotice(adminErrorKey(lastError), 'error')
-    else setNotice(failed ? 'admin.pipeline.requeuePartial' : 'admin.pipeline.requeued', failed ? 'warning' : 'success', { count: ok, failed })
+    await refresh()
+    if (!alive.current) return
+    setRunning(false)
+    if (list.length === 1 && failed.length === 1) setNotice(adminErrorKey(lastError), 'error')
+    else
+      setNotice(failed.length ? 'admin.pipeline.requeuePartial' : 'admin.pipeline.requeued', failed.length ? 'warning' : 'success', {
+        count: ok,
+        failed: failed.length,
+        titles: failed.join(', '),
+      })
   }
 
   const duration = (s: number | null) => {
@@ -96,6 +116,11 @@ export function AdminPipelinePage() {
           <strong>{overview.data ? averageTime(overview.data.avg_processing_secs) : '—'}</strong>
         </div>
       </div>
+      {overview.isError && (
+        <p className="tab-note">
+          {t(adminErrorKey(overview.error))} <Button onClick={() => void overview.refetch()}>{t('common.tryAgain')}</Button>
+        </p>
+      )}
 
       <div className="admin-toolbar">
         <div className="filter-tabs" role="group" aria-label={t('admin.pipeline.filterLabel')}>
@@ -105,7 +130,7 @@ export function AdminPipelinePage() {
             </button>
           ))}
         </div>
-        <Button variant="danger" onClick={() => eligible.length && !requeue.isPending && setAsk(eligible)} aria-disabled={eligible.length === 0 || requeue.isPending}>
+        <Button variant="danger" onClick={() => eligible.length && !running && setAsk(eligible)} aria-disabled={eligible.length === 0 || running} aria-busy={running}>
           {t('admin.pipeline.requeueAll', { count: eligible.length })}
         </Button>
       </div>
@@ -158,7 +183,7 @@ export function AdminPipelinePage() {
                     <td className="error-cell">{error ? displayText(error) : '—'}</td>
                     <td>
                       {canRequeue(j) && (
-                        <Button onClick={() => !requeue.isPending && setAsk([j])} aria-disabled={requeue.isPending} aria-label={t('admin.pipeline.requeueOne', { title: displayText(j.title) })}>
+                        <Button onClick={() => !running && setAsk([j])} aria-disabled={running} aria-label={t('admin.pipeline.requeueOne', { title: displayText(j.title) })}>
                           {t('admin.pipeline.requeue')}
                         </Button>
                       )}

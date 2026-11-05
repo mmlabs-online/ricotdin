@@ -74,6 +74,8 @@ export function useFormatters() {
     date: (iso: string | null) => (iso ? new Intl.DateTimeFormat(lang, { dateStyle: 'medium' }).format(new Date(iso)) : null),
     dateTime: (iso: string | null) => (iso ? new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)) : null),
     number: (n: number) => new Intl.NumberFormat(lang).format(n),
+    /** audio seconds as minutes, one decimal below 10 min (30 s is not 0) */
+    minutes: (sec: number) => new Intl.NumberFormat(lang, { maximumFractionDigits: sec < 600 ? 1 : 0 }).format(sec / 60),
     bytes: (b: number) => {
       const units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
       let v = Math.max(0, b)
@@ -84,6 +86,8 @@ export function useFormatters() {
       }
       return new Intl.NumberFormat(lang, { style: 'unit', unit: units[i], unitDisplay: 'narrow', maximumFractionDigits: i ? 1 : 0 }).format(v)
     },
+    /** a `YYYY-MM-DD` the API grouped in UTC, shown as that same day */
+    day: (ymd: string) => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${ymd}T00:00:00Z`)),
     time: (ms: number) => new Intl.DateTimeFormat(lang, { timeStyle: 'medium' }).format(new Date(ms)),
   }
 }
@@ -102,6 +106,14 @@ export function useUrlState() {
     setParams(p, { replace: true, preventScrollReset: true })
   }
   return { get: (k: string) => params.get(k), page, set }
+}
+
+/** A page past the end (rows removed meanwhile, or a hand-edited `?page=`): go to the last one. */
+export function useClampPage(total: number | undefined, perPage: number, page: number, shown: number, go: (page: number) => void) {
+  const last = Math.max(1, Math.ceil((total ?? 0) / perPage))
+  useEffect(() => {
+    if (total !== undefined && shown === 0 && page > last) go(last)
+  }, [total, shown, page, last]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function AdminPagination({ page, perPage, total, onPage }: { page: number; perPage: number; total: number; onPage: (page: number) => void }) {

@@ -422,7 +422,7 @@
       "confirmBody_other": "Each is processed again from the start, and each owner is charged audio minutes again. Current transcripts and notes stay until the new runs replace them.",
       "requeued_one": "{{count}} meeting queued again.",
       "requeued_other": "{{count}} meetings queued again.",
-      "requeuePartial": "{{count}} queued again, {{failed}} refused (already running, or its audio is missing).",
+      "requeuePartial": "{{count}} queued again; {{failed}} refused (already running, or the audio is missing): {{titles}}.",
       "empty": "No meetings here.",
       "caption": "Meetings in the processing pipeline",
       "col": {
@@ -515,7 +515,8 @@
       "percent": "{{n}} %",
       "files": "Stored files",
       "stored": "Storage used",
-      "tableOf": "{{title}} (table)"
+      "tableOf": "{{title}} (table)",
+      "noUsageDay": "No usage"
     },
     "activity": {
       "subtitle": "What users did, newest first.",

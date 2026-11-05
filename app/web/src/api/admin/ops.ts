@@ -101,15 +101,21 @@ export function useSchedulers() {
   })
 }
 
+/** One requeue. The caller refreshes the lists once after a batch (`refreshPipeline`), not per item. */
 export function useRequeue() {
   const fetchApi = useFetchApi()
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: (meetingId: string) => apiJson(fetchApi, `/admin/pipeline/${enc(meetingId)}/requeue`, { method: 'POST' }),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: ['admin', 'pipeline'] })
-    },
   })
+}
+
+export function useRefreshPipeline() {
+  const qc = useQueryClient()
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['admin', 'pipeline', 'jobs'] }),
+      qc.invalidateQueries({ queryKey: ['admin', 'pipeline', 'overview'] }),
+    ])
 }
 
 export function useStorageUsage() {

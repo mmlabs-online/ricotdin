@@ -422,7 +422,7 @@
       "confirmBody_other": "Mỗi cuộc họp được xử lý lại từ đầu và mỗi chủ cuộc họp bị trừ số phút âm thanh thêm lần nữa. Bản ghi lời và ghi chú hiện tại vẫn giữ cho tới khi lần chạy mới thay thế.",
       "requeued_one": "Đã xếp lại {{count}} cuộc họp.",
       "requeued_other": "Đã xếp lại {{count}} cuộc họp.",
-      "requeuePartial": "Đã xếp lại {{count}}, {{failed}} bị từ chối (đang chạy, hoặc thiếu tệp âm thanh).",
+      "requeuePartial": "Đã xếp lại {{count}}; {{failed}} bị từ chối (đang chạy, hoặc thiếu tệp âm thanh): {{titles}}.",
       "empty": "Không có cuộc họp nào.",
       "caption": "Cuộc họp trong hàng đợi xử lý",
       "col": {
@@ -515,7 +515,8 @@
       "percent": "{{n}} %",
       "files": "Tệp đã lưu",
       "stored": "Dung lượng đã dùng",
-      "tableOf": "{{title}} (bảng)"
+      "tableOf": "{{title}} (bảng)",
+      "noUsageDay": "Không có sử dụng"
     },
     "activity": {
       "subtitle": "Người dùng đã làm gì, mới nhất trước.",

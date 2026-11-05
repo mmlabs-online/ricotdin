@@ -107,6 +107,19 @@ describe('dailyBars', () => {
     const d = dailyBars([{ date: '2026-11-02', provider: 'grok', unit: 'tokens', quantity: 1 }], 'tokens')
     expect(d.providers).toEqual(['grok'])
   })
+  it('with a range, every day gets a bar (empty days are 0), so the axis is continuous', () => {
+    const d = dailyBars([{ date: '2026-11-03', provider: 'gemini', unit: 'tokens', quantity: 5 }], 'tokens', { from: '2026-11-01', to: '2026-11-04' })
+    expect(d.days.map((x) => [x.date, x.total])).toEqual([
+      ['2026-11-01', 0],
+      ['2026-11-02', 0],
+      ['2026-11-03', 5],
+      ['2026-11-04', 0],
+    ])
+    expect(dailyBars([], 'tokens', { from: '2026-11-01', to: '2026-11-02' }).days).toHaveLength(2)
+    // rows outside the range are dropped; an over-long range is capped at 400 days
+    expect(dailyBars([{ date: '2026-12-01', provider: 'gemini', unit: 'tokens', quantity: 5 }], 'tokens', { from: '2026-11-01', to: '2026-11-01' }).max).toBe(0)
+    expect(dailyBars([], 'tokens', { from: '2020-01-01', to: '2026-11-01' }).days).toHaveLength(400)
+  })
   it('unknown providers sort after the known ones; bad rows are skipped', () => {
     const d = dailyBars(
       [

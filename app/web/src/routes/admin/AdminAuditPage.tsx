@@ -3,7 +3,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useAuditLog } from '../../api/admin/ops'
-import { AdminHead, AdminPagination, useFormatters, useUrlState } from '../../components/admin/AdminParts'
+import { AdminHead, AdminPagination, useClampPage, useFormatters, useUrlState } from '../../components/admin/AdminParts'
 import { LogFilters } from '../../components/admin/LogFilters'
 import { Button } from '../../components/ui/Button'
 import { dateInput, metadataText, uuidOrNull } from '../../lib/admin/ops'
@@ -23,6 +23,10 @@ export function AdminAuditPage() {
   const to = dateInput(url.get('to'))
   const log = useAuditLog({ actor, action, from, to, page: url.page, perPage: PER_PAGE })
   const f = useFormatters()
+  useClampPage(log.data?.total, PER_PAGE, url.page, log.data?.logs.length ?? 1, (p) => url.set({ page: p }))
+  // the email only from rows of this filter (not the previous answer kept while loading)
+  const first = log.isPlaceholderData ? undefined : log.data?.logs[0]
+  const chipEmail = first && first.actor_id === actor && first.actor_email ? displayText(first.actor_email) : null
 
   return (
     <>
@@ -35,7 +39,7 @@ export function AdminAuditPage() {
       />
       {actor && (
         <p className="filter-chip">
-          {t('admin.audit.forActor', { email: log.data?.logs[0]?.actor_email ? displayText(log.data.logs[0].actor_email) : actor })}{' '}
+          {t('admin.audit.forActor', { email: chipEmail ?? actor })}{' '}
           <Button variant="ghost" onClick={() => url.set({ actor: null, page: 1 })}>
             {t('admin.audit.allActors')}
           </Button>

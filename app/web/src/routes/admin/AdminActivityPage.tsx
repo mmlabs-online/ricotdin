@@ -3,7 +3,7 @@
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useActivityFeed } from '../../api/admin/ops'
-import { AdminHead, AdminPagination, useFormatters, useUrlState } from '../../components/admin/AdminParts'
+import { AdminHead, AdminPagination, useClampPage, useFormatters, useUrlState } from '../../components/admin/AdminParts'
 import { LogFilters } from '../../components/admin/LogFilters'
 import { Button } from '../../components/ui/Button'
 import { dateInput, EVENT_TYPES, eventKey, metadataText, uuidOrNull } from '../../lib/admin/ops'
@@ -24,6 +24,10 @@ export function AdminActivityPage() {
   const to = dateInput(url.get('to'))
   const feed = useActivityFeed({ userId, eventType, from, to, page: url.page, perPage: PER_PAGE })
   const f = useFormatters()
+  useClampPage(feed.data?.total, PER_PAGE, url.page, feed.data?.rows.length ?? 1, (p) => url.set({ page: p }))
+  // the email only from rows of this filter (not the previous answer kept while loading)
+  const first = feed.isPlaceholderData ? undefined : feed.data?.rows[0]
+  const chipEmail = first && first.user_id === userId && first.user_email ? displayText(first.user_email) : null
 
   return (
     <>
@@ -37,7 +41,7 @@ export function AdminActivityPage() {
       />
       {userId && (
         <p className="filter-chip">
-          {t('admin.activity.forUser', { email: feed.data?.rows[0]?.user_email ? displayText(feed.data.rows[0].user_email) : userId })}{' '}
+          {t('admin.activity.forUser', { email: chipEmail ?? userId })}{' '}
           <Button variant="ghost" onClick={() => url.set({ userId: null, page: 1 })}>
             {t('admin.activity.allUsers')}
           </Button>
