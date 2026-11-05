@@ -51,6 +51,7 @@ export function grantAmount(s: string): number | undefined {
 
 /** Client check of a quota grant (minutes, queries as typed); null = send it. */
 export function grantProblem(minutes: string, queries: string): string | null {
+  if ([minutes, queries].some((v) => /^[1-9]\d{0,2}([.,]\d{3})+$/.test(v.trim()))) return 'admin.quota.errors.grouping'
   const m = grantAmount(minutes) ?? 0
   const q = grantAmount(queries) ?? 0
   if (!Number.isFinite(m) || !Number.isFinite(q)) return 'admin.quota.errors.number'

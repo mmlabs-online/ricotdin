@@ -331,7 +331,8 @@
         "negative": "Values cannot be negative.",
         "number": "Enter numbers only.",
         "whole": "Chat questions must be a whole number.",
-        "tooLarge": "That is more than one grant allows (100,000 minutes, 1,000,000 questions)."
+        "tooLarge": "That is more than one grant allows (100,000 minutes, 1,000,000 questions).",
+        "grouping": "Type the number without thousands separators (for example 1000)."
       },
       "confirmTitle": "Add this quota?",
       "confirmBody": "Add {{minutes}} audio minutes and {{queries}} questions to {{name}}? This cannot be undone here."

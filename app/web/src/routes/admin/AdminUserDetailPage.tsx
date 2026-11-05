@@ -201,7 +201,7 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
   const fieldBad = (p: string | null) => p !== null && p !== 'admin.quota.errors.empty'
   const minutesBad = problem !== null && (fieldBad(grantProblem(minutes, '')) || problem === 'admin.quota.errors.empty')
   const queriesBad = problem !== null && fieldBad(grantProblem('', queries))
-  const ids = { minutes: useId(), queries: useId(), note: useId(), err: useId(), history: useId() }
+  const ids = { minutes: useId(), queries: useId(), note: useId(), err: useId(), history: useId(), grantBody: useId() }
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -293,8 +293,8 @@ function QuotaCard({ userId, name, onNotice }: { userId: string; name: string; o
             </Button>
           </form>
           {pending && (
-            <Modal title={t('admin.quota.confirmTitle')} onClose={() => setPending(null)} describedBy="grant-body">
-              <p className="modal-copy" id="grant-body">
+            <Modal title={t('admin.quota.confirmTitle')} onClose={() => setPending(null)} describedBy={ids.grantBody}>
+              <p className="modal-copy" id={ids.grantBody}>
                 {t('admin.quota.confirmBody', { name, minutes: f.number(pending.audio_minutes ?? 0), queries: f.number(pending.agent_queries ?? 0) })}
               </p>
               <div className="modal-actions">

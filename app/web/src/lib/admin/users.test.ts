@@ -58,6 +58,12 @@ describe('grantProblem', () => {
     expect(grantProblem('', '10')).toBeNull()
     expect(grantProblem('1,5', '')).toBeNull() // Vietnamese decimal comma
     expect(grantAmount('1,5')).toBe(1.5)
+    // "1,000" / "1.000" could be a thousand or one: refused, never guessed
+    expect(grantProblem('1,000', '')).toBe('admin.quota.errors.grouping')
+    expect(grantProblem('1.000', '')).toBe('admin.quota.errors.grouping')
+    expect(grantProblem('1,000,000', '')).toBe('admin.quota.errors.grouping')
+    expect(grantProblem('', '1.000')).toBe('admin.quota.errors.grouping')
+    expect(grantProblem('2.25', '')).toBeNull()
     expect(grantAmount(' ')).toBeUndefined()
   })
 })

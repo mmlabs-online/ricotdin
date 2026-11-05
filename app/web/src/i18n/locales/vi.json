@@ -331,7 +331,8 @@
         "negative": "Không được nhập số âm.",
         "number": "Chỉ nhập số.",
         "whole": "Lượt hỏi phải là số nguyên.",
-        "tooLarge": "Vượt mức một lần nạp (100.000 phút, 1.000.000 lượt hỏi)."
+        "tooLarge": "Vượt mức một lần nạp (100.000 phút, 1.000.000 lượt hỏi).",
+        "grouping": "Nhập số không có dấu phân cách hàng nghìn (ví dụ 1000)."
       },
       "confirmTitle": "Cộng hạn mức này?",
       "confirmBody": "Cộng {{minutes}} phút âm thanh và {{queries}} lượt hỏi cho {{name}}? Không hoàn tác được tại đây."
