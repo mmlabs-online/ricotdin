@@ -176,9 +176,16 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   optional `REFRESH_TTL_DAYS`. Without `JWT_PRIVATE_KEY` auth routes answer 503; without `SMTP_HOST`
   no mail is sent (`email_sent: false`). On Windows `chmod 0600` does nothing: restrict
   `app/api/.env` with `icacls app\api\.env /inheritance:r /grant:r "%USERNAME%:F"`.
-- **Open (owner decision pending):** an unverified account blocks re-registration of its email
-  (409), so someone could pre-register a victim's address with their own password and hope the
-  victim clicks the verify link. Refresh sessions have no absolute lifetime (sliding 30 days).
+- **Pre-registration + session lifetime (SEC-05, owner decisions 2026-11-09):** the verify link
+  **sets the password** (`POST /auth/verify-email {token, password}`: password checked before the
+  token is touched, then token consumed + hash set + verified + every refresh token revoked), so a
+  password chosen by whoever registered the address first never survives verification. Registering
+  an email of an **unverified** account creates nothing: a fresh verify link (the old one is voided)
+  goes to that address and the answer equals a new registration (201); the new username/password
+  are dropped; per-address mail limit 3/h. Verified or disabled → 409 (2026-10-26). A username is
+  "taken" only by another account. Refresh: **90-day absolute lifetime** per family from sign-in
+  (`tokens.ABSOLUTE_TTL`, family start = `min(created_at)`, no migration) on top of the sliding 30
+  days; `refresh_expiry` caps new tokens at the family's day 90.
 
 - **Integration tests** (`*_integration.py`) create and drop `ricotdin_test_*` databases on the
   `DATABASE_URL` branch (never point it at `main`); CI runs them against a `pgvector/pgvector:pg18` service.
@@ -617,8 +624,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - Body ≤ 64 KiB (413 `payload_too_large`, `json_object(max_bytes=)`). Messages are written with
   `clock_timestamp()` so a question always sorts before its reply. A reply that was committed is
   never refunded. 402 body = the v2 error envelope (`error.code`), not v1's `{blocked, reason}`.
-- **Open (owner decision pending):** a refunded answer failure still costs us the provider calls,
-  so a user can farm refunds with questions the provider rejects (bounded by the rate limit).
+- **Refunds (SEC-05, owner decision 2026-11-09):** only failures on our side are refunded
+  (retrieval error, `AIUnavailable`, `AIBadOutput`, cancel). A provider refusal of the question
+  (`AIRejected`) keeps the charge (`rag.answer.answer_refund_reason`): it is the one failure a user
+  can cause on purpose, and the provider call still cost us.
 
 ### 0.9 v2 admin API (ARC-10 done: 10a users, 10b operations, 10c configuration)
 
@@ -804,10 +813,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   rename / reorder (up-down buttons, not drag) / delete with the v1 notices (BUG-014..016) / share
   by email or username. `src/i18n/keys.test.ts` checks that every literal `t('…')` key resolves to a
   string in EN and VI.
-  Review rules kept (13a): the verify link POSTs only after a "Confirm" click (mail scanners must
-  not verify a pre-registered account); text other users write (titles, folder names) goes through
-  `lib/text.ts` `displayText` (no bidi / zero-width characters) and is bidi-isolated in CSS —
-  **follow-up:** the API should also reject them in `parse_folder_name` / `parse_meeting_patch`;
+  Review rules kept (13a): the verify link POSTs only after the person sets their password on the
+  page (SEC-05; mail scanners never verify an account); text other users write (titles, folder
+  names) goes through `lib/text.ts` `displayText` (no bidi / zero-width characters) and is
+  bidi-isolated in CSS; the API refuses them in folder and meeting names (SEC-05,
+  `rules.has_invisible_characters`, code `invalid_characters` → `errors.invisibleCharacters`);
   share success shows WHO was added; optimistic edits share the mutation key `['meetings','edit']`
   (no polling while one is in flight, per-row rollback, refetch after the last one settles);
   controls that disappear hand focus to a stable one (`data-*` targets, `aria-disabled` instead
