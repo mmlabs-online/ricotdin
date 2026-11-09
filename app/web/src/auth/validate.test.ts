@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newPasswordError, normalizeEmail, normalizeUsername, validateEmail, validatePassword, validateUsername } from './validate'
+import { newPasswordError, passwordField, normalizeEmail, normalizeUsername, validateEmail, validatePassword, validateUsername } from './validate'
 
 // Same rules as app/api/app/auth/validate.py (the API decides; this only saves a round trip).
 describe('auth validation (i18n keys)', () => {
@@ -30,5 +30,13 @@ describe('newPasswordError (reset + SEC-05 verify)', () => {
     expect(newPasswordError('short', 'short')).toBe('auth.validation.passwordShort')
     expect(newPasswordError('long-enough-1', 'long-enough-2')).toBe('auth.validation.mismatch')
     expect(newPasswordError('long-enough-1', 'long-enough-1')).toBeNull()
+  })
+})
+
+describe('passwordField', () => {
+  it('ties a mismatch to the confirmation field and every other rule to the password field', () => {
+    expect(passwordField('auth.validation.mismatch')).toBe('repeat')
+    expect(passwordField('auth.validation.passwordShort')).toBe('password')
+    expect(passwordField('auth.validation.passwordLong')).toBe('password')
   })
 })

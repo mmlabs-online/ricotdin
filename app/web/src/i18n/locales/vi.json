@@ -100,7 +100,8 @@
       "resendHelp": "Cần liên kết xác minh mới? Nhập email của bạn.",
       "resend": "Gửi email xác minh",
       "confirmHelp": "Chọn mật khẩu cho tài khoản. Bước này xác minh email và kích hoạt tài khoản.",
-      "confirm": "Xác minh và đặt mật khẩu"
+      "confirm": "Xác minh và đặt mật khẩu",
+      "password": "Mật khẩu"
     },
     "reset": {
       "help": "Chọn mật khẩu mới. Bạn sẽ bị đăng xuất trên mọi thiết bị.",
@@ -906,7 +907,7 @@
     "notFound": "Mục này không còn tồn tại.",
     "rateLimited": "Quá nhiều yêu cầu. Đợi một lát rồi thử lại.",
     "generic": "Đã có lỗi. Hãy thử lại.",
-    "invisibleCharacters": "Tên không được chứa ký tự ẩn hoặc ký tự đổi chiều văn bản. Hãy xoá chúng rồi thử lại."
+    "invisibleCharacters": "Tên và tiêu đề không được chứa ký tự ẩn hoặc ký tự đổi chiều văn bản. Hãy gõ lại thay vì dán, rồi thử lại."
   },
   "meetings": {
     "upload": "Tải tệp lên",

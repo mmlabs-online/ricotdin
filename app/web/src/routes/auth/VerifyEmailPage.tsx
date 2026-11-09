@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../auth/AuthProvider'
 import { publicAuthErrorKey } from '../../auth/authErrors'
 import { forgetHashToken, readHashToken } from '../../auth/emailLink'
-import { newPasswordError } from '../../auth/validate'
+import { newPasswordError, passwordField } from '../../auth/validate'
 import { AuthLayout } from '../../components/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -32,22 +32,28 @@ export function VerifyEmailPage() {
 
   const errId = useId()
   const helpId = useId()
+  const linkErrId = useId()
   const pwRef = useRef<HTMLInputElement>(null)
+  const repeatRef = useRef<HTMLInputElement>(null)
   const [password, setPassword] = useState('')
   const [repeat, setRepeat] = useState('')
-  const [fieldError, setFieldError] = useState<string | null>(null)
+  // A field rule (marks only its own field) or a form error (rate limit, offline: no field is wrong).
+  const [problem, setProblem] = useState<{ key: string; field: 'password' | 'repeat' | null } | null>(null)
+  const [attempt, setAttempt] = useState(0) // a new alert node per submit, so a repeat is announced
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (!token || started.current) return
+    setAttempt((n) => n + 1)
     const invalid = newPasswordError(password, repeat)
     if (invalid) {
-      setFieldError(invalid)
-      pwRef.current?.focus()
+      const field = passwordField(invalid)
+      setProblem({ key: invalid, field })
+      ;(field === 'repeat' ? repeatRef : pwRef).current?.focus()
       return
     }
     started.current = true // the token is single use: never post it twice at once
-    setFieldError(null)
+    setProblem(null)
     setState('verifying')
     session
       .publicAuth('/verify-email', { token, password })
@@ -61,7 +67,8 @@ export function VerifyEmailPage() {
         }
         // refused password, rate limit, offline: the token was not used, so the form stays
         started.current = false
-        setFieldError(key)
+        setAttempt((n) => n + 1)
+        setProblem({ key, field: key.startsWith('auth.validation.') ? 'password' : null })
         setState('confirm')
         requestAnimationFrame(() => pwRef.current?.focus())
       })
@@ -69,13 +76,16 @@ export function VerifyEmailPage() {
 
   if (state === 'confirm' || state === 'verifying') {
     const busy = state === 'verifying'
+    const on = (field: 'password' | 'repeat') => problem?.field === field
     return (
       <AuthLayout>
         <form className="auth-card" onSubmit={submit} noValidate>
           <h1>{t('page.verifyEmail.title')}</h1>
           <p>{t('auth.verify.confirmHelp')}</p>
+          {/* lets a password manager store the new password for this account (3.3.8) */}
+          <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
           <label>
-            {t('auth.reset.newPassword')}
+            {t('auth.verify.password')}
             <input
               ref={pwRef}
               type="password"
@@ -83,8 +93,8 @@ export function VerifyEmailPage() {
               value={password}
               maxLength={1024}
               onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={fieldError ? true : undefined}
-              aria-describedby={fieldError ? `${helpId} ${errId}` : helpId}
+              aria-invalid={on('password') ? true : undefined}
+              aria-describedby={on('password') ? `${helpId} ${errId}` : helpId}
             />
           </label>
           <p id={helpId} className="field-help">
@@ -93,21 +103,22 @@ export function VerifyEmailPage() {
           <label>
             {t('auth.register.confirm')}
             <input
+              ref={repeatRef}
               type="password"
               autoComplete="new-password"
               value={repeat}
               maxLength={1024}
               onChange={(e) => setRepeat(e.target.value)}
-              aria-invalid={fieldError ? true : undefined}
-              aria-describedby={fieldError ? errId : undefined}
+              aria-invalid={on('repeat') ? true : undefined}
+              aria-describedby={on('repeat') ? errId : undefined}
             />
           </label>
-          {fieldError && (
-            <p id={errId} key={fieldError + password.length} className="auth-error" role="alert">
-              {t(fieldError)}
+          {problem && (
+            <p id={errId} key={attempt} className="auth-error" role="alert">
+              {t(problem.key)}
             </p>
           )}
-          <Button type="submit" variant="primary" className="full" disabled={busy} aria-busy={busy}>
+          <Button type="submit" variant="primary" className="full" aria-disabled={busy || undefined} aria-busy={busy}>
             {t('auth.verify.confirm')}
           </Button>
         </form>
@@ -118,7 +129,11 @@ export function VerifyEmailPage() {
     <AuthLayout>
       <div className="auth-card">
         {/* the form is gone: the result's heading takes focus */}
-        <h1 tabIndex={-1} ref={(el) => (started.current ? el?.focus() : undefined)}>
+        <h1
+          tabIndex={-1}
+          ref={(el) => (started.current ? el?.focus() : undefined)}
+          aria-describedby={state === 'error' && errorKey ? linkErrId : undefined}
+        >
           {t('page.verifyEmail.title')}
         </h1>
         {state === 'verified' ? (
@@ -131,7 +146,7 @@ export function VerifyEmailPage() {
         ) : (
           <>
             {errorKey && (
-              <p className="auth-error" role="alert">
+              <p id={linkErrId} className="auth-error" role="alert">
                 {t(errorKey)}
               </p>
             )}

@@ -100,7 +100,8 @@
       "resendHelp": "Need a new verification link? Enter your email.",
       "resend": "Send verification email",
       "confirmHelp": "Choose the password for your account. This confirms your email address and activates the account.",
-      "confirm": "Verify and set password"
+      "confirm": "Verify and set password",
+      "password": "Password"
     },
     "reset": {
       "help": "Choose a new password. You will be signed out on every device.",
@@ -906,7 +907,7 @@
     "notFound": "It no longer exists.",
     "rateLimited": "Too many requests. Wait a moment and try again.",
     "generic": "Something went wrong. Try again.",
-    "invisibleCharacters": "Names cannot contain invisible or text-direction characters. Remove them and try again."
+    "invisibleCharacters": "Names and titles cannot contain invisible or text-direction characters. Retype the text without pasting it, then try again."
   },
   "meetings": {
     "upload": "Upload",

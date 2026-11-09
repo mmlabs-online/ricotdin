@@ -36,3 +36,8 @@ export function validatePassword(password: string): string | null {
 export function newPasswordError(password: string, confirm: string): string | null {
   return validatePassword(password) ?? (confirm !== password ? 'auth.validation.mismatch' : null)
 }
+
+/** Which field a new-password error belongs to, so only that field is marked invalid. */
+export function passwordField(errorKey: string): 'password' | 'repeat' {
+  return errorKey === 'auth.validation.mismatch' ? 'repeat' : 'password'
+}
