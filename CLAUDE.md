@@ -342,6 +342,19 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   run inside the service transaction (holds a connection and the row lock, ≤ ~2 min with retries);
   the avatar map is committed before the profile UPDATE (a failed UPDATE leaves an unreferenced
   2 MB file); deleting a v1 (`r2`/`supabase`) meeting is a Drive no-op until ARC-18 copies files.
+- **Editing summary / notes (PRO-06, part 6a; 6b = rich-text editor + history UI):**
+  `PATCH /meetings/{id}/content {field: summary|notes, content, baseHash}` (editor+, `done`
+  meetings only else 409, `baseHash` = sha-256 hex of the UTF-8 text the edit started from, NULL =
+  empty — a different current text → 409 `content_changed`; ≤ 20 000 / 100 000 chars, no NUL /
+  lone surrogates → 422 `invalid_characters`; 120 per user per hour `app.state.content_limiter`).
+  History = migration `0007` table `meeting_note_versions` (each row = the text a field had from
+  then on, so the newest row is the current text; the first edit first keeps the AI text as an
+  `ai` row with no author; `regenerate` writes the replaced + new text as `ai`; restore writes a
+  `restore` row; the 50 newest per meeting + field are kept). App role: SELECT under RLS
+  (`can_access_meeting(...,'viewer')`); service: SELECT/INSERT/DELETE; worker: none (worker
+  re-processing writes no version). `GET /meetings/{id}/content-versions?field=` (no text,
+  `editedByUsername` read as service), `GET …/{versionId}`, `POST …/{versionId}/restore
+  {baseHash}` (editor+). v2-only table in `V2_ONLY_TABLES`. Pure rules `app/domain/content.py`.
 - **Move = meeting owner only** (owner decision 2026-11-02, CWE-269): `PATCH /meetings/{id}` with
   `folder_id` from anyone else → 403 "Only the meeting owner can move it to another folder.";
   editors still rename.
@@ -835,8 +848,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `lib/meetings/detail.ts` (audio state, quota failure, speaker groups, past due, owner actions,
   `actionErrorKey`), `lib/chat/chat.ts` (untrusted chat answers: malformed citations dropped).
   **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
-  `lib/markdown.ts`:** headings, lists, bold/italic/code; links and images become their text, HTML
-  stays text (§0.8) — never add a link/image renderer or `dangerouslySetInnerHTML`. Line rules are
+  `lib/markdown.ts`:** headings, lists, bold/italic/code; images become their text, HTML stays
+  text (§0.8) — never add an image renderer or `dangerouslySetInnerHTML`. Links stay text too,
+  except with `links` (summary / notes only, PRO-06): `https:` without credentials
+  (`safeLinkHref`), host shown next to the text, `target=_blank rel="noopener noreferrer
+  nofollow"`. **Chat answers never pass `links`.** Line rules are
   plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep
   the timing tests. The `/media` src goes through `mediaSrc` (API origin + `/media` only); the
   failed card shows only localized text, not `error_message`. Regenerate (owner, `done`) and "Process again" (owner,
