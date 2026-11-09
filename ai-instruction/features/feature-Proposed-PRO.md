@@ -136,7 +136,7 @@ As a user, I want keyword + semantic search across all meetings for quick lookup
 ---
 
 ### PRO-06 — Edit notes with history
-**Priority:** Medium | **Status:** ⚠️ Partial (6a done: API, history, Markdown editor; 6b: rich-text editor + history UI)
+**Priority:** Medium | **Status:** ✅ Done (6a: API, history, Markdown editor, PR #83; 6b: rich-text editor + history UI)
 
 **User Story**  
 As a meeting owner or editor, I want to edit the summary and notes in a rich-text editor and get earlier versions back so that the meeting record says what was really decided.
@@ -191,7 +191,7 @@ The AI summary and notes are read-only today; a wrong decision or a misheard nam
 
 **Key files (expected)**
 - `app/api/migrations/versions/0007_note_versions.py`, `app/api/app/domain/content.py`, `app/api/app/routers/content_versions.py` (or `meetings.py`), `app/api/app/routers/meetings.py` (regenerate), `app/api/scripts/migrate_from_supabase.py` (`V2_ONLY_TABLES`)
-- `app/web/src/components/meeting/DetailPanels.tsx`, `app/web/src/components/meeting/NotesEditor.tsx`, `app/web/src/components/meeting/VersionHistory.tsx`, `app/web/src/lib/markdown.ts`, `app/web/src/api/meetingDetail.ts`, locales
+- `app/web/src/components/meeting/DetailPanels.tsx`, `app/web/src/components/meeting/ContentEditor.tsx`, `app/web/src/components/meeting/RichTextEditor.tsx`, `app/web/src/lib/editor/richDoc.ts`, `app/web/src/lib/meetings/history.ts`, `app/web/src/components/meeting/VersionHistory.tsx`, `app/web/src/lib/markdown.ts`, `app/web/src/api/meetingDetail.ts`, locales
 
 ---
 
