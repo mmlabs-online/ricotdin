@@ -27,6 +27,9 @@ export function blockedLinkSet(raw: readonly string[] | undefined): ReadonlySet<
 
 /** An `https:` URL without credentials, normalised; anything else → null (stays text). */
 export function safeLinkHref(raw: string): string | null {
+  // Printable ASCII only: the API lists AI link targets with a Postgres regex, whose idea of
+  // whitespace may differ from ours (security review of PRO-06 6b). IDN hosts work as xn--.
+  if (!/^[!-~]+$/.test(raw)) return null
   let url: URL
   try {
     url = new URL(raw)

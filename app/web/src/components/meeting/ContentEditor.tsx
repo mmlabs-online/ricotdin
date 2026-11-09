@@ -76,9 +76,9 @@ export function ContentEditor({
   const { t } = useTranslation()
   const save = useEditContent(meetingId)
   const [RichTextEditor] = useState(richComponent)
-  // read once from the text the editor opened with (the base may change after a conflict)
-  const [mdOptions] = useState<MarkdownOptions>(() => editorOptions(original ?? '', links, aiLinks))
   const [base, setBase] = useState(original) // the text this edit started from
+  // follows the base: after a conflict it is the latest stored text (maybe a new AI version)
+  const mdOptions = useMemo<MarkdownOptions>(() => editorOptions(base ?? '', links, aiLinks), [base, links, aiLinks])
   const [draft, setDraft] = useState(original ?? '')
   const [fromRich, setFromRich] = useState(false) // the draft was last written by the rich editor
   const onRichChange = useCallback((md: string) => {

@@ -229,3 +229,12 @@ describe('backslash escapes (PRO-06 6b: text written by the rich editor)', () =>
     ])
   })
 })
+
+describe('safeLinkHref accepts printable ASCII only (PRO-06 6b security review)', () => {
+  it('refuses targets with control, space-like or non-ASCII characters, so the API and the page agree', () => {
+    for (const raw of ['https://evil.example/a\u0085b', 'https://evil.example/a\u200bb', '\u0001https://evil.example/', 'https://ví-dụ.vn/']) {
+      expect(safeLinkHref(raw)).toBeNull()
+    }
+    expect(safeLinkHref('https://xn--v-du-0ra7a.vn/a%C3%A9')).toBe('https://xn--v-du-0ra7a.vn/a%C3%A9')
+  })
+})
