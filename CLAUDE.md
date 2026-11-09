@@ -926,8 +926,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   A v1 tag on `dev` fails the guard; v1 hotfix tags are cut on `release/1.1`, whose own
   `release.yml` still builds v1 (a tag runs the workflow file of the tagged commit).
 - **Pinning:** every GitHub Action by commit SHA (`# vN` comment), the v2 base images
-  (`python`, `node`, `nginx-unprivileged`, `uv`) by digest; `.github/dependabot.yml` opens monthly
-  PRs into `dev` to move them. Never add an action by tag.
+  (`python`, `node`, `nginx-unprivileged`, `uv`) by digest. Dependabot is off (owner decision
+  2026-11-09: no `.github/dependabot.yml`); pins are moved by hand. Python stays on 3.12 until
+  `pyproject.toml` (`requires-python`, ruff/mypy target) and `uv.lock` move with it — a base-image
+  bump alone breaks the API image (`uv sync` finds no 3.12). Never add an action by tag.
 - **Secrets scan:** `.gitleaks.toml` (default rules; allowlist = named test files with fake keys + one
   type annotation — add a file only after checking its "secret" is fake) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
   commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
