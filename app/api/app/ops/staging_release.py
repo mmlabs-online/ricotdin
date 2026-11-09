@@ -1,6 +1,6 @@
 """Staging releases from ``staging/X.Y.Z`` branches (OPS-02). Pure, standard library only.
 
-``release-staging.yml`` runs ``python3 -m app.ops.staging_release`` (from ``app/api``, no
+``release-staging.yml`` runs ``python3 -I app/ops/staging_release.py`` (a file, from ``app/api``, no
 dependencies installed) as its guard: the branch must be ``staging/X.Y.Z`` (X >= 2) and both
 version files must say ``X.Y.Z``. It prints the image tag (``staging-X.Y.Z-<sha7>``) and the
 deployment-repo branch for the later steps. ``release_env`` writes the only file the staging

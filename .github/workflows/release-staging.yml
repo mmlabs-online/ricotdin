@@ -150,6 +150,11 @@ jobs:
               --body "Staging deploy of \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA, branch $GITHUB_REF_NAME). Changes only \`$APP_DIR/release.env\`; merged by that run once pr-scope passes. Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.")"
           fi
 
+          # Right after a force-push the PR may still report the old head and its old checks.
+          for _ in $(seq 20); do
+            [ "$(gh pr view "$PR" --json headRefOid -q .headRefOid)" = "$(git rev-parse HEAD)" ] && break
+            sleep 3
+          done
           # The PR must change exactly that one file (the deploy runs compose.yml unchecked).
           FILES="$(gh pr diff "$PR" --name-only)"
           if [ "$FILES" != "$APP_DIR/release.env" ]; then
