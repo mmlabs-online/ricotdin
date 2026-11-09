@@ -1170,8 +1170,8 @@
       "action": "Sửa",
       "editing": "Đang sửa: {{what}}",
       "label": {
-        "summary": "Nội dung tóm tắt (Markdown)",
-        "notes": "Nội dung ghi chú (Markdown)"
+        "summary": "Nội dung tóm tắt",
+        "notes": "Nội dung ghi chú"
       },
       "preview": "Xem trước",
       "previewLabel": "Xem trước",
@@ -1191,7 +1191,66 @@
       "actionSummary": "Sửa tóm tắt",
       "actionNotes": "Sửa ghi chú",
       "latestHelp": "Đây là nội dung vừa được lưu. Bản nháp của bạn vẫn còn trong ô soạn.",
-      "useLatest": "Lưu đè lên bản mới nhất"
+      "useLatest": "Lưu đè lên bản mới nhất",
+      "mode": {
+        "label": "Chế độ soạn",
+        "rich": "Trực quan",
+        "markdown": "Markdown"
+      },
+      "rich": {
+        "help": "Chỉ giữ những gì trang này hiển thị được: tiêu đề, đậm, nghiêng, code, danh sách và liên kết https. Trong danh sách, Tab để thụt vào, Shift+Tab để lùi ra.",
+        "loading": "Đang tải trình soạn…",
+        "unavailable": "Không tải được trình soạn thảo. Bạn vẫn có thể sửa nội dung dạng Markdown.",
+        "toolbar": "Định dạng",
+        "bold": "Đậm (Ctrl/⌘+B)",
+        "italic": "Nghiêng (Ctrl/⌘+I)",
+        "code": "Code (Ctrl/⌘+E)",
+        "link": "Liên kết",
+        "heading": "Tiêu đề",
+        "subheading": "Tiêu đề phụ",
+        "bulletList": "Danh sách gạch đầu dòng",
+        "orderedList": "Danh sách đánh số",
+        "codeBlock": "Khối code",
+        "undo": "Hoàn tác (Ctrl/⌘+Z)",
+        "redo": "Làm lại (Ctrl/⌘+Shift+Z)",
+        "linkGroup": "Liên kết",
+        "linkUrl": "Địa chỉ liên kết (https)",
+        "linkApply": "Gắn liên kết",
+        "linkRemove": "Bỏ liên kết",
+        "linkInvalid": "Hãy nhập đầy đủ địa chỉ https://.",
+        "linkEdit": "Sửa liên kết"
+      }
+    },
+    "history": {
+      "actionSummary": "Lịch sử tóm tắt",
+      "actionNotes": "Lịch sử ghi chú",
+      "title": {
+        "summary": "Lịch sử tóm tắt",
+        "notes": "Lịch sử ghi chú"
+      },
+      "help": "Các phiên bản trước, mới nhất ở trên. Giữ tối đa 50 phiên bản; mọi người mở được meeting này đều đọc được.",
+      "empty": "Chưa có phiên bản nào. Mỗi lần sửa hoặc tạo lại nội dung sẽ lưu một phiên bản.",
+      "listLabel": "Các phiên bản",
+      "source": {
+        "ai": "Do AI viết",
+        "user": "Sửa bởi {{who}}",
+        "restore": "Khôi phục bởi {{who}}"
+      },
+      "unknownUser": "tài khoản đã bị xoá",
+      "previewTitle": "Phiên bản lúc {{when}}",
+      "previewTitleNoDate": "Phiên bản đã chọn",
+      "emptyText": "Phiên bản này để trống.",
+      "isCurrent": "Đây là nội dung hiện tại.",
+      "restore": "Khôi phục phiên bản này",
+      "confirm": "Khôi phục phiên bản này? Nội dung hiện tại vẫn nằm trong lịch sử nên bạn có thể quay lại.",
+      "confirmAction": "Khôi phục",
+      "restoring": "Đang khôi phục…",
+      "restored": "Đã khôi phục phiên bản.",
+      "errors": {
+        "changed": "Có người vừa sửa nội dung này. Hãy đóng lịch sử, xem nội dung mới nhất rồi thử lại.",
+        "gone": "Phiên bản này không còn trong lịch sử.",
+        "failed": "Đã có lỗi xảy ra. Hãy thử lại."
+      }
     }
   },
   "chat": {

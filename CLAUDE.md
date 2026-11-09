@@ -342,7 +342,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   run inside the service transaction (holds a connection and the row lock, ≤ ~2 min with retries);
   the avatar map is committed before the profile UPDATE (a failed UPDATE leaves an unreferenced
   2 MB file); deleting a v1 (`r2`/`supabase`) meeting is a Drive no-op until ARC-18 copies files.
-- **Editing summary / notes (PRO-06, part 6a; 6b = rich-text editor + history UI):**
+- **Editing summary / notes (PRO-06; 6a API + history, 6b web editor + history UI, §0.10):**
   `PATCH /meetings/{id}/content {field: summary|notes, content, baseHash}` (editor+, `done`
   meetings only else 409, `baseHash` = sha-256 hex of the UTF-8 text the edit started from, NULL =
   empty — a different current text → 409 `content_changed`; ≤ 20 000 / 200 000 chars (= the AI
@@ -356,7 +356,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   new text; restore writes a `restore` row; the 50 newest per meeting + field are kept).
   `GET /meetings/{id}` adds `summary_edited` / `notes_edited`: the newest version is a person's
   (`user`/`restore`) and equals the current text (`domain.content.edited_by_person`), and
-  `summary_ai_links` / `notes_ai_links`: every https target found (in SQL) in an `ai` version of
+  `summary_ai_links` / `notes_ai_links`: every link target, in any spelling (`https:x`, a leading control character…; the web normalises them with `safeLinkHref`), found in SQL in an `ai` version of
   that field — those links stay text even after a person's edit or a restore of AI text. App role: SELECT under RLS
   (`can_access_meeting(...,'viewer')`); service: SELECT/INSERT/DELETE; worker: none (worker
   re-processing writes no version). `GET /meetings/{id}/content-versions?field=` (no text,
@@ -861,7 +861,27 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `notes_edited`, PRO-06; AI text can be steered by what was said in the meeting, so an AI link is
   never clickable, nor any target in `*_ai_links`): `https:` without credentials (`safeLinkHref`), host shown next to the text,
   `target=_blank rel="noopener noreferrer nofollow"`, "opens in a new tab" for screen readers.
-  **Chat answers never pass `links`.** Switching the detail tab with an unsaved draft asks first. Line rules are
+  **Chat answers never pass `links`.** Switching the detail tab with an unsaved draft asks first.
+  **Rich-text editing (PRO-06 6b):** `components/meeting/RichTextEditor.tsx` (Tiptap 3.31.4, pinned;
+  lazy chunk loaded only when Edit opens — a failed load falls back to the Markdown mode) edits the
+  same Markdown draft as the Markdown mode (switch remembered in `localStorage`
+  `ricotdin-editor-mode`). Its schema = what `lib/markdown.ts` renders (headings h3/h4, bold,
+  italic, code, code blocks, lists, https links; one mark per piece of text, `excludes: '_'`);
+  `lib/editor/richDoc.ts` reads Markdown **through `parseMarkdown`** and writes it back with
+  escapes (`\*`, `` \` ``, `\[`, `\\`, `~` and a final `!` always, `_` where it could open formatting —
+  ASCII word rule like the parser —, block markers at a line start) — `lib/markdown.ts` now reads
+  `\` + punctuation as that character. Each inline run is checked: the page must show exactly the
+  links the editor had, else it is written as plain text; link targets with `(`/`)` stay text. The
+  editor opens with `editorOptions`: every link of a text still written by the AI and every
+  `*_ai_links` target opens as plain text, so an edit never turns an AI link into a clickable one;
+  autolink is off. A nested list takes its parent list's type (plugin `SameListType`). Opening the
+  editor rewrites the text (`normalizeMarkdown`); that alone is not a change (`isDraftChanged`).
+  Tested property: the page shows the same thing before and after a round trip. Never enable
+  Tiptap's `injectCSS` or inline styles (CSP `style-src 'self'`), nor TextStyle / Color / Highlight /
+  TextAlign (they write `style` attributes); never add an image node or an HTML mode. History drawer `components/meeting/VersionHistory.tsx` (`Modal variant="drawer"`):
+  every reader of a `done` meeting; preview through `Markdown` (`links` only for `user`/`restore`
+  versions, `*_ai_links` blocked); Restore = owner/editor, in-place confirm, `baseHash` of the
+  shown text. Owner decisions 2026-11-09: no per-version delete; usernames shown to viewers. Line rules are
   plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep
   the timing tests. The `/media` src goes through `mediaSrc` (API origin + `/media` only); the
   failed card shows only localized text, not `error_message`. Regenerate (owner, `done`) and "Process again" (owner,

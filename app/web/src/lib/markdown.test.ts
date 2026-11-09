@@ -205,3 +205,36 @@ describe('links the AI wrote stay text (PRO-06 review)', () => {
     ])
   })
 })
+
+describe('backslash escapes (PRO-06 6b: text written by the rich editor)', () => {
+  it('shows an escaped character as itself, never as formatting', () => {
+    expect(parseInline('2\\*3\\*4 \\`x\\` \\[a](https://a.test) \\_b\\_ \\~\\~c\\~\\~')).toEqual([
+      { kind: 'text', text: '2*3*4 `x` [a](https://a.test) _b_ ~~c~~' },
+    ])
+  })
+
+  it('reads a double backslash as one and keeps other backslashes', () => {
+    expect(parseInline('C:\\\\temp \\q \\\\*not em*')).toEqual([
+      { kind: 'text', text: 'C:\\temp \\q \\' },
+      { kind: 'em', text: 'not em' },
+    ])
+  })
+
+  it('keeps escaped block markers as text', () => {
+    expect(parseMarkdown('\\# a\n\n\\- b\n\n1\\. c\n\n\\> d')).toEqual([
+      { kind: 'paragraph', inlines: [{ kind: 'text', text: '# a' }] },
+      { kind: 'paragraph', inlines: [{ kind: 'text', text: '- b' }] },
+      { kind: 'paragraph', inlines: [{ kind: 'text', text: '1. c' }] },
+      { kind: 'paragraph', inlines: [{ kind: 'text', text: '> d' }] },
+    ])
+  })
+})
+
+describe('safeLinkHref accepts printable ASCII only (PRO-06 6b security review)', () => {
+  it('refuses targets with control, space-like or non-ASCII characters, so the API and the page agree', () => {
+    for (const raw of ['https://evil.example/a\u0085b', 'https://evil.example/a\u200bb', '\u0001https://evil.example/', 'https://ví-dụ.vn/']) {
+      expect(safeLinkHref(raw)).toBeNull()
+    }
+    expect(safeLinkHref('https://xn--v-du-0ra7a.vn/a%C3%A9')).toBe('https://xn--v-du-0ra7a.vn/a%C3%A9')
+  })
+})

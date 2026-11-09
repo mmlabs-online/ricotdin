@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/errors'
-import { canEditContent, contentHash, editErrorKey, isDirty } from './edit'
+import { normalizeMarkdown } from '../editor/richDoc'
+import { canEditContent, contentHash, editErrorKey, editorMode, isDirty, isDraftChanged } from './edit'
 
 describe('contentHash (PRO-06, same as the API content_hash)', () => {
   it('is the sha-256 hex of the UTF-8 text; null is empty', async () => {
@@ -42,5 +43,34 @@ describe('editErrorKey', () => {
     expect(editErrorKey(e(429))).toBe('detail.errors.rateLimited')
     expect(editErrorKey(e(0, 'network'))).toBe('detail.errors.network')
     expect(editErrorKey(new Error('x'))).toBe('detail.edit.errors.failed')
+  })
+})
+
+const AI = { links: false }
+
+describe('isDraftChanged (PRO-06 6b)', () => {
+  it('ignores the rewrite the rich editor makes of an unchanged text', () => {
+    const ai = '# Plan\n* a\n* b\n\nline one\nline two'
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, AI), AI)).toBe(false)
+    expect(isDraftChanged(ai, ai, AI)).toBe(false)
+    expect(isDraftChanged(null, '', AI)).toBe(false)
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, AI) + 'x', AI)).toBe(true)
+    expect(isDraftChanged(null, 'x', AI)).toBe(true)
+  })
+})
+
+describe('editorMode', () => {
+  it('is rich unless markdown was chosen', () => {
+    expect(editorMode('markdown')).toBe('markdown')
+    expect(editorMode('rich')).toBe('rich')
+    expect(editorMode(null)).toBe('rich')
+    expect(editorMode('html')).toBe('rich')
+  })
+})
+
+describe('isDraftChanged in the Markdown mode', () => {
+  it('counts every typed change, also one that equals the rich rewrite', () => {
+    const ai = 'line one\nline two'
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, { links: false }), { links: false }, false)).toBe(true)
   })
 })

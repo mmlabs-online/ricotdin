@@ -810,10 +810,22 @@ def test_pro06_long_ai_notes_can_be_edited(client: TestClient, world: dict[str, 
 def test_pro06_links_the_ai_wrote_stay_listed_after_an_edit(
     client: TestClient, world: dict[str, Any]
 ) -> None:
-    ai = "Read [this](https://evil.test/x) and [that](http://plain.test)"
+    ai = (
+        "Read [this](https://evil.test/x) and [that](http://plain.test) "
+        "[a](https:evil.test/a) [b](https:\\\\evil.test/b) [c](\x01https://evil.test/c)"
+    )
     mid = _notes_meeting(world, notes=ai)
     assert _edit(client, "b", mid, ai + " (typo fixed)", ai).status_code == 200
     got = client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()
     assert got["notes_edited"] is True
-    assert got["notes_ai_links"] == ["https://evil.test/x"]  # never clickable in the web
+    # every target, in any spelling: the web normalises them (never clickable)
+    assert sorted(got["notes_ai_links"]) == sorted(
+        [
+            "https://evil.test/x",
+            "http://plain.test",
+            "https:evil.test/a",
+            "https:\\\\evil.test/b",
+            "\x01https://evil.test/c",
+        ]
+    )
     assert got["summary_ai_links"] == []

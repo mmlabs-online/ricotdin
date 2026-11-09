@@ -27,6 +27,9 @@ export function blockedLinkSet(raw: readonly string[] | undefined): ReadonlySet<
 
 /** An `https:` URL without credentials, normalised; anything else → null (stays text). */
 export function safeLinkHref(raw: string): string | null {
+  // Printable ASCII only: the API lists AI link targets with a Postgres regex, whose idea of
+  // whitespace may differ from ours (security review of PRO-06 6b). IDN hosts work as xn--.
+  if (!/^[!-~]+$/.test(raw)) return null
   let url: URL
   try {
     url = new URL(raw)
@@ -49,10 +52,12 @@ export type Block =
 const MAX_INPUT = 200_000
 const MAX_DEPTH = 2
 
+// A backslash before punctuation shows that character as itself (CommonMark), so text written by
+// the rich editor (PRO-06 6b, `lib/editor/richDoc.ts`) is never read as formatting.
 // Every inner part is bounded (and paragraphs are capped below), so text full of stray `**` or
 // `[` cannot make the scan quadratic on a long paragraph.
 const INLINE =
-  /!\[([^\]]{0,300})\]\([^)\s]{0,2000}\)|\[([^\]]{1,300})\]\(([^)\s]{0,2000})\)|`([^`]{1,300})`|\*\*(\S(?:[^*]{0,300}?\S)?)\*\*|__(\S(?:[^_]{0,300}?\S)?)__|~~([^~]{1,300}?)~~|(?<![\w*])\*(\S(?:[^*]{0,300}?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]{0,300}?\S)?)_(?!\w)/g
+  /\\([\\`*_[\]~#>+\-.()!])|!\[([^\]]{0,300})\]\([^)\s]{0,2000}\)|\[([^\]]{1,300})\]\(([^)\s]{0,2000})\)|`([^`]{1,300})`|\*\*(\S(?:[^*]{0,300}?\S)?)\*\*|__(\S(?:[^_]{0,300}?\S)?)__|~~([^~]{1,300}?)~~|(?<![\w*])\*(\S(?:[^*]{0,300}?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]{0,300}?\S)?)_(?!\w)/g
 const MAX_PARAGRAPH = 20_000
 
 export function parseInline(source: string, opts: MarkdownOptions = {}): Inline[] {
@@ -67,10 +72,11 @@ export function parseInline(source: string, opts: MarkdownOptions = {}): Inline[
   for (const m of source.matchAll(INLINE)) {
     const index = m.index ?? 0
     push('text', source.slice(at, index))
-    const [, image, link, target, code, strong1, strong2, strike, em1, em2] = m
+    const [, escaped, image, link, target, code, strong1, strong2, strike, em1, em2] = m
     const safe = link !== undefined && opts.links ? safeLinkHref(target ?? '') : null
     const href = safe && !opts.blocked?.has(safe) ? safe : null
-    if (image !== undefined) push('text', image)
+    if (escaped !== undefined) push('text', escaped)
+    else if (image !== undefined) push('text', image)
     else if (link !== undefined && href) out.push({ kind: 'link', text: link, href, host: new URL(href).hostname })
     else if (link !== undefined) push('text', link)
     else if (code !== undefined) push('code', code)

@@ -136,13 +136,13 @@ As a user, I want keyword + semantic search across all meetings for quick lookup
 ---
 
 ### PRO-06 — Edit notes with history
-**Priority:** Medium | **Status:** ⚠️ Partial (6a done: API, history, Markdown editor; 6b: rich-text editor + history UI)
+**Priority:** Medium | **Status:** ✅ Done (6a: API, history, Markdown editor, PR #83; 6b: rich-text editor + history UI)
 
 **User Story**  
 As a meeting owner or editor, I want to edit the summary and notes in a rich-text editor and get earlier versions back so that the meeting record says what was really decided.
 
 **Context**
-The AI summary and notes are read-only today; a wrong decision or a misheard name stays in the record and in exports. Owner decisions 2026-11-09: option C (rich text + version history) over A (Markdown box) and B (A + an "edited" flag); formatting = the current safe set (headings, bold, italic, code, lists) **plus links**; keep the 50 newest versions, owner + editor restore, viewers read the history; one code in two PRs. Folders were done earlier; tags (PRO-09), whole-meeting export (PRO-10) and speaker names (PRO-04) are their own codes.
+The AI summary and notes are read-only today; a wrong decision or a misheard name stays in the record and in exports. Owner decisions 2026-11-09: option C (rich text + version history) over A (Markdown box) and B (A + an "edited" flag); formatting = the current safe set (headings, bold, italic, code, lists) **plus links**; keep the 50 newest versions, owner + editor restore, viewers read the history; one code in two PRs. Owner decisions 2026-11-09 (after 6a): single versions can **not** be deleted (only deleting the meeting removes its history); the editor's username is **shown** to everyone who can read the meeting, viewers included. Folders were done earlier; tags (PRO-09), whole-meeting export (PRO-10) and speaker names (PRO-04) are their own codes.
 
 **Use Cases**
 1. An editor fixes a wrong decision in the notes and saves; everyone with access sees the fix.
@@ -191,7 +191,7 @@ The AI summary and notes are read-only today; a wrong decision or a misheard nam
 
 **Key files (expected)**
 - `app/api/migrations/versions/0007_note_versions.py`, `app/api/app/domain/content.py`, `app/api/app/routers/content_versions.py` (or `meetings.py`), `app/api/app/routers/meetings.py` (regenerate), `app/api/scripts/migrate_from_supabase.py` (`V2_ONLY_TABLES`)
-- `app/web/src/components/meeting/DetailPanels.tsx`, `app/web/src/components/meeting/NotesEditor.tsx`, `app/web/src/components/meeting/VersionHistory.tsx`, `app/web/src/lib/markdown.ts`, `app/web/src/api/meetingDetail.ts`, locales
+- `app/web/src/components/meeting/DetailPanels.tsx`, `app/web/src/components/meeting/ContentEditor.tsx`, `app/web/src/components/meeting/RichTextEditor.tsx`, `app/web/src/lib/editor/richDoc.ts`, `app/web/src/lib/meetings/history.ts`, `app/web/src/components/meeting/VersionHistory.tsx`, `app/web/src/lib/markdown.ts`, `app/web/src/api/meetingDetail.ts`, locales
 
 ---
 

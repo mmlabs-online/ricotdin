@@ -1170,8 +1170,8 @@
       "action": "Edit",
       "editing": "Editing: {{what}}",
       "label": {
-        "summary": "Summary text (Markdown)",
-        "notes": "Notes text (Markdown)"
+        "summary": "Summary text",
+        "notes": "Notes text"
       },
       "preview": "Preview",
       "previewLabel": "Preview",
@@ -1191,7 +1191,66 @@
       "actionSummary": "Edit summary",
       "actionNotes": "Edit notes",
       "latestHelp": "This is the text saved in the meantime. Your draft is still in the editor.",
-      "useLatest": "Save over the latest text"
+      "useLatest": "Save over the latest text",
+      "mode": {
+        "label": "Editing mode",
+        "rich": "Rich text",
+        "markdown": "Markdown"
+      },
+      "rich": {
+        "help": "Keeps only what this page can show: headings, bold, italic, code, lists and https links. In a list, Tab indents and Shift+Tab outdents.",
+        "loading": "Loading the editor…",
+        "unavailable": "The rich-text editor could not be loaded. You can edit the Markdown text instead.",
+        "toolbar": "Formatting",
+        "bold": "Bold (Ctrl/⌘+B)",
+        "italic": "Italic (Ctrl/⌘+I)",
+        "code": "Code (Ctrl/⌘+E)",
+        "link": "Link",
+        "heading": "Heading",
+        "subheading": "Subheading",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "codeBlock": "Code block",
+        "undo": "Undo (Ctrl/⌘+Z)",
+        "redo": "Redo (Ctrl/⌘+Shift+Z)",
+        "linkGroup": "Link",
+        "linkUrl": "Link address (https)",
+        "linkApply": "Apply link",
+        "linkRemove": "Remove link",
+        "linkInvalid": "Enter a full https:// address.",
+        "linkEdit": "Edit link"
+      }
+    },
+    "history": {
+      "actionSummary": "Summary history",
+      "actionNotes": "Notes history",
+      "title": {
+        "summary": "Summary history",
+        "notes": "Notes history"
+      },
+      "help": "Earlier versions, newest first. Up to 50 are kept, and everyone who can open this meeting can read them.",
+      "empty": "No earlier versions yet. One is saved each time the text is edited or regenerated.",
+      "listLabel": "Versions",
+      "source": {
+        "ai": "Written by the AI",
+        "user": "Edited by {{who}}",
+        "restore": "Restored by {{who}}"
+      },
+      "unknownUser": "a deleted account",
+      "previewTitle": "Version of {{when}}",
+      "previewTitleNoDate": "Selected version",
+      "emptyText": "This version was empty.",
+      "isCurrent": "This is the current text.",
+      "restore": "Restore this version",
+      "confirm": "Restore this version? The current text stays in the history, so you can switch back.",
+      "confirmAction": "Restore",
+      "restoring": "Restoring…",
+      "restored": "Version restored.",
+      "errors": {
+        "changed": "Someone changed this text in the meantime. Close the history, check the latest text, then try again.",
+        "gone": "This version is no longer in the history.",
+        "failed": "Something went wrong. Try again."
+      }
     }
   },
   "chat": {
