@@ -340,11 +340,12 @@ def test_sec05_model_refusal_is_charged(
     client: TestClient, world: dict[str, Any], ai: Provider
 ) -> None:
     _queries(world, "a")
+    refunds = "SELECT count(*) FROM quota_ledger WHERE user_id = %s AND dedup_key LIKE '%%:refund'"
+    before = _sql(world["db"], refunds, world["a"])  # earlier tests share this user's ledger
     ai.refuse = True  # the model refuses the question itself (AIRefused)
     resp = _ask(client, "a", meetingId=str(_meeting(world, "a")))
     assert resp.json()["message"]["content"] == ANSWER_ERROR_REPLY and _left(world, "a") == 9
-    keys = _sql(world["db"], "SELECT dedup_key FROM quota_ledger WHERE user_id = %s", world["a"])
-    assert not any(k[0].endswith(":refund") for k in keys)
+    assert _sql(world["db"], refunds, world["a"]) == before  # no refund for this question
 
 
 def test_provider_rejection_of_the_request_is_refunded(
