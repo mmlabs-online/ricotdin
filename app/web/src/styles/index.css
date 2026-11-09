@@ -811,3 +811,14 @@ input, select, textarea {
   .return-to-app { font-size: 0; width: var(--control-height); padding: 0; justify-content: center; }
   .return-to-app svg { display: block; }
 }
+
+/* PRO-06: editing summary / notes, links in them */
+.content-editor { display: flex; flex-direction: column; gap: var(--space-3); }
+.content-editor-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.content-editor-field textarea { width: 100%; min-height: 12rem; font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.6; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md, 8px); background: var(--surface, transparent); color: inherit; resize: vertical; }
+.content-editor-field textarea[aria-invalid="true"] { border-color: var(--danger, #b42318); }
+.content-editor-preview { border: 1px dashed var(--border-strong); border-radius: var(--radius-md, 8px); padding: var(--space-3); }
+.md-link { text-decoration: underline; overflow-wrap: anywhere; }
+.md-link-host { margin-inline-start: 0.35em; font-size: 0.85em; opacity: 0.8; }
+.md-link-host::before { content: "("; }
+.md-link-host::after { content: ")"; }

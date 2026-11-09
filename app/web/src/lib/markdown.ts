@@ -1,10 +1,30 @@
 // A small markdown reader for AI-written text (meeting notes, chat answers; ARC-13b). Pure.
 // It understands only headings, paragraphs, lists, fenced code and inline bold / italic / code.
-// Links and images become their text, and HTML stays text: the text comes from an AI reading
-// a transcript, so it can be steered by whoever spoke in the meeting (prompt injection). It must
-// never fetch a remote image or offer a link (CLAUDE.md §0.8).
+// Images become their text and HTML stays text: the text comes from an AI reading a transcript,
+// so it can be steered by whoever spoke in the meeting (prompt injection). It never fetches a
+// remote image. Links stay text too (chat, CLAUDE.md §0.8) unless the caller allows them (summary
+// and notes, which people can edit, PRO-06): then only `https:` links without credentials.
 
-export type Inline = { kind: 'text' | 'strong' | 'em' | 'code'; text: string }
+export type Inline =
+  | { kind: 'text' | 'strong' | 'em' | 'code'; text: string }
+  | { kind: 'link'; text: string; href: string; host: string }
+
+/** Summary / notes may carry links people typed (PRO-06); chat answers never do (§0.8). */
+export interface MarkdownOptions {
+  links?: boolean
+}
+
+/** An `https:` URL without credentials, normalised; anything else → null (stays text). */
+export function safeLinkHref(raw: string): string | null {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || !url.hostname) return null
+  return url.href
+}
 export interface ListItem {
   depth: number
   inlines: Inline[]
@@ -21,12 +41,12 @@ const MAX_DEPTH = 2
 // Every inner part is bounded (and paragraphs are capped below), so text full of stray `**` or
 // `[` cannot make the scan quadratic on a long paragraph.
 const INLINE =
-  /!\[([^\]]{0,300})\]\([^)\s]{0,2000}\)|\[([^\]]{1,300})\]\([^)\s]{0,2000}\)|`([^`]{1,300})`|\*\*(\S(?:[^*]{0,300}?\S)?)\*\*|__(\S(?:[^_]{0,300}?\S)?)__|~~([^~]{1,300}?)~~|(?<![\w*])\*(\S(?:[^*]{0,300}?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]{0,300}?\S)?)_(?!\w)/g
+  /!\[([^\]]{0,300})\]\([^)\s]{0,2000}\)|\[([^\]]{1,300})\]\(([^)\s]{0,2000})\)|`([^`]{1,300})`|\*\*(\S(?:[^*]{0,300}?\S)?)\*\*|__(\S(?:[^_]{0,300}?\S)?)__|~~([^~]{1,300}?)~~|(?<![\w*])\*(\S(?:[^*]{0,300}?\S)?)\*(?![\w*])|(?<!\w)_(\S(?:[^_]{0,300}?\S)?)_(?!\w)/g
 const MAX_PARAGRAPH = 20_000
 
-export function parseInline(source: string): Inline[] {
+export function parseInline(source: string, opts: MarkdownOptions = {}): Inline[] {
   const out: Inline[] = []
-  const push = (kind: Inline['kind'], text: string) => {
+  const push = (kind: 'text' | 'strong' | 'em' | 'code', text: string) => {
     if (!text) return
     const last = out[out.length - 1]
     if (kind === 'text' && last?.kind === 'text') last.text += text
@@ -36,8 +56,10 @@ export function parseInline(source: string): Inline[] {
   for (const m of source.matchAll(INLINE)) {
     const index = m.index ?? 0
     push('text', source.slice(at, index))
-    const [, image, link, code, strong1, strong2, strike, em1, em2] = m
+    const [, image, link, target, code, strong1, strong2, strike, em1, em2] = m
+    const href = link !== undefined && opts.links ? safeLinkHref(target ?? '') : null
     if (image !== undefined) push('text', image)
+    else if (link !== undefined && href) out.push({ kind: 'link', text: link, href, host: new URL(href).hostname })
     else if (link !== undefined) push('text', link)
     else if (code !== undefined) push('code', code)
     else if (strong1 !== undefined || strong2 !== undefined) push('strong', strong1 ?? strong2 ?? '')
@@ -105,14 +127,14 @@ function fenceOf(line: string): string | null {
   return t.startsWith('```') ? '```' : t.startsWith('~~~') ? '~~~' : null
 }
 
-export function parseMarkdown(source: string): Block[] {
+export function parseMarkdown(source: string, opts: MarkdownOptions = {}): Block[] {
   const lines = source.slice(0, MAX_INPUT).replace(/\r\n?/g, '\n').split('\n')
   const blocks: Block[] = []
   let paragraph: string[] = []
   let list: Extract<Block, { kind: 'list' }> | null = null
 
   const flush = () => {
-    if (paragraph.length) blocks.push({ kind: 'paragraph', inlines: parseInline(paragraph.join(' ').slice(0, MAX_PARAGRAPH)) })
+    if (paragraph.length) blocks.push({ kind: 'paragraph', inlines: parseInline(paragraph.join(' ').slice(0, MAX_PARAGRAPH), opts) })
     paragraph = []
     list = null
   }
@@ -134,7 +156,7 @@ export function parseMarkdown(source: string): Block[] {
     const heading = readHeading(line)
     if (heading) {
       flush()
-      blocks.push({ kind: 'heading', level: heading.level <= 2 ? 3 : 4, inlines: parseInline(heading.text) })
+      blocks.push({ kind: 'heading', level: heading.level <= 2 ? 3 : 4, inlines: parseInline(heading.text, opts) })
       continue
     }
     const item = readItem(line)
@@ -145,7 +167,7 @@ export function parseMarkdown(source: string): Block[] {
         blocks.push(list)
       }
       const width = line.slice(0, item.indent).replace(/\t/g, '  ').length
-      list.items.push({ depth: Math.min(MAX_DEPTH, Math.floor(width / 2)), inlines: parseInline(item.text) })
+      list.items.push({ depth: Math.min(MAX_DEPTH, Math.floor(width / 2)), inlines: parseInline(item.text, opts) })
       continue
     }
     list = null

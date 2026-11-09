@@ -238,3 +238,25 @@ export function useAskMeeting(meetingId: string) {
     },
   })
 }
+
+export type ContentField = 'summary' | 'notes'
+
+/** Save the summary or the notes (PRO-06). `baseHash` = hash of the text the edit started from:
+ *  the API answers 409 `content_changed` when someone saved in the meantime. Not optimistic. */
+export function useEditContent(meetingId: string) {
+  const fetchApi = useFetchApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationKey: [...DETAIL_EDIT, 'content'],
+    mutationFn: (v: { field: ContentField; content: string; baseHash: string }) =>
+      apiJson<{ field: ContentField; content: string; contentHash: string }>(fetchApi, `/meetings/${enc(meetingId)}/content`, {
+        method: 'PATCH',
+        body: v,
+      }),
+    onSuccess: (r) =>
+      qc.setQueryData<Meeting>(detailKeys.meeting(meetingId), (m) => (m ? { ...m, [r.field]: r.content } : m)),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: detailKeys.meeting(meetingId), exact: true })
+    },
+  })
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdown } from './markdown'
+import { parseInline, parseMarkdown, safeLinkHref } from './markdown'
 
 describe('parseInline', () => {
   it('keeps plain text', () => {
@@ -159,5 +159,39 @@ describe('parseMarkdown', () => {
 
   it('a link with a space in its target stays text with its brackets', () => {
     expect(parseInline('[a](b c)')).toEqual([{ kind: 'text', text: '[a](b c)' }])
+  })
+})
+
+describe('links in summary / notes (PRO-06)', () => {
+  it('keeps only https links, with their host, when links are allowed', () => {
+    expect(parseInline('see [the doc](https://docs.example.com/a?b=1) now', { links: true })).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'link', text: 'the doc', href: 'https://docs.example.com/a?b=1', host: 'docs.example.com' },
+      { kind: 'text', text: ' now' },
+    ])
+  })
+
+  it('never links other schemes, credentials or images', () => {
+    for (const src of ['[x](javascript:void0)', '[x](http://a.test)', '[x](data:text/html,hi)', '[x](https://u:p@a.test)', '[x](//a.test)']) {
+      expect(parseInline(src, { links: true })).toEqual([{ kind: 'text', text: 'x' }])
+    }
+    expect(parseInline('![pic](https://a.test/p.png)', { links: true })).toEqual([{ kind: 'text', text: 'pic' }])
+  })
+
+  it('chat and every other caller keep links as text (default)', () => {
+    expect(parseInline('[x](https://a.test)')).toEqual([{ kind: 'text', text: 'x' }])
+    expect(parseMarkdown('[x](https://a.test)')).toEqual([{ kind: 'paragraph', inlines: [{ kind: 'text', text: 'x' }] }])
+  })
+
+  it('passes the option through blocks', () => {
+    const [p] = parseMarkdown('- [x](https://a.test)', { links: true })
+    expect(p).toMatchObject({ kind: 'list', items: [{ inlines: [{ kind: 'link', host: 'a.test' }] }] })
+  })
+
+  it('safeLinkHref accepts https only and normalises', () => {
+    expect(safeLinkHref('https://A.test/x')).toBe('https://a.test/x')
+    expect(safeLinkHref('HTTPS://a.test')).toBe('https://a.test/')
+    expect(safeLinkHref('ftp://a.test')).toBeNull()
+    expect(safeLinkHref('not a url')).toBeNull()
   })
 })

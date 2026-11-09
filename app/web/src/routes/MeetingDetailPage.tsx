@@ -33,6 +33,7 @@ import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { Status } from '../components/ui/Status'
 import { canDelete, canMove, canRename, getMeetingRole } from '../lib/access/roles'
+import { canEditContent } from '../lib/meetings/edit'
 import type { Citation } from '../lib/chat/chat'
 import { downloadBlob, downloadIcs } from '../lib/media/download'
 import { meetingSeekPath, nearestSegment, parseSeekParam } from '../lib/media/seek'
@@ -113,6 +114,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const folderList = folders.data ?? []
   const role = getMeetingRole(meeting, me, folderList)
   const canEdit = canRename(role)
+  const contentEdit = canEditContent(role, meeting.status) ? { meetingId: meeting.id } : null // PRO-06
   const done = meeting.status === 'done'
   const audio = audioState(meeting)
   const wantAudio = audio === 'available' && meeting.status !== 'pending'
@@ -430,9 +432,10 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   summary={meeting.summary}
                   model={modelLabel(meeting.generation_provider, meeting.generation_model)}
                   regenerate={{ visible: canRegenerate(meeting, role), busy: regenerate.isPending, onClick: () => !regenerate.isPending && setDialog('regenerate') }}
+                  edit={contentEdit}
                 />
               )}
-              {tab === 'notes' && <NotesPanel notes={meeting.notes} />}
+              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} />}
               {tab === 'todos' && (
                 <TodosPanel
                   todos={todos.data ?? []}

@@ -1073,7 +1073,7 @@
       "busy": "Regenerating…",
       "done": "Summary and notes regenerated.",
       "confirmTitle": "Regenerate the summary and notes?",
-      "confirmBody": "The AI rewrites the summary and notes from the transcript. This uses audio minutes from your balance. To-dos and calendar suggestions stay as they are.",
+      "confirmBody": "The AI rewrites the summary and notes from the transcript. The current text is kept in the history. This uses audio minutes from your balance. To-dos and calendar suggestions stay as they are.",
       "confirm": "Regenerate"
     },
     "audio": {
@@ -1164,6 +1164,30 @@
       "forbidden": "You do not have permission to do this.",
       "network": "No connection to the server. Check your network and try again.",
       "generic": "Something went wrong. Please try again."
+    },
+    "edit": {
+      "action": "Edit",
+      "editing": "Editing: {{what}}",
+      "label": {
+        "summary": "Summary text (Markdown)",
+        "notes": "Notes text (Markdown)"
+      },
+      "preview": "Preview",
+      "write": "Back to editing",
+      "previewLabel": "Preview",
+      "markdownHelp": "Markdown: # heading, **bold**, *italic*, - list, [text](https://…)",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved.",
+      "leaveConfirm": "Leave and lose the changes you have not saved?",
+      "discardConfirm": "Discard the changes you have not saved?",
+      "errors": {
+        "changed": "Someone changed this text in the meantime. Copy your changes, reload the page and edit again.",
+        "notDone": "This meeting cannot be edited until it has finished processing.",
+        "characters": "The text contains characters that cannot be saved. Remove them and try again.",
+        "invalid": "The text could not be saved. It may be too long.",
+        "failed": "The changes could not be saved. Try again."
+      }
     }
   },
   "chat": {

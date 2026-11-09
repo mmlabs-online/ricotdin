@@ -102,6 +102,7 @@ V2_ONLY_TABLES = {
     "drive_config",
     "storage_objects",
     "scheduler_runs",
+    "meeting_note_versions",  # PRO-06: v2-only version history
 }
 # v2-only tables with nothing to copy (``users`` is filled from Supabase ``auth.users``).
 NOT_COPIED_TABLES = V2_ONLY_TABLES - {"users"}

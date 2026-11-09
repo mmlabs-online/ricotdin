@@ -64,6 +64,7 @@ from app.services.ai.analysis import (
 from app.services.ai.model_lock import lock_model
 from app.services.ai.prompts import load_prompt
 from app.services.ai.service import AIService, UsageContext
+from app.services.note_versions import record_versions
 from app.services.platform import Platform, get_platform
 from app.services.storage.base import StorageNotConfigured, UploadedFileMissing, UploadRejected
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
@@ -435,6 +436,12 @@ async def _regenerate(
         usage=UsageContext(mid, meeting["user_id"]),
     )  # fmt: skip
     async with db.role_transaction(SERVICE) as conn:
+        before = (
+            await conn.execute(
+                text("SELECT summary, notes FROM public.meetings WHERE id = :id FOR UPDATE"),
+                {"id": mid},
+            )
+        ).first()
         saved = (
             await conn.execute(
                 text(
@@ -448,6 +455,15 @@ async def _regenerate(
                 {"id": mid, "s": analysis.summary, "n": analysis.notes},
             )
         ).first()
+        if saved is not None and before is not None:  # the replaced text stays in the history
+            await record_versions(
+                conn, mid, "summary", current=before.summary, new=analysis.summary,
+                source="ai", editor=meeting["user_id"],  # regenerate is owner-only
+            )  # fmt: skip
+            await record_versions(
+                conn, mid, "notes", current=before.notes, new=analysis.notes,
+                source="ai", editor=meeting["user_id"],
+            )  # fmt: skip
     if saved is None:  # reprocessed or deleted while the AI was answering
         async with db.role_transaction(SERVICE) as conn:
             exists = (

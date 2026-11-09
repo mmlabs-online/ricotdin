@@ -1,5 +1,6 @@
 // Renders AI-written text (notes, chat answers) from lib/markdown.ts: React elements only, no
-// HTML, no links, no images (§0.8).
+// HTML, no images (§0.8). Links only with `links` (summary / notes, PRO-06): https only, the host
+// shown next to the text, opened in a new tab without referrer or opener. Chat never passes it.
 import { Fragment, useMemo } from 'react'
 import { parseMarkdown, type Inline, type ListItem } from '../lib/markdown'
 import { displayText } from '../lib/text'
@@ -12,6 +13,13 @@ function Inlines({ items }: { items: Inline[] }) {
         if (i.kind === 'strong') return <strong key={n}>{text}</strong>
         if (i.kind === 'em') return <em key={n}>{text}</em>
         if (i.kind === 'code') return <code key={n}>{text}</code>
+        if (i.kind === 'link')
+          return (
+            <a key={n} href={i.href} target="_blank" rel="noopener noreferrer nofollow" className="md-link">
+              {text}
+              <span className="md-link-host">{displayText(i.host)}</span>
+            </a>
+          )
         return <Fragment key={n}>{text}</Fragment>
       })}
     </>
@@ -40,8 +48,8 @@ function List({ items, ordered }: { items: ListItem[]; ordered: boolean }) {
   )
 }
 
-export function Markdown({ source, className }: { source: string; className?: string }) {
-  const blocks = useMemo(() => parseMarkdown(source), [source])
+export function Markdown({ source, className, links = false }: { source: string; className?: string; links?: boolean }) {
+  const blocks = useMemo(() => parseMarkdown(source, { links }), [source, links])
   return (
     <div className={className ? `markdown ${className}` : 'markdown'}>
       {blocks.map((b, n) => {
