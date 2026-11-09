@@ -4,8 +4,9 @@
 // Pasted HTML goes through the same schema: images, scripts and unknown markup are dropped, links
 // keep only safe https targets. Tiptap's own <style> is not injected (CSP style-src 'self'): the
 // styles live in styles/index.css.
-import { useEffect, useId, useImperativeHandle, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
-import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react'
+import { useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { EditorContent, Extension, useEditor, useEditorState, type Editor } from '@tiptap/react'
+import { Plugin } from '@tiptap/pm/state'
 import Document from '@tiptap/extension-document'
 import Paragraph from '@tiptap/extension-paragraph'
 import Text from '@tiptap/extension-text'
@@ -17,10 +18,10 @@ import CodeBlock from '@tiptap/extension-code-block'
 import { BulletList, ListItem, ListKeymap, OrderedList } from '@tiptap/extension-list'
 import Link from '@tiptap/extension-link'
 import { UndoRedo } from '@tiptap/extensions'
-import { Bold as BoldIcon, Code as CodeIcon, Heading2, Heading3, Italic as ItalicIcon, Link as LinkIcon, List, ListOrdered, Redo2, SquareCode, Undo2 } from 'lucide-react'
+import { Bold as BoldIcon, Code as CodeIcon, Heading3, Heading4, Italic as ItalicIcon, Link as LinkIcon, List, ListOrdered, Redo2, SquareCode, Undo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { docToMarkdown, markdownToDoc } from '../../lib/editor/richDoc'
-import { safeLinkHref } from '../../lib/markdown'
+import { safeLinkHref, type MarkdownOptions } from '../../lib/markdown'
 import { Button } from '../ui/Button'
 
 export interface RichTextHandle {
@@ -28,6 +29,31 @@ export interface RichTextHandle {
 }
 
 const isSafe = (url: string) => safeLinkHref(url) !== null
+
+const isList = (name: string | undefined) => name === 'bulletList' || name === 'orderedList'
+
+/** A list inside a list item takes the type of the list around it: the page nests one type per
+ *  list (lib/markdown.ts), so a numbered list inside bullets would fall apart there. */
+const SameListType = Extension.create({
+  name: 'sameListType',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        appendTransaction(trs, _old, state) {
+          if (!trs.some((t) => t.docChanged)) return null
+          const tr = state.tr
+          state.doc.descendants((node, pos, parent, index) => {
+            void index
+            if (!isList(node.type.name) || parent?.type.name !== 'listItem') return
+            const outer = state.doc.resolve(pos).node(-1)
+            if (isList(outer.type.name) && outer.type !== node.type) tr.setNodeMarkup(pos, outer.type)
+          })
+          return tr.docChanged ? tr : null
+        },
+      }),
+    ]
+  },
+})
 
 // One kind of formatting per piece of text, like the page renders it (`excludes: '_'`).
 const EXTENSIONS = [
@@ -45,7 +71,7 @@ const EXTENSIONS = [
   ListKeymap,
   Link.extend({ excludes: '_' }).configure({
     openOnClick: false,
-    autolink: true,
+    autolink: false, // typing after an AI's bare domain must not make it a link (security review L1)
     linkOnPaste: true,
     defaultProtocol: 'https',
     isAllowedUri: (url) => isSafe(url),
@@ -53,6 +79,7 @@ const EXTENSIONS = [
     HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: null },
   }),
   UndoRedo,
+  SameListType,
 ]
 
 function useToolbarState(editor: Editor) {
@@ -74,7 +101,23 @@ function useToolbarState(editor: Editor) {
   })
 }
 
-function Tool({ label, pressed, disabled, onClick, children }: { label: string; pressed?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+function Tool({
+  label,
+  pressed,
+  expanded,
+  controls,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  pressed?: boolean
+  expanded?: boolean
+  controls?: string
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
   return (
     <Button
       variant="ghost"
@@ -82,6 +125,8 @@ function Tool({ label, pressed, disabled, onClick, children }: { label: string; 
       aria-label={label}
       title={label}
       aria-pressed={pressed}
+      aria-expanded={expanded}
+      aria-controls={controls}
       aria-disabled={disabled || undefined}
       tabIndex={-1}
       onMouseDown={(e) => e.preventDefault()} // keep the editor's selection
@@ -107,11 +152,12 @@ function onToolbarKey(e: KeyboardEvent<HTMLDivElement>) {
   target?.focus()
 }
 
-function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
+function LinkForm({ id, editor, onDone }: { id: string; editor: Editor; onDone: () => void }) {
   const { t } = useTranslation()
   const current = editor.getAttributes('link').href
   const [url, setUrl] = useState(typeof current === 'string' ? current : 'https://')
-  const [invalid, setInvalid] = useState(false)
+  const [invalidN, setInvalidN] = useState(0) // a fresh alert node each time, so a repeat is announced
+  const invalid = invalidN > 0
   const inputRef = useRef<HTMLInputElement>(null)
   const errId = useId()
   useEffect(() => {
@@ -122,7 +168,7 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   function apply() {
     const href = safeLinkHref(url.trim())
     if (!href) {
-      setInvalid(true)
+      setInvalidN((n) => n + 1)
       inputRef.current?.focus()
       return
     }
@@ -135,6 +181,7 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
 
   return (
     <div
+      id={id}
       className="rich-link-form"
       role="group"
       aria-label={t('detail.edit.rich.linkGroup')}
@@ -144,7 +191,8 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
           e.stopPropagation() // closes the link form, not the editor
           editor.commands.focus()
           onDone()
-        } else if (e.key === 'Enter') {
+        } else if (e.key === 'Enter' && e.target === inputRef.current) {
+          // Enter on Remove / Cancel does what that button says
           e.preventDefault()
           apply()
         }
@@ -159,7 +207,7 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
           value={url}
           onChange={(e) => {
             setUrl(e.target.value)
-            setInvalid(false)
+            setInvalidN(0)
           }}
           aria-invalid={invalid || undefined}
           aria-describedby={invalid ? errId : undefined}
@@ -186,7 +234,7 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
         {t('common.cancel')}
       </Button>
       {invalid && (
-        <p id={errId} className="auth-error" role="alert">
+        <p id={errId} key={invalidN} className="auth-error" role="alert">
           {t('detail.edit.rich.linkInvalid')}
         </p>
       )}
@@ -194,7 +242,7 @@ function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   )
 }
 
-function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
+function Toolbar({ editor, linking, linkFormId, onLink }: { editor: Editor; linking: boolean; linkFormId: string; onLink: () => void }) {
   const { t } = useTranslation()
   const s = useToolbarState(editor)
   const run = (f: (c: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>) => () => void f(editor.chain().focus()).run()
@@ -209,15 +257,15 @@ function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
       <Tool label={t('detail.edit.rich.code')} pressed={s.code} onClick={run((c) => c.toggleCode())}>
         <CodeIcon size={16} aria-hidden="true" />
       </Tool>
-      <Tool label={t('detail.edit.rich.link')} pressed={s.link} onClick={onLink}>
+      <Tool label={t(s.link ? 'detail.edit.rich.linkEdit' : 'detail.edit.rich.link')} expanded={linking} controls={linking ? linkFormId : undefined} onClick={onLink}>
         <LinkIcon size={16} aria-hidden="true" />
       </Tool>
       <span className="rich-sep" aria-hidden="true" />
       <Tool label={t('detail.edit.rich.heading')} pressed={s.h3} onClick={run((c) => c.toggleHeading({ level: 3 }))}>
-        <Heading2 size={16} aria-hidden="true" />
+        <Heading3 size={16} aria-hidden="true" />
       </Tool>
       <Tool label={t('detail.edit.rich.subheading')} pressed={s.h4} onClick={run((c) => c.toggleHeading({ level: 4 }))}>
-        <Heading3 size={16} aria-hidden="true" />
+        <Heading4 size={16} aria-hidden="true" />
       </Tool>
       <Tool label={t('detail.edit.rich.bulletList')} pressed={s.bullet} onClick={run((c) => c.toggleBulletList())}>
         <List size={16} aria-hidden="true" />
@@ -241,6 +289,7 @@ function Toolbar({ editor, onLink }: { editor: Editor; onLink: () => void }) {
 
 export default function RichTextEditor({
   initial,
+  options,
   onChange,
   label,
   describedBy,
@@ -250,6 +299,8 @@ export default function RichTextEditor({
 }: {
   /** Markdown the editor opens with (read once). */
   initial: string
+  /** how the page renders this text (AI text / blocked targets open as plain text) */
+  options: MarkdownOptions
   onChange: (markdown: string) => void
   label: string
   describedBy?: string
@@ -258,30 +309,32 @@ export default function RichTextEditor({
   ref?: Ref<RichTextHandle>
 }) {
   const [linking, setLinking] = useState(false)
+  const linkFormId = useId()
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
   }, [onChange])
   const toolbarRef = useRef<HTMLDivElement>(null)
 
+  // Tiptap compares options by reference on every render and re-applies them when one differs:
+  // the document is built once, and the accessibility attributes change only with their props.
+  const [content] = useState(() => markdownToDoc(initial, options))
+  const editorProps = useMemo(() => {
+    const attributes: Record<string, string> = { class: 'rich-editor-content markdown', role: 'textbox', 'aria-multiline': 'true', 'aria-label': label }
+    if (describedBy) attributes['aria-describedby'] = describedBy
+    if (invalid) attributes['aria-invalid'] = 'true'
+    return { attributes }
+  }, [label, describedBy, invalid])
   const editor = useEditor({
     extensions: EXTENSIONS,
-    content: markdownToDoc(initial),
+    content,
     injectCSS: false,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     autofocus: autoFocus ? 'start' : false,
-    editorProps: { attributes: { class: 'rich-editor-content', role: 'textbox', 'aria-multiline': 'true' } },
+    editorProps,
     onUpdate: ({ editor: e }) => onChangeRef.current(docToMarkdown(e.getJSON())),
   })
-
-  // Accessible name, description and error state follow the props.
-  useEffect(() => {
-    const attributes: Record<string, string> = { class: 'rich-editor-content', role: 'textbox', 'aria-multiline': 'true', 'aria-label': label }
-    if (describedBy) attributes['aria-describedby'] = describedBy
-    if (invalid) attributes['aria-invalid'] = 'true'
-    editor.setOptions({ editorProps: { attributes } })
-  }, [editor, label, describedBy, invalid])
 
   // The first tool is the toolbar's Tab stop.
   useEffect(() => {
@@ -294,9 +347,9 @@ export default function RichTextEditor({
   return (
     <div className="rich-editor">
       <div ref={toolbarRef}>
-        <Toolbar editor={editor} onLink={() => setLinking((v) => !v)} />
+        <Toolbar editor={editor} linking={linking} linkFormId={linkFormId} onLink={() => setLinking((v) => !v)} />
       </div>
-      {linking && <LinkForm editor={editor} onDone={() => setLinking(false)} />}
+      {linking && <LinkForm id={linkFormId} editor={editor} onDone={() => setLinking(false)} />}
       <EditorContent editor={editor} />
     </div>
   )

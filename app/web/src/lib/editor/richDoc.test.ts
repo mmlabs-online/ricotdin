@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { parseMarkdown } from '../markdown'
-import { docToMarkdown, markdownToDoc, normalizeMarkdown, type RichNode } from './richDoc'
+import { docToMarkdown, editorOptions, markdownToDoc as toDoc, normalizeMarkdown as normalize, type RichNode } from './richDoc'
+
+// A person's text (links allowed); the AI's text and blocked targets are tested below.
+const LINKS = { links: true }
+const markdownToDoc = (md: string) => toDoc(md, LINKS)
+const normalizeMarkdown = (md: string) => normalize(md, LINKS)
 
 const p = (...content: RichNode[]): RichNode => ({ type: 'paragraph', content })
 const txt = (text: string, ...marks: RichNode['marks'] & object): RichNode =>
@@ -107,7 +112,7 @@ describe('docToMarkdown (PRO-06 6b)', () => {
 
   it('leaves ordinary punctuation alone', () => {
     expect(docToMarkdown(doc(p(txt('snake_case, ~5 min, C# and 3.5 - fine (ok) [todo] #12'))))).toBe(
-      'snake_case, ~5 min, C# and 3.5 - fine (ok) \\[todo] #12\n',
+      'snake_case, \\~5 min, C# and 3.5 - fine (ok) \\[todo] #12\n',
     )
   })
 
@@ -128,7 +133,6 @@ describe('docToMarkdown (PRO-06 6b)', () => {
   it('writes a link only for a safe https target, as text otherwise', () => {
     expect(docToMarkdown(doc(p(txt('a', link('javascript:alert(1)')))))).toBe('a\n')
     expect(docToMarkdown(doc(p(txt('a', link('https://u:p@a.test/')))))).toBe('a\n')
-    expect(docToMarkdown(doc(p(txt('a', link('https://a.test/x(1)')))))).toBe('[a](https://a.test/x%281%29)\n')
     expect(docToMarkdown(doc(p(txt('a]b', link('https://a.test/')))))).toBe('a]b\n')
   })
 
@@ -136,7 +140,7 @@ describe('docToMarkdown (PRO-06 6b)', () => {
     const md = docToMarkdown(
       doc({ type: 'bulletList', content: [item(p(txt('a')), { type: 'orderedList', content: [item(p(txt('b')))] }), item(p(txt('c')))] }),
     )
-    expect(md).toBe('- a\n  1. b\n- c\n')
+    expect(md).toBe('- a\n  - b\n- c\n')
   })
 
   it('separates two lists so they stay two lists', () => {
@@ -185,5 +189,84 @@ describe('round trip (PRO-06 6b): opening the editor never changes what the page
       p(txt('Use '), txt('a_b', italic), txt(' then '), txt('**', bold), txt(' and '), txt('[x]', code)),
     )
     expect(markdownToDoc(docToMarkdown(built))).toEqual(built)
+  })
+})
+
+describe('review fixes (PRO-06 6b)', () => {
+  it('uses the parser’s ASCII word rule next to Vietnamese letters', () => {
+    for (const md of ['mã\\_số\\_điện', 'é*x*é']) expect(shown(normalizeMarkdown(md))).toEqual(shown(md))
+    expect(shown(docToMarkdown(doc(p(txt('mã_số_điện')))))).toEqual([{ kind: 'paragraph', inlines: [{ kind: 'text', text: 'mã_số_điện' }] }])
+    expect(shown(docToMarkdown(doc(p(txt('x', italic), txt('é')))))).toEqual(shown('*x*é'))
+  })
+
+  it('keeps a ! right before a link', () => {
+    const md = docToMarkdown(doc(p(txt('Click!'), txt('docs', link('https://a.test/')))))
+    expect(shown(md)).toEqual([
+      { kind: 'paragraph', inlines: [{ kind: 'text', text: 'Click!' }, { kind: 'link', text: 'docs', href: 'https://a.test/', host: 'a.test' }] },
+    ])
+  })
+
+  it('writes a nested list with the type of the list it is in (the page nests one type)', () => {
+    const md = docToMarkdown(
+      doc({ type: 'bulletList', content: [item(p(txt('a')), { type: 'orderedList', content: [item(p(txt('b')))] }), item(p(txt('c')))] }),
+    )
+    expect(md).toBe('- a\n  - b\n- c\n')
+    expect(shown(md)).toHaveLength(1)
+  })
+
+  it('opens the AI’s links and blocked targets as text, never as links (security review H1)', () => {
+    const ai = 'Pay [the invoice](https://evil.example/a(b) now'
+    expect(JSON.stringify(toDoc(ai, { links: false }))).not.toContain('"link"')
+    const blocked = new Set(['https://evil.example/x'])
+    expect(JSON.stringify(toDoc('[x](https://evil.example/x)', { links: true, blocked }))).not.toContain('"link"')
+    expect(shown(normalize(ai, { links: false }))).toEqual(parseMarkdown(ai))
+  })
+
+  it('never writes a link target with parentheses (it would escape the blocked set)', () => {
+    expect(docToMarkdown(doc(p(txt('a', link('https://a.test/x(1)')))))).toBe('a\n')
+  })
+
+  it('escapes ~ everywhere, so two pieces never join into ~~ (security review M2)', () => {
+    const md = docToMarkdown(doc(p(txt('q~'), txt('~y '), txt('~~[x](https://evil.example)', code))))
+    expect(shown(md).flatMap((b) => ('inlines' in b ? b.inlines : [])).some((i) => i.kind === 'link')).toBe(false)
+  })
+
+  it('never writes a link that was not a link in the editor (property test)', () => {
+    const pieces = ['a', ' ', '~', '*', '_', '`', '[', ']', '(', ')', '!', '\\', 'https://e.test/', 'é', '#', '1.', '-']
+    const marks = [[], [bold], [italic], [code], [link('https://ok.test/')]] as RichNode['marks'][]
+    let seed = 7
+    const rnd = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31
+      return seed % n
+    }
+    for (let run = 0; run < 2000; run++) {
+      const content: RichNode[] = []
+      for (let i = 0, n = 1 + rnd(6); i < n; i++) {
+        let text = ''
+        for (let j = 0, m = 1 + rnd(5); j < m; j++) text += pieces[rnd(pieces.length)]
+        const mk = marks[rnd(marks.length)]
+        content.push(mk && mk.length ? { type: 'text', text, marks: mk } : { type: 'text', text })
+      }
+      const hrefs = shown(docToMarkdown(doc(p(...content))))
+        .flatMap((b) => ('inlines' in b ? b.inlines : []))
+        .flatMap((i) => (i.kind === 'link' ? [i.href] : []))
+      for (const h of hrefs) expect(h).toBe('https://ok.test/')
+      const wanted = content.filter((c) => c.marks?.some((m) => m.type === 'link')).length
+      expect(hrefs.length).toBeLessThanOrEqual(wanted)
+    }
+  })
+})
+describe('editorOptions (security review H1)', () => {
+  const ai = '- see [the board](https://evil.example/b)\n\nand [docs](https://evil.example/d)'
+  it('blocks every link of a text the AI wrote, but keeps links a person adds', () => {
+    const opts = editorOptions(ai, false)
+    expect(JSON.stringify(toDoc(ai, opts))).not.toContain('"link"')
+    expect(JSON.stringify(toDoc(ai + '\n\n[mine](https://ok.test/)', opts))).toContain('https://ok.test/')
+  })
+  it('allows a person’s links in an edited text, except the AI’s targets', () => {
+    const opts = editorOptions('[x](https://ok.test/) [y](https://evil.example/y)', true, ['https:evil.example/y'])
+    const json = JSON.stringify(toDoc('[x](https://ok.test/) [y](https://evil.example/y)', opts))
+    expect(json).toContain('https://ok.test/')
+    expect(json).not.toContain('evil.example')
   })
 })

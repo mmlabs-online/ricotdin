@@ -46,14 +46,16 @@ describe('editErrorKey', () => {
   })
 })
 
+const AI = { links: false }
+
 describe('isDraftChanged (PRO-06 6b)', () => {
   it('ignores the rewrite the rich editor makes of an unchanged text', () => {
     const ai = '# Plan\n* a\n* b\n\nline one\nline two'
-    expect(isDraftChanged(ai, normalizeMarkdown(ai))).toBe(false)
-    expect(isDraftChanged(ai, ai)).toBe(false)
-    expect(isDraftChanged(null, '')).toBe(false)
-    expect(isDraftChanged(ai, normalizeMarkdown(ai) + 'x')).toBe(true)
-    expect(isDraftChanged(null, 'x')).toBe(true)
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, AI), AI)).toBe(false)
+    expect(isDraftChanged(ai, ai, AI)).toBe(false)
+    expect(isDraftChanged(null, '', AI)).toBe(false)
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, AI) + 'x', AI)).toBe(true)
+    expect(isDraftChanged(null, 'x', AI)).toBe(true)
   })
 })
 
@@ -63,5 +65,12 @@ describe('editorMode', () => {
     expect(editorMode('rich')).toBe('rich')
     expect(editorMode(null)).toBe('rich')
     expect(editorMode('html')).toBe('rich')
+  })
+})
+
+describe('isDraftChanged in the Markdown mode', () => {
+  it('counts every typed change, also one that equals the rich rewrite', () => {
+    const ai = 'line one\nline two'
+    expect(isDraftChanged(ai, normalizeMarkdown(ai, { links: false }), { links: false }, false)).toBe(true)
   })
 })

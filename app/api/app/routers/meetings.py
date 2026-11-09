@@ -169,9 +169,12 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
     return meeting
 
 
-# Every https link target in an AI version of a field (extracted in SQL: never ships the texts).
+# Every link target in an AI version of a field, in any scheme spelling (`https:x`, `https:\\x`,
+# a leading control character...): the web normalises each with `safeLinkHref` like the links it
+# renders, so none of them becomes clickable (security review of PRO-06 6b). Extracted in SQL:
+# never ships the texts.
 _AI_LINKS = (
-    "SELECT DISTINCT field, (regexp_matches(content, '\\]\\((https://[^)\\s]+)\\)', "
+    "SELECT DISTINCT field, (regexp_matches(content, '\\]\\(([^)\\s]+)\\)', "
     "'gi'))[1] AS href FROM public.meeting_note_versions WHERE meeting_id = :id AND source = 'ai'"
 )
 

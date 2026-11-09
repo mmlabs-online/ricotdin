@@ -52,11 +52,16 @@ function useFieldEdit() {
     })
   }
   const [history, setHistory] = useState(false)
+  const historyRef = useRef<HTMLButtonElement>(null)
   // The drawer returns focus to History when it closes; the notice follows one frame later.
   const restored = (text: string) => {
     setHistory(false)
     setNotice('')
-    requestAnimationFrame(() => requestAnimationFrame(() => setNotice(text)))
+    // the restored text may swap the panel's footer: focus the History button that is there now
+    requestAnimationFrame(() => {
+      historyRef.current?.focus()
+      requestAnimationFrame(() => setNotice(text))
+    })
   }
   return {
     editing,
@@ -64,6 +69,7 @@ function useFieldEdit() {
     close,
     notice,
     editRef,
+    historyRef,
     history,
     openHistory: () => setHistory(true),
     closeHistory: () => setHistory(false),
@@ -117,13 +123,13 @@ export function SummaryPanel({
         {f.notice}
       </span>
       {editing ? (
-        <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+        <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onDirtyChange={onDraftDirty} links={links} aiLinks={aiLinks} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
       ) : (
         <>
           {summary?.trim() ? <Markdown source={summary} links={links} aiLinks={aiLinks} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
           <div className="panel-footer">
             {edit && <EditButton label={t('detail.edit.actionSummary')} onClick={f.open} buttonRef={f.editRef} />}
-            {history && <HistoryButton label={t('detail.history.actionSummary')} onClick={f.openHistory} />}
+            {history && <HistoryButton label={t('detail.history.actionSummary')} onClick={f.openHistory} buttonRef={f.historyRef} />}
             {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
             {regenerate?.visible && (
               <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
@@ -178,7 +184,7 @@ export function NotesPanel({
     }
   }
   const editButton = edit && <EditButton label={t('detail.edit.actionNotes')} onClick={f.open} buttonRef={f.editRef} />
-  const historyButton = history && <HistoryButton label={t('detail.history.actionNotes')} onClick={f.openHistory} />
+  const historyButton = history && <HistoryButton label={t('detail.history.actionNotes')} onClick={f.openHistory} buttonRef={f.historyRef} />
   return (
     <article className="summary-card notes-content">
       <h2 className="section-label">
@@ -189,7 +195,7 @@ export function NotesPanel({
         {f.notice}
       </span>
       {editing ? (
-        <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+        <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onDirtyChange={onDraftDirty} links={links} aiLinks={aiLinks} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
       ) : notes?.trim() ? (
         <>
           <Markdown source={notes} links={links} aiLinks={aiLinks} />

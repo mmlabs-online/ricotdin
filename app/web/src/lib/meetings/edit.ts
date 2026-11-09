@@ -2,6 +2,7 @@
 import { ApiError } from '../../api/errors'
 import { canRename, type MeetingRole } from '../access/roles'
 import { normalizeMarkdown } from '../editor/richDoc'
+import type { MarkdownOptions } from '../markdown'
 
 /** sha-256 hex of the UTF-8 text, the API's `content_hash`: a save carries the hash of the text
  *  it started from, so it never overwrites a change made in the meantime (409). */
@@ -21,9 +22,10 @@ export function isDirty(original: string | null, draft: string): boolean {
 }
 
 /** Changed for real: the rich editor rewrites an untouched text into its own Markdown
- *  (`normalizeMarkdown`), which must not count as an edit (no save, no leave warning). */
-export function isDraftChanged(original: string | null, draft: string): boolean {
-  return isDirty(original, draft) && draft !== normalizeMarkdown(original ?? '')
+ *  (`normalizeMarkdown`), which must not count as an edit (no save, no leave warning). Only for a
+ *  draft the rich editor wrote: in the Markdown mode every typed change counts. */
+export function isDraftChanged(original: string | null, draft: string, opts: MarkdownOptions, fromRich = true): boolean {
+  return isDirty(original, draft) && !(fromRich && draft === normalizeMarkdown(original ?? '', opts))
 }
 
 export type EditorMode = 'rich' | 'markdown'

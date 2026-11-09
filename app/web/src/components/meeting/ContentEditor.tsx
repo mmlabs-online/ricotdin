@@ -4,25 +4,41 @@
 // text the edit started from, so a change someone made in the meantime is never overwritten
 // (409 → reload or keep editing). Opening the rich editor rewrites the text into its own Markdown;
 // that alone is not a change (`isDraftChanged`).
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ComponentType, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentProps, type ComponentType, type FormEvent } from 'react'
 import { useBlocker } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useEditContent, type ContentField } from '../../api/meetingDetail'
-import { normalizeMarkdown } from '../../lib/editor/richDoc'
+import { editorOptions, normalizeMarkdown } from '../../lib/editor/richDoc'
+import type { MarkdownOptions } from '../../lib/markdown'
 import { contentHash, EDITOR_MODE_KEY, editErrorKey, editorMode, isDirty, isDraftChanged, type EditorMode } from '../../lib/meetings/edit'
 import { Markdown } from '../Markdown'
 import { Button } from '../ui/Button'
 import type { default as RichTextEditorView, RichTextHandle } from './RichTextEditor'
 
-type RichProps = ComponentProps<typeof RichTextEditorView>
+type RichProps = ComponentProps<typeof RichTextEditorView> & { onUnavailable: () => void }
 
-/** Shown instead of the rich editor when its code could not be loaded (offline, new deploy). */
-let richFailed: (() => void) | null = null
-function RichUnavailable() {
-  useEffect(() => richFailed?.(), [])
+/** Rendered instead of the rich editor when its code could not be loaded (offline, new deploy):
+ *  tells this editor to use the Markdown mode. The next editor that opens tries the load again. */
+function RichUnavailable({ onUnavailable }: RichProps) {
+  useEffect(() => onUnavailable(), [onUnavailable])
   return null
 }
-const RichTextEditor = lazy<ComponentType<RichProps>>(() => import('./RichTextEditor').catch(() => ({ default: RichUnavailable })))
+let richLoadFailed = false
+const loadRich = () =>
+  lazy<ComponentType<RichProps>>(() =>
+    import('./RichTextEditor').catch(() => {
+      richLoadFailed = true
+      return { default: RichUnavailable }
+    }),
+  )
+let RichLazy = loadRich()
+function richComponent() {
+  if (richLoadFailed) {
+    richLoadFailed = false
+    RichLazy = loadRich() // a cached failure would disable the rich mode until a reload
+  }
+  return RichLazy
+}
 
 function storedMode(): EditorMode {
   try {
@@ -45,17 +61,34 @@ export function ContentEditor({
   original,
   onClose,
   onDirtyChange,
+  links = false,
+  aiLinks,
 }: {
   meetingId: string
   field: ContentField
   original: string | null
   onClose: (saved: boolean) => void
   onDirtyChange?: (dirty: boolean) => void
+  /** how the page renders the stored text: AI text has no links, AI-written targets stay text */
+  links?: boolean
+  aiLinks?: readonly string[]
 }) {
   const { t } = useTranslation()
   const save = useEditContent(meetingId)
+  const [RichTextEditor] = useState(richComponent)
+  // read once from the text the editor opened with (the base may change after a conflict)
+  const [mdOptions] = useState<MarkdownOptions>(() => editorOptions(original ?? '', links, aiLinks))
   const [base, setBase] = useState(original) // the text this edit started from
   const [draft, setDraft] = useState(original ?? '')
+  const [fromRich, setFromRich] = useState(false) // the draft was last written by the rich editor
+  const onRichChange = useCallback((md: string) => {
+    setDraft(md)
+    setFromRich(true)
+  }, [])
+  const onUnavailable = useCallback(() => {
+    setRichDown(true)
+    requestAnimationFrame(() => areaRef.current?.focus())
+  }, [])
   const [mode, setMode] = useState<EditorMode>(storedMode)
   const [richKey, setRichKey] = useState(0) // remount the rich editor with the current draft
   const [richDown, setRichDown] = useState(false)
@@ -65,21 +98,12 @@ export function ContentEditor({
   const richRef = useRef<RichTextHandle>(null)
   const errId = useId()
   const helpId = useId()
-  // = isDraftChanged(base, draft), with the base rewritten once instead of on every key press
-  const normalizedBase = useMemo(() => normalizeMarkdown(base ?? ''), [base])
-  const dirty = isDirty(base, draft) && draft !== normalizedBase
+  // = isDraftChanged(base, draft, mdOptions, fromRich), with the base rewritten once, not per key
+  const normalizedBase = useMemo(() => normalizeMarkdown(base ?? '', mdOptions), [base, mdOptions])
+  const dirty = isDirty(base, draft) && !(fromRich && draft === normalizedBase)
   const busy = save.isPending
   const rich = mode === 'rich' && !richDown
 
-  useEffect(() => {
-    richFailed = () => {
-      setRichDown(true)
-      requestAnimationFrame(() => areaRef.current?.focus())
-    }
-    return () => {
-      richFailed = null
-    }
-  }, [])
   useEffect(() => {
     // only on mount (the rich editor focuses itself); a mode switch keeps focus on the switch (3.2.2)
     if (mode === 'markdown') areaRef.current?.focus()
@@ -116,7 +140,7 @@ export function ContentEditor({
   async function submit(e: FormEvent | null, from: string | null = base) {
     e?.preventDefault()
     if (busy) return
-    if (!isDraftChanged(from, draft)) return onClose(false)
+    if (!isDraftChanged(from, draft, mdOptions, fromRich)) return onClose(false)
     try {
       await save.mutateAsync({ field, content: draft, baseHash: await contentHash(from) })
       onClose(true)
@@ -175,12 +199,14 @@ export function ContentEditor({
         </span>
       </div>
       {rich ? (
-        <Suspense fallback={<p className="tab-note">{t('detail.edit.rich.loading')}</p>}>
+        <Suspense fallback={<p className="tab-note" role="status">{t('detail.edit.rich.loading')}</p>}>
           <RichTextEditor
             key={richKey}
             ref={richRef}
             initial={draft}
-            onChange={setDraft}
+            options={mdOptions}
+            onChange={onRichChange}
+            onUnavailable={onUnavailable}
             label={label}
             describedBy={describedBy}
             invalid={error !== null}
@@ -189,7 +215,7 @@ export function ContentEditor({
         </Suspense>
       ) : preview ? (
         <div className="content-editor-preview" aria-label={t('detail.edit.previewLabel')} role="region">
-          <Markdown source={draft} links />
+          <Markdown source={draft} links aiLinks={aiLinks} />
         </div>
       ) : (
         <label className="content-editor-field">
@@ -198,7 +224,10 @@ export function ContentEditor({
             ref={areaRef}
             value={draft}
             rows={field === 'summary' ? 8 : 18}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setFromRich(false)
+            }}
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
           />

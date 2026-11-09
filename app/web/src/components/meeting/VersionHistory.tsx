@@ -2,7 +2,7 @@
 // list (when, who, AI / edit / restore), a read-only preview and "Restore" for the owner and
 // editors (confirmed in place). Everyone who can read the meeting sees the history and the
 // editors' usernames (owner decision 2026-11-09); versions cannot be deleted one by one.
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { History, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRestoreVersion, useVersion, useVersions, type ContentField } from '../../api/meetingDetail'
@@ -89,6 +89,8 @@ export function VersionHistory({
     } catch (err) {
       setConfirming(false)
       setError((prev) => ({ key: historyErrorKey(err), n: (prev?.n ?? 0) + 1 }))
+      // the confirm group is gone: back to Restore, or the preview heading if it is gone too (409)
+      requestAnimationFrame(() => (document.querySelector<HTMLElement>('[data-focus="restore"]') ?? previewRef.current)?.focus())
     }
   }
 
@@ -101,7 +103,7 @@ export function VersionHistory({
         <p className="tab-note">{t('common.loading')}</p>
       ) : list.isError ? (
         <div className="tab-note">
-          <p>{t(historyErrorKey(list.error))}</p>
+          <p role="alert">{t(historyErrorKey(list.error))}</p>
           <Button onClick={() => void list.refetch()}>{t('common.tryAgain')}</Button>
         </div>
       ) : rows.length === 0 ? (
@@ -130,12 +132,12 @@ export function VersionHistory({
             <p className="tab-note">{t('common.loading')}</p>
           ) : version.isError || !v ? (
             <div className="tab-note">
-              <p>{t(historyErrorKey(version.error))}</p>
+              <p role="alert">{t(historyErrorKey(version.error))}</p>
               <Button onClick={() => void version.refetch()}>{t('common.tryAgain')}</Button>
             </div>
           ) : (
             <>
-              <div className="version-text">
+              <div className="version-text" role="region" tabIndex={0} aria-labelledby={`${descId}-preview`}>
                 {v.content.trim() ? <Markdown source={v.content} links={versionLinks(v.source)} aiLinks={aiLinks} /> : <p className="tab-note">{t('detail.history.emptyText')}</p>}
               </div>
               {isCurrent ? (
@@ -188,9 +190,9 @@ export function VersionHistory({
   )
 }
 
-export function HistoryButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function HistoryButton({ label, onClick, buttonRef }: { label: string; onClick: () => void; buttonRef?: RefObject<HTMLButtonElement | null> }) {
   return (
-    <Button onClick={onClick} data-focus="history">
+    <Button ref={buttonRef} onClick={onClick} data-focus="history">
       <History size={15} aria-hidden="true" />
       {label}
     </Button>
