@@ -12,6 +12,12 @@ export interface Meeting extends MeetingRow {
   language: string | null
   summary: string | null
   notes: string | null
+  /** PRO-06: the current text was written by a person (only then may it render links) */
+  summary_edited?: boolean
+  notes_edited?: boolean
+  /** https targets the AI ever wrote in that field: they stay text even in a person's text */
+  summary_ai_links?: string[]
+  notes_ai_links?: string[]
   started_at: string | null
   generation_provider: string | null
   generation_model: string | null

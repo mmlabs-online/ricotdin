@@ -65,7 +65,7 @@ def _allowed(url: str, statement: str, *args: Any) -> None:
     "table",
     ["users", "refresh_tokens", "email_tokens", "folders", "folder_shares", "chat_sessions",
      "chat_messages", "features", "storage_config", "quota_ledger", "activity_log", "usage_log",
-     "audit_logs"],
+     "audit_logs", "meeting_note_versions"],
 )  # fmt: skip
 def test_worker_cannot_read_tables_outside_the_allow_list(db: str, table: str) -> None:
     _denied(db, f"SELECT 1 FROM {table}")  # noqa: S608 - fixed table names

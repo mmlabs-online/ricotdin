@@ -1,7 +1,7 @@
 // The tab panels of the meeting detail screen (Make MeetingDetail). Text written by the AI or by
 // other users goes through displayText / Markdown (no links, images or bidi tricks).
-import { useEffect, useRef, useState } from 'react'
-import { CalendarDays, Copy, FileAudio, ListTodo, MessageSquareText, RefreshCw, Search, Sparkles, X } from 'lucide-react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { CalendarDays, Copy, FileAudio, ListTodo, MessageSquareText, Pencil, RefreshCw, Search, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   calendarParts,
@@ -20,6 +20,7 @@ import { formatClock } from '../../lib/media/seek'
 import { displayText } from '../../lib/text'
 import type { TranscriptSegment } from '../../lib/transcript/export'
 import { Markdown } from '../Markdown'
+import { ContentEditor } from './ContentEditor'
 import { Button } from '../ui/Button'
 
 const clock = (ms: number) => formatClock(ms / 1000)
@@ -35,38 +36,100 @@ function Loading({ state, onRetry }: { state: 'pending' | 'error'; onRetry: () =
   )
 }
 
+/** Edit + saved notice of one field (PRO-06). After closing the editor, focus returns to Edit;
+ *  "Saved." goes into a status region that stays mounted, one frame after focus moved. */
+function useFieldEdit() {
+  const [editing, setEditing] = useState(false)
+  const [notice, setNotice] = useState('')
+  const editRef = useRef<HTMLButtonElement>(null)
+  const close = (didSave: boolean, saved: string) => {
+    setEditing(false)
+    setNotice('')
+    requestAnimationFrame(() => {
+      editRef.current?.focus()
+      if (didSave) requestAnimationFrame(() => setNotice(saved))
+    })
+  }
+  return { editing, open: () => setEditing(true), close, notice, editRef }
+}
+
+export type ContentEdit = { meetingId: string } | null
+
+function EditButton({ label, onClick, buttonRef }: { label: string; onClick: () => void; buttonRef: RefObject<HTMLButtonElement | null> }) {
+  return (
+    <Button ref={buttonRef} onClick={onClick}>
+      <Pencil size={15} aria-hidden="true" />
+      {label}
+    </Button>
+  )
+}
+
 export function SummaryPanel({
   summary,
   model,
   regenerate,
+  edit = null,
+  links = false,
+  aiLinks,
+  onDraftDirty,
 }: {
   summary: string | null
   model: string | null
   regenerate: { visible: boolean; busy: boolean; onClick: () => void } | null
+  edit?: ContentEdit
+  links?: boolean
+  aiLinks?: readonly string[]
+  onDraftDirty?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
+  const f = useFieldEdit()
+  const editing = f.editing && edit
   return (
     <article className="summary-card">
       <h2 className="section-label">
         <Sparkles size={16} aria-hidden="true" />
-        {t('detail.summary.label')}
+        {editing ? t('detail.edit.editing', { what: t('detail.summary.label') }) : t('detail.summary.label')}
       </h2>
-      {summary?.trim() ? <Markdown source={summary} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
-      <div className="panel-footer">
-        {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
-        {regenerate?.visible && (
-          <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
-            <RefreshCw size={15} aria-hidden="true" />
-            {regenerate.busy ? t('detail.regenerate.busy') : t('detail.regenerate.action')}
-          </Button>
-        )}
-      </div>
+      <span role="status" className="sr-only">
+        {f.notice}
+      </span>
+      {editing ? (
+        <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+      ) : (
+        <>
+          {summary?.trim() ? <Markdown source={summary} links={links} aiLinks={aiLinks} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
+          <div className="panel-footer">
+            {edit && <EditButton label={t('detail.edit.actionSummary')} onClick={f.open} buttonRef={f.editRef} />}
+            {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
+            {regenerate?.visible && (
+              <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
+                <RefreshCw size={15} aria-hidden="true" />
+                {regenerate.busy ? t('detail.regenerate.busy') : t('detail.regenerate.action')}
+              </Button>
+            )}
+          </div>
+        </>
+      )}
     </article>
   )
 }
 
-export function NotesPanel({ notes }: { notes: string | null }) {
+export function NotesPanel({
+  notes,
+  edit = null,
+  links = false,
+  aiLinks,
+  onDraftDirty,
+}: {
+  notes: string | null
+  edit?: ContentEdit
+  links?: boolean
+  aiLinks?: readonly string[]
+  onDraftDirty?: (dirty: boolean) => void
+}) {
   const { t } = useTranslation()
+  const f = useFieldEdit()
+  const editing = f.editing && edit
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null)
   async function copy() {
     setCopied(null) // a second copy is announced again
@@ -77,16 +140,23 @@ export function NotesPanel({ notes }: { notes: string | null }) {
       setCopied('failed')
     }
   }
+  const editButton = edit && <EditButton label={t('detail.edit.actionNotes')} onClick={f.open} buttonRef={f.editRef} />
   return (
     <article className="summary-card notes-content">
       <h2 className="section-label">
         <FileAudio size={16} aria-hidden="true" />
-        {t('detail.notes.label')}
+        {editing ? t('detail.edit.editing', { what: t('detail.notes.label') }) : t('detail.notes.label')}
       </h2>
-      {notes?.trim() ? (
+      <span role="status" className="sr-only">
+        {f.notice}
+      </span>
+      {editing ? (
+        <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+      ) : notes?.trim() ? (
         <>
-          <Markdown source={notes} />
+          <Markdown source={notes} links={links} aiLinks={aiLinks} />
           <div className="panel-footer">
+            {editButton}
             <Button onClick={() => void copy()}>
               <Copy size={15} aria-hidden="true" />
               {t('detail.notes.copy')}
@@ -97,7 +167,10 @@ export function NotesPanel({ notes }: { notes: string | null }) {
           </div>
         </>
       ) : (
-        <p className="tab-note">{t('detail.notes.empty')}</p>
+        <>
+          <p className="tab-note">{t('detail.notes.empty')}</p>
+          {editButton && <div className="panel-footer">{editButton}</div>}
+        </>
       )}
     </article>
   )

@@ -813,7 +813,8 @@
     "tryAgain": "Thử lại",
     "save": "Lưu",
     "dismiss": "Đóng thông báo",
-    "loading": "Đang tải…"
+    "loading": "Đang tải…",
+    "opensInNewTab": "(mở trong tab mới)"
   },
   "player": {
     "scanning": "Đang chuẩn bị phát…",
@@ -1073,7 +1074,7 @@
       "busy": "Đang tạo lại…",
       "done": "Đã tạo lại tóm tắt và ghi chú.",
       "confirmTitle": "Tạo lại tóm tắt và ghi chú?",
-      "confirmBody": "AI sẽ viết lại tóm tắt và ghi chú từ bản ghi lời. Việc này dùng số phút âm thanh trong số dư của bạn. Việc cần làm và đề xuất lịch giữ nguyên.",
+      "confirmBody": "AI sẽ viết lại tóm tắt và ghi chú từ bản ghi lời. Việc này dùng số phút âm thanh trong số dư của bạn. Việc cần làm và đề xuất lịch giữ nguyên. Nội dung hiện tại được giữ trong lịch sử.",
       "confirm": "Tạo lại"
     },
     "audio": {
@@ -1164,6 +1165,33 @@
       "forbidden": "Bạn không có quyền làm việc này.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    },
+    "edit": {
+      "action": "Sửa",
+      "editing": "Đang sửa: {{what}}",
+      "label": {
+        "summary": "Nội dung tóm tắt (Markdown)",
+        "notes": "Nội dung ghi chú (Markdown)"
+      },
+      "preview": "Xem trước",
+      "previewLabel": "Xem trước",
+      "markdownHelp": "Markdown: # tiêu đề, **đậm**, *nghiêng*, - danh sách, [chữ](https://…)",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "saved": "Đã lưu.",
+      "leaveConfirm": "Rời trang và mất các thay đổi chưa lưu?",
+      "discardConfirm": "Bỏ các thay đổi chưa lưu?",
+      "errors": {
+        "changed": "Có người vừa sửa nội dung này. Hãy xem bên dưới, rồi lưu đè hoặc huỷ.",
+        "notDone": "Chỉ sửa được khi meeting đã xử lý xong.",
+        "characters": "Nội dung có ký tự không lưu được. Hãy xoá chúng rồi thử lại.",
+        "invalid": "Không lưu được nội dung. Có thể nội dung quá dài.",
+        "failed": "Không lưu được thay đổi. Hãy thử lại."
+      },
+      "actionSummary": "Sửa tóm tắt",
+      "actionNotes": "Sửa ghi chú",
+      "latestHelp": "Đây là nội dung vừa được lưu. Bản nháp của bạn vẫn còn trong ô soạn.",
+      "useLatest": "Lưu đè lên bản mới nhất"
     }
   },
   "chat": {

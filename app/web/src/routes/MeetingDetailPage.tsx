@@ -1,6 +1,6 @@
 // Meeting detail (ARC-13b, Make MeetingDetail): header + actions, processing state, player,
 // summary / notes / to-dos / calendar / transcript tabs, and chat about this meeting.
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Clock3, LoaderCircle, RefreshCw, X } from 'lucide-react'
@@ -33,6 +33,7 @@ import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { Status } from '../components/ui/Status'
 import { canDelete, canMove, canRename, getMeetingRole } from '../lib/access/roles'
+import { canEditContent } from '../lib/meetings/edit'
 import type { Citation } from '../lib/chat/chat'
 import { downloadBlob, downloadIcs } from '../lib/media/download'
 import { meetingSeekPath, nearestSegment, parseSeekParam } from '../lib/media/seek'
@@ -113,6 +114,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const folderList = folders.data ?? []
   const role = getMeetingRole(meeting, me, folderList)
   const canEdit = canRename(role)
+  const contentEdit = canEditContent(role, meeting.status) ? { meetingId: meeting.id } : null // PRO-06
   const done = meeting.status === 'done'
   const audio = audioState(meeting)
   const wantAudio = audio === 'available' && meeting.status !== 'pending'
@@ -174,8 +176,20 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     prevStatus.current = meeting.status
   }, [meeting.status, id, qc])
 
+  // An unsaved summary / notes draft is lost when its tab unmounts: ask first (PRO-06).
+  const draftDirty = useRef(false)
+  const onDraftDirty = useCallback((dirty: boolean) => {
+    draftDirty.current = dirty
+  }, [])
+  function changeTab(to: Tab): boolean {
+    if (to !== tab && draftDirty.current && !window.confirm(t('detail.edit.leaveConfirm'))) return false
+    if (to !== tab) draftDirty.current = false
+    setTab(to)
+    return true
+  }
+
   function seek(ms: number, moveFocus = false) {
-    setTab('transcript')
+    if (!changeTab('transcript')) return
     setActiveSeg(nearestSegment(segments, ms)?.id ?? null)
     setSeekNonce((n) => n + 1)
     // the clicked control (to-do, suggestion, citation in another tab) may be unmounted
@@ -278,7 +292,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     if (next === null) return
     e.preventDefault()
     const target = TABS[next] ?? 'summary'
-    setTab(target)
+    if (!changeTab(target)) return
     document.getElementById(`${tabsId}-tab-${target}`)?.focus()
   }
 
@@ -404,7 +418,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   aria-controls={`${tabsId}-panel`}
                   tabIndex={tab === id2 ? 0 : -1}
                   className={tab === id2 ? 'active' : ''}
-                  onClick={() => setTab(id2)}
+                  onClick={() => changeTab(id2)}
                   onKeyDown={onTabKey}
                 >
                   {t(`detail.tabs.${id2}`)}
@@ -430,9 +444,13 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   summary={meeting.summary}
                   model={modelLabel(meeting.generation_provider, meeting.generation_model)}
                   regenerate={{ visible: canRegenerate(meeting, role), busy: regenerate.isPending, onClick: () => !regenerate.isPending && setDialog('regenerate') }}
+                  edit={contentEdit}
+                  links={meeting.summary_edited === true}
+                  aiLinks={meeting.summary_ai_links}
+                  onDraftDirty={onDraftDirty}
                 />
               )}
-              {tab === 'notes' && <NotesPanel notes={meeting.notes} />}
+              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} links={meeting.notes_edited === true} aiLinks={meeting.notes_ai_links} onDraftDirty={onDraftDirty} />}
               {tab === 'todos' && (
                 <TodosPanel
                   todos={todos.data ?? []}

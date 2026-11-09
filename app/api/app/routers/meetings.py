@@ -35,6 +35,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.access import can_move_meeting, has_role
+from app.domain.content import edited_by_person
 from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
 from app.domain.uploads import (
@@ -64,6 +65,7 @@ from app.services.ai.analysis import (
 from app.services.ai.model_lock import lock_model
 from app.services.ai.prompts import load_prompt
 from app.services.ai.service import AIService, UsageContext
+from app.services.note_versions import record_versions
 from app.services.platform import Platform, get_platform
 from app.services.storage.base import StorageNotConfigured, UploadedFileMissing, UploadRejected
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
@@ -134,10 +136,44 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
                 {"id": mid},
             )
         ).first()
+        newest = (
+            {}
+            if row is None
+            else {
+                r.field: r
+                for r in await conn.execute(
+                    text(
+                        "SELECT DISTINCT ON (field) field, source, content "
+                        "FROM public.meeting_note_versions WHERE meeting_id = :id "
+                        "ORDER BY field, created_at DESC, id DESC"
+                    ),
+                    {"id": mid},
+                )
+            }
+        )
     meeting = as_dict(row)
     if meeting is None:
         raise NotFound(_NOT_FOUND)
+    ai_links: dict[str, list[str]] = {"summary": [], "notes": []}
+    if any(edited for edited in (newest.get("summary"), newest.get("notes"))):
+        async with db.app_transaction(identity) as conn:
+            for r in await conn.execute(text(_AI_LINKS), {"id": mid}):
+                ai_links[r.field].append(r.href)
+    for field in ("summary", "notes"):  # PRO-06: only text a person wrote may render links
+        v = newest.get(field)
+        meeting[f"{field}_edited"] = edited_by_person(
+            v.source if v else None, newest=v.content if v else None, current=meeting[field]
+        )
+        # links the AI ever wrote in this field stay text, also after a person's edit / restore
+        meeting[f"{field}_ai_links"] = ai_links[field]
     return meeting
+
+
+# Every https link target in an AI version of a field (extracted in SQL: never ships the texts).
+_AI_LINKS = (
+    "SELECT DISTINCT field, (regexp_matches(content, '\\]\\((https://[^)\\s]+)\\)', "
+    "'gi'))[1] AS href FROM public.meeting_note_versions WHERE meeting_id = :id AND source = 'ai'"
+)
 
 
 async def _children(
@@ -435,6 +471,12 @@ async def _regenerate(
         usage=UsageContext(mid, meeting["user_id"]),
     )  # fmt: skip
     async with db.role_transaction(SERVICE) as conn:
+        before = (
+            await conn.execute(
+                text("SELECT summary, notes FROM public.meetings WHERE id = :id FOR UPDATE"),
+                {"id": mid},
+            )
+        ).first()
         saved = (
             await conn.execute(
                 text(
@@ -448,6 +490,15 @@ async def _regenerate(
                 {"id": mid, "s": analysis.summary, "n": analysis.notes},
             )
         ).first()
+        if saved is not None and before is not None:  # the replaced text stays in the history
+            await record_versions(
+                conn, mid, "summary", current=before.summary, new=analysis.summary,
+                source="ai", editor=meeting["user_id"],  # regenerate is owner-only
+            )  # fmt: skip
+            await record_versions(
+                conn, mid, "notes", current=before.notes, new=analysis.notes,
+                source="ai", editor=meeting["user_id"],
+            )  # fmt: skip
     if saved is None:  # reprocessed or deleted while the AI was answering
         async with db.role_transaction(SERVICE) as conn:
             exists = (

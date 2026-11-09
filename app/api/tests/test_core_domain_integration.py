@@ -20,6 +20,7 @@ from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.provision import drop_login, ensure_login
 from app.db.scratch import admin_url, scratch_database
+from app.domain.content import content_hash
 from app.main import create_app
 from tests.conftest import alembic_upgrade, requires_db
 
@@ -664,3 +665,155 @@ def test_activity(client: TestClient, world: dict[str, Any]) -> None:
         world["e"],
     )
     assert len(rows) == 10 and all(m is None for _, m in rows)  # unknown meeting id → NULL
+
+
+# --- PRO-06: edit summary / notes with a version history ----------------------------------------
+
+
+def _notes_meeting(world: dict[str, Any], notes: str = "AI notes") -> str:
+    """A done meeting of A in the shared folder F1 (B editor, C viewer, D stranger)."""
+    mid = uuid.uuid4()
+    _sql(
+        world["db"],
+        "INSERT INTO meetings (id, user_id, title, status, folder_id, summary, notes) "
+        "VALUES (%s, %s, 'Notes', 'done', %s, 'AI summary', %s)",
+        mid, world["a"], world["f1"], notes,
+    )  # fmt: skip
+    return str(mid)
+
+
+def _edit(
+    client: TestClient, who: str, mid: str, content: str, base: str, field: str = "notes"
+) -> Any:
+    return client.patch(
+        f"/meetings/{mid}/content",
+        headers=_as(client, who),
+        json={"field": field, "content": content, "baseHash": content_hash(base)},
+    )
+
+
+def test_pro06_owner_and_editor_edit_viewer_and_stranger_cannot(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    mid = _notes_meeting(world)
+    r = _edit(client, "b", mid, "Fixed by B", "AI notes")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"field": "notes", "content": "Fixed by B",
+                        "contentHash": content_hash("Fixed by B")}  # fmt: skip
+    assert _edit(client, "a", mid, "Fixed by A", "Fixed by B").status_code == 200
+    assert _edit(client, "c", mid, "viewer", "Fixed by A").status_code == 403
+    assert _edit(client, "d", mid, "stranger", "Fixed by A").status_code == 403
+    assert _sql(world["db"], "SELECT notes FROM meetings WHERE id = %s", mid) == [("Fixed by A",)]
+    got = client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()
+    assert (got["notes_edited"], got["summary_edited"]) == (True, False)  # links: person text only
+    _sql(world["db"], "UPDATE meetings SET notes = 'AI again' WHERE id = %s", mid)  # worker rerun
+    assert client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()["notes_edited"] is False
+    _sql(world["db"], "UPDATE meetings SET notes = 'Fixed by A' WHERE id = %s", mid)
+    # history: the AI text first, then each save; newest first; viewer may read it
+    r = client.get(f"/meetings/{mid}/content-versions?field=notes", headers=_as(client, "c"))
+    assert r.status_code == 200
+    versions = r.json()["versions"]
+    assert [v["source"] for v in versions] == ["user", "user", "ai"]
+    assert (
+        versions[2]["editedBy"] is None and versions[0]["editedByUsername"] == world["names"]["a"]
+    )
+    assert "content" not in versions[0]
+    one = client.get(
+        f"/meetings/{mid}/content-versions/{versions[2]['id']}", headers=_as(client, "c")
+    )
+    assert one.json()["content"] == "AI notes"
+    assert client.get(f"/meetings/{mid}/content-versions?field=notes",
+                      headers=_as(client, "d")).status_code == 404  # fmt: skip
+
+
+def test_pro06_a_stale_base_hash_is_a_conflict(client: TestClient, world: dict[str, Any]) -> None:
+    mid = _notes_meeting(world)
+    assert _edit(client, "a", mid, "first", "AI notes").status_code == 200
+    r = _edit(client, "b", mid, "second", "AI notes")  # B started from the AI text
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "content_changed")
+    assert _sql(world["db"], "SELECT notes FROM meetings WHERE id = %s", mid) == [("first",)]
+
+
+def test_pro06_only_done_meetings_and_valid_bodies(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    mid = _notes_meeting(world)
+    _sql(world["db"], "UPDATE meetings SET status = 'processing' WHERE id = %s", mid)
+    assert _edit(client, "a", mid, "x", "AI notes").status_code == 409
+    _sql(world["db"], "UPDATE meetings SET status = 'done' WHERE id = %s", mid)
+    r = client.patch(f"/meetings/{mid}/content", headers=_as(client, "a"),
+                     json={"field": "title", "content": "x", "baseHash": content_hash("AI notes")})  # fmt: skip
+    assert r.status_code == 422
+    assert _edit(client, "a", mid, "a\x00b", "AI notes").status_code == 422
+    assert _edit(client, "a", str(uuid.uuid4()), "x", "AI notes").status_code == 404
+
+
+def test_pro06_restore_and_the_50_version_cap(client: TestClient, world: dict[str, Any]) -> None:
+    mid = _notes_meeting(world)
+    text = "AI notes"
+    for i in range(51):
+        assert _edit(client, "a", mid, f"v{i}", text).status_code == 200
+        text = f"v{i}"
+    versions = client.get(f"/meetings/{mid}/content-versions?field=notes",
+                          headers=_as(client, "a")).json()["versions"]  # fmt: skip
+    assert len(versions) == 50 and versions[0]["source"] == "user"
+    target = versions[10]  # v40
+    r = client.post(f"/meetings/{mid}/content-versions/{target['id']}/restore",
+                    headers=_as(client, "c"), json={"baseHash": content_hash("v50")})  # fmt: skip
+    assert r.status_code == 403
+    r = client.post(f"/meetings/{mid}/content-versions/{target['id']}/restore",
+                    headers=_as(client, "b"), json={"baseHash": content_hash("v50")})  # fmt: skip
+    assert r.status_code == 200 and r.json()["content"] == "v40"
+    newest = client.get(f"/meetings/{mid}/content-versions?field=notes",
+                        headers=_as(client, "a")).json()["versions"]  # fmt: skip
+    assert newest[0]["source"] == "restore" and len(newest) == 50
+    other = _notes_meeting(world)
+    r = client.post(f"/meetings/{other}/content-versions/{target['id']}/restore",
+                    headers=_as(client, "a"), json={"baseHash": content_hash("AI notes")})  # fmt: skip
+    assert r.status_code == 404  # a version of another meeting
+
+
+def test_pro06_note_versions_are_service_only_for_writes(world: dict[str, Any]) -> None:
+    privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]
+    with psycopg.connect(world["db"], autocommit=True) as conn:  # owner: sees every role's grant
+        held = {
+            (role, p): conn.execute(
+                "SELECT has_table_privilege(%s, 'public.meeting_note_versions', %s)", (role, p)
+            ).fetchone()[0]  # type: ignore[index]
+            for role in ("ricotdin_app", "ricotdin_service", "ricotdin_worker")
+            for p in privileges
+        }
+    assert [p for p in privileges if held[("ricotdin_app", p)]] == ["SELECT"]
+    assert [p for p in privileges if held[("ricotdin_service", p)]] == [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+    ]
+    assert not any(held[("ricotdin_worker", p)] for p in privileges)
+
+
+def test_pro06_saving_the_same_text_writes_nothing(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    mid = _notes_meeting(world)
+    assert _edit(client, "a", mid, "AI notes", "AI notes").status_code == 200
+    assert _sql(
+        world["db"], "SELECT count(*) FROM meeting_note_versions WHERE meeting_id = %s", mid
+    ) == [(0,)]
+
+
+def test_pro06_long_ai_notes_can_be_edited(client: TestClient, world: dict[str, Any]) -> None:
+    mid = _notes_meeting(world, notes="x" * 150_000)  # the AI may write up to 200 000
+    assert _edit(client, "a", mid, "short", "x" * 150_000).status_code == 200
+
+
+def test_pro06_links_the_ai_wrote_stay_listed_after_an_edit(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    ai = "Read [this](https://evil.test/x) and [that](http://plain.test)"
+    mid = _notes_meeting(world, notes=ai)
+    assert _edit(client, "b", mid, ai + " (typo fixed)", ai).status_code == 200
+    got = client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()
+    assert got["notes_edited"] is True
+    assert got["notes_ai_links"] == ["https://evil.test/x"]  # never clickable in the web
+    assert got["summary_ai_links"] == []
