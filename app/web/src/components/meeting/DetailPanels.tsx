@@ -21,6 +21,7 @@ import { displayText } from '../../lib/text'
 import type { TranscriptSegment } from '../../lib/transcript/export'
 import { Markdown } from '../Markdown'
 import { ContentEditor } from './ContentEditor'
+import { HistoryButton, VersionHistory } from './VersionHistory'
 import { Button } from '../ui/Button'
 
 const clock = (ms: number) => formatClock(ms / 1000)
@@ -50,8 +51,28 @@ function useFieldEdit() {
       if (didSave) requestAnimationFrame(() => setNotice(saved))
     })
   }
-  return { editing, open: () => setEditing(true), close, notice, editRef }
+  const [history, setHistory] = useState(false)
+  // The drawer returns focus to History when it closes; the notice follows one frame later.
+  const restored = (text: string) => {
+    setHistory(false)
+    setNotice('')
+    requestAnimationFrame(() => requestAnimationFrame(() => setNotice(text)))
+  }
+  return {
+    editing,
+    open: () => setEditing(true),
+    close,
+    notice,
+    editRef,
+    history,
+    openHistory: () => setHistory(true),
+    closeHistory: () => setHistory(false),
+    restored,
+  }
 }
+
+/** Version history (PRO-06 6b): everyone who can read a finished meeting; owner + editors restore. */
+export type ContentHistory = { meetingId: string; canRestore: boolean } | null
 
 export type ContentEdit = { meetingId: string } | null
 
@@ -69,6 +90,7 @@ export function SummaryPanel({
   model,
   regenerate,
   edit = null,
+  history = null,
   links = false,
   aiLinks,
   onDraftDirty,
@@ -77,6 +99,7 @@ export function SummaryPanel({
   model: string | null
   regenerate: { visible: boolean; busy: boolean; onClick: () => void } | null
   edit?: ContentEdit
+  history?: ContentHistory
   links?: boolean
   aiLinks?: readonly string[]
   onDraftDirty?: (dirty: boolean) => void
@@ -100,6 +123,7 @@ export function SummaryPanel({
           {summary?.trim() ? <Markdown source={summary} links={links} aiLinks={aiLinks} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
           <div className="panel-footer">
             {edit && <EditButton label={t('detail.edit.actionSummary')} onClick={f.open} buttonRef={f.editRef} />}
+            {history && <HistoryButton label={t('detail.history.actionSummary')} onClick={f.openHistory} />}
             {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
             {regenerate?.visible && (
               <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
@@ -110,6 +134,17 @@ export function SummaryPanel({
           </div>
         </>
       )}
+      {f.history && history && (
+        <VersionHistory
+          meetingId={history.meetingId}
+          field="summary"
+          current={summary}
+          canRestore={history.canRestore}
+          aiLinks={aiLinks}
+          onClose={f.closeHistory}
+          onRestored={() => f.restored(t('detail.history.restored'))}
+        />
+      )}
     </article>
   )
 }
@@ -117,12 +152,14 @@ export function SummaryPanel({
 export function NotesPanel({
   notes,
   edit = null,
+  history = null,
   links = false,
   aiLinks,
   onDraftDirty,
 }: {
   notes: string | null
   edit?: ContentEdit
+  history?: ContentHistory
   links?: boolean
   aiLinks?: readonly string[]
   onDraftDirty?: (dirty: boolean) => void
@@ -141,6 +178,7 @@ export function NotesPanel({
     }
   }
   const editButton = edit && <EditButton label={t('detail.edit.actionNotes')} onClick={f.open} buttonRef={f.editRef} />
+  const historyButton = history && <HistoryButton label={t('detail.history.actionNotes')} onClick={f.openHistory} />
   return (
     <article className="summary-card notes-content">
       <h2 className="section-label">
@@ -157,6 +195,7 @@ export function NotesPanel({
           <Markdown source={notes} links={links} aiLinks={aiLinks} />
           <div className="panel-footer">
             {editButton}
+            {historyButton}
             <Button onClick={() => void copy()}>
               <Copy size={15} aria-hidden="true" />
               {t('detail.notes.copy')}
@@ -169,8 +208,24 @@ export function NotesPanel({
       ) : (
         <>
           <p className="tab-note">{t('detail.notes.empty')}</p>
-          {editButton && <div className="panel-footer">{editButton}</div>}
+          {(editButton || historyButton) && (
+            <div className="panel-footer">
+              {editButton}
+              {historyButton}
+            </div>
+          )}
         </>
+      )}
+      {f.history && history && (
+        <VersionHistory
+          meetingId={history.meetingId}
+          field="notes"
+          current={notes}
+          canRestore={history.canRestore}
+          aiLinks={aiLinks}
+          onClose={f.closeHistory}
+          onRestored={() => f.restored(t('detail.history.restored'))}
+        />
       )}
     </article>
   )

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { useFetchApi } from '../auth/AuthProvider'
 import { normalizeChat, normalizeMessage, type ChatMessage } from '../lib/chat/chat'
 import { isQueued, restoreRow, type CalendarSuggestion, type Todo, type TodoStatus } from '../lib/meetings/detail'
+import { normalizeVersion, normalizeVersions } from '../lib/meetings/history'
 import { needsPolling } from '../lib/meetings/list'
 import type { TranscriptSegment } from '../lib/transcript/export'
 import { apiJson } from './json'
@@ -175,6 +176,7 @@ export function useRegenerate(meetingId: string) {
       ),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: detailKeys.meeting(meetingId), exact: true })
+      void qc.invalidateQueries({ queryKey: ['meeting', meetingId, 'versions'] }) // regenerate writes versions
     },
   })
 }
@@ -257,6 +259,61 @@ export function useEditContent(meetingId: string) {
       qc.setQueryData<Meeting>(detailKeys.meeting(meetingId), (m) => (m ? { ...m, [r.field]: r.content } : m)),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: detailKeys.meeting(meetingId), exact: true })
+      void qc.invalidateQueries({ queryKey: ['meeting', meetingId, 'versions'] })
+    },
+  })
+}
+
+// --- version history (PRO-06, part 6b) -----------------------------------------------------------
+
+export const historyKeys = {
+  list: (id: string, field: ContentField) => ['meeting', id, 'versions', field] as const,
+  one: (id: string, versionId: string) => ['meeting', id, 'version', versionId] as const,
+}
+
+/** Newest first, without the text (viewer or above). */
+export function useVersions(meetingId: string, field: ContentField, enabled: boolean) {
+  const fetchApi = useFetchApi()
+  return useQuery({
+    queryKey: historyKeys.list(meetingId, field),
+    enabled,
+    queryFn: async () => normalizeVersions(await apiJson<unknown>(fetchApi, `/meetings/${enc(meetingId)}/content-versions?field=${enc(field)}`)),
+  })
+}
+
+/** One version's text. A version never changes, so it is fetched once. */
+export function useVersion(meetingId: string, versionId: string | null) {
+  const fetchApi = useFetchApi()
+  return useQuery({
+    queryKey: historyKeys.one(meetingId, versionId ?? ''),
+    enabled: versionId !== null,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const v = normalizeVersion(await apiJson<unknown>(fetchApi, `/meetings/${enc(meetingId)}/content-versions/${enc(versionId ?? '')}`))
+      if (!v) throw new Error('malformed version')
+      return v
+    },
+  })
+}
+
+/** Make a version current again (editor+). `baseHash` = hash of the text shown now (409 if it changed). */
+export function useRestoreVersion(meetingId: string) {
+  const fetchApi = useFetchApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationKey: [...DETAIL_EDIT, 'restore'],
+    mutationFn: (v: { versionId: string; baseHash: string }) =>
+      apiJson<{ field: ContentField; content: string; contentHash: string }>(
+        fetchApi,
+        `/meetings/${enc(meetingId)}/content-versions/${enc(v.versionId)}/restore`,
+        { method: 'POST', body: { baseHash: v.baseHash } },
+      ),
+    onSuccess: (r) => {
+      qc.setQueryData<Meeting>(detailKeys.meeting(meetingId), (m) => (m ? { ...m, [r.field]: r.content } : m))
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: detailKeys.meeting(meetingId), exact: true })
+      void qc.invalidateQueries({ queryKey: ['meeting', meetingId, 'versions'] })
     },
   })
 }

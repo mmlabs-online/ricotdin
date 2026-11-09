@@ -11,11 +11,14 @@ export function Modal({
   title,
   onClose,
   describedBy,
+  variant = 'dialog',
   children,
 }: {
   title: string
   onClose: () => void
   describedBy?: string
+  /** 'drawer' = full-height panel on the right (PRO-06 history) */
+  variant?: 'dialog' | 'drawer'
   children: ReactNode
 }) {
   const { t } = useTranslation()
@@ -73,10 +76,10 @@ export function Modal({
   }, [])
 
   return createPortal(
-    <div className="modal-backdrop" role="presentation" onMouseDown={() => onCloseRef.current()}>
+    <div className={variant === 'drawer' ? 'modal-backdrop modal-backdrop-drawer' : 'modal-backdrop'} role="presentation" onMouseDown={() => onCloseRef.current()}>
       <div
         ref={dialogRef}
-        className="modal"
+        className={variant === 'drawer' ? 'modal modal-drawer' : 'modal'}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

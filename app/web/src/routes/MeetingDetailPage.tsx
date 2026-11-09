@@ -115,6 +115,8 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const role = getMeetingRole(meeting, me, folderList)
   const canEdit = canRename(role)
   const contentEdit = canEditContent(role, meeting.status) ? { meetingId: meeting.id } : null // PRO-06
+  // everyone who can read the meeting sees the history; owner + editors restore (PRO-06 6b)
+  const contentHistory = meeting.status === 'done' ? { meetingId: meeting.id, canRestore: contentEdit !== null } : null
   const done = meeting.status === 'done'
   const audio = audioState(meeting)
   const wantAudio = audio === 'available' && meeting.status !== 'pending'
@@ -445,12 +447,13 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   model={modelLabel(meeting.generation_provider, meeting.generation_model)}
                   regenerate={{ visible: canRegenerate(meeting, role), busy: regenerate.isPending, onClick: () => !regenerate.isPending && setDialog('regenerate') }}
                   edit={contentEdit}
+                  history={contentHistory}
                   links={meeting.summary_edited === true}
                   aiLinks={meeting.summary_ai_links}
                   onDraftDirty={onDraftDirty}
                 />
               )}
-              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} links={meeting.notes_edited === true} aiLinks={meeting.notes_ai_links} onDraftDirty={onDraftDirty} />}
+              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} history={contentHistory} links={meeting.notes_edited === true} aiLinks={meeting.notes_ai_links} onDraftDirty={onDraftDirty} />}
               {tab === 'todos' && (
                 <TodosPanel
                   todos={todos.data ?? []}
