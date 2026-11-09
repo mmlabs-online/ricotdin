@@ -29,7 +29,7 @@ async def record_versions(
         await conn.execute(
             text(
                 "SELECT content FROM public.meeting_note_versions WHERE meeting_id = :m "
-                "AND field = :f ORDER BY seq DESC LIMIT 1"
+                "AND field = :f ORDER BY created_at DESC, id DESC LIMIT 1"
             ),
             {"m": meeting_id, "f": field},
         )
@@ -47,7 +47,7 @@ async def record_versions(
         for r in await conn.execute(
             text(
                 "SELECT id FROM public.meeting_note_versions WHERE meeting_id = :m AND field = :f "
-                "ORDER BY seq DESC"
+                "ORDER BY created_at DESC, id DESC"
             ),
             {"m": meeting_id, "f": field},
         )

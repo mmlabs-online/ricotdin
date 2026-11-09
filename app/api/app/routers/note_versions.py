@@ -157,7 +157,7 @@ async def list_versions(meeting_id: str, field: str, identity: Identity, db: Db)
                     text(
                         "SELECT id, field, source, edited_by, created_at, "
                         "char_length(content) AS length FROM public.meeting_note_versions "
-                        "WHERE meeting_id = :m AND field = :f ORDER BY seq DESC"
+                        "WHERE meeting_id = :m AND field = :f ORDER BY created_at DESC, id DESC"
                     ),
                     {"m": mid, "f": name},
                 )

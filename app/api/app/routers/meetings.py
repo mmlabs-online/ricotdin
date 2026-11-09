@@ -145,7 +145,7 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
                     text(
                         "SELECT DISTINCT ON (field) field, source, content "
                         "FROM public.meeting_note_versions WHERE meeting_id = :id "
-                        "ORDER BY field, seq DESC"
+                        "ORDER BY field, created_at DESC, id DESC"
                     ),
                     {"id": mid},
                 )

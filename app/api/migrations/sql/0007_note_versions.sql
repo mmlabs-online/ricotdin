@@ -7,16 +7,17 @@
 
 CREATE TABLE public.meeting_note_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  seq bigint GENERATED ALWAYS AS IDENTITY,  -- order of writes (never a clock)
   meeting_id uuid NOT NULL REFERENCES public.meetings (id) ON DELETE CASCADE,
   field text NOT NULL CHECK (field IN ('summary', 'notes')),
   content text NOT NULL CHECK (char_length(content) <= 200000),  -- = AI notes limit
   source text NOT NULL CHECK (source IN ('ai', 'user', 'restore')),
   edited_by uuid NULL REFERENCES public.users (id) ON DELETE SET NULL,
+  -- clock_timestamp(): rows written one after another under the meeting row lock get rising
+  -- times; id breaks a tie (no sequence: public holds only tables and indexes, tested)
   created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX meeting_note_versions_by_field
-  ON public.meeting_note_versions (meeting_id, field, seq DESC);
+  ON public.meeting_note_versions (meeting_id, field, created_at DESC, id DESC);
 CREATE INDEX meeting_note_versions_edited_by
   ON public.meeting_note_versions (edited_by) WHERE edited_by IS NOT NULL;
 

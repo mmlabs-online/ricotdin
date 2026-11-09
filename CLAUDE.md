@@ -349,7 +349,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   limits), no NUL / lone surrogates → 422 `invalid_characters`; body ≤ 2.5 MB; the same text
   again writes nothing; 120 per user per hour `app.state.content_limiter`, checked before the
   body is read). History = migration `0007` table `meeting_note_versions` (each row = the text a
-  field had from then on, ordered by `seq` identity, never a clock; a current text the newest row
+  field had from then on, ordered by `created_at` (`clock_timestamp`, writes serialised by the
+  meeting row lock) then `id` — no sequence, `public` holds only tables and indexes (tested); a current text the newest row
   does not hold — first edit, or a worker re-process, which writes no version — is kept first as
   an `ai` row; `ai` rows never have an author, also on `regenerate`, which writes the replaced +
   new text; restore writes a `restore` row; the 50 newest per meeting + field are kept).
