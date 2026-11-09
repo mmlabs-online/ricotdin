@@ -911,7 +911,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   requeue the seeded failed meeting → the stand-in worker finishes it, key check + save a key, audit
   rows); `tests/e2e_server.py` seeds the admin and the failed meeting (+ its `storage_objects` row).
 
-### 0.11 v2 release & supply chain (ARC-15, part 1)
+### 0.11 v2 release, supply chain, backup, cutover (ARC-15)
 
 - **`release.yml` is v2 from `dev` on:** tag `vX.Y.Z` (X ≥ 2) on `release/X.Y`; the guard job
   requires the same version in `app/api/pyproject.toml` and `app/web/package.json` (bump both),
@@ -919,8 +919,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   (API **and** worker: one image, the worker is `command: python -m app.worker`) and
   `mingming21400/ricotdin-web`, and opens the deployment PR writing `RICOTDIN_API_IMAGE`,
   `RICOTDIN_WEB_IMAGE` (both `:tag@digest`) and `RICOTDIN_VERSION` to
-  `apps/ricotdin/release-v2.env` — its own file, because v1 hotfix releases rewrite all of
-  `release.env` (the deployment repo's `pr-scope.yml` must allow it, ARC-15 part 2). A prerelease
+  `apps/ricotdin-v2/release.env` — its own app directory, because v1 hotfix releases rewrite all of
+  `apps/ricotdin/release.env` and v1's deploy workflow fires on `apps/ricotdin/**` (the deployment
+  repo's `pr-scope.yml` must allow the new path; drafts in `docs/ops/deployment-repo/`, part 2). A prerelease
   tag (`v2.0.0-rc1`) only pushes images, no deployment PR.
   A v1 tag on `dev` fails the guard; v1 hotfix tags are cut on `release/1.1`, whose own
   `release.yml` still builds v1 (a tag runs the workflow file of the tagged commit).
@@ -931,6 +932,23 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   type annotation — add a file only after checking its "secret" is fake) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
   commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
   not rescanned: a finding there is rotated at the provider, never allowlisted.
+- **Backup (part 2) replaces v1 OPS-03:** `backup.yml` dumps Neon `main` with pg_dump 18
+  (`--format=custom`, secret `NEON_BACKUP_DATABASE_URL`: a `BYPASSRLS` + `pg_read_all_data` login —
+  pg_dump fails on RLS tables without BYPASSRLS — direct URL), checks the archive lists
+  `public.meetings`, age-encrypts it; a second job that never sees the DB secret installs packages
+  (artifact = the encrypted file only) and `scripts/backup_r2.py` uploads `db-v2/ricotdin-v2-db-<UTC>.dump.age` (IfNoneMatch)
+  and prunes after 30 days (`app/ops/backup_plan.py`, pure, tests `test_backup_plan.py`; never the
+  newest, never v1's `db/` keys). Roles/logins are not in the dump (migrations +
+  `provision_db_roles`). Runbook `docs/ops/backup-restore.md`. The v1 `SUPABASE_DB_URL` secret is
+  retired; the final v1 dump is taken by hand at the cutover. §9o describes the retired v1 job.
+- **Deployment (drafts in `docs/ops/deployment-repo/`):** `apps/ricotdin-v2/compose.yml` (api +
+  worker + web + autoheal, network aliases `ricotdin-api` / `ricotdin-web` on `web`, three server
+  env files `/etc/mmlabs/ricotdin-{api,worker,web}.env`) and `deploy-ricotdin-v2.yml` (both pins
+  must be `ricotdin-{api,web}:<RICOTDIN_VERSION>@sha256:…`; restore on unhealthy like v1). v1's
+  `apps/ricotdin/` stays for the rollback until ARC-16.
+- **Cutover runbook:** `docs/ops/v2-cutover.md` (prep table incl. the staging rehearsal + rollback
+  test, the window: stop v1 → final v1 dump → final migration → go-live counts → tag `v2.0.0` →
+  deploy → switch cloudflared hostnames → smoke checklist; rollback; after go-live).
 - **Known history finding (2026-11-05):** commits of 2026-06-09/10/13 (`README.md`, on `main` and
   `release/1.0`/`1.1`) contain a Supabase `service_role` JWT, the anon JWT and a Gemini API key.
   Rotate them (Supabase: JWT secret rotation / new API keys; Google: delete the key); history is
@@ -1304,7 +1322,7 @@ Policy for people: `docs/privacy/retention-policy.md`.
   Tab trapped, focus returned to the opener.
 - Not built: admin toggle (notice is always mandatory); notice before file upload (upload is not recording).
 
-## 9o. DB backup (OPS-03, Supabase Free)
+## 9o. DB backup (OPS-03, Supabase Free) — retired by ARC-15 (v2 backup: §0.11)
 
 - `.github/workflows/backup.yml`: daily 02:00 UTC + manual. `supabase db dump` (roles, schema, data) →
   tar.gz → `age` encrypt with the **public** key → `scripts/backup/r2.ts upload` → `prune` (only after a

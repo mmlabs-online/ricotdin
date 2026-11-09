@@ -12,6 +12,47 @@ that needs **runtime secrets**, which live only in a server-side env file.
 `apps/ricotdin/release.env` is **not** a draft: ricotdin's `release.yml` writes it in the
 `ricotdin vX.Y.Z` PR (OPS-04). `pr-scope.yml` already accepts `release/ricotdin-v…` branches.
 
+## v2 (ARC-15): `apps/ricotdin-v2/`
+
+v2 lives in its own app directory, so a v1 hotfix or a v1 deploy never touches it and v1 stays
+runnable for a rollback until ARC-16.
+
+| Draft (this repo) | Copy to (deployment repo) |
+|---|---|
+| `docs/ops/deployment-repo/apps/ricotdin-v2/compose.yml` | `apps/ricotdin-v2/compose.yml` |
+| `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2.yml` | `.github/workflows/deploy-ricotdin-v2.yml` |
+
+- **Release pins:** ricotdin's `release.yml` (v2) writes `apps/ricotdin-v2/release.env` with
+  `RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE` (both `:vX.Y.Z@sha256:…`) and `RICOTDIN_VERSION`,
+  in a PR from `release/ricotdin-vX.Y.Z`.
+- **`pr-scope.yml`:** must accept that file on those branches. Also: **dismiss stale approvals
+  on new commits** (a re-run for the same tag force-pushes the branch), and add gitleaks.
+- **Three server env files**, all `chmod 600` and owned by the runner user, never in a repo.
+  Names are listed in `compose.yml`.
+  - `/etc/mmlabs/ricotdin-api.env`: the API.
+  - `/etc/mmlabs/ricotdin-worker.env`: the worker. It must hold **only** the worker values, or
+    the worker refuses to start.
+  - `/etc/mmlabs/ricotdin-web.env`: `RICOTDIN_API_URL`, not a secret.
+  - `KEY_ENCRYPTION_SECRET` is the **same value as v1**.
+  - Generate the production `JWT_PRIVATE_KEY` on the server:
+    `uv run python -m scripts.gen_jwt_key --env-file /etc/mmlabs/ricotdin-api.env`, or paste its
+    output there.
+  - The logins come from `scripts.provision_db_roles` run against Neon `main`.
+- **cloudflared:** two public hostnames, sibling subdomains of one site:
+  - `api.<domain>` → `http://ricotdin-api:8000`;
+  - `app.<domain>` → `http://ricotdin-web:8080`.
+  - `FORWARDED_ALLOW_IPS` = **only cloudflared's address**, never the whole `web` subnet. Other
+    containers share that network: trusting all of it lets any of them forge `X-Forwarded-For`
+    and slip past the per-client login and register limits. Give cloudflared a fixed
+    `ipv4_address` in `proxy/compose.yml` and put that one address here.
+  - Strip query strings for `/media` from the tunnel / access logs.
+  - `WEB_ORIGIN` and `ALLOWED_ORIGINS` = `https://app.<domain>`.
+- **autoheal** restarts containers labelled `autoheal=true` once they turn unhealthy. It acts on
+  **every** container on the host with that label, not only this project. It holds the Docker
+  socket, which is host root, so it is pinned by digest and has no network.
+  - Follow-up: put a docker-socket-proxy in front of it that allows only list and restart.
+- **Order and rollback:** `docs/ops/v2-cutover.md` in ricotdin.
+
 ## How a release deploys
 
 ```
