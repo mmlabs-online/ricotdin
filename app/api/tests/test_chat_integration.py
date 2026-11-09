@@ -52,7 +52,7 @@ class Provider:
         self.answer: Any = None  # None → cite every excerpt
         self.status = 200
         self.embed_status = 200
-        self.refuse = False  # Gemini blocks the prompt (safety): ModelRefused
+        self.refuse = False  # the model refuses (Gemini block / OpenAI refusal): ModelRefused
         self.prompts: list[str] = []
         self.models: list[str] = []
 
@@ -73,6 +73,10 @@ class Provider:
         if self.status != 200:
             return httpx2.Response(self.status, json={"error": {"code": "bad_request"}})
         if request.url.host == "api.openai.com":
+            if self.refuse:
+                return httpx2.Response(
+                    200, json={"choices": [{"message": {"refusal": "I can't help with that."}}]}
+                )
             prompt = body["messages"][-1]["content"]
             self.prompts.append(prompt)
             self.models.append(f"openai:{body['model']}")
