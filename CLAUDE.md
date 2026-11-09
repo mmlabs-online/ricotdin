@@ -981,9 +981,24 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   `mingming21400/ricotdin-web`, and opens the deployment PR writing `RICOTDIN_API_IMAGE`,
   `RICOTDIN_WEB_IMAGE` (both `:tag@digest`) and `RICOTDIN_VERSION` to
   `apps/ricotdin-v2/release.env` — its own app directory, because v1 hotfix releases rewrite all of
-  `apps/ricotdin/release.env` and v1's deploy workflow fires on `apps/ricotdin/**` (the deployment
-  repo's `pr-scope.yml` must allow the new path; drafts in `docs/ops/deployment-repo/`, part 2). A prerelease
+  `apps/ricotdin/release.env` and v1's deploy workflow fires on `apps/ricotdin/**`. The PR branch
+  is `release/ricotdin-v2-vX.Y.Z`: the deployment repo's `pr-scope.yml` reads the app folder from
+  `^release/([a-z0-9-]+)-v[0-9]`, so the branch name decides which `apps/<folder>/` a release PR may
+  change (OPS-02 fixed `release/ricotdin-vX.Y.Z`, read as v1's folder). A prerelease
   tag (`v2.0.0-rc1`) only pushes images, no deployment PR.
+- **Staging (OPS-02, `docs/ops/staging.md`):** pushing `staging/X.Y.Z` (X ≥ 2) runs
+  `release-staging.yml`: guard `python3 -m app.ops.staging_release` (stdlib only; branch = both
+  version files), both CI suites, images `:staging-X.Y.Z-<sha7>` (never `latest` or `vX.Y.Z`), then
+  a PR from `release/ricotdin-v2-staging-vX.Y.Z` writing only `apps/ricotdin-v2-staging/release.env`,
+  **auto-merged** once `pr-scope` passes (the deployment repo must require that check, or auto-merge
+  skips it); `deploy-ricotdin-v2-staging.yml` deploys it on mmlabs-server with restore on unhealthy.
+  Hosts `ricotdin-staging.mmlabs.online` (web) + `ricotdin-staging-api.mmlabs.online` (one-level
+  names: the free Cloudflare certificate covers `*.mmlabs.online` only). Staging = the Neon **dev**
+  branch through the three app logins (owner decision 2026-11-09: shared with local development,
+  incl. Drive and the job queue; re-running `provision_db_roles` rotates them and stops staging),
+  no `SMTP_*` (nobody can register), no access gate, its own autoheal label. Never migrates: the
+  owner runs `alembic upgrade head` on dev before pushing a staging branch with a migration.
+  Versions are `2.0.0` since OPS-02.
   A v1 tag on `dev` fails the guard; v1 hotfix tags are cut on `release/1.1`, whose own
   `release.yml` still builds v1 (a tag runs the workflow file of the tagged commit).
 - **Pinning:** every GitHub Action by commit SHA (`# vN` comment), the v2 base images

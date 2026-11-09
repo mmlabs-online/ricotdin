@@ -1,0 +1,139 @@
+name: Release staging
+
+# OPS-02. Push a branch staging/X.Y.Z (X >= 2, cut from dev) → staging at
+# https://ricotdin-staging.mmlabs.online (API: ricotdin-staging-api.mmlabs.online):
+#   1. guard: branch name ↔ app/api/pyproject.toml ↔ app/web/package.json (app.ops.staging_release);
+#   2. the full API and web CI (ci-api.yml, ci-web.yml, reused as-is);
+#   3. build + push mingming21400/ricotdin-api and ricotdin-web as :staging-X.Y.Z-<sha7>
+#      (never latest, never a production vX.Y.Z tag);
+#   4. open or update PR "ricotdin staging-X.Y.Z-<sha7>" on mmlabs-online/deployment that changes
+#      ONLY apps/ricotdin-v2-staging/release.env (both images by digest) and turn on auto-merge.
+#      Its branch release/ricotdin-v2-staging-vX.Y.Z makes pr-scope.yml limit it to that folder.
+# The deployment repo's deploy-ricotdin-v2-staging.yml then deploys it on mmlabs-server. Every
+# push to the branch redeploys. No migration step: run `alembic upgrade head` on the staging
+# database (the Neon dev branch) before pushing a commit that brings a migration.
+on:
+  push:
+    branches: ['staging/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-staging-${{ github.ref }}
+  cancel-in-progress: true # a newer push to the same branch wins
+
+env:
+  API_IMAGE: mingming21400/ricotdin-api
+  WEB_IMAGE: mingming21400/ricotdin-web
+  DEPLOY_REPO: mmlabs-online/deployment
+  APP_DIR: apps/ricotdin-v2-staging
+
+jobs:
+  guard:
+    name: branch · version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      branch: ${{ steps.check.outputs.branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Standard library only: nothing is installed before the checks pass.
+      - name: Check the branch and the versions
+        id: check
+        working-directory: app/api
+        run: python3 -I -m app.ops.staging_release | tee -a "$GITHUB_OUTPUT"
+
+  verify-api:
+    needs: guard
+    uses: ./.github/workflows/ci-api.yml
+
+  verify-web:
+    needs: guard
+    uses: ./.github/workflows/ci-web.yml
+
+  build:
+    name: build & push images · open staging deployment PR
+    needs: [guard, verify-api, verify-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # The tag is never baked in: the API reads RICOTDIN_VERSION from release.env at runtime.
+      - name: Build & push API image (API + worker)
+        id: api
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: app/api/Dockerfile
+          push: true
+          tags: ${{ env.API_IMAGE }}:${{ needs.guard.outputs.tag }}
+          build-args: |
+            BUILD_COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build & push web image
+        id: web
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: app/web
+          file: app/web/Dockerfile
+          push: true
+          tags: ${{ env.WEB_IMAGE }}:${{ needs.guard.outputs.tag }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # DEPLOY_REPO_TOKEN: fine-grained PAT on mmlabs-online/deployment only, Contents + Pull
+      # requests read/write. The deployment repo needs "Allow auto-merge" and a protected main
+      # requiring pr-scope, or auto-merge merges at once without the scope check.
+      - name: Open staging deployment PR
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          BRANCH: ${{ needs.guard.outputs.branch }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          # Validates both digests and the tag before anything is written.
+          ENV_TEXT="$(cd app/api && python3 -I -m app.ops.staging_release release-env "$TAG" "$API_DIGEST" "$WEB_DIGEST")"
+
+          gh auth setup-git
+          gh repo clone "$DEPLOY_REPO" deployment -- --depth 1
+          cd deployment
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          mkdir -p "$APP_DIR"
+          printf '%s\n' "$ENV_TEXT" > "$APP_DIR/release.env"
+          git add "$APP_DIR/release.env"
+          if git diff --cached --quiet; then
+            echo "$APP_DIR/release.env already pins $TAG on main — nothing to deploy."
+            exit 0
+          fi
+          git commit -m "ricotdin $TAG"
+          # --force: the branch is per version; each push to staging/X.Y.Z rewrites it.
+          git push --force -u origin "$BRANCH"
+
+          PR="$(gh pr list --head "$BRANCH" --state open --json url -q '.[0].url')"
+          if [ -n "$PR" ]; then
+            gh pr edit "$PR" --title "ricotdin $TAG"
+            echo "Open PR $PR updated to $TAG."
+          else
+            PR="$(gh pr create --title "ricotdin $TAG" --head "$BRANCH" \
+              --body "Staging deploy of \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA, branch $GITHUB_REF_NAME). Changes only \`$APP_DIR/release.env\`; merges itself once pr-scope passes. Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.")"
+          fi
+          gh pr merge "$PR" --auto --squash

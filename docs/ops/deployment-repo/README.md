@@ -24,9 +24,12 @@ runnable for a rollback until ARC-16.
 
 - **Release pins:** ricotdin's `release.yml` (v2) writes `apps/ricotdin-v2/release.env` with
   `RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE` (both `:vX.Y.Z@sha256:…`) and `RICOTDIN_VERSION`,
-  in a PR from `release/ricotdin-vX.Y.Z`.
-- **`pr-scope.yml`:** must accept that file on those branches. Also: **dismiss stale approvals
-  on new commits** (a re-run for the same tag force-pushes the branch), and add gitleaks.
+  in a PR from `release/ricotdin-v2-vX.Y.Z`.
+- **`pr-scope.yml`:** needs no change: it reads the app folder from the branch
+  (`^release/([a-z0-9-]+)-v[0-9]` → `ricotdin-v2`), so that PR may change only `apps/ricotdin-v2/`.
+  (Before OPS-02 the branch was `release/ricotdin-vX.Y.Z`, which pr-scope read as `ricotdin`, the
+  v1 folder, and refused.) Still to do: **dismiss stale approvals on new commits** (a re-run for
+  the same tag force-pushes the branch), and add gitleaks.
 - **Three server env files**, all `chmod 600` and owned by the runner user, never in a repo.
   Names are listed in `compose.yml`.
   - `/etc/mmlabs/ricotdin-api.env`: the API.
@@ -52,6 +55,44 @@ runnable for a rollback until ARC-16.
   socket, which is host root, so it is pinned by digest and has no network.
   - Follow-up: put a docker-socket-proxy in front of it that allows only list and restart.
 - **Order and rollback:** `docs/ops/v2-cutover.md` in ricotdin.
+
+## v2 staging (OPS-02): `apps/ricotdin-v2-staging/`
+
+Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Production
+(`apps/ricotdin-v2/`) and v1 (`apps/ricotdin/`) are never touched. Owner checklist:
+`docs/ops/staging.md` in ricotdin.
+
+| Draft (this repo) | Copy to (deployment repo) |
+|---|---|
+| `docs/ops/deployment-repo/apps/ricotdin-v2-staging/compose.yml` | `apps/ricotdin-v2-staging/compose.yml` |
+| `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2-staging.yml` | `.github/workflows/deploy-ricotdin-v2-staging.yml` |
+
+- **Release pins:** ricotdin's `release-staging.yml` writes `apps/ricotdin-v2-staging/release.env`
+  (both images `:staging-X.Y.Z-<sha7>@sha256:…`, `RICOTDIN_VERSION=staging-X.Y.Z-<sha7>`) in a PR
+  from `release/ricotdin-v2-staging-vX.Y.Z`. pr-scope reads that as `ricotdin-v2-staging`. The
+  workflow turns on **auto-merge**, so the repo needs:
+  - Settings → General → **Allow auto-merge** and **Allow squash merging**;
+  - a branch protection rule (or ruleset) on `main` that **requires the `pr-scope` check**.
+    Without a required check, auto-merge merges at once and the scope check does not gate it.
+- **Three server env files** `/etc/mmlabs/ricotdin-staging-{api,worker,web}.env` (`chmod 600`,
+  owned by the runner user). They use the same names as production, with staging values:
+  - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
+    branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
+    `JWT_PRIVATE_KEY` (a staging key of its own), `KEY_ENCRYPTION_SECRET` (the value the dev
+    branch's stored keys and `drive_config` were encrypted with), `WEB_ORIGIN` =
+    `ALLOWED_ORIGINS` = `https://ricotdin-staging.mmlabs.online`, `FORWARDED_ALLOW_IPS` =
+    cloudflared's address. **No `SMTP_*`**: nobody can register on staging.
+  - worker: `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET` only.
+  - web: `RICOTDIN_API_URL=https://ricotdin-staging-api.mmlabs.online`.
+  - Re-running `provision_db_roles` against the dev branch **rotates these logins**: copy the
+    new three URLs here at once, or staging stops.
+- **cloudflared:** `ricotdin-staging.mmlabs.online` → `http://ricotdin-staging-web:8080`,
+  `ricotdin-staging-api.mmlabs.online` → `http://ricotdin-staging-api:8000` (one-level names:
+  Cloudflare's free certificate covers `*.mmlabs.online` only). Strip `/media` query strings
+  from the logs.
+- **autoheal:** staging runs its own, limited to the label `autoheal-ricotdin-staging=true`.
+- **Shared with local development:** the database and the Drive folder (`drive_config` lives in
+  that database). A worker the owner runs locally takes jobs from the same queue.
 
 ## How a release deploys
 
