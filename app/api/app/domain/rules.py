@@ -4,6 +4,7 @@ Messages and status codes are the v1 route handlers' (legacy/app/api). Where v1 
 unhandled 500 (a non-string name, ``folder_id: ""``, …) the intended 400/422 is raised instead.
 """
 
+import unicodedata
 import uuid
 from typing import Any
 
@@ -34,6 +35,32 @@ def can_reprocess(audio_path: str | None) -> bool:
     return bool(audio_path)
 
 
+# --- names other users see (SEC-05) ----------------------------------------------------------
+
+# Control (Cc), format (Cf: bidi controls and marks, zero-width characters, soft hyphen, tag
+# characters), line / paragraph separators (Zl, Zp), plus invisible letters and marks that are not
+# in those categories (Hangul fillers, the combining grapheme joiner, Khmer inherent vowels). They
+# can reorder the text around a name or make one name look like another (CWE-451). Emoji
+# variation selectors stay allowed ("❤️"). Mirrored by the web's `lib/text.ts`.
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+_INVISIBLE_EXTRA = frozenset("\u034f\u115f\u1160\u17b4\u17b5\u3164\uffa0")
+INVISIBLE_MESSAGE = "Names cannot contain invisible or text-direction characters."
+
+
+def has_invisible_characters(text: str) -> bool:
+    return any(
+        ch in _INVISIBLE_EXTRA or unicodedata.category(ch) in _INVISIBLE_CATEGORIES for ch in text
+    )
+
+
+class InvalidNameCharacters(BadRequest):
+    code = "invalid_characters"
+
+
+class InvalidTitleCharacters(UnprocessableEntity):
+    code = "invalid_characters"
+
+
 # --- meetings ---------------------------------------------------------------------------------
 
 
@@ -43,6 +70,8 @@ def parse_meeting_patch(body: dict[str, Any]) -> dict[str, Any]:
         title = body["title"]
         if not isinstance(title, str):
             raise UnprocessableEntity("title must be a string.")
+        if has_invisible_characters(title):  # before strip(): it removes some controls silently
+            raise InvalidTitleCharacters(INVISIBLE_MESSAGE)
         title = title.strip()
         if not title:
             raise UnprocessableEntity("title must not be empty.")
@@ -77,6 +106,8 @@ def parse_dismissed(body: dict[str, Any]) -> None:
 
 def parse_folder_name(body: dict[str, Any]) -> str:
     raw = body.get("name")
+    if isinstance(raw, str) and has_invisible_characters(raw):  # before strip(), see above
+        raise InvalidNameCharacters(INVISIBLE_MESSAGE)
     name = raw.strip() if isinstance(raw, str) else ""
     if not name:
         raise BadRequest("name is required.")

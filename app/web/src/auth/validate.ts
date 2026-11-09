@@ -31,3 +31,13 @@ export function validatePassword(password: string): string | null {
   if (password.length > MAX_PASSWORD) return 'auth.validation.passwordLong'
   return null
 }
+
+/** A new password and its confirmation (reset, and the verify link that sets it, SEC-05). */
+export function newPasswordError(password: string, confirm: string): string | null {
+  return validatePassword(password) ?? (confirm !== password ? 'auth.validation.mismatch' : null)
+}
+
+/** Which field a new-password error belongs to, so only that field is marked invalid. */
+export function passwordField(errorKey: string): 'password' | 'repeat' {
+  return errorKey === 'auth.validation.mismatch' ? 'repeat' : 'password'
+}

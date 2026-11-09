@@ -68,6 +68,11 @@ class AIRejected(AppError):
     message = "The AI service could not process this meeting."
 
 
+class AIRefused(AIRejected):
+    """The model itself declined the content (safety block / refusal), as opposed to a request we
+    built badly (404 / 413 / unknown model). Chat keeps the charge only for this one (SEC-05)."""
+
+
 class AIBadOutput(AppError):
     status = 502
     code = "ai_bad_output"
@@ -245,7 +250,7 @@ class AIService:
             unavailable.retry_after = pool.ready_in()
             raise unavailable from None
         except ModelRefused as exc:
-            raise AIRejected(
+            raise AIRefused(
                 "The AI model declined to process this meeting.", detail=str(exc)
             ) from None
         except ParseFailed as exc:

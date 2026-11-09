@@ -3,11 +3,13 @@
 from datetime import UTC, datetime, timedelta
 
 from app.auth.tokens import (
+    ABSOLUTE_TTL,
     REUSE_GRACE,
     RefreshRow,
     hash_token,
     is_expired,
     new_opaque_token,
+    refresh_expiry,
     refresh_outcome,
     should_revoke_family,
 )
@@ -71,3 +73,30 @@ def test_reuse_wins_over_disabled_and_expired() -> None:
 
 def test_disabled_wins_over_expired() -> None:
     assert refresh_outcome(_row(user_disabled=True, expires_at=NOW), NOW) == "disabled"
+
+
+# --- SEC-05: absolute session lifetime --------------------------------------------------------
+
+
+def test_sec05_a_family_older_than_90_days_is_expired() -> None:
+    start = NOW - ABSOLUTE_TTL - timedelta(seconds=1)
+    assert refresh_outcome(_row(family_started_at=start), NOW) == "expired"
+    assert refresh_outcome(_row(family_started_at=NOW - ABSOLUTE_TTL), NOW) == "expired"
+
+
+def test_sec05_a_family_inside_90_days_still_refreshes() -> None:
+    assert refresh_outcome(_row(family_started_at=NOW - timedelta(days=89)), NOW) == "ok"
+    assert refresh_outcome(_row(), NOW) == "ok"  # unknown start: only the sliding expiry applies
+
+
+def test_sec05_new_tokens_never_outlive_the_family() -> None:
+    ttl = timedelta(days=30)
+    assert refresh_expiry(NOW, ttl, family_started_at=None) == NOW + ttl
+    young = NOW - timedelta(days=10)
+    assert refresh_expiry(NOW, ttl, family_started_at=young) == NOW + ttl
+    old = NOW - timedelta(days=80)
+    assert refresh_expiry(NOW, ttl, family_started_at=old) == old + ABSOLUTE_TTL
+
+
+def test_sec05_absolute_lifetime_is_90_days() -> None:
+    assert ABSOLUTE_TTL == timedelta(days=90)

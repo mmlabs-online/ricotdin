@@ -414,6 +414,26 @@ def test_folder_create_rename_delete(client: TestClient, world: dict[str, Any]) 
     assert _status(client, "d", "DELETE", f"/folders/{fid}") == 404
 
 
+def test_sec05_invisible_characters_are_refused_in_names(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    r = client.post("/folders", headers=_as(client, "d"), json={"name": "Shared\u202efdp.exe"})
+    assert (r.status_code, r.json()["error"]["code"]) == (400, "invalid_characters")
+    r = client.post("/folders", headers=_as(client, "d"), json={"name": "Họp tuần"})
+    assert r.status_code == 201
+    fid = r.json()["folder"]["id"]
+    r = client.patch(f"/folders/{fid}", headers=_as(client, "d"), json={"name": "a\u200bb"})
+    assert (r.status_code, r.json()["error"]["code"]) == (400, "invalid_characters")
+    m1 = str(world["m1"])
+    r = client.patch(f"/meetings/{m1}", headers=_as(client, "a"), json={"title": "x\u2066y"})
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_characters")
+    assert (
+        _sql(world["db"], "SELECT title FROM meetings WHERE id = %s", world["m1"])[0][0]
+        != "x\u2066y"
+    )
+    assert _status(client, "d", "DELETE", f"/folders/{fid}") == 200
+
+
 def test_folder_delete_keeps_everyones_meetings(client: TestClient, world: dict[str, Any]) -> None:
     fid = _sql(
         world["db"],

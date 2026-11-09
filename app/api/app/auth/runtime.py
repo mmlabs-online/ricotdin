@@ -38,6 +38,9 @@ class Limiters:
     register_ip: RateLimiter = field(default_factory=lambda: _per(5, 60 * 60))
     email_ip: RateLimiter = field(default_factory=lambda: _per(5, 15 * 60))
     email_address: RateLimiter = field(default_factory=lambda: _per(3, 60 * 60))
+    # Registration of an unverified address re-sends its link (SEC-05): its own bucket, and over
+    # the limit nothing is sent but the answer stays a new registration's (no oracle, no DoS).
+    register_resend: RateLimiter = field(default_factory=lambda: _per(3, 60 * 60))
     password_user: RateLimiter = field(default_factory=lambda: _per(5, 15 * 60))
 
 

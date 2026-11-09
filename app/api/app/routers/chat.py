@@ -37,7 +37,13 @@ from app.db.session import Database, get_database
 from app.domain.access import has_role
 from app.domain.models import Pick, system_default
 from app.domain.rules import parse_uuid
-from app.rag.answer import ANSWER_SCHEMA, SYSTEM_PROMPT, build_user_content, parse_answer
+from app.rag.answer import (
+    ANSWER_SCHEMA,
+    SYSTEM_PROMPT,
+    answer_refund_reason,
+    build_user_content,
+    parse_answer,
+)
 from app.rag.scope import (
     MATCH_COUNT,
     RetrievedChunk,
@@ -406,7 +412,8 @@ async def _answer(
         )  # fmt: skip
     except AppError as exc:
         log.error("chat answer failed (%s %s)", type(exc).__name__, exc.code)
-        return ANSWER_ERROR_REPLY, [], "answer_generation_failed"
+        # A provider refusal stays charged; failures on our side are refunded (SEC-05).
+        return ANSWER_ERROR_REPLY, [], answer_refund_reason(exc)
     return answer.text, answer.citations, None
 
 

@@ -23,8 +23,10 @@ from app.auth.jwt import ACCESS_TTL, JwtKeys, issue_access_token
 from app.auth.passwords import hash_password, verify_dummy, verify_password
 from app.auth.runtime import RESET_TTL, VERIFY_TTL, AuthRuntime
 from app.auth.validate import (
+    EmailState,
     normalize_email,
     normalize_username,
+    registration_action,
     validate_email,
     validate_password,
     validate_username,
@@ -117,8 +119,9 @@ class EmailIn(BaseModel):
     email: str = Field(max_length=320)
 
 
-class TokenIn(BaseModel):
+class VerifyIn(BaseModel):
     token: str = Field(max_length=200)
+    password: str = Field(max_length=1024)
 
 
 class ResetIn(BaseModel):
@@ -204,18 +207,39 @@ async def register(
         if error:
             raise UnprocessableEntity(error)
     password_hash = await runtime.run_hash(hash_password, body.password)
+    token: str | None = None
     try:
         async with db.role_transaction(SERVICE) as conn:
-            if await service.username_taken(conn, username):
+            existing = await service.find_user_by_email(conn, email)
+            state = None if existing is None else await service.lock_account(conn, existing.id)
+            owner = await service.username_owner(conn, username)
+            # The account's own username is not "taken" when its owner registers again (SEC-05).
+            if owner is not None and (existing is None or owner != existing.id):
                 raise Conflict("That username is already taken. Please choose another.")
-            if await service.find_user_by_email(conn, email):
-                raise Conflict("An account with that email already exists.")
-            user_id = await service.create_user(conn, email, username, password_hash)
-            token = await service.issue_email_token(
-                conn, user_id, "verify_email", ttl=VERIFY_TTL, now=_now()
+            action = registration_action(
+                None if state is None else EmailState(state.verified, state.disabled)
             )
+            if action == "conflict":
+                raise Conflict("An account with that email already exists.")
+            if existing is None:
+                user_id = await service.create_user(conn, email, username, password_hash)
+                token = await service.issue_email_token(
+                    conn, user_id, "verify_email", ttl=VERIFY_TTL, now=_now()
+                )
+            elif runtime.limiters.register_resend.check(email, now=time.monotonic()).allowed:
+                # Unverified account (SEC-05): no second account; the password is dropped (the
+                # verify link sets it), a free username replaces the earlier one, and the inbox
+                # owner gets one more link without the earlier one being cancelled.
+                if owner is None:
+                    await service.set_username(conn, existing.id, username)
+                token = await service.issue_email_token(
+                    conn, existing.id, "verify_email", ttl=VERIFY_TTL, now=_now(),
+                    void_previous=False,
+                )  # fmt: skip
     except IntegrityError:  # concurrent registration with the same email/username
         raise Conflict("That email or username is already taken.") from None
+    if token is None:  # over the re-send limit: same answer, nothing sent
+        return RegisterOut(email_sent=True)
     sent = await send_mail(runtime, email, verification_email(link(runtime, "verify-email", token)))
     return RegisterOut(email_sent=sent)
 
@@ -324,13 +348,29 @@ async def logout(request: Request, runtime: Runtime, db: Db) -> Response:
 
 @router.post("/verify-email")
 async def verify_email(
-    body: TokenIn, request: Request, runtime: Runtime, db: Db
+    body: VerifyIn, request: Request, runtime: Runtime, db: Db
 ) -> dict[str, bool]:
+    """The verify link also sets the password (SEC-05): only the inbox owner can finish an account,
+    so a password chosen by whoever registered the address first never survives verification."""
     enforce(runtime.limiters.token_ip, ip_key(client_ip(request)))
+    error = validate_password(body.password)
+    if error:
+        raise UnprocessableEntity(error)  # before the token is touched: it stays usable
+    user_id = None
     async with db.role_transaction(SERVICE) as conn:
-        user_id = await service.consume_email_token(conn, body.token, "verify_email", now=_now())
+        candidate = await service.peek_email_token(conn, body.token, "verify_email", now=_now())
+        # User row first, then the token row (the order issue_email_token uses: no deadlock).
+        state = None if candidate is None else await service.lock_account(conn, candidate)
+        # Only an account that is still unverified and enabled: a stray link must never work as a
+        # 24-hour password reset of a verified account, or revive a disabled one.
+        if state is not None and not state.verified and not state.disabled:
+            user_id = await service.find_email_token(conn, body.token, "verify_email", now=_now())
         if user_id is not None:
+            password_hash = await runtime.run_hash(hash_password, body.password)
+            await service.consume_email_token(conn, body.token, "verify_email", now=_now())
+            await service.set_password_hash(conn, user_id, password_hash)
             await service.mark_email_verified(conn, user_id)
+            await service.revoke_user_tokens(conn, user_id)
     if user_id is None:
         raise InvalidLink()
     return {"verified": True}

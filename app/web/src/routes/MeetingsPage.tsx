@@ -23,12 +23,13 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { getMeetingRole } from '../lib/access/roles'
 import { filterMeetings, type FolderFilter } from '../lib/meetings/list'
-import { displayText } from '../lib/text'
+import { displayText, isInvisibleCharactersError } from '../lib/text'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 function errorKey(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === 'network') return 'errors.network'
+    if (isInvisibleCharactersError(err)) return 'errors.invisibleCharacters' // SEC-05 (rename)
     if (err.status === 403) return 'errors.forbidden'
     if (err.status === 404) return 'errors.notFound'
     if (err.status === 429) return 'errors.rateLimited'

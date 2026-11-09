@@ -684,7 +684,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verify Email */
+        /**
+         * Verify Email
+         * @description The verify link also sets the password (SEC-05): only the inbox owner can finish an account,
+         *     so a password chosen by whoever registered the address first never survives verification.
+         */
         post: operations["verify_email_auth_verify_email_post"];
         delete?: never;
         options?: never;
@@ -1307,11 +1311,6 @@ export interface components {
             /** Token */
             token: string;
         };
-        /** TokenIn */
-        TokenIn: {
-            /** Token */
-            token: string;
-        };
         /** TokenOut */
         TokenOut: {
             /** Access Token */
@@ -1352,6 +1351,13 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VerifyIn */
+        VerifyIn: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
         };
     };
     responses: never;
@@ -2507,7 +2513,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TokenIn"];
+                "application/json": components["schemas"]["VerifyIn"];
             };
         };
         responses: {

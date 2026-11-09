@@ -96,11 +96,12 @@
       "invalid": "Hãy kiểm tra lại thông tin rồi thử lại."
     },
     "verify": {
-      "done": "Email đã được xác minh. Bạn có thể đăng nhập.",
+      "done": "Email đã được xác minh và mật khẩu đã được đặt. Hãy đăng nhập bằng mật khẩu này.",
       "resendHelp": "Cần liên kết xác minh mới? Nhập email của bạn.",
       "resend": "Gửi email xác minh",
-      "confirmHelp": "Xác nhận đây là địa chỉ email của bạn để kích hoạt tài khoản.",
-      "confirm": "Xác nhận email của tôi"
+      "confirmHelp": "Chọn mật khẩu cho tài khoản. Bước này xác minh email và kích hoạt tài khoản.",
+      "confirm": "Xác minh và đặt mật khẩu",
+      "password": "Mật khẩu"
     },
     "reset": {
       "help": "Chọn mật khẩu mới. Bạn sẽ bị đăng xuất trên mọi thiết bị.",
@@ -905,7 +906,8 @@
     "forbidden": "Bạn không có quyền làm việc này.",
     "notFound": "Mục này không còn tồn tại.",
     "rateLimited": "Quá nhiều yêu cầu. Đợi một lát rồi thử lại.",
-    "generic": "Đã có lỗi. Hãy thử lại."
+    "generic": "Đã có lỗi. Hãy thử lại.",
+    "invisibleCharacters": "Tên và tiêu đề không được chứa ký tự ẩn hoặc ký tự đổi chiều văn bản. Hãy gõ lại thay vì dán, rồi thử lại."
   },
   "meetings": {
     "upload": "Tải tệp lên",

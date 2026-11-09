@@ -4,6 +4,8 @@ Each validator returns ``None`` when valid, or a user-facing message.
 """
 
 import re
+from dataclasses import dataclass
+from typing import Literal
 
 _USERNAME = re.compile(r"^[a-z0-9_-]+$")
 # One plain address: no display names, quotes, comments or lists (recipient injection, ARC-05).
@@ -45,3 +47,26 @@ def validate_password(password: str) -> str | None:
     if len(password) > MAX_PASSWORD:
         return f"Password must be at most {MAX_PASSWORD} characters."
     return None
+
+
+# --- registering an email that already has an account (SEC-05) --------------------------------
+
+
+@dataclass(frozen=True)
+class EmailState:
+    verified: bool
+    disabled: bool
+
+
+RegistrationAction = Literal["create", "resend", "conflict"]
+
+
+def registration_action(existing: EmailState | None) -> RegistrationAction:
+    """An unverified account does not block its address: the inbox owner gets a fresh verify link
+    (which sets the password) and the answer looks like a new registration. A verified or disabled
+    account keeps the 409 (owner decision 2026-10-26)."""
+    if existing is None:
+        return "create"
+    if existing.verified or existing.disabled:
+        return "conflict"
+    return "resend"

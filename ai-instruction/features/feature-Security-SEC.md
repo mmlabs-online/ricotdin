@@ -128,7 +128,7 @@ As the system, I want proper secret management (no hard-coding) to avoid key lea
 ---
 
 ### SEC-05 — v2 pre-go-live hardening
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As the owner, I want v2 to close the four security gaps left open before go-live so that nobody can take over an account under someone else's email, keep a stolen session forever, spoof names with invisible characters, or farm chat refunds.
@@ -149,18 +149,18 @@ CLAUDE.md §0.3, §0.8 and §0.10 list these as open: (1) someone can register a
 
 **Backend**
 - `POST /auth/verify-email {token, password}`: password validated before the token is consumed; in one transaction: consume the token, set the password hash (argon2id), mark verified, revoke every refresh token of the user. Expired / used token → the existing invalid-link answer.
-- `POST /auth/register`: an email that belongs to an **unverified** account → no new row; issue a new `verify_email` token for the existing account (voids the previous one) and mail it; answer 201 with the same body as a new registration. The new request's username and password are discarded. Username taken by another account → 409 as today; a **verified** email → 409 as today (owner decision 2026-10-26). Mail sends follow the existing per-address limit (3/h).
+- `POST /auth/register`: an email that belongs to an **unverified** account → no new row; issue one more `verify_email` token for the existing account **without voiding earlier links** (review round 1: otherwise an attacker re-registering could keep cancelling the owner's link) and mail it; answer 201 with the same body as a new registration. The password is dropped; a free username replaces the pre-registered one. Re-sends have their own silent limit (3/h per address: over it nothing is sent, same answer). Username taken by another account → 409 as today; a **verified** email → 409 as today (owner decision 2026-10-26). Mail sends follow the existing per-address limit (3/h).
 - Refresh rotation: a family older than 90 days (`min(created_at)` of the family, DB clock) → outcome `expired` (401, token revoked). New tokens never get `expires_at` beyond family start + 90 days. Pure rule in `app/auth/` (`ABSOLUTE_TTL = 90 days`).
 - `parse_folder_name` / `parse_meeting_patch` (and the meeting title on create, if accepted there): reject Unicode bidi controls (U+202A–U+202E, U+2066–U+2069), zero-width and format characters (U+200B–U+200F, U+2060–U+2064, U+FEFF) and C0/C1 controls → 400 (folders) / 422 (meetings) with code `invalid_characters`. Same set as `app/web/src/lib/text.ts`.
-- Chat `_answer`: `AIRejected` → reply `ANSWER_ERROR_REPLY`, **no refund** (charge kept, metadata reason `answer_rejected`); every other failure keeps today's refund (retrieval error, `AIUnavailable`, `AIBadOutput`, timeout, cancel).
+- Chat `_answer`: `AIRefused` (the model refused the content: `ModelRefused`, a subclass of `AIRejected`) → reply `ANSWER_ERROR_REPLY`, **no refund**; every other failure keeps today's refund (retrieval error, `AIUnavailable`, `AIBadOutput`, plain `AIRejected` = unknown/retired model or prompt too large, timeout, cancel). No separate `answer_rejected` metadata is written.
 - Replace the three "Open (owner decision pending)" lines in CLAUDE.md §0.3/§0.8 and the §0.10 bidi follow-up with the new rules.
 
 **Acceptance Criteria**
-- Given an unverified account for `a@x.com`, when anyone registers `a@x.com` with a free username, then the answer equals a new registration (201, same body), no second user exists, and the account gets a new verify link (the old one stops working).
+- Given an unverified account for `a@x.com`, when anyone registers `a@x.com` with a free username, then the answer equals a new registration (201, same body), no second user exists, and the address gets one more verify link; once the account is verified through any link, every other link stops working.
 - Given a verify link, when it is posted with a valid password, then the account is verified, only the new password signs in, and all its refresh tokens are revoked; when posted without a valid password, then 422 and the token still works.
 - Given a refresh family whose first token is 90 days + 1 s old, when it is refreshed, then 401 and the token is revoked; a family 89 days old refreshes and its new token expires no later than day 90.
 - Given a folder or meeting name containing U+202E or U+200B, when it is created / renamed, then the API refuses it with `invalid_characters` and nothing is stored; plain Vietnamese names with diacritics are accepted.
-- Given a chat question whose answer call raises `AIRejected`, then the user is charged one query and no `agent:<id>:refund` ledger row exists; given `AIUnavailable`, then the refund row exists as today.
+- Given a chat question whose answer call raises `AIRefused`, then the user is charged one query and no `agent:<id>:refund` ledger row exists; given `AIUnavailable` or a plain `AIRejected`, then the refund row exists as today.
 
 **Test Plan**
 - Pure logic first:
@@ -168,7 +168,7 @@ CLAUDE.md §0.3, §0.8 and §0.10 list these as open: (1) someone can register a
   - `app/auth/` refresh rule → `absolute_expiry()` / outcome for an old family. Tests in `app/api/tests/test_refresh_rules.py`.
   - `app/rag/answer.py` (or `chat.py` helper) → `refund_reason(exc)`. Tests in `app/api/tests/test_chat_refund.py`.
 - Integration: `app/api/tests/test_auth_integration.py`: register an unverified email, verify with password, refresh after 90 days (DB clock moved by updating `created_at`); `test_chat_integration.py`: refusal charged, unavailable refunded.
-- Web: `app/web/src/routes/auth/VerifyEmailPage.test.tsx` (password step, no POST before Confirm), error-key tests for `invalid_characters`; e2e core flow updated for the new verify step.
+- Web: pure `newPasswordError` / `passwordField` (`src/auth/validate.test.ts`), `isInvisibleCharactersError` + `displayText` (`src/lib/text.test.ts`), error keys (`detail.test.ts`, `folderErrors.test.ts`). No component test (the repo has no jsdom setup) and e2e never opens a verify link: the page is checked by hand (done check).
 
 **Structural flags**
 - Auth contract change: `/auth/verify-email` now requires `password` (web + e2e updated in the same PR; v2 is not live yet). No migration, no env var, no new provider. ~12–16 files.

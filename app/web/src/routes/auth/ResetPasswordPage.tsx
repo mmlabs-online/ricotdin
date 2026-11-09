@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../auth/AuthProvider'
 import { publicAuthErrorKey } from '../../auth/authErrors'
 import { forgetHashToken, readHashToken } from '../../auth/emailLink'
-import { validatePassword } from '../../auth/validate'
+import { newPasswordError } from '../../auth/validate'
 import { AuthLayout } from '../../components/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -32,7 +32,7 @@ export function ResetPasswordPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!token || busy) return
-    const invalid = validatePassword(password) ?? (confirm !== password ? 'auth.validation.mismatch' : null)
+    const invalid = newPasswordError(password, confirm)
     if (invalid) {
       setErrorKey(invalid)
       pwRef.current?.focus()

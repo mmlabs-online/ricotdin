@@ -176,6 +176,7 @@ describe('actionErrorKey', () => {
     expect(actionErrorKey('ics', e(422))).toBe('detail.errors.icsNoTime')
     expect(actionErrorKey('ics', e(500))).toBe('detail.errors.icsFailed')
     expect(actionErrorKey('save', e(500))).toBe('detail.errors.saveFailed')
+    expect(actionErrorKey('save', e(422, 'invalid_characters'))).toBe('errors.invisibleCharacters') // SEC-05
     expect(actionErrorKey('delete', e(500))).toBe('detail.errors.generic')
   })
 
