@@ -165,6 +165,47 @@ async def lock_credentials(
     return None if row is None else (row.password_hash, row.disabled_at)
 
 
+@dataclass(frozen=True)
+class AccountState:
+    verified: bool
+    disabled: bool
+
+
+async def lock_account(conn: AsyncConnection, user_id: uuid.UUID) -> AccountState | None:
+    """Lock the user row (always before email_tokens: one lock order, no deadlock) and re-read
+    the flags that decide a registration or a verification (SEC-05)."""
+    row = (
+        await conn.execute(
+            text("SELECT email_verified_at, disabled_at FROM users WHERE id = :u FOR UPDATE"),
+            {"u": user_id},
+        )
+    ).first()
+    if row is None:
+        return None
+    return AccountState(row.email_verified_at is not None, row.disabled_at is not None)
+
+
+async def peek_email_token(
+    conn: AsyncConnection, token: str, purpose: EmailPurpose, *, now: datetime
+) -> uuid.UUID | None:
+    """The user of a valid token, without a lock (find the user first, lock in user order)."""
+    r = await conn.execute(
+        text(
+            "SELECT user_id FROM email_tokens "
+            "WHERE token_hash = :h AND purpose = :p AND used_at IS NULL AND expires_at > :now"
+        ),
+        {"h": hash_token(token), "p": purpose, "now": now},
+    )
+    user_id: uuid.UUID | None = r.scalar_one_or_none()
+    return user_id
+
+
+async def set_username(conn: AsyncConnection, user_id: uuid.UUID, username: str) -> None:
+    await conn.execute(
+        text("UPDATE profiles SET username = :n WHERE id = :u"), {"n": username, "u": user_id}
+    )
+
+
 async def mark_signed_in(conn: AsyncConnection, user_id: uuid.UUID) -> None:
     await conn.execute(
         text("UPDATE users SET last_sign_in_at = now() WHERE id = :id"), {"id": user_id}
@@ -274,6 +315,8 @@ async def rotate_refresh(
             text(
                 "SELECT t.id, t.user_id, t.family_id, t.revoked_at, t.expires_at, "
                 "t.replaced_by, u.disabled_at, now() AS db_now, "
+                # Family start = sign-in (SEC-05). Never prune refresh_tokens rows of a live
+                # family: a later min(created_at) would quietly extend the 90-day limit.
                 "(SELECT min(f.created_at) FROM refresh_tokens f WHERE f.family_id = t.family_id) "
                 "AS family_started_at "
                 "FROM refresh_tokens t JOIN users u ON u.id = t.user_id "
@@ -355,17 +398,20 @@ async def issue_email_token(
     *,
     ttl: timedelta,
     now: datetime,
+    void_previous: bool = True,
 ) -> str:
-    """A new single-use token; earlier unused tokens of the same purpose stop working.
-    The user row lock serialises concurrent requests, so at most one token stays valid."""
+    """A new single-use token; earlier unused tokens of the same purpose stop working unless
+    ``void_previous`` is False (a registration of the address must not cancel the link the inbox
+    owner already has, SEC-05). The user row lock serialises concurrent requests."""
     await conn.execute(text("SELECT 1 FROM users WHERE id = :u FOR UPDATE"), {"u": user_id})
-    await conn.execute(
-        text(
-            "UPDATE email_tokens SET used_at = now() "
-            "WHERE user_id = :u AND purpose = :p AND used_at IS NULL"
-        ),
-        {"u": user_id, "p": purpose},
-    )
+    if void_previous:
+        await conn.execute(
+            text(
+                "UPDATE email_tokens SET used_at = now() "
+                "WHERE user_id = :u AND purpose = :p AND used_at IS NULL"
+            ),
+            {"u": user_id, "p": purpose},
+        )
     token = new_opaque_token()
     await conn.execute(
         text(

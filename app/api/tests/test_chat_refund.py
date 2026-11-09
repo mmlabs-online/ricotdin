@@ -7,13 +7,20 @@ import pytest
 
 from app.core.errors import AppError, ServiceUnavailable
 from app.rag.answer import answer_refund_reason
-from app.services.ai.service import AIBadOutput, AIRejected, AIUnavailable
+from app.services.ai.service import AIBadOutput, AIRefused, AIRejected, AIUnavailable
 
 
-def test_sec05_a_provider_refusal_is_charged() -> None:
-    assert answer_refund_reason(AIRejected()) is None
+def test_sec05_a_model_refusal_is_charged() -> None:
+    assert answer_refund_reason(AIRefused()) is None
 
 
-@pytest.mark.parametrize("exc", [AIUnavailable(), AIBadOutput(), ServiceUnavailable(), AppError()])
+def test_sec05_other_rejections_are_ours_and_refunded() -> None:
+    # unknown / retired model (404), prompt too large (413): our configuration, not the user
+    assert answer_refund_reason(AIRejected()) == "answer_generation_failed"
+
+
+@pytest.mark.parametrize(
+    "exc", [AIRejected(), AIUnavailable(), AIBadOutput(), ServiceUnavailable(), AppError()]
+)
 def test_sec05_failures_on_our_side_are_refunded(exc: AppError) -> None:
     assert answer_refund_reason(exc) == "answer_generation_failed"

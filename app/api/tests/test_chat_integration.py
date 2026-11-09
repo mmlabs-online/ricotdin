@@ -52,6 +52,7 @@ class Provider:
         self.answer: Any = None  # None → cite every excerpt
         self.status = 200
         self.embed_status = 200
+        self.refuse = False  # Gemini blocks the prompt (safety): ModelRefused
         self.prompts: list[str] = []
         self.models: list[str] = []
 
@@ -77,6 +78,8 @@ class Provider:
             self.models.append(f"openai:{body['model']}")
             return httpx2.Response(200, json={"choices": [{"message": {
                 "content": self._answer(prompt)}}], "usage": {"total_tokens": 5}})  # fmt: skip
+        if self.refuse:
+            return httpx2.Response(200, json={"promptFeedback": {"blockReason": "SAFETY"}})
         prompt = body["contents"][-1]["parts"][0]["text"]
         self.prompts.append(prompt)
         self.models.append(f"gemini:{request.url.path.split('/')[-1].split(':')[0]}")
@@ -329,15 +332,24 @@ def test_unusable_or_failed_answers_are_refunded(
     assert _left(world, "a") == 10
 
 
-def test_sec05_provider_rejection_is_charged(
+def test_sec05_model_refusal_is_charged(
     client: TestClient, world: dict[str, Any], ai: Provider
 ) -> None:
     _queries(world, "a")
-    ai.status = 400  # the provider refuses the question itself (AIRejected)
+    ai.refuse = True  # the model refuses the question itself (AIRefused)
     resp = _ask(client, "a", meetingId=str(_meeting(world, "a")))
     assert resp.json()["message"]["content"] == ANSWER_ERROR_REPLY and _left(world, "a") == 9
     keys = _sql(world["db"], "SELECT dedup_key FROM quota_ledger WHERE user_id = %s", world["a"])
     assert not any(k[0].endswith(":refund") for k in keys)
+
+
+def test_provider_rejection_of_the_request_is_refunded(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "a")
+    ai.status = 400  # e.g. a retired model or a prompt we made too large: our side
+    resp = _ask(client, "a", meetingId=str(_meeting(world, "a")))
+    assert resp.json()["message"]["content"] == ANSWER_ERROR_REPLY and _left(world, "a") == 10
 
 
 def test_sec05_provider_outage_is_still_refunded(

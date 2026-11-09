@@ -7,6 +7,12 @@ describe('displayText (user text from other people)', () => {
     expect(displayText('evil‮gnp.exe')).toBe('evilgnp.exe')
     expect(displayText('a⁦b⁩c​d‏e﻿')).toBe('abcde')
   })
+  it('also removes marks the review found missing (SEC-05)', () => {
+    expect(displayText('a\u061Cb\u00ADc\u2028d\u3164e\u{E0041}f')).toBe('abcdef')
+  })
+  it('keeps emoji with variation selectors', () => {
+    expect(displayText('❤️ team')).toBe('❤️ team')
+  })
   it('keeps normal text, including Vietnamese', () => {
     expect(displayText('Đồng bộ khách hàng')).toBe('Đồng bộ khách hàng')
   })

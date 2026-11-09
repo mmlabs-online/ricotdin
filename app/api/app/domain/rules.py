@@ -4,7 +4,7 @@ Messages and status codes are the v1 route handlers' (legacy/app/api). Where v1 
 unhandled 500 (a non-string name, ``folder_id: ""``, …) the intended 400/422 is raised instead.
 """
 
-import re
+import unicodedata
 import uuid
 from typing import Any
 
@@ -37,17 +37,20 @@ def can_reprocess(audio_path: str | None) -> bool:
 
 # --- names other users see (SEC-05) ----------------------------------------------------------
 
-# Bidi controls, zero-width / invisible format characters and C0/C1 controls: they can reorder the
-# text around a name or make one name look like another (CWE-451). Same set as the web's
-# `lib/text.ts` displayText, plus control characters.
-_INVISIBLE_RE = re.compile(
-    "[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
-)
+# Control (Cc), format (Cf: bidi controls and marks, zero-width characters, soft hyphen, tag
+# characters), line / paragraph separators (Zl, Zp), plus invisible letters and marks that are not
+# in those categories (Hangul fillers, the combining grapheme joiner, Khmer inherent vowels). They
+# can reorder the text around a name or make one name look like another (CWE-451). Emoji
+# variation selectors stay allowed ("❤️"). Mirrored by the web's `lib/text.ts`.
+_INVISIBLE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
+_INVISIBLE_EXTRA = frozenset("\u034f\u115f\u1160\u17b4\u17b5\u3164\uffa0")
 INVISIBLE_MESSAGE = "Names cannot contain invisible or text-direction characters."
 
 
 def has_invisible_characters(text: str) -> bool:
-    return _INVISIBLE_RE.search(text) is not None
+    return any(
+        ch in _INVISIBLE_EXTRA or unicodedata.category(ch) in _INVISIBLE_CATEGORIES for ch in text
+    )
 
 
 class InvalidNameCharacters(BadRequest):
@@ -67,13 +70,13 @@ def parse_meeting_patch(body: dict[str, Any]) -> dict[str, Any]:
         title = body["title"]
         if not isinstance(title, str):
             raise UnprocessableEntity("title must be a string.")
+        if has_invisible_characters(title):  # before strip(): it removes some controls silently
+            raise InvalidTitleCharacters(INVISIBLE_MESSAGE)
         title = title.strip()
         if not title:
             raise UnprocessableEntity("title must not be empty.")
         if len(title) > MAX_TITLE:
             raise UnprocessableEntity(f"title must be {MAX_TITLE} characters or fewer.")
-        if has_invisible_characters(title):
-            raise InvalidTitleCharacters(INVISIBLE_MESSAGE)
         out["title"] = title
     if "folder_id" in body:
         raw = body["folder_id"]
@@ -103,13 +106,13 @@ def parse_dismissed(body: dict[str, Any]) -> None:
 
 def parse_folder_name(body: dict[str, Any]) -> str:
     raw = body.get("name")
+    if isinstance(raw, str) and has_invisible_characters(raw):  # before strip(), see above
+        raise InvalidNameCharacters(INVISIBLE_MESSAGE)
     name = raw.strip() if isinstance(raw, str) else ""
     if not name:
         raise BadRequest("name is required.")
     if len(name) > MAX_FOLDER_NAME:
         raise BadRequest(f"Folder name too long (max {MAX_FOLDER_NAME} characters).")
-    if has_invisible_characters(name):
-        raise InvalidNameCharacters(INVISIBLE_MESSAGE)
     return name
 
 

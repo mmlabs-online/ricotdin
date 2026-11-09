@@ -303,6 +303,8 @@ _INVISIBLE = [
     "⁠", "⁡", "⁢", "⁣", "⁤",  # word joiner, invisible operators
     "﻿",  # zero-width no-break space / BOM
     "\x00", "\t", "\n", "\x1f", "\x7f", "\x85", "\x9f",  # C0 / C1 controls
+    "\u061c", "\u00ad", "\u180e", "\u2028", "\u2029", "\u206a", "\ufff9",  # review round 1
+    "\U000e0041", "\u034f", "\u115f", "\u3164", "\uffa0", "\u17b4",  # tags, fillers
 ]  # fmt: skip
 
 
@@ -332,3 +334,13 @@ def test_sec05_meeting_title_with_invisible_characters_is_refused(ch: str) -> No
     with pytest.raises(AppError) as exc:
         parse_meeting_patch({"title": f"Weekly{ch}sync"})
     assert (exc.value.status, exc.value.code) == (422, "invalid_characters")
+
+
+@pytest.mark.parametrize("raw", ["\x1cPlan", "Plan\x85", " \u2029Plan "])
+def test_sec05_leading_or_trailing_controls_are_refused_not_stripped(raw: str) -> None:
+    with pytest.raises(AppError) as exc:
+        parse_folder_name({"name": raw})
+    assert exc.value.code == "invalid_characters"
+    with pytest.raises(AppError) as exc:
+        parse_meeting_patch({"title": raw})
+    assert exc.value.code == "invalid_characters"

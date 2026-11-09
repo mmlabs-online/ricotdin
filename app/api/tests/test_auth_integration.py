@@ -207,10 +207,11 @@ def test_sec05_registering_an_unverified_email_resends_the_link(api: Any, env: A
     name = _new_name()  # the "attacker" registers the address first, with their own password
     assert _register(client, name, password="attacker-pass-1").status_code == 201
     first = _token_from(mailer, f"{name}@example.test")
-    # the inbox owner registers the same address (any free username): same answer as a new account
+    # the inbox owner registers the same address with a free username: same answer as a new one
+    mine = _new_name()
     r = client.post(
         "/auth/register",
-        json={"email": f"{name}@example.test", "username": _new_name(), "password": PASSWORD},
+        json={"email": f"{name}@example.test", "username": mine, "password": PASSWORD},
     )
     assert r.status_code == 201, r.text
     assert r.json() == {"verify_email": True, "email_sent": True}
@@ -218,12 +219,56 @@ def test_sec05_registering_an_unverified_email_resends_the_link(api: Any, env: A
         (1,)
     ]
     second = _token_from(mailer, f"{name}@example.test")
-    assert first != second
-    assert _verify(client, first).status_code == 400  # the earlier link stopped working
+    assert first != second  # the earlier link is not cancelled: nobody can block the owner
     # the owner sets the password through the link: only that password signs in afterwards
     assert _verify(client, second, password="owner-pass-22").status_code == 200
-    assert _login(client, name, "attacker-pass-1").status_code == 401
-    assert _login(client, name, "owner-pass-22").status_code == 200
+    assert _verify(client, first).status_code == 400  # verified: no link works any more
+    assert _login(client, mine, "attacker-pass-1").status_code == 401
+    assert _login(client, mine, "owner-pass-22").status_code == 200  # the free username won
+    assert _login(client, name, "owner-pass-22").status_code == 401  # the earlier one is gone
+
+
+def test_sec05_reregistering_an_unverified_email_with_a_third_accounts_username(
+    api: Any,
+) -> None:
+    client, mailer = api
+    name, third = _new_name(), _verified_user(client, mailer)
+    _register(client, name)
+    r = client.post(
+        "/auth/register",
+        json={"email": f"{name}@example.test", "username": third, "password": PASSWORD},
+    )
+    assert r.status_code == 409 and "username" in r.json()["error"]["message"]
+
+
+def test_sec05_a_verified_email_still_conflicts_even_with_its_own_username(api: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    r = _register(client, name)
+    assert r.status_code == 409 and "email" in r.json()["error"]["message"]
+
+
+def test_sec05_register_resends_are_limited_silently(api: Any) -> None:
+    client, mailer = api
+    app: Any = client.app
+    app.state.auth.limiters.register_resend = RateLimiter(capacity=3, refill_per_second=3 / 3600)
+    name = _new_name()
+    _register(client, name)
+    before = len(mailer.outbox)
+    for _ in range(5):  # 3 per hour re-send; the rest answer the same and send nothing
+        assert _register(client, name).status_code == 201
+    assert len(mailer.outbox) - before == 3
+
+
+def test_sec05_a_verify_link_never_resets_a_verified_account(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _new_name()
+    _register(client, name)
+    token = _token_from(mailer, f"{name}@example.test")
+    _register(client, name)  # a second link
+    assert _verify(client, _token_from(mailer, f"{name}@example.test")).status_code == 200
+    assert _verify(client, token, password="takeover-pass-9").status_code == 400
+    assert _login(client, name, "takeover-pass-9").status_code == 401
 
 
 def test_sec05_reregistering_with_the_accounts_own_username_resends(api: Any) -> None:
