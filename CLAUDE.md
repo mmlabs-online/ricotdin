@@ -345,12 +345,16 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
 - **Editing summary / notes (PRO-06, part 6a; 6b = rich-text editor + history UI):**
   `PATCH /meetings/{id}/content {field: summary|notes, content, baseHash}` (editor+, `done`
   meetings only else 409, `baseHash` = sha-256 hex of the UTF-8 text the edit started from, NULL =
-  empty — a different current text → 409 `content_changed`; ≤ 20 000 / 100 000 chars, no NUL /
-  lone surrogates → 422 `invalid_characters`; 120 per user per hour `app.state.content_limiter`).
-  History = migration `0007` table `meeting_note_versions` (each row = the text a field had from
-  then on, so the newest row is the current text; the first edit first keeps the AI text as an
-  `ai` row with no author; `regenerate` writes the replaced + new text as `ai`; restore writes a
-  `restore` row; the 50 newest per meeting + field are kept). App role: SELECT under RLS
+  empty — a different current text → 409 `content_changed`; ≤ 20 000 / 200 000 chars (= the AI
+  limits), no NUL / lone surrogates → 422 `invalid_characters`; body ≤ 2.5 MB; the same text
+  again writes nothing; 120 per user per hour `app.state.content_limiter`, checked before the
+  body is read). History = migration `0007` table `meeting_note_versions` (each row = the text a
+  field had from then on, ordered by `seq` identity, never a clock; a current text the newest row
+  does not hold — first edit, or a worker re-process, which writes no version — is kept first as
+  an `ai` row; `ai` rows never have an author, also on `regenerate`, which writes the replaced +
+  new text; restore writes a `restore` row; the 50 newest per meeting + field are kept).
+  `GET /meetings/{id}` adds `summary_edited` / `notes_edited`: the newest version is a person's
+  (`user`/`restore`) and equals the current text (`domain.content.edited_by_person`). App role: SELECT under RLS
   (`can_access_meeting(...,'viewer')`); service: SELECT/INSERT/DELETE; worker: none (worker
   re-processing writes no version). `GET /meetings/{id}/content-versions?field=` (no text,
   `editedByUsername` read as service), `GET …/{versionId}`, `POST …/{versionId}/restore
@@ -850,9 +854,11 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   **AI text (summary, notes, chat answers) renders only through `components/Markdown.tsx` +
   `lib/markdown.ts`:** headings, lists, bold/italic/code; images become their text, HTML stays
   text (§0.8) — never add an image renderer or `dangerouslySetInnerHTML`. Links stay text too,
-  except with `links` (summary / notes only, PRO-06): `https:` without credentials
-  (`safeLinkHref`), host shown next to the text, `target=_blank rel="noopener noreferrer
-  nofollow"`. **Chat answers never pass `links`.** Line rules are
+  except with `links`, passed only for a summary / notes **a person wrote** (`summary_edited` /
+  `notes_edited`, PRO-06; AI text can be steered by what was said in the meeting, so an AI link is
+  never clickable): `https:` without credentials (`safeLinkHref`), host shown next to the text,
+  `target=_blank rel="noopener noreferrer nofollow"`, "opens in a new tab" for screen readers.
+  **Chat answers never pass `links`.** Switching the detail tab with an unsaved draft asks first. Line rules are
   plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep
   the timing tests. The `/media` src goes through `mediaSrc` (API origin + `/media` only); the
   failed card shows only localized text, not `error_message`. Regenerate (owner, `done`) and "Process again" (owner,

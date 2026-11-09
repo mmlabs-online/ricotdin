@@ -813,7 +813,8 @@
     "tryAgain": "Try again",
     "save": "Save",
     "dismiss": "Dismiss",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "opensInNewTab": "(opens in a new tab)"
   },
   "player": {
     "scanning": "Preparing playback…",
@@ -1173,7 +1174,6 @@
         "notes": "Notes text (Markdown)"
       },
       "preview": "Preview",
-      "write": "Back to editing",
       "previewLabel": "Preview",
       "markdownHelp": "Markdown: # heading, **bold**, *italic*, - list, [text](https://…)",
       "save": "Save",
@@ -1182,12 +1182,16 @@
       "leaveConfirm": "Leave and lose the changes you have not saved?",
       "discardConfirm": "Discard the changes you have not saved?",
       "errors": {
-        "changed": "Someone changed this text in the meantime. Copy your changes, reload the page and edit again.",
+        "changed": "Someone changed this text in the meantime. Compare it below, then save over it or cancel.",
         "notDone": "This meeting cannot be edited until it has finished processing.",
         "characters": "The text contains characters that cannot be saved. Remove them and try again.",
         "invalid": "The text could not be saved. It may be too long.",
         "failed": "The changes could not be saved. Try again."
-      }
+      },
+      "actionSummary": "Edit summary",
+      "actionNotes": "Edit notes",
+      "latestHelp": "This is the text saved in the meantime. Your draft is still in the editor.",
+      "useLatest": "Save over the latest text"
     }
   },
   "chat": {

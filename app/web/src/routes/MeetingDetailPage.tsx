@@ -1,6 +1,6 @@
 // Meeting detail (ARC-13b, Make MeetingDetail): header + actions, processing state, player,
 // summary / notes / to-dos / calendar / transcript tabs, and chat about this meeting.
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Clock3, LoaderCircle, RefreshCw, X } from 'lucide-react'
@@ -176,8 +176,20 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     prevStatus.current = meeting.status
   }, [meeting.status, id, qc])
 
+  // An unsaved summary / notes draft is lost when its tab unmounts: ask first (PRO-06).
+  const draftDirty = useRef(false)
+  const onDraftDirty = useCallback((dirty: boolean) => {
+    draftDirty.current = dirty
+  }, [])
+  function changeTab(to: Tab): boolean {
+    if (to !== tab && draftDirty.current && !window.confirm(t('detail.edit.leaveConfirm'))) return false
+    if (to !== tab) draftDirty.current = false
+    setTab(to)
+    return true
+  }
+
   function seek(ms: number, moveFocus = false) {
-    setTab('transcript')
+    if (!changeTab('transcript')) return
     setActiveSeg(nearestSegment(segments, ms)?.id ?? null)
     setSeekNonce((n) => n + 1)
     // the clicked control (to-do, suggestion, citation in another tab) may be unmounted
@@ -280,7 +292,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
     if (next === null) return
     e.preventDefault()
     const target = TABS[next] ?? 'summary'
-    setTab(target)
+    if (!changeTab(target)) return
     document.getElementById(`${tabsId}-tab-${target}`)?.focus()
   }
 
@@ -406,7 +418,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   aria-controls={`${tabsId}-panel`}
                   tabIndex={tab === id2 ? 0 : -1}
                   className={tab === id2 ? 'active' : ''}
-                  onClick={() => setTab(id2)}
+                  onClick={() => changeTab(id2)}
                   onKeyDown={onTabKey}
                 >
                   {t(`detail.tabs.${id2}`)}
@@ -433,9 +445,11 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   model={modelLabel(meeting.generation_provider, meeting.generation_model)}
                   regenerate={{ visible: canRegenerate(meeting, role), busy: regenerate.isPending, onClick: () => !regenerate.isPending && setDialog('regenerate') }}
                   edit={contentEdit}
+                  links={meeting.summary_edited === true}
+                  onDraftDirty={onDraftDirty}
                 />
               )}
-              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} />}
+              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} links={meeting.notes_edited === true} onDraftDirty={onDraftDirty} />}
               {tab === 'todos' && (
                 <TodosPanel
                   todos={todos.data ?? []}

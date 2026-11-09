@@ -36,17 +36,21 @@ function Loading({ state, onRetry }: { state: 'pending' | 'error'; onRetry: () =
   )
 }
 
-/** Edit + saved notice of one field (PRO-06). After closing the editor, focus returns to Edit. */
+/** Edit + saved notice of one field (PRO-06). After closing the editor, focus returns to Edit;
+ *  "Saved." goes into a status region that stays mounted, one frame after focus moved. */
 function useFieldEdit() {
   const [editing, setEditing] = useState(false)
-  const [saved, setSaved] = useState(0)
+  const [notice, setNotice] = useState('')
   const editRef = useRef<HTMLButtonElement>(null)
-  const close = (didSave: boolean) => {
+  const close = (didSave: boolean, saved: string) => {
     setEditing(false)
-    if (didSave) setSaved((n) => n + 1)
-    requestAnimationFrame(() => editRef.current?.focus())
+    setNotice('')
+    requestAnimationFrame(() => {
+      editRef.current?.focus()
+      if (didSave) requestAnimationFrame(() => setNotice(saved))
+    })
   }
-  return { editing, open: () => setEditing(true), close, saved, editRef }
+  return { editing, open: () => setEditing(true), close, notice, editRef }
 }
 
 export type ContentEdit = { meetingId: string } | null
@@ -65,51 +69,63 @@ export function SummaryPanel({
   model,
   regenerate,
   edit = null,
+  links = false,
+  onDraftDirty,
 }: {
   summary: string | null
   model: string | null
   regenerate: { visible: boolean; busy: boolean; onClick: () => void } | null
   edit?: ContentEdit
+  links?: boolean
+  onDraftDirty?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
   const f = useFieldEdit()
-  if (f.editing && edit)
-    return (
-      <article className="summary-card">
-        <h2 className="section-label">
-          <Sparkles size={16} aria-hidden="true" />
-          {t('detail.edit.editing', { what: t('detail.summary.label') })}
-        </h2>
-        <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onClose={f.close} />
-      </article>
-    )
+  const editing = f.editing && edit
   return (
     <article className="summary-card">
       <h2 className="section-label">
         <Sparkles size={16} aria-hidden="true" />
-        {t('detail.summary.label')}
+        {editing ? t('detail.edit.editing', { what: t('detail.summary.label') }) : t('detail.summary.label')}
       </h2>
-      {summary?.trim() ? <Markdown source={summary} links /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
-      <span role="status" className="sr-only" key={f.saved}>
-        {f.saved ? t('detail.edit.saved') : ''}
+      <span role="status" className="sr-only">
+        {f.notice}
       </span>
-      <div className="panel-footer">
-        {edit && <EditButton label={t('detail.edit.action')} onClick={f.open} buttonRef={f.editRef} />}
-        {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
-        {regenerate?.visible && (
-          <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
-            <RefreshCw size={15} aria-hidden="true" />
-            {regenerate.busy ? t('detail.regenerate.busy') : t('detail.regenerate.action')}
-          </Button>
-        )}
-      </div>
+      {editing ? (
+        <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+      ) : (
+        <>
+          {summary?.trim() ? <Markdown source={summary} links={links} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
+          <div className="panel-footer">
+            {edit && <EditButton label={t('detail.edit.actionSummary')} onClick={f.open} buttonRef={f.editRef} />}
+            {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
+            {regenerate?.visible && (
+              <Button onClick={regenerate.onClick} aria-disabled={regenerate.busy} aria-busy={regenerate.busy} data-focus="regenerate">
+                <RefreshCw size={15} aria-hidden="true" />
+                {regenerate.busy ? t('detail.regenerate.busy') : t('detail.regenerate.action')}
+              </Button>
+            )}
+          </div>
+        </>
+      )}
     </article>
   )
 }
 
-export function NotesPanel({ notes, edit = null }: { notes: string | null; edit?: ContentEdit }) {
+export function NotesPanel({
+  notes,
+  edit = null,
+  links = false,
+  onDraftDirty,
+}: {
+  notes: string | null
+  edit?: ContentEdit
+  links?: boolean
+  onDraftDirty?: (dirty: boolean) => void
+}) {
   const { t } = useTranslation()
   const f = useFieldEdit()
+  const editing = f.editing && edit
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null)
   async function copy() {
     setCopied(null) // a second copy is announced again
@@ -120,30 +136,23 @@ export function NotesPanel({ notes, edit = null }: { notes: string | null; edit?
       setCopied('failed')
     }
   }
-  if (f.editing && edit)
-    return (
-      <article className="summary-card notes-content">
-        <h2 className="section-label">
-          <FileAudio size={16} aria-hidden="true" />
-          {t('detail.edit.editing', { what: t('detail.notes.label') })}
-        </h2>
-        <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onClose={f.close} />
-      </article>
-    )
+  const editButton = edit && <EditButton label={t('detail.edit.actionNotes')} onClick={f.open} buttonRef={f.editRef} />
   return (
     <article className="summary-card notes-content">
       <h2 className="section-label">
         <FileAudio size={16} aria-hidden="true" />
-        {t('detail.notes.label')}
+        {editing ? t('detail.edit.editing', { what: t('detail.notes.label') }) : t('detail.notes.label')}
       </h2>
-      <span role="status" className="sr-only" key={f.saved}>
-        {f.saved ? t('detail.edit.saved') : ''}
+      <span role="status" className="sr-only">
+        {f.notice}
       </span>
-      {notes?.trim() ? (
+      {editing ? (
+        <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
+      ) : notes?.trim() ? (
         <>
-          <Markdown source={notes} links />
+          <Markdown source={notes} links={links} />
           <div className="panel-footer">
-            {edit && <EditButton label={t('detail.edit.action')} onClick={f.open} buttonRef={f.editRef} />}
+            {editButton}
             <Button onClick={() => void copy()}>
               <Copy size={15} aria-hidden="true" />
               {t('detail.notes.copy')}
@@ -156,11 +165,7 @@ export function NotesPanel({ notes, edit = null }: { notes: string | null; edit?
       ) : (
         <>
           <p className="tab-note">{t('detail.notes.empty')}</p>
-          {edit && (
-            <div className="panel-footer">
-              <EditButton label={t('detail.edit.action')} onClick={f.open} buttonRef={f.editRef} />
-            </div>
-          )}
+          {editButton && <div className="panel-footer">{editButton}</div>}
         </>
       )}
     </article>

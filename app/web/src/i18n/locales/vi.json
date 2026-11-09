@@ -813,7 +813,8 @@
     "tryAgain": "Thử lại",
     "save": "Lưu",
     "dismiss": "Đóng thông báo",
-    "loading": "Đang tải…"
+    "loading": "Đang tải…",
+    "opensInNewTab": "(mở trong tab mới)"
   },
   "player": {
     "scanning": "Đang chuẩn bị phát…",
@@ -1173,7 +1174,6 @@
         "notes": "Nội dung ghi chú (Markdown)"
       },
       "preview": "Xem trước",
-      "write": "Quay lại sửa",
       "previewLabel": "Xem trước",
       "markdownHelp": "Markdown: # tiêu đề, **đậm**, *nghiêng*, - danh sách, [chữ](https://…)",
       "save": "Lưu",
@@ -1182,12 +1182,16 @@
       "leaveConfirm": "Rời trang và mất các thay đổi chưa lưu?",
       "discardConfirm": "Bỏ các thay đổi chưa lưu?",
       "errors": {
-        "changed": "Có người vừa sửa nội dung này. Hãy sao chép phần bạn sửa, tải lại trang rồi sửa lại.",
+        "changed": "Có người vừa sửa nội dung này. Hãy xem bên dưới, rồi lưu đè hoặc huỷ.",
         "notDone": "Chỉ sửa được khi meeting đã xử lý xong.",
         "characters": "Nội dung có ký tự không lưu được. Hãy xoá chúng rồi thử lại.",
         "invalid": "Không lưu được nội dung. Có thể nội dung quá dài.",
         "failed": "Không lưu được thay đổi. Hãy thử lại."
-      }
+      },
+      "actionSummary": "Sửa tóm tắt",
+      "actionNotes": "Sửa ghi chú",
+      "latestHelp": "Đây là nội dung vừa được lưu. Bản nháp của bạn vẫn còn trong ô soạn.",
+      "useLatest": "Lưu đè lên bản mới nhất"
     }
   },
   "chat": {

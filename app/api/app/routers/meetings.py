@@ -35,6 +35,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.access import can_move_meeting, has_role
+from app.domain.content import edited_by_person
 from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
 from app.domain.uploads import (
@@ -135,9 +136,29 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
                 {"id": mid},
             )
         ).first()
+        newest = (
+            {}
+            if row is None
+            else {
+                r.field: r
+                for r in await conn.execute(
+                    text(
+                        "SELECT DISTINCT ON (field) field, source, content "
+                        "FROM public.meeting_note_versions WHERE meeting_id = :id "
+                        "ORDER BY field, seq DESC"
+                    ),
+                    {"id": mid},
+                )
+            }
+        )
     meeting = as_dict(row)
     if meeting is None:
         raise NotFound(_NOT_FOUND)
+    for field in ("summary", "notes"):  # PRO-06: only text a person wrote may render links
+        v = newest.get(field)
+        meeting[f"{field}_edited"] = edited_by_person(
+            v.source if v else None, newest=v.content if v else None, current=meeting[field]
+        )
     return meeting
 
 

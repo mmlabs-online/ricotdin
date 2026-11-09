@@ -14,26 +14,37 @@ export function ContentEditor({
   field,
   original,
   onClose,
+  onDirtyChange,
 }: {
   meetingId: string
   field: ContentField
   original: string | null
   onClose: (saved: boolean) => void
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
   const save = useEditContent(meetingId)
-  const [base] = useState(original) // the text this edit started from
+  const [base, setBase] = useState(original) // the text this edit started from
   const [draft, setDraft] = useState(original ?? '')
   const [preview, setPreview] = useState(false)
   const [error, setError] = useState<{ key: string; n: number } | null>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
   const errId = useId()
+  const helpId = useId()
   const dirty = isDirty(base, draft)
   const busy = save.isPending
 
   useEffect(() => {
     areaRef.current?.focus()
   }, [])
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+  // After a conflict the page reloads the text (`original`); "Use the latest text" makes it the
+  // new base and keeps the draft, so the next save is checked against what is stored now.
+  const conflict = error?.key === 'detail.edit.errors.changed'
+  const latestDiffers = conflict && (original ?? '') !== (base ?? '')
 
   // Leaving with unsaved text asks first (in-app navigation and reload).
   const blocker = useBlocker(dirty && !busy)
@@ -44,17 +55,20 @@ export function ContentEditor({
   }, [blocker, t])
   useEffect(() => {
     if (!dirty) return
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = '' // older Chromium / Safari
+    }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  async function submit(e: FormEvent) {
-    e.preventDefault()
+  async function submit(e: FormEvent | null, from: string | null = base) {
+    e?.preventDefault()
     if (busy) return
-    if (!dirty) return onClose(false)
+    if (!isDirty(from, draft)) return onClose(false)
     try {
-      await save.mutateAsync({ field, content: draft, baseHash: await contentHash(base) })
+      await save.mutateAsync({ field, content: draft, baseHash: await contentHash(from) })
       onClose(true)
     } catch (err) {
       setError((prev) => ({ key: editErrorKey(err), n: (prev?.n ?? 0) + 1 }))
@@ -70,12 +84,24 @@ export function ContentEditor({
 
   const label = t(`detail.edit.label.${field}`)
   return (
-    <form className="content-editor" onSubmit={(e) => void submit(e)} noValidate>
+    <form
+      className="content-editor"
+      onSubmit={(e) => void submit(e)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          cancel()
+        }
+      }}
+      noValidate
+    >
       <div className="content-editor-bar">
         <Button type="button" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>
-          {preview ? t('detail.edit.write') : t('detail.edit.preview')}
+          {t('detail.edit.preview')}
         </Button>
-        <span className="tab-note">{t('detail.edit.markdownHelp')}</span>
+        <span id={helpId} className="tab-note">
+          {t('detail.edit.markdownHelp')}
+        </span>
       </div>
       {preview ? (
         <div className="content-editor-preview" aria-label={t('detail.edit.previewLabel')} role="region">
@@ -88,10 +114,9 @@ export function ContentEditor({
             ref={areaRef}
             value={draft}
             rows={field === 'summary' ? 8 : 18}
-            maxLength={field === 'summary' ? 20000 : 100000}
             onChange={(e) => setDraft(e.target.value)}
             aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errId : undefined}
+            aria-describedby={error ? `${helpId} ${errId}` : helpId}
           />
         </label>
       )}
@@ -99,6 +124,21 @@ export function ContentEditor({
         <p id={errId} key={error.n} className="auth-error" role="alert">
           {t(error.key)}
         </p>
+      )}
+      {latestDiffers && (
+        <div className="content-editor-latest">
+          <p className="tab-note">{t('detail.edit.latestHelp')}</p>
+          <Markdown source={original ?? ''} />
+          <Button
+            type="button"
+            onClick={() => {
+              setBase(original) // the draft now replaces the latest text, checked against it
+              void submit(null, original)
+            }}
+          >
+            {t('detail.edit.useLatest')}
+          </Button>
+        </div>
       )}
       <div className="panel-footer">
         <Button type="submit" variant="primary" aria-disabled={busy || undefined} aria-busy={busy}>

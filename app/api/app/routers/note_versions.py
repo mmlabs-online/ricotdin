@@ -35,6 +35,7 @@ Identity = Annotated[RequestIdentity, Depends(current_identity)]
 Db = Annotated[Database, Depends(get_database)]
 
 EDITS_PER_HOUR = 120
+MAX_EDIT_BODY = 2_500_000  # 200 000 characters, JSON-escaped
 _NOT_FOUND = "Meeting not found."
 _VERSION_NOT_FOUND = "Version not found."
 _NOT_DONE = "This meeting has no finished summary and notes to edit yet."
@@ -90,6 +91,8 @@ async def _save(
                 raise NotFound(_VERSION_NOT_FOUND)
         if content is None:  # neither a text nor a version: a caller bug
             raise NotFound(_VERSION_NOT_FOUND)
+        if content == (current or ""):  # nothing changed: no write, no duplicate version
+            return {"field": field, "content": content, "contentHash": content_hash(content)}
         column = "summary" if field == "summary" else "notes"  # fixed column names only
         await conn.execute(
             text(f"UPDATE public.meetings SET {column} = :c WHERE id = :id"),  # noqa: S608
@@ -106,9 +109,10 @@ async def edit_content(
     meeting_id: str, request: Request, identity: Identity, db: Db
 ) -> dict[str, Any]:
     """Save the summary or the notes (editor or above, finished meetings only)."""
-    edit = parse_content_edit(await json_object(request))
-    mid = path_id(meeting_id, _NOT_FOUND)
     enforce_limit(request.app.state.content_limiter, identity.user_id)
+    # 100 000 characters, JSON-escaped, stay well under this (review round 1: body cap)
+    edit = parse_content_edit(await json_object(request, max_bytes=MAX_EDIT_BODY))
+    mid = path_id(meeting_id, _NOT_FOUND)
     return await _save(db, identity, mid, edit.field, edit.base_hash, content=edit.content)
 
 
@@ -117,10 +121,10 @@ async def restore_version(
     meeting_id: str, version_id: str, request: Request, identity: Identity, db: Db
 ) -> dict[str, Any]:
     """Make an earlier version current again; it becomes a new version (editor or above)."""
-    base_hash = parse_restore(await json_object(request))
+    enforce_limit(request.app.state.content_limiter, identity.user_id)
+    base_hash = parse_restore(await json_object(request, max_bytes=4096))
     mid = path_id(meeting_id, _NOT_FOUND)
     vid = path_id(version_id, _VERSION_NOT_FOUND)
-    enforce_limit(request.app.state.content_limiter, identity.user_id)
     async with db.app_transaction(identity) as conn:  # which field, under RLS
         field = (
             await conn.execute(
@@ -153,7 +157,7 @@ async def list_versions(meeting_id: str, field: str, identity: Identity, db: Db)
                     text(
                         "SELECT id, field, source, edited_by, created_at, "
                         "char_length(content) AS length FROM public.meeting_note_versions "
-                        "WHERE meeting_id = :m AND field = :f ORDER BY created_at DESC, id DESC"
+                        "WHERE meeting_id = :m AND field = :f ORDER BY seq DESC"
                     ),
                     {"m": mid, "f": name},
                 )

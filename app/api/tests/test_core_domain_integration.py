@@ -704,6 +704,11 @@ def test_pro06_owner_and_editor_edit_viewer_and_stranger_cannot(
     assert _edit(client, "c", mid, "viewer", "Fixed by A").status_code == 403
     assert _edit(client, "d", mid, "stranger", "Fixed by A").status_code == 403
     assert _sql(world["db"], "SELECT notes FROM meetings WHERE id = %s", mid) == [("Fixed by A",)]
+    got = client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()
+    assert (got["notes_edited"], got["summary_edited"]) == (True, False)  # links: person text only
+    _sql(world["db"], "UPDATE meetings SET notes = 'AI again' WHERE id = %s", mid)  # worker rerun
+    assert client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()["notes_edited"] is False
+    _sql(world["db"], "UPDATE meetings SET notes = 'Fixed by A' WHERE id = %s", mid)
     # history: the AI text first, then each save; newest first; viewer may read it
     r = client.get(f"/meetings/{mid}/content-versions?field=notes", headers=_as(client, "c"))
     assert r.status_code == 200
@@ -769,9 +774,34 @@ def test_pro06_restore_and_the_50_version_cap(client: TestClient, world: dict[st
 
 
 def test_pro06_note_versions_are_service_only_for_writes(world: dict[str, Any]) -> None:
-    with psycopg.connect(world["app"], autocommit=True) as conn:
-        grants = conn.execute(
-            "SELECT privilege_type FROM information_schema.role_table_grants "
-            "WHERE table_name = 'meeting_note_versions' AND grantee = 'ricotdin_app'"
-        ).fetchall()
-    assert sorted(g[0] for g in grants) == ["SELECT"]
+    privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]
+    with psycopg.connect(world["db"], autocommit=True) as conn:  # owner: sees every role's grant
+        held = {
+            (role, p): conn.execute(
+                "SELECT has_table_privilege(%s, 'public.meeting_note_versions', %s)", (role, p)
+            ).fetchone()[0]  # type: ignore[index]
+            for role in ("ricotdin_app", "ricotdin_service", "ricotdin_worker")
+            for p in privileges
+        }
+    assert [p for p in privileges if held[("ricotdin_app", p)]] == ["SELECT"]
+    assert [p for p in privileges if held[("ricotdin_service", p)]] == [
+        "SELECT",
+        "INSERT",
+        "DELETE",
+    ]
+    assert not any(held[("ricotdin_worker", p)] for p in privileges)
+
+
+def test_pro06_saving_the_same_text_writes_nothing(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    mid = _notes_meeting(world)
+    assert _edit(client, "a", mid, "AI notes", "AI notes").status_code == 200
+    assert _sql(
+        world["db"], "SELECT count(*) FROM meeting_note_versions WHERE meeting_id = %s", mid
+    ) == [(0,)]
+
+
+def test_pro06_long_ai_notes_can_be_edited(client: TestClient, world: dict[str, Any]) -> None:
+    mid = _notes_meeting(world, notes="x" * 150_000)  # the AI may write up to 200 000
+    assert _edit(client, "a", mid, "short", "x" * 150_000).status_code == 200

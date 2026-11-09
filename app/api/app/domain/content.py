@@ -15,7 +15,8 @@ ContentField = Literal["summary", "notes"]
 VersionSource = Literal["ai", "user", "restore"]
 
 FIELDS: tuple[ContentField, ...] = ("summary", "notes")
-MAX_CONTENT: dict[str, int] = {"summary": 20_000, "notes": 100_000}
+# = the AI limits (services/ai/analysis.LIMITS): a person may keep everything the AI wrote
+MAX_CONTENT: dict[str, int] = {"summary": 20_000, "notes": 200_000}
 MAX_VERSIONS = 50
 _SOURCES = frozenset({"ai", "user", "restore"})
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -72,16 +73,29 @@ def parse_restore(body: dict[str, Any]) -> str:
 
 
 def versions_to_write(
-    *, has_history: bool, current: str | None, new: str, source: str
+    *, newest: str | None, current: str | None, new: str, source: str
 ) -> list[tuple[str, VersionSource]]:
-    """Version rows to insert, oldest first."""
+    """Version rows to insert, oldest first. ``newest`` = text of the field's newest version (None
+    without history). A current text the history does not hold was written by the AI (first
+    analysis, or a re-process by the worker, which writes no version), so it is kept first."""
     if source not in _SOURCES:
         raise ValueError(f"unknown version source {source!r}")
     rows: list[tuple[str, VersionSource]] = []
-    if not has_history and current and current != new:
-        rows.append((current, "ai"))  # before the first version, the text came from the AI
+    if current and current != newest and current != new:
+        rows.append((current, "ai"))
     rows.append((new, cast(VersionSource, source)))  # checked against _SOURCES above
     return rows
+
+
+def version_author(source: VersionSource, actor: uuid.UUID | None) -> uuid.UUID | None:
+    """AI text is never shown as written by a person, even when someone regenerated it."""
+    return None if source == "ai" else actor
+
+
+def edited_by_person(source: str | None, *, newest: str | None, current: str | None) -> bool:
+    """The current text was written by a person (edit or restore), not by the AI. Only such text
+    may render links (AI text can be steered by what was said in the meeting, CLAUDE.md §0.8)."""
+    return source in ("user", "restore") and newest is not None and newest == (current or "")
 
 
 def versions_to_prune(ids_newest_first: list[uuid.UUID]) -> list[uuid.UUID]:

@@ -819,6 +819,5 @@ input, select, textarea {
 .content-editor-field textarea[aria-invalid="true"] { border-color: var(--danger, #b42318); }
 .content-editor-preview { border: 1px dashed var(--border-strong); border-radius: var(--radius-md, 8px); padding: var(--space-3); }
 .md-link { text-decoration: underline; overflow-wrap: anywhere; }
-.md-link-host { margin-inline-start: 0.35em; font-size: 0.85em; opacity: 0.8; }
-.md-link-host::before { content: "("; }
-.md-link-host::after { content: ")"; }
+.md-link-host { font-size: 0.9em; }
+.content-editor-latest { border: 1px solid var(--border-strong); border-radius: var(--radius-md, 8px); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }

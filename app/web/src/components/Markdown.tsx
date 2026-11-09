@@ -2,10 +2,15 @@
 // HTML, no images (§0.8). Links only with `links` (summary / notes, PRO-06): https only, the host
 // shown next to the text, opened in a new tab without referrer or opener. Chat never passes it.
 import { Fragment, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { parseMarkdown, type Inline, type ListItem } from '../lib/markdown'
 import { displayText } from '../lib/text'
 
+const OPEN = ' ('
+const CLOSE = ')'
+
 function Inlines({ items }: { items: Inline[] }) {
+  const { t } = useTranslation()
   return (
     <>
       {items.map((i, n) => {
@@ -17,7 +22,12 @@ function Inlines({ items }: { items: Inline[] }) {
           return (
             <a key={n} href={i.href} target="_blank" rel="noopener noreferrer nofollow" className="md-link">
               {text}
-              <span className="md-link-host">{displayText(i.host)}</span>
+              <span className="md-link-host">
+                {OPEN}
+                {displayText(i.host)}
+                {CLOSE}
+              </span>
+              <span className="sr-only">{t('common.opensInNewTab')}</span>
             </a>
           )
         return <Fragment key={n}>{text}</Fragment>
