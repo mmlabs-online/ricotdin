@@ -70,10 +70,12 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
 - **Release pins:** ricotdin's `release-staging.yml` writes `apps/ricotdin-v2-staging/release.env`
   (both images `:staging-X.Y.Z-<sha7>@sha256:…`, `RICOTDIN_VERSION=staging-X.Y.Z-<sha7>`) in a PR
   from `release/ricotdin-v2-staging-vX.Y.Z`. pr-scope reads that as `ricotdin-v2-staging`. The
-  workflow turns on **auto-merge**, so the repo needs:
-  - Settings → General → **Allow auto-merge** and **Allow squash merging**;
-  - a branch protection rule (or ruleset) on `main` that **requires the `pr-scope` check**.
-    Without a required check, auto-merge merges at once and the scope check does not gate it.
+  release run itself waits for `pr-scope`, checks the PR changes only that `release.env` and then
+  squash-merges it (no GitHub auto-merge: on the Free plan this private repo has no branch
+  protection, so auto-merge would not wait for the check). Nothing here *enforces* that rule: the
+  token can push to `main`. Proper fix (debt): GitHub Team or a public repo, a protected `main`
+  requiring `pr-scope`, CODEOWNERS on `/apps/ricotdin*/`, `/proxy/`, `/.github/`, and`pr-scope`
+  allowing only `apps/<app>/release.env` on `release/*` branches.
 - **Three server env files** `/etc/mmlabs/ricotdin-staging-{api,worker,web}.env` (`chmod 600`,
   owned by the runner user). They use the same names as production, with staging values:
   - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
@@ -81,7 +83,10 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
     `JWT_PRIVATE_KEY` (a staging key of its own), `KEY_ENCRYPTION_SECRET` (the value the dev
     branch's stored keys and `drive_config` were encrypted with), `WEB_ORIGIN` =
     `ALLOWED_ORIGINS` = `https://ricotdin-staging.mmlabs.online`, `FORWARDED_ALLOW_IPS` =
-    cloudflared's address. **No `SMTP_*`**: nobody can register on staging.
+    cloudflared's fixed address (pin it with `ipv4_address` in `proxy/compose.yml`; never the
+    subnet). **No `SMTP_*`**: nobody can complete a registration on staging.
+  - `KEY_ENCRYPTION_SECRET` and `JWT_PRIVATE_KEY` must **not** be the production values: staging
+    is public and deploys any pushed `staging/*` branch.
   - worker: `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET` only.
   - web: `RICOTDIN_API_URL=https://ricotdin-staging-api.mmlabs.online`.
   - Re-running `provision_db_roles` against the dev branch **rotates these logins**: copy the

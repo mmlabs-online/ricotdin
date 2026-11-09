@@ -99,8 +99,13 @@ def release_env(tag: str, sha: str, *, api_digest: str, web_digest: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    """Guard (no argument): check the ref and the versions, print step outputs.
-    ``release-env <tag> <api digest> <web digest>``: print the release.env text."""
+    """Guard (no argument): check the ref and the versions, then append ``version`` / ``tag`` /
+    ``branch`` to ``$GITHUB_OUTPUT`` (only when every check passed, so a failure leaves no tag).
+    ``release-env <tag> <api digest> <web digest>``: print the release.env text on stdout.
+    Errors go to stderr as ``::error::`` lines (stdout of release-env is captured by the caller).
+
+    Run it as a file, ``python3 -I app/ops/staging_release.py`` from app/api: ``-I`` implies
+    ``-P`` (3.11+), so ``-m app.ops...`` would not find the package."""
     ref = os.environ.get("GITHUB_REF", "")
     sha = os.environ.get("GITHUB_SHA", "")
     try:
@@ -120,14 +125,19 @@ def main(argv: list[str]) -> int:
         problems = version_problems(version, api, web)
         if problems:
             for p in problems:
-                print(f"::error::{p}")
+                print(f"::error::{p}", file=sys.stderr)
             return 1
-        print(f"version={version}")
-        print(f"tag={staging_tag(version, sha)}")
-        print(f"branch={deployment_branch(version)}")
+        tag = staging_tag(version, sha)
+        outputs = f"version={version}\ntag={tag}\nbranch={deployment_branch(version)}\n"
+        target = os.environ.get("GITHUB_OUTPUT")
+        if not target:
+            raise StagingReleaseError("GITHUB_OUTPUT is not set (run this inside GitHub Actions)")
+        with open(target, "a", encoding="utf-8") as fh:
+            fh.write(outputs)
+        print(outputs, end="")  # for the log
         return 0
     except StagingReleaseError as exc:
-        print(f"::error::{exc}")
+        print(f"::error::{exc}", file=sys.stderr)
         return 1
 
 

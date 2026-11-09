@@ -9,7 +9,7 @@ name: deploy-ricotdin-v2-staging
 # Production (apps/ricotdin-v2/) and v1 (apps/ricotdin/) are untouched by this workflow.
 #
 # The release PRs come from ricotdin's release-staging.yml (branch release/ricotdin-v2-staging-vX.Y.Z,
-# auto-merged once pr-scope passes). Runtime secrets live ONLY in the three server env files below.
+# merged by that run once pr-scope passes). Runtime secrets live ONLY in the three server env files below.
 # No migrate step: staging uses the Neon dev branch; the owner runs alembic before pushing a
 # staging branch that brings a migration.
 
@@ -30,7 +30,7 @@ concurrency:
 env:
   APP_DIR: apps/ricotdin-v2-staging
   PROJECT: ricotdin-v2-staging
-  # Must match env_file in apps/ricotdin-v2/compose.yml. chmod 600, owned by the runner user.
+  # Must match env_file in apps/ricotdin-v2-staging/compose.yml. chmod 600, owned by the runner user.
   RICOTDIN_ENV_FILES: /etc/mmlabs/ricotdin-staging-api.env /etc/mmlabs/ricotdin-staging-worker.env /etc/mmlabs/ricotdin-staging-web.env
 
 jobs:

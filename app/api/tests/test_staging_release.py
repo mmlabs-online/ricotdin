@@ -1,5 +1,10 @@
 """OPS-02: staging releases from staging/X.Y.Z branches (pure guard + naming)."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from app.ops.staging_release import (
@@ -104,3 +109,63 @@ def test_release_env_refuses_a_bad_digest(digest: str) -> None:
 def test_release_env_refuses_a_bad_tag() -> None:
     with pytest.raises(StagingReleaseError):
         release_env("v2.0.0", SHA, api_digest=DIGEST, web_digest=DIGEST)
+
+
+# --- the exact command line of release-staging.yml (review: -I also sets -P since 3.11) -------
+
+API_DIR = Path(__file__).resolve().parents[1]
+GUARD = ["-I", "app/ops/staging_release.py"]
+
+
+def _guard(tmp_path: Path, ref: str, *args: str) -> tuple[int, str, str]:
+    out = tmp_path / "github_output"
+    out.write_text("", encoding="utf-8")
+    env = {
+        "GITHUB_REF": ref,
+        "GITHUB_SHA": SHA,
+        "GITHUB_OUTPUT": str(out),
+        "PATH": os.environ.get("PATH", ""),
+    }
+    if os.name == "nt":
+        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+    run = subprocess.run(  # noqa: S603 - fixed interpreter and arguments
+        [sys.executable, *GUARD, *args],
+        cwd=API_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return run.returncode, out.read_text(encoding="utf-8"), run.stderr
+
+
+def test_workflow_guard_writes_its_outputs_for_the_current_version(tmp_path: Path) -> None:
+    version = read_versions(
+        (API_DIR / "pyproject.toml").read_text(encoding="utf-8"),
+        (API_DIR.parent / "web/package.json").read_text(encoding="utf-8"),
+    )[0]
+    code, outputs, _ = _guard(tmp_path, f"refs/heads/staging/{version}")
+    assert code == 0
+    assert outputs.splitlines() == [
+        f"version={version}",
+        f"tag=staging-{version}-a1b2c3d",
+        f"branch=release/ricotdin-v2-staging-v{version}",
+    ]
+
+
+@pytest.mark.parametrize(
+    "ref", ["refs/heads/staging/2.0", "refs/heads/staging/9.9.9", "refs/heads/feature/x"]
+)
+def test_workflow_guard_fails_with_an_error_and_no_outputs(tmp_path: Path, ref: str) -> None:
+    code, outputs, stderr = _guard(tmp_path, ref)
+    assert code == 1
+    assert outputs == ""  # nothing a later job could take for a tag
+    assert "::error::" in stderr
+
+
+def test_release_env_command_prints_the_file_and_errors_on_stderr(tmp_path: Path) -> None:
+    code, _, stderr = _guard(
+        tmp_path, "refs/heads/staging/2.0.0", "release-env", "staging-2.0.0-a1b2c3d", "bad", DIGEST
+    )
+    assert code == 1
+    assert "::error::" in stderr
