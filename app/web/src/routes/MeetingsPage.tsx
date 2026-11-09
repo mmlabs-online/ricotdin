@@ -29,6 +29,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 function errorKey(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === 'network') return 'errors.network'
+    if (err.code === 'invalid_characters') return 'errors.invisibleCharacters' // SEC-05 (rename)
     if (err.status === 403) return 'errors.forbidden'
     if (err.status === 404) return 'errors.notFound'
     if (err.status === 429) return 'errors.rateLimited'

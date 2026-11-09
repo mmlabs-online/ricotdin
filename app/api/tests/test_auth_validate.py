@@ -4,8 +4,10 @@ import pytest
 
 from app.auth.identifier import classify_identifier
 from app.auth.validate import (
+    EmailState,
     normalize_email,
     normalize_username,
+    registration_action,
     validate_email,
     validate_password,
     validate_username,
@@ -97,3 +99,15 @@ def test_only_a_single_plain_address_is_accepted(bad: str) -> None:
 @pytest.mark.parametrize("ok", ["a@b.test", "first.last+tag@sub.example.co", "x_y-z%1@a-b.vn"])
 def test_plain_addresses_are_accepted(ok: str) -> None:
     assert validate_email(ok) is None
+
+
+# --- SEC-05: registering an existing email ----------------------------------------------------
+
+
+def test_sec05_registration_action() -> None:
+    assert registration_action(None) == "create"
+    assert registration_action(EmailState(verified=False, disabled=False)) == "resend"
+    assert registration_action(EmailState(verified=True, disabled=False)) == "conflict"
+    # a disabled account is never re-activated by a registration, verified or not
+    assert registration_action(EmailState(verified=False, disabled=True)) == "conflict"
+    assert registration_action(EmailState(verified=True, disabled=True)) == "conflict"

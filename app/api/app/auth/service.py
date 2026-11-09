@@ -19,6 +19,7 @@ from app.auth.tokens import (
     RefreshRow,
     hash_token,
     new_opaque_token,
+    refresh_expiry,
     refresh_outcome,
 )
 from app.core.logging import get_logger
@@ -94,8 +95,13 @@ async def find_user_by_id(conn: AsyncConnection, user_id: uuid.UUID) -> UserRow 
 
 
 async def username_taken(conn: AsyncConnection, username: str) -> bool:
-    r = await conn.execute(text("SELECT 1 FROM profiles WHERE username = :u"), {"u": username})
-    return r.first() is not None
+    return await username_owner(conn, username) is not None
+
+
+async def username_owner(conn: AsyncConnection, username: str) -> uuid.UUID | None:
+    r = await conn.execute(text("SELECT id FROM profiles WHERE username = :u"), {"u": username})
+    owner: uuid.UUID | None = r.scalar()
+    return owner
 
 
 async def create_user(
@@ -201,6 +207,7 @@ async def issue_refresh(
     ttl: timedelta,
     now: datetime,
     family_id: uuid.UUID | None = None,
+    family_started_at: datetime | None = None,
     ip: str | None = None,
     user_agent: str | None = None,
 ) -> tuple[str, uuid.UUID]:
@@ -216,7 +223,7 @@ async def issue_refresh(
                 "u": user_id,
                 "f": family_id or uuid.uuid4(),
                 "h": hash_token(token),
-                "exp": now + ttl,
+                "exp": refresh_expiry(now, ttl, family_started_at=family_started_at),
                 "ip": ip,
                 "ua": (user_agent or "")[:512] or None,
             },
@@ -266,7 +273,9 @@ async def rotate_refresh(
         await conn.execute(
             text(
                 "SELECT t.id, t.user_id, t.family_id, t.revoked_at, t.expires_at, "
-                "t.replaced_by, u.disabled_at, now() AS db_now "
+                "t.replaced_by, u.disabled_at, now() AS db_now, "
+                "(SELECT min(f.created_at) FROM refresh_tokens f WHERE f.family_id = t.family_id) "
+                "AS family_started_at "
                 "FROM refresh_tokens t JOIN users u ON u.id = t.user_id "
                 "WHERE t.token_hash = :h FOR UPDATE OF t"
             ),
@@ -281,6 +290,7 @@ async def rotate_refresh(
             row.expires_at,
             user_disabled=row.disabled_at is not None,
             rotated=row.replaced_by is not None,
+            family_started_at=row.family_started_at,
         )
     )
     # revoked_at / expires_at were written with the DB clock: compare with the DB clock too.
@@ -304,7 +314,14 @@ async def rotate_refresh(
         )
         return RotateResult(outcome)
     new_token, new_id = await issue_refresh(
-        conn, row.user_id, ttl=ttl, now=now, family_id=row.family_id, ip=ip, user_agent=user_agent
+        conn,
+        row.user_id,
+        ttl=ttl,
+        now=now,
+        family_id=row.family_id,
+        family_started_at=row.family_started_at,
+        ip=ip,
+        user_agent=user_agent,
     )
     await conn.execute(
         text("UPDATE refresh_tokens SET revoked_at = now(), replaced_by = :n WHERE id = :id"),

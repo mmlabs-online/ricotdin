@@ -26,6 +26,7 @@ const MAX_NAME = 100
 export function folderErrorKey(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.code === 'network') return 'errors.network'
+    if (err.code === 'invalid_characters') return 'errors.invisibleCharacters' // SEC-05
     if (err.status === 409) return 'folders.errors.duplicate'
     if (err.status === 400 || err.status === 422) return 'folders.errors.name'
     if (err.status === 403 || err.status === 404) return 'errors.forbidden'

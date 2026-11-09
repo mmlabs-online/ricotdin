@@ -2,6 +2,7 @@
 import { ApiError } from '../../api/errors'
 import type { MeetingRole } from '../access/roles'
 import { searchKey } from './list'
+import { isInvisibleCharactersError } from '../text'
 
 export type TodoStatus = 'open' | 'done' | 'dismissed'
 export interface Todo {
@@ -193,7 +194,7 @@ export function actionErrorKey(action: DetailAction, err: unknown): string {
     case 'ics':
       return err.status === 422 ? 'detail.errors.icsNoTime' : 'detail.errors.icsFailed'
     case 'save':
-      return 'detail.errors.saveFailed'
+      return isInvisibleCharactersError(err) ? 'errors.invisibleCharacters' : 'detail.errors.saveFailed'
     case 'delete':
       return 'detail.errors.generic'
   }

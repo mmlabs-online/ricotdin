@@ -45,13 +45,15 @@ def verification_email(link: str) -> EmailMessage:
     return _render(
         "Verify your Ricotdin email / Xác minh email Ricotdin",
         (
-            "Welcome to Ricotdin. Confirm your email address to finish creating your account.",
-            "Verify email",
+            "Welcome to Ricotdin. Confirm your email address and choose your password to finish "
+            "creating your account.",
+            "Verify email and set password",
             "The link expires in 24 hours. If you did not sign up, ignore this email.",
         ),
         (
-            "Chào mừng bạn đến với Ricotdin. Xác minh email để hoàn tất tạo tài khoản.",
-            "Xác minh email",
+            "Chào mừng bạn đến với Ricotdin. Xác minh email và đặt mật khẩu "
+            "để hoàn tất tạo tài khoản.",
+            "Xác minh email và đặt mật khẩu",
             "Liên kết hết hạn sau 24 giờ. Nếu bạn không đăng ký, hãy bỏ qua email này.",
         ),
         link,

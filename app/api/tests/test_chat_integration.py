@@ -3,7 +3,7 @@
 providers). Scope: a chunk of a meeting the caller cannot see never reaches the prompt (RLS +
 the scope filter), folder scope searches only the folder's visible meetings, global scope only
 the caller's visible meetings. Citations: invented ids dropped, times from the database. Quota:
-one agent query per question, 402 when none left, refunded on a retrieval or AI failure."""
+one agent query per question, 402 when none left, refunded on a retrieval or AI failure on our side (a provider refusal is charged, SEC-05)."""
 
 import json
 import re
@@ -329,11 +329,22 @@ def test_unusable_or_failed_answers_are_refunded(
     assert _left(world, "a") == 10
 
 
-def test_provider_rejection_is_refunded(
+def test_sec05_provider_rejection_is_charged(
     client: TestClient, world: dict[str, Any], ai: Provider
 ) -> None:
     _queries(world, "a")
-    ai.status = 400
+    ai.status = 400  # the provider refuses the question itself (AIRejected)
+    resp = _ask(client, "a", meetingId=str(_meeting(world, "a")))
+    assert resp.json()["message"]["content"] == ANSWER_ERROR_REPLY and _left(world, "a") == 9
+    keys = _sql(world["db"], "SELECT dedup_key FROM quota_ledger WHERE user_id = %s", world["a"])
+    assert not any(k[0].endswith(":refund") for k in keys)
+
+
+def test_sec05_provider_outage_is_still_refunded(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "a")
+    ai.status = 503  # our side: no answer could be produced (AIUnavailable)
     resp = _ask(client, "a", meetingId=str(_meeting(world, "a")))
     assert resp.json()["message"]["content"] == ANSWER_ERROR_REPLY and _left(world, "a") == 10
 

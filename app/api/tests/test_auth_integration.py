@@ -102,11 +102,14 @@ def _register(client: TestClient, name: str, password: str = PASSWORD) -> Any:
 def _verified_user(client: TestClient, mailer: MemoryMailer) -> str:
     name = _new_name()
     assert _register(client, name).status_code == 201
-    r = client.post(
-        "/auth/verify-email", json={"token": _token_from(mailer, f"{name}@example.test")}
-    )
+    r = _verify(client, _token_from(mailer, f"{name}@example.test"))
     assert r.status_code == 200, r.text
     return name
+
+
+def _verify(client: TestClient, token: str, password: str = PASSWORD) -> Any:
+    """SEC-05: the verify link also sets the password."""
+    return client.post("/auth/verify-email", json={"token": token, "password": password})
 
 
 def _login(
@@ -184,9 +187,8 @@ def test_register_validation(api: Any, body: dict[str, str], fragment: str) -> N
 
 
 def test_duplicate_username_and_email_conflict(api: Any) -> None:
-    client, _ = api
-    name = _new_name()
-    assert _register(client, name).status_code == 201
+    client, mailer = api
+    name = _verified_user(client, mailer)  # an unverified email no longer conflicts (SEC-05)
     other = _new_name()
     r = client.post(
         "/auth/register",
@@ -200,13 +202,85 @@ def test_duplicate_username_and_email_conflict(api: Any) -> None:
     assert r.status_code == 409 and "email" in r.json()["error"]["message"]
 
 
+def test_sec05_registering_an_unverified_email_resends_the_link(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _new_name()  # the "attacker" registers the address first, with their own password
+    assert _register(client, name, password="attacker-pass-1").status_code == 201
+    first = _token_from(mailer, f"{name}@example.test")
+    # the inbox owner registers the same address (any free username): same answer as a new account
+    r = client.post(
+        "/auth/register",
+        json={"email": f"{name}@example.test", "username": _new_name(), "password": PASSWORD},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json() == {"verify_email": True, "email_sent": True}
+    assert _sql(env, "SELECT count(*) FROM users WHERE email = %s", f"{name}@example.test") == [
+        (1,)
+    ]
+    second = _token_from(mailer, f"{name}@example.test")
+    assert first != second
+    assert _verify(client, first).status_code == 400  # the earlier link stopped working
+    # the owner sets the password through the link: only that password signs in afterwards
+    assert _verify(client, second, password="owner-pass-22").status_code == 200
+    assert _login(client, name, "attacker-pass-1").status_code == 401
+    assert _login(client, name, "owner-pass-22").status_code == 200
+
+
+def test_sec05_reregistering_with_the_accounts_own_username_resends(api: Any) -> None:
+    client, mailer = api
+    name = _new_name()
+    _register(client, name)
+    first = _token_from(mailer, f"{name}@example.test")
+    assert _register(client, name).status_code == 201  # lost the mail: register again
+    assert _token_from(mailer, f"{name}@example.test") != first
+
+
+def test_sec05_verify_needs_a_valid_password_and_keeps_the_token(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _new_name()
+    _register(client, name)
+    token = _token_from(mailer, f"{name}@example.test")
+    assert _verify(client, token, password="short").status_code == 422
+    r = client.post("/auth/verify-email", json={"token": token})
+    assert r.status_code == 422
+    assert _sql(
+        env,
+        "SELECT email_verified_at IS NULL FROM users u JOIN profiles p ON p.id = u.id "
+        "WHERE p.username = %s",
+        name,
+    ) == [(True,)]
+    assert _verify(client, token).status_code == 200  # still usable
+
+
+def test_sec05_verify_revokes_existing_sessions(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    _login(client, name)
+    r = client.post("/auth/resend-verification", json={"email": f"{name}@example.test"})
+    assert r.status_code == 202  # already verified: no new link
+    _sql(
+        env,
+        "UPDATE users SET email_verified_at = NULL "
+        "WHERE id = (SELECT id FROM profiles WHERE username = %s)",
+        name,
+    )
+    client.post("/auth/resend-verification", json={"email": f"{name}@example.test"})
+    assert _verify(client, _token_from(mailer, f"{name}@example.test")).status_code == 200
+    assert _sql(
+        env,
+        "SELECT count(*) FROM refresh_tokens WHERE revoked_at IS NULL "
+        "AND user_id = (SELECT id FROM profiles WHERE username = %s)",
+        name,
+    ) == [(0,)]
+
+
 def test_verification_token_is_single_use(api: Any) -> None:
     client, mailer = api
     name = _new_name()
     _register(client, name)
     token = _token_from(mailer, f"{name}@example.test")
-    assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
-    r = client.post("/auth/verify-email", json={"token": token})
+    assert _verify(client, token).status_code == 200
+    r = _verify(client, token)
     assert r.status_code == 400
 
 
@@ -219,8 +293,8 @@ def test_resend_replaces_the_previous_link(api: Any) -> None:
     assert r.status_code == 202
     second = _token_from(mailer, f"{name}@example.test")
     assert first != second
-    assert client.post("/auth/verify-email", json={"token": first}).status_code == 400
-    assert client.post("/auth/verify-email", json={"token": second}).status_code == 200
+    assert _verify(client, first).status_code == 400
+    assert _verify(client, second).status_code == 200
 
 
 def test_resend_for_unknown_email_looks_the_same(api: Any) -> None:
@@ -395,6 +469,33 @@ def test_expired_refresh_token_is_refused_and_revoked(api: Any, env: Any) -> Non
         "AND user_id = (SELECT id FROM profiles WHERE username = %s)",
         name,
     ) == [(0,)]
+
+
+def test_sec05_a_session_ends_90_days_after_sign_in(api: Any, env: Any) -> None:
+    client, mailer = api
+    name = _verified_user(client, mailer)
+    _login(client, name)
+    _sql(env, _AGE_FAMILY, "89 days", name)
+    assert _refresh(client).status_code == 200  # inside 90 days: still refreshes
+    # the new token never outlives the family: sign-in (89 days ago) + 90 days = tomorrow
+    assert _sql(env, _ACTIVE_EXPIRES_WITHIN_A_DAY, name) == [(True,)]
+    _sql(env, _AGE_FAMILY, "90 days 1 second", name)
+    assert _refresh(client).status_code == 401
+    assert _sql(env, _ACTIVE_COUNT, name) == [(0,)]
+
+
+_AGE_FAMILY = (
+    "UPDATE refresh_tokens SET created_at = now() - %s::interval "
+    "WHERE user_id = (SELECT id FROM profiles WHERE username = %s)"
+)
+_ACTIVE_EXPIRES_WITHIN_A_DAY = (
+    "SELECT expires_at <= now() + interval '1 day 5 seconds' FROM refresh_tokens "
+    "WHERE revoked_at IS NULL AND user_id = (SELECT id FROM profiles WHERE username = %s)"
+)
+_ACTIVE_COUNT = (
+    "SELECT count(*) FROM refresh_tokens "
+    "WHERE revoked_at IS NULL AND user_id = (SELECT id FROM profiles WHERE username = %s)"
+)
 
 
 def test_login_and_logout_require_an_allowed_origin(api: Any) -> None:

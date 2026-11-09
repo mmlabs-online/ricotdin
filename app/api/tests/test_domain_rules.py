@@ -10,6 +10,7 @@ from app.core.errors import AppError
 from app.domain.rules import (
     CLIENT_EVENT_TYPES,
     can_reprocess,
+    has_invisible_characters,
     is_email_identifier,
     normalize_lookup_username,
     parse_activity,
@@ -291,3 +292,43 @@ def test_activity_only_for_the_caller(user_id: Any) -> None:
         403,
         "Forbidden: userId must match the authenticated user.",
     )
+
+
+# --- SEC-05: invisible characters in names ----------------------------------------------------
+
+_INVISIBLE = [
+    "‪", "‫", "‬", "‭", "‮",  # bidi embeddings / overrides
+    "⁦", "⁧", "⁨", "⁩",  # bidi isolates
+    "​", "‌", "‍", "‎", "‏",  # zero-width, LRM / RLM
+    "⁠", "⁡", "⁢", "⁣", "⁤",  # word joiner, invisible operators
+    "﻿",  # zero-width no-break space / BOM
+    "\x00", "\t", "\n", "\x1f", "\x7f", "\x85", "\x9f",  # C0 / C1 controls
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("ch", _INVISIBLE)
+def test_sec05_invisible_characters_are_detected(ch: str) -> None:
+    assert has_invisible_characters(f"Plan{ch}2026")
+
+
+@pytest.mark.parametrize(
+    "name", ["Họp tuần", "Báo cáo Q4 – đội Kỹ thuật", "📌 Sprint", "a-b_c (1)"]
+)
+def test_sec05_normal_names_pass(name: str) -> None:
+    assert not has_invisible_characters(name)
+    assert parse_folder_name({"name": name}) == name
+    assert parse_meeting_patch({"title": name}) == {"title": name}
+
+
+@pytest.mark.parametrize("ch", ["‮", "​", "﻿"])
+def test_sec05_folder_name_with_invisible_characters_is_refused(ch: str) -> None:
+    with pytest.raises(AppError) as exc:
+        parse_folder_name({"name": f"Shared{ch}fdp.exe"})
+    assert (exc.value.status, exc.value.code) == (400, "invalid_characters")
+
+
+@pytest.mark.parametrize("ch", ["‮", "⁦", "\x00"])
+def test_sec05_meeting_title_with_invisible_characters_is_refused(ch: str) -> None:
+    with pytest.raises(AppError) as exc:
+        parse_meeting_patch({"title": f"Weekly{ch}sync"})
+    assert (exc.value.status, exc.value.code) == (422, "invalid_characters")

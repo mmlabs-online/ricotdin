@@ -13,8 +13,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.errors import AppError
 from app.rag.scope import HistoryMessage, RetrievedChunk, clean_text
-from app.services.ai.service import ParseFailed
+from app.services.ai.service import AIRejected, ParseFailed
 
 __all__ = [
     "ANSWER_SCHEMA",
@@ -124,3 +125,11 @@ def parse_answer(raw: str, chunks: Sequence[RetrievedChunk]) -> Answer:
              "end_ms": c.end_ms}
         )  # fmt: skip
     return Answer(text, citations)
+
+
+def answer_refund_reason(exc: AppError) -> str | None:
+    """Refund reason for a failed answer, or None when the query stays charged (SEC-05): a provider
+    refusal of the question itself is the one failure a user can cause on purpose."""
+    if isinstance(exc, AIRejected):
+        return None
+    return "answer_generation_failed"

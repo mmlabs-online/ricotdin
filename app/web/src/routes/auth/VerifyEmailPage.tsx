@@ -1,14 +1,15 @@
-// Email verification (AUT-01, SEC-02): the link carries #token=…; it is read once and removed
-// from the address bar. It is posted to /auth/verify-email only when the person clicks "Confirm":
-// mail scanners that open links and run the page must not verify an account on their own (with
-// the §0.3 pre-registration risk, that would verify an attacker's account for the victim's
-// address). Without a usable token: resend form.
-import { useEffect, useRef, useState } from 'react'
+// Email verification (AUT-01, SEC-02, SEC-05): the link carries #token=…; it is read once and
+// removed from the address bar. The person chooses their password here and only then is the token
+// posted to /auth/verify-email (with the password): mail scanners that open links never verify an
+// account, and a password chosen by whoever registered the address first never survives (SEC-05).
+// Without a usable token: resend form.
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../auth/AuthProvider'
 import { publicAuthErrorKey } from '../../auth/authErrors'
 import { forgetHashToken, readHashToken } from '../../auth/emailLink'
+import { newPasswordError } from '../../auth/validate'
 import { AuthLayout } from '../../components/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -29,36 +30,94 @@ export function VerifyEmailPage() {
     if (location.hash) forgetHashToken()
   }, [location.hash])
 
-  const confirm = () => {
+  const errId = useId()
+  const helpId = useId()
+  const pwRef = useRef<HTMLInputElement>(null)
+  const [password, setPassword] = useState('')
+  const [repeat, setRepeat] = useState('')
+  const [fieldError, setFieldError] = useState<string | null>(null)
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
     if (!token || started.current) return
-    started.current = true // the token is single use: never post it twice
+    const invalid = newPasswordError(password, repeat)
+    if (invalid) {
+      setFieldError(invalid)
+      pwRef.current?.focus()
+      return
+    }
+    started.current = true // the token is single use: never post it twice at once
+    setFieldError(null)
     setState('verifying')
     session
-      .publicAuth('/verify-email', { token })
+      .publicAuth('/verify-email', { token, password })
       .then(() => setState('verified'))
       .catch((err: unknown) => {
-        setErrorKey(publicAuthErrorKey(err, 'verify'))
-        setState('error')
+        const key = publicAuthErrorKey(err, 'verify')
+        if (key === 'auth.errors.invalidLink') {
+          setErrorKey(key)
+          setState('error')
+          return
+        }
+        // refused password, rate limit, offline: the token was not used, so the form stays
+        started.current = false
+        setFieldError(key)
+        setState('confirm')
+        requestAnimationFrame(() => pwRef.current?.focus())
       })
   }
 
   if (state === 'confirm' || state === 'verifying') {
+    const busy = state === 'verifying'
     return (
       <AuthLayout>
-        <div className="auth-card">
+        <form className="auth-card" onSubmit={submit} noValidate>
           <h1>{t('page.verifyEmail.title')}</h1>
           <p>{t('auth.verify.confirmHelp')}</p>
-          <Button variant="primary" className="full" onClick={confirm} disabled={state === 'verifying'} aria-busy={state === 'verifying'}>
+          <label>
+            {t('auth.reset.newPassword')}
+            <input
+              ref={pwRef}
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              maxLength={1024}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={fieldError ? `${helpId} ${errId}` : helpId}
+            />
+          </label>
+          <p id={helpId} className="field-help">
+            {t('auth.register.passwordHelp')}
+          </p>
+          <label>
+            {t('auth.register.confirm')}
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={repeat}
+              maxLength={1024}
+              onChange={(e) => setRepeat(e.target.value)}
+              aria-invalid={fieldError ? true : undefined}
+              aria-describedby={fieldError ? errId : undefined}
+            />
+          </label>
+          {fieldError && (
+            <p id={errId} key={fieldError + password.length} className="auth-error" role="alert">
+              {t(fieldError)}
+            </p>
+          )}
+          <Button type="submit" variant="primary" className="full" disabled={busy} aria-busy={busy}>
             {t('auth.verify.confirm')}
           </Button>
-        </div>
+        </form>
       </AuthLayout>
     )
   }
   return (
     <AuthLayout>
       <div className="auth-card">
-        {/* the Confirm button is gone: the result's heading takes focus */}
+        {/* the form is gone: the result's heading takes focus */}
         <h1 tabIndex={-1} ref={(el) => (started.current ? el?.focus() : undefined)}>
           {t('page.verifyEmail.title')}
         </h1>
