@@ -12,6 +12,17 @@ export type Inline =
 /** Summary / notes may carry links people typed (PRO-06); chat answers never do (§0.8). */
 export interface MarkdownOptions {
   links?: boolean
+  /** normalised targets that stay text even with `links` (links the AI ever wrote) */
+  blocked?: ReadonlySet<string>
+}
+
+export function blockedLinkSet(raw: readonly string[] | undefined): ReadonlySet<string> {
+  const out = new Set<string>()
+  for (const r of raw ?? []) {
+    const href = safeLinkHref(r)
+    if (href) out.add(href)
+  }
+  return out
 }
 
 /** An `https:` URL without credentials, normalised; anything else → null (stays text). */
@@ -57,7 +68,8 @@ export function parseInline(source: string, opts: MarkdownOptions = {}): Inline[
     const index = m.index ?? 0
     push('text', source.slice(at, index))
     const [, image, link, target, code, strong1, strong2, strike, em1, em2] = m
-    const href = link !== undefined && opts.links ? safeLinkHref(target ?? '') : null
+    const safe = link !== undefined && opts.links ? safeLinkHref(target ?? '') : null
+    const href = safe && !opts.blocked?.has(safe) ? safe : null
     if (image !== undefined) push('text', image)
     else if (link !== undefined && href) out.push({ kind: 'link', text: link, href, host: new URL(href).hostname })
     else if (link !== undefined) push('text', link)

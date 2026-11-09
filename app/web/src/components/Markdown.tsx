@@ -3,7 +3,7 @@
 // shown next to the text, opened in a new tab without referrer or opener. Chat never passes it.
 import { Fragment, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { parseMarkdown, type Inline, type ListItem } from '../lib/markdown'
+import { blockedLinkSet, parseMarkdown, type Inline, type ListItem } from '../lib/markdown'
 import { displayText } from '../lib/text'
 
 const OPEN = ' ('
@@ -58,8 +58,18 @@ function List({ items, ordered }: { items: ListItem[]; ordered: boolean }) {
   )
 }
 
-export function Markdown({ source, className, links = false }: { source: string; className?: string; links?: boolean }) {
-  const blocks = useMemo(() => parseMarkdown(source, { links }), [source, links])
+export function Markdown({
+  source,
+  className,
+  links = false,
+  aiLinks,
+}: {
+  source: string
+  className?: string
+  links?: boolean
+  aiLinks?: readonly string[]
+}) {
+  const blocks = useMemo(() => parseMarkdown(source, { links, blocked: blockedLinkSet(aiLinks) }), [source, links, aiLinks])
   return (
     <div className={className ? `markdown ${className}` : 'markdown'}>
       {blocks.map((b, n) => {

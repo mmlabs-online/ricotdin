@@ -136,7 +136,7 @@ As a user, I want keyword + semantic search across all meetings for quick lookup
 ---
 
 ### PRO-06 — Edit notes with history
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ⚠️ Partial (6a done: API, history, Markdown editor; 6b: rich-text editor + history UI)
 
 **User Story**  
 As a meeting owner or editor, I want to edit the summary and notes in a rich-text editor and get earlier versions back so that the meeting record says what was really decided.

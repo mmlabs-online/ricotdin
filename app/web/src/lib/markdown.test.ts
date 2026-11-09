@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdown, safeLinkHref } from './markdown'
+import { blockedLinkSet, parseInline, parseMarkdown, safeLinkHref } from './markdown'
 
 describe('parseInline', () => {
   it('keeps plain text', () => {
@@ -193,5 +193,15 @@ describe('links in summary / notes (PRO-06)', () => {
     expect(safeLinkHref('HTTPS://a.test')).toBe('https://a.test/')
     expect(safeLinkHref('ftp://a.test')).toBeNull()
     expect(safeLinkHref('not a url')).toBeNull()
+  })
+})
+
+describe('links the AI wrote stay text (PRO-06 review)', () => {
+  it('blocks links whose target appeared in an AI version, compared normalised', () => {
+    const blocked = blockedLinkSet(['HTTPS://Evil.test/x', 'not a url'])
+    expect(parseInline('[a](https://evil.test/x) [b](https://ok.test)', { links: true, blocked })).toEqual([
+      { kind: 'text', text: 'a ' },
+      { kind: 'link', text: 'b', href: 'https://ok.test/', host: 'ok.test' },
+    ])
   })
 })

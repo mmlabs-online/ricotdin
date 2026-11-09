@@ -446,10 +446,11 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   regenerate={{ visible: canRegenerate(meeting, role), busy: regenerate.isPending, onClick: () => !regenerate.isPending && setDialog('regenerate') }}
                   edit={contentEdit}
                   links={meeting.summary_edited === true}
+                  aiLinks={meeting.summary_ai_links}
                   onDraftDirty={onDraftDirty}
                 />
               )}
-              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} links={meeting.notes_edited === true} onDraftDirty={onDraftDirty} />}
+              {tab === 'notes' && <NotesPanel notes={meeting.notes} edit={contentEdit} links={meeting.notes_edited === true} aiLinks={meeting.notes_ai_links} onDraftDirty={onDraftDirty} />}
               {tab === 'todos' && (
                 <TodosPanel
                   todos={todos.data ?? []}

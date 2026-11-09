@@ -110,7 +110,7 @@ async def edit_content(
 ) -> dict[str, Any]:
     """Save the summary or the notes (editor or above, finished meetings only)."""
     enforce_limit(request.app.state.content_limiter, identity.user_id)
-    # 100 000 characters, JSON-escaped, stay well under this (review round 1: body cap)
+    # 200 000 characters, JSON-escaped, stay under this (review round 1: body cap)
     edit = parse_content_edit(await json_object(request, max_bytes=MAX_EDIT_BODY))
     mid = path_id(meeting_id, _NOT_FOUND)
     return await _save(db, identity, mid, edit.field, edit.base_hash, content=edit.content)

@@ -805,3 +805,15 @@ def test_pro06_saving_the_same_text_writes_nothing(
 def test_pro06_long_ai_notes_can_be_edited(client: TestClient, world: dict[str, Any]) -> None:
     mid = _notes_meeting(world, notes="x" * 150_000)  # the AI may write up to 200 000
     assert _edit(client, "a", mid, "short", "x" * 150_000).status_code == 200
+
+
+def test_pro06_links_the_ai_wrote_stay_listed_after_an_edit(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    ai = "Read [this](https://evil.test/x) and [that](http://plain.test)"
+    mid = _notes_meeting(world, notes=ai)
+    assert _edit(client, "b", mid, ai + " (typo fixed)", ai).status_code == 200
+    got = client.get(f"/meetings/{mid}", headers=_as(client, "c")).json()
+    assert got["notes_edited"] is True
+    assert got["notes_ai_links"] == ["https://evil.test/x"]  # never clickable in the web
+    assert got["summary_ai_links"] == []

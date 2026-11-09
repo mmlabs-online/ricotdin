@@ -70,6 +70,7 @@ export function SummaryPanel({
   regenerate,
   edit = null,
   links = false,
+  aiLinks,
   onDraftDirty,
 }: {
   summary: string | null
@@ -77,6 +78,7 @@ export function SummaryPanel({
   regenerate: { visible: boolean; busy: boolean; onClick: () => void } | null
   edit?: ContentEdit
   links?: boolean
+  aiLinks?: readonly string[]
   onDraftDirty?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
@@ -95,7 +97,7 @@ export function SummaryPanel({
         <ContentEditor meetingId={edit.meetingId} field="summary" original={summary} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
       ) : (
         <>
-          {summary?.trim() ? <Markdown source={summary} links={links} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
+          {summary?.trim() ? <Markdown source={summary} links={links} aiLinks={aiLinks} /> : <p className="tab-note">{t('detail.summary.empty')}</p>}
           <div className="panel-footer">
             {edit && <EditButton label={t('detail.edit.actionSummary')} onClick={f.open} buttonRef={f.editRef} />}
             {model && <span className="model-label">{t('detail.summary.model', { model: displayText(model) })}</span>}
@@ -116,11 +118,13 @@ export function NotesPanel({
   notes,
   edit = null,
   links = false,
+  aiLinks,
   onDraftDirty,
 }: {
   notes: string | null
   edit?: ContentEdit
   links?: boolean
+  aiLinks?: readonly string[]
   onDraftDirty?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
@@ -150,7 +154,7 @@ export function NotesPanel({
         <ContentEditor meetingId={edit.meetingId} field="notes" original={notes} onDirtyChange={onDraftDirty} onClose={(saved) => f.close(saved, t('detail.edit.saved'))} />
       ) : notes?.trim() ? (
         <>
-          <Markdown source={notes} links={links} />
+          <Markdown source={notes} links={links} aiLinks={aiLinks} />
           <div className="panel-footer">
             {editButton}
             <Button onClick={() => void copy()}>

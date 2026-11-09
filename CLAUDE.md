@@ -354,7 +354,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   an `ai` row; `ai` rows never have an author, also on `regenerate`, which writes the replaced +
   new text; restore writes a `restore` row; the 50 newest per meeting + field are kept).
   `GET /meetings/{id}` adds `summary_edited` / `notes_edited`: the newest version is a person's
-  (`user`/`restore`) and equals the current text (`domain.content.edited_by_person`). App role: SELECT under RLS
+  (`user`/`restore`) and equals the current text (`domain.content.edited_by_person`), and
+  `summary_ai_links` / `notes_ai_links`: every https target found (in SQL) in an `ai` version of
+  that field — those links stay text even after a person's edit or a restore of AI text. App role: SELECT under RLS
   (`can_access_meeting(...,'viewer')`); service: SELECT/INSERT/DELETE; worker: none (worker
   re-processing writes no version). `GET /meetings/{id}/content-versions?field=` (no text,
   `editedByUsername` read as service), `GET …/{versionId}`, `POST …/{versionId}/restore
@@ -856,7 +858,7 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   text (§0.8) — never add an image renderer or `dangerouslySetInnerHTML`. Links stay text too,
   except with `links`, passed only for a summary / notes **a person wrote** (`summary_edited` /
   `notes_edited`, PRO-06; AI text can be steered by what was said in the meeting, so an AI link is
-  never clickable): `https:` without credentials (`safeLinkHref`), host shown next to the text,
+  never clickable, nor any target in `*_ai_links`): `https:` without credentials (`safeLinkHref`), host shown next to the text,
   `target=_blank rel="noopener noreferrer nofollow"`, "opens in a new tab" for screen readers.
   **Chat answers never pass `links`.** Switching the detail tab with an unsaved draft asks first. Line rules are
   plain loops and inline regex parts are length-bounded (a heading regex was cubic: CWE-1333); keep

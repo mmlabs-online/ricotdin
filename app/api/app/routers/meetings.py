@@ -154,12 +154,26 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
     meeting = as_dict(row)
     if meeting is None:
         raise NotFound(_NOT_FOUND)
+    ai_links: dict[str, list[str]] = {"summary": [], "notes": []}
+    if any(edited for edited in (newest.get("summary"), newest.get("notes"))):
+        async with db.app_transaction(identity) as conn:
+            for r in await conn.execute(text(_AI_LINKS), {"id": mid}):
+                ai_links[r.field].append(r.href)
     for field in ("summary", "notes"):  # PRO-06: only text a person wrote may render links
         v = newest.get(field)
         meeting[f"{field}_edited"] = edited_by_person(
             v.source if v else None, newest=v.content if v else None, current=meeting[field]
         )
+        # links the AI ever wrote in this field stay text, also after a person's edit / restore
+        meeting[f"{field}_ai_links"] = ai_links[field]
     return meeting
+
+
+# Every https link target in an AI version of a field (extracted in SQL: never ships the texts).
+_AI_LINKS = (
+    "SELECT DISTINCT field, (regexp_matches(content, '\\]\\((https://[^)\\s]+)\\)', "
+    "'gi'))[1] AS href FROM public.meeting_note_versions WHERE meeting_id = :id AND source = 'ai'"
+)
 
 
 async def _children(
