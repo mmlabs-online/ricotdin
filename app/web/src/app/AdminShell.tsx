@@ -4,11 +4,13 @@ import { ArrowUpRight, ShieldCheck } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/AuthProvider'
+import { useApplyAccountLocale } from '../i18n/useAccountLocale'
 import { ADMIN_SECTIONS } from './adminSections'
 import { initials } from './initials'
 
 export function AdminShell() {
   const { t } = useTranslation()
+  useApplyAccountLocale() // PRF-06
   const navigate = useNavigate()
   const { state } = useAuth()
   const user = state.status === 'signedIn' ? state.user : null

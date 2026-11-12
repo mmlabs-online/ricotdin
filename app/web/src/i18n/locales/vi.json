@@ -1343,6 +1343,10 @@
       "darkHint": "Dịu mắt",
       "color": "Bảng màu"
     },
+    "language": {
+      "title": "Ngôn ngữ",
+      "body": "Lưu vào tài khoản, nên mọi thiết bị bạn đăng nhập đều dùng ngôn ngữ này."
+    },
     "model": {
       "title": "Mô hình AI",
       "body": "Dùng cho các cuộc họp mới bạn tải lên. Quản trị viên quyết định có những mô hình nào.",

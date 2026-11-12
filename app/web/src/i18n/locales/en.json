@@ -1343,6 +1343,10 @@
       "darkHint": "Easy on the eyes",
       "color": "Color theme"
     },
+    "language": {
+      "title": "Language",
+      "body": "Saved to your account, so every device you sign in on uses it."
+    },
     "model": {
       "title": "AI model",
       "body": "Used for new meetings you upload. An administrator decides which models are available.",

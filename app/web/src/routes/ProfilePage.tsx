@@ -24,6 +24,7 @@ import { mediaSrc } from '../lib/meetings/detail'
 import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
 import { AVATAR_TYPES, uploadErrorKey } from '../lib/upload/upload'
+import { useChooseLocale } from '../i18n/useAccountLocale'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { COLOR_THEMES } from '../theme/theme'
 import { useTheme } from '../theme/ThemeProvider'
@@ -97,6 +98,7 @@ export function ProfilePage() {
       <DetailsSection profile={profile.data} />
       <PasswordSection />
       <AppearanceSection />
+      <LanguageSection />
       <ModelSection />
       <DefaultFolderSection />
       <UsageSection profile={profile.data} />
@@ -318,6 +320,28 @@ function AppearanceSection() {
             {colorTheme === theme && <Check size={16} aria-hidden="true" />}
           </button>
         ))}
+      </div>
+    </Section>
+  )
+}
+
+function LanguageSection() {
+  const { t, i18n } = useTranslation()
+  const choose = useChooseLocale()
+  const id = useId()
+  const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
+  return (
+    <Section title={t('profile.language.title')} body={t('profile.language.body')}>
+      <div className="field-row">
+        <label htmlFor={id}>{t('language.label')}</label>
+        <select id={id} value={language} onChange={(e) => choose(e.target.value === 'vi' ? 'vi' : 'en')}>
+          <option value="en" lang="en">
+            {t('language.en')}
+          </option>
+          <option value="vi" lang="vi">
+            {t('language.vi')}
+          </option>
+        </select>
       </div>
     </Section>
   )

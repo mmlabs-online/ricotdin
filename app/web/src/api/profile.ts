@@ -23,6 +23,8 @@ export interface Preferences {
   model: string | null
   /** PRF-07: folder new meetings go to when the client sends no folderId. */
   defaultFolderId: string | null
+  /** PRF-06: UI language saved on the account; null = follow this device/browser. */
+  locale: 'en' | 'vi' | null
   allowedModels: Array<{ provider: string; model: string; label: string }>
 }
 
@@ -52,7 +54,9 @@ export function useUpdatePreferences() {
   const fetchApi = useFetchApi()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (pick: { provider: string | null; model: string | null } | { defaultFolderId: string | null }) =>
+    mutationFn: (
+      pick: { provider: string | null; model: string | null } | { defaultFolderId: string | null } | { locale: 'en' | 'vi' | null },
+    ) =>
       apiJson(fetchApi, '/profile/preferences', { method: 'PATCH', body: pick }),
     onSettled: () => qc.invalidateQueries({ queryKey: profileKeys.preferences, exact: true }),
   })
