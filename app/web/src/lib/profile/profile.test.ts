@@ -40,6 +40,8 @@ describe('profileErrorKey', () => {
     expect(profileErrorKey('password', e(409))).toBe('profile.errors.passwordChanged')
     expect(profileErrorKey('password', e(422))).toBe('profile.errors.passwordRejected')
     expect(profileErrorKey('model', e(400))).toBe('profile.errors.modelNotAllowed')
+    expect(profileErrorKey('folder', e(404))).toBe('profile.errors.folderUnavailable')
+    expect(profileErrorKey('folder', e(422))).toBe('profile.errors.folderUnavailable')
     expect(profileErrorKey('password', e(429))).toBe('profile.errors.rateLimited')
     expect(profileErrorKey('details', e(0, 'network'))).toBe('profile.errors.network')
     expect(profileErrorKey('details', e(500))).toBe('profile.errors.generic')

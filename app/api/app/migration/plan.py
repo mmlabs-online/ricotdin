@@ -42,6 +42,22 @@ def load_order(tables: set[str], fks: Iterable[tuple[str, str]]) -> list[str]:
     return order
 
 
+# Columns of shared tables that v1 never had (v2 migrations after the baseline). The copy does not
+# read, compare or write them: they keep their v2 default, and a re-run keeps a user's value.
+V2_ONLY_COLUMNS: dict[str, frozenset[str]] = {
+    "profiles": frozenset({"default_folder_id"}),  # PRF-07, migration 0008
+}
+
+
+def copied_columns(
+    table: str, columns: Sequence[str], types: Sequence[str]
+) -> tuple[list[str], list[str]]:
+    """``columns`` / ``types`` of a target table without its v2-only columns."""
+    skip = V2_ONLY_COLUMNS.get(table, frozenset())
+    kept = [(c, t) for c, t in zip(columns, types, strict=True) if c not in skip]
+    return [c for c, _ in kept], [t for _, t in kept]
+
+
 def select_sql(table: str, columns: Sequence[str]) -> str:
     cols = ", ".join(f"{_q(c)}::text" for c in columns)
     return f"SELECT {cols} FROM public.{_q(table)}"  # noqa: S608 - identifiers validated

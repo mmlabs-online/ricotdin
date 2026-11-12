@@ -66,6 +66,18 @@
   admins get no extra access). Folders, shares and lookup run as service with checks in code (v1 did
   the same; avoids the `folders_select` bug, §0.1). `PATCH /profile` and preferences write as
   `ricotdin_app` (column grant + `profiles_update`), so `role` can never be written.
+- **Default folder (PRF-07, migration `0008`):** `profiles.default_folder_id` (FK `folders`,
+  `ON DELETE SET NULL`). `GET /profile/preferences` returns `defaultFolderId`; `PATCH` takes
+  `defaultFolderId` (UUID or null) independently of `provider`/`model` (a body with one leaves the
+  other), after `folder_assignable` as service (owner or editor share, else 404). `POST /meetings`
+  applies it only when the body has **no** `folderId` key (`null`/`""` = no folder); a default the
+  user can no longer add to gives no folder, not 404 (an explicit id still 404s); the stored id stays
+  until the folder is deleted (a re-share brings it back), and the web shows it as "no longer
+  available". A folder deleted between the check and the write → 404 (FK). The web Record page sends
+  an explicit `folderId` from one select (preselected with the default; locked only while a file is
+  being sent) for both the recorder and the file upload; if the preferences cannot be loaded it
+  offers "your default folder" and sends no `folderId`. The v1 → v2 copy skips the column
+  (`V2_ONLY_COLUMNS`, §0.5).
 - **Validation** is pure in `app/domain/rules.py`; `.ics` in `app/domain/ics.py`; the model
   allow-list in `app/domain/models.py` (from `app_settings['generation.allowed_models']`, fallback
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).

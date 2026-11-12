@@ -900,7 +900,17 @@
     "selected": "Selected {{name}}, {{size}}",
     "removeNamed": "Remove {{name}}",
     "started": "Uploading…",
-    "progressLabel": "Upload progress"
+    "progressLabel": "Upload progress",
+    "folder": {
+      "label": "Save to folder",
+      "help": "Starts on your default folder.",
+      "profileLink": "Set the default in your profile",
+      "locked": "You can change the folder when this upload finishes.",
+      "loading": "Loading folders…",
+      "loadError": "Folders could not be loaded. The meeting goes to your default folder.",
+      "useDefault": "Your default folder",
+      "lost": "Your default folder is no longer available, so it starts on No folder."
+    }
   },
   "errors": {
     "network": "Cannot reach the server. Check your connection and try again.",
@@ -928,7 +938,8 @@
       "none": "No folder",
       "shared": "Shared",
       "manage": "Manage",
-      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown."
+      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown.",
+      "sharedSuffix": "(shared with you)"
     },
     "empty": {
       "first": "No meetings yet",
@@ -1340,6 +1351,14 @@
       "save": "Save model",
       "saved": "Default model saved."
     },
+    "folder": {
+      "title": "Default folder",
+      "body": "New meetings you record or upload go to this folder. You can still pick another one each time.",
+      "label": "Folder for new meetings",
+      "save": "Save folder",
+      "saved": "Default folder saved.",
+      "lost": "Your saved default folder is no longer available. Pick another one or No folder."
+    },
     "usage": {
       "title": "Balance",
       "body": "What you can still use. Ask an administrator to top it up.",
@@ -1360,7 +1379,8 @@
       "modelNotAllowed": "That model is no longer available. Choose another.",
       "rateLimited": "Too many attempts. Wait a few minutes and try again.",
       "network": "No connection to the server. Check your network and try again.",
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "folderUnavailable": "This folder can no longer be used. Pick another one."
     }
   }
 }

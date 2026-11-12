@@ -35,6 +35,10 @@
   - **A migration that creates a v2-only table** (no Supabase counterpart) must add it to
     `V2_ONLY_TABLES` in the script, or every run is blocked (BUG-020);
     `test_bug020_every_table_created_after_the_baseline_is_v2_only` enforces it.
+  - **A migration that adds a column to a shared table** (PRF-07: `profiles.default_folder_id`)
+    must list it in `V2_ONLY_COLUMNS` (`app/migration/plan.py`): the copy then never reads,
+    compares or writes it (it keeps its v2 default; a re-run keeps a user's value);
+    `test_every_column_added_after_the_baseline_is_v2_only` enforces it.
 - **Report:**
   - Order-independent digests per table, plus secrets and file results (copied / already in
     Drive / v2 files / missing / rejected / failed, mapped count + `storage_digest`).

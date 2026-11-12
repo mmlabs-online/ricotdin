@@ -285,6 +285,22 @@ def test_report_renders_markdown_with_verdict() -> None:
     assert bad.rstrip().endswith("**Result: FAIL**")
 
 
+def test_v2_only_columns_are_never_read_compared_or_overwritten() -> None:
+    """PRF-07: profiles.default_folder_id has no v1 counterpart. The copy leaves it out of the
+    drift check, the SELECT on the source and the upsert (a re-run keeps a user's choice)."""
+    from app.migration.plan import copied_columns, upsert_sql
+
+    cols, types = copied_columns(
+        "profiles", ["id", "username", "default_folder_id"], ["uuid", "text", "uuid"]
+    )
+    assert (cols, types) == (["id", "username"], ["uuid", "text"])
+    assert "default_folder_id" not in upsert_sql("profiles", cols, types, ["id"])
+    assert copied_columns("meetings", ["id", "default_folder_id"], ["uuid", "uuid"]) == (
+        ["id", "default_folder_id"],
+        ["uuid", "uuid"],
+    )
+
+
 def test_column_drift_reports_names_and_types_ignoring_schema_prefix() -> None:
     from app.migration.plan import column_drift
 
@@ -429,6 +445,28 @@ def test_bug020_every_table_created_after_the_baseline_is_v2_only() -> None:
     assert {"drive_config", "storage_objects"} <= created
     assert created <= V2_ONLY_TABLES
     assert created <= NOT_COPIED_TABLES  # never copied from Supabase either
+
+
+def test_every_column_added_after_the_baseline_is_v2_only() -> None:
+    # PRF-07 review: a column added to a shared table by a v2 migration (0002+) is not in Supabase;
+    # without V2_ONLY_COLUMNS the preflight reports "missing in source" and the SELECT fails.
+    import re
+
+    from app.migration.plan import V2_ONLY_COLUMNS
+    from scripts.migrate_from_supabase import API_ROOT, V2_ONLY_TABLES
+
+    added: set[tuple[str, str]] = set()
+    for sql in sorted((API_ROOT / "migrations" / "sql").glob("*.sql")):
+        if sql.name.startswith("0001_") or sql.name.endswith("_down.sql"):
+            continue
+        text = sql.read_text("utf-8")
+        for table, body in re.findall(r"ALTER TABLE public\.(\w+)\s+([^;]*);", text):
+            added |= {(table, c) for c in re.findall(r"ADD COLUMN (?:IF NOT EXISTS )?(\w+)", body)}
+    assert ("profiles", "default_folder_id") in added
+    for table, column in added:
+        assert table in V2_ONLY_TABLES or column in V2_ONLY_COLUMNS.get(table, set()), (
+            f"{table}.{column}: add it to V2_ONLY_COLUMNS (app/migration/plan.py)"
+        )
 
 
 def test_duplicate_active_jobs_block_the_run() -> None:

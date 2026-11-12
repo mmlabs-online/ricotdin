@@ -21,6 +21,8 @@ export interface Profile {
 export interface Preferences {
   provider: string | null
   model: string | null
+  /** PRF-07: folder new meetings go to when the client sends no folderId. */
+  defaultFolderId: string | null
   allowedModels: Array<{ provider: string; model: string; label: string }>
 }
 
@@ -50,7 +52,7 @@ export function useUpdatePreferences() {
   const fetchApi = useFetchApi()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (pick: { provider: string | null; model: string | null }) =>
+    mutationFn: (pick: { provider: string | null; model: string | null } | { defaultFolderId: string | null }) =>
       apiJson(fetchApi, '/profile/preferences', { method: 'PATCH', body: pick }),
     onSettled: () => qc.invalidateQueries({ queryKey: profileKeys.preferences, exact: true }),
   })

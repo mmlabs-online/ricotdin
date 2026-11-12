@@ -900,7 +900,17 @@
     "selected": "Đã chọn {{name}}, {{size}}",
     "removeNamed": "Bỏ {{name}}",
     "started": "Đang tải lên…",
-    "progressLabel": "Tiến trình tải lên"
+    "progressLabel": "Tiến trình tải lên",
+    "folder": {
+      "label": "Lưu vào thư mục",
+      "help": "Chọn sẵn thư mục mặc định của bạn.",
+      "profileLink": "Đổi mặc định trong hồ sơ",
+      "locked": "Đổi được thư mục sau khi tải lên xong.",
+      "loading": "Đang tải thư mục…",
+      "loadError": "Không tải được danh sách thư mục. Cuộc họp sẽ vào thư mục mặc định của bạn.",
+      "useDefault": "Thư mục mặc định của bạn",
+      "lost": "Thư mục mặc định không còn dùng được, nên chọn sẵn Không có thư mục."
+    }
   },
   "errors": {
     "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
@@ -928,7 +938,8 @@
       "none": "Không có thư mục",
       "shared": "Chia sẻ",
       "manage": "Quản lý thư mục",
-      "loadError": "Không tải được thư mục nên tên thư mục và quyền biên tập chia sẻ chưa hiển thị."
+      "loadError": "Không tải được thư mục nên tên thư mục và quyền biên tập chia sẻ chưa hiển thị.",
+      "sharedSuffix": "(được chia sẻ)"
     },
     "empty": {
       "first": "Chưa có cuộc họp nào",
@@ -1340,6 +1351,14 @@
       "save": "Lưu mô hình",
       "saved": "Đã lưu mô hình mặc định."
     },
+    "folder": {
+      "title": "Thư mục mặc định",
+      "body": "Cuộc họp mới bạn ghi âm hoặc tải lên sẽ được lưu vào thư mục này. Mỗi lần tạo, bạn vẫn có thể chọn thư mục khác.",
+      "label": "Thư mục cho cuộc họp mới",
+      "save": "Lưu thư mục",
+      "saved": "Đã lưu thư mục mặc định.",
+      "lost": "Thư mục mặc định đã lưu không còn dùng được. Hãy chọn thư mục khác hoặc Không có thư mục."
+    },
     "usage": {
       "title": "Số dư",
       "body": "Phần bạn còn dùng được. Hãy nhờ quản trị viên nạp thêm.",
@@ -1360,7 +1379,8 @@
       "modelNotAllowed": "Mô hình này không còn dùng được. Hãy chọn mô hình khác.",
       "rateLimited": "Thử quá nhiều lần. Hãy chờ vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
-      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "folderUnavailable": "Thư mục này không còn dùng được. Hãy chọn thư mục khác."
     }
   }
 }

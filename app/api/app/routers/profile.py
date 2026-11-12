@@ -28,7 +28,7 @@ from app.core.errors import (
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.models import allowed_models, model_label
-from app.domain.rules import parse_preferences, parse_profile_patch
+from app.domain.rules import parse_preferences_patch, parse_profile_patch
 from app.domain.uploads import (
     MAX_AVATAR_BYTES,
     avatar_content_type,
@@ -39,6 +39,7 @@ from app.domain.uploads import (
 from app.routers._common import SERVICE, enforce_limit, is_unique_violation, json_object, jsonb
 from app.routers.auth import enforce, set_refresh_cookie
 from app.routers.meetings import delete_files
+from app.services.access import folder_assignable
 from app.services.platform import Platform, get_platform
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_avatar_key
@@ -247,13 +248,18 @@ async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
     async with db.app_transaction(identity) as conn:
         row = (
             await conn.execute(
-                text("SELECT default_provider, default_model FROM public.profiles WHERE id = :me"),
+                text(
+                    "SELECT default_provider, default_model, default_folder_id "
+                    "FROM public.profiles WHERE id = :me"
+                ),
                 {"me": identity.user_id},
             )
         ).first()
+    folder = row.default_folder_id if row else None
     return {
         "provider": row.default_provider if row else None,
         "model": row.default_model if row else None,
+        "defaultFolderId": str(folder) if folder else None,
         "allowedModels": [
             {"provider": p, "model": m, "label": model_label(p, m)} for p, m in allowed
         ],
@@ -263,13 +269,32 @@ async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
 @router.patch("/preferences")
 async def update_preferences(request: Request, identity: Identity, db: Db) -> dict[str, bool]:
     body = await json_object(request)
-    provider, model = parse_preferences(body, await _allowed(db))
+    changes = parse_preferences_patch(body, await _allowed(db))
+    folder = changes.get("default_folder_id")
+    if folder is not None:
+        async with db.role_transaction(SERVICE) as conn:  # like POST /meetings (shared folders)
+            if not await folder_assignable(conn, folder, identity.user_id):
+                raise NotFound("Folder not found.")
     async with db.app_transaction(identity) as conn:
-        await conn.execute(
-            text(
-                "UPDATE public.profiles SET default_provider = :p, default_model = :m "
-                "WHERE id = :me"
-            ),
-            {"p": provider, "m": model, "me": identity.user_id},
-        )
+        if "default_model" in changes:
+            await conn.execute(
+                text(
+                    "UPDATE public.profiles SET default_provider = :p, default_model = :m "
+                    "WHERE id = :me"
+                ),
+                {
+                    "p": changes["default_provider"],
+                    "m": changes["default_model"],
+                    "me": identity.user_id,
+                },
+            )
+        if "default_folder_id" in changes:
+            try:
+                async with conn.begin_nested():
+                    await conn.execute(
+                        text("UPDATE public.profiles SET default_folder_id = :f WHERE id = :me"),
+                        {"f": folder, "me": identity.user_id},
+                    )
+            except IntegrityError as exc:  # folder deleted after the check above (FK)
+                raise NotFound("Folder not found.") from exc
     return {"ok": True}
