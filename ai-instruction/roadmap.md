@@ -49,6 +49,7 @@ Postgres and auth, no Supabase).
 |---|---|---|
 | **Phase 2 – dry-run + test (owner sessions):** ② migration rehearsal 1 with Drive (C1) + wallet drift count; ③ production prep (cutover prep 3–8); RC `v2.0.0-rc1` (agent); ④ staging rehearsal = migration PASS #2 + timed rollback (C4) + manual test of every phase-1 feature | ARC-03, ARC-18, ARC-15 | After phase 1; a fresh manual Supabase dump before each rehearsal |
 | **Phase 3 – bugs:** owner reports, `/fix-bug` per finding (S1/S2 before go-live); ⑤ cutover window | `BUG-NNN`, ARC-15 | After phase 2 |
+| Post-cutover restructure: feature-sliced api/web, repo layer + access-checked write helper, `app/jobs`, prompt into the api package, trim agents, freeze baseline before ARC-16 (slice 1 = CLAUDE.md split, done now) | ARC-19 | After ARC-15, module by module (owner 2026-11-12) |
 | Drive orphan sweeper, ffmpeg sandbox | needs `/add-feature` | After go-live (owner 2026-11-09) |
 | `storage.audio_retention_days` | — | After the final migration's file copy |
 | Remove legacy + Supabase + v1 R2 buckets | ARC-16 | Irreversible — owner confirms |
@@ -132,3 +133,9 @@ supersedes it.
 - **Options considered:** (a) set-password link (chosen) / replace the unverified account after 24 h / keep 409. (b) 90 days (chosen) / 30 days / no absolute limit. (c) refund our failures only (chosen) / refund all with a daily cap / keep as is.
 - **Why:** Sensitive meetings: an attacker must never own an account under someone else's address, and a stolen refresh cookie must not live forever. Refusals are the only failures a user can trigger on purpose, so they are the ones that stop being refunded.
 - **Revisit if:** users complain about signing in every 90 days, or legitimate questions are often refused by a provider.
+
+### 2026-11-12 — Architecture review: restructure after the cutover (ARC-19)
+- **Decision:** (1) Structural restructuring of `app/api` and `app/web` happens **after the cutover** (ARC-15), module by module. (2) Split `CLAUDE.md` **now** (ARC-19 slice 1): short root file, v2 sections in `docs/architecture/*.md`, v1 sections in `legacy/CLAUDE.md`, text moved verbatim. (3) Target layout is **feature-sliced**: `app/modules/*` + `app/platform/*` in the API, `src/features/*` in the web app, with a repository layer and one access-checked service-write helper. (4) **No renaming** of `app/` or the python package `app`. (5) **Delete merged remote branches** (the owner reviews the list first).
+- **Options considered:** restructure now vs after the cutover (after, chosen); feature-sliced vs layered + repositories only (feature-sliced, chosen); rename `app/` → `apps/` (not chosen).
+- **Why:** a large move now would conflict with the 25–35 phase 1 feature PRs; the 166 KB CLAUDE.md costs context in every session and mixes v1 and v2 rules; one folder per module matches the one-ticket-one-module workflow; renaming only adds churn.
+- **Revisit if:** the cutover slips far enough that phase 1 work starts suffering from the router/SQL layout, or the split CLAUDE.md files drift apart.

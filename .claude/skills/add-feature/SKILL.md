@@ -29,7 +29,7 @@ Do this quietly so your questions and options are specific to this repo:
    - Exists, not done → tell the user the code; offer to brainstorm/refine that spec instead.
    - Partial overlap → keep the related codes; they shape the options and dependencies.
 2. **Scope:** compare with `CLAUDE.md` §1 "Explicitly OUT of MVP scope" and the hard rules
-   in §5–§7. Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
+   in §5–§7 (all in `legacy/CLAUDE.md` since ARC-19; v2 rules in `docs/architecture/*.md`). Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
    or go to the **PRO** module.
 3. **Code reality:** Grep/Glob for what already exists that the idea could build on
    (tables, routes, components, `lib/` helpers). Note reusable pieces — they make an option
