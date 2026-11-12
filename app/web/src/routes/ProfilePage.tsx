@@ -13,11 +13,13 @@ import {
   type Preferences,
   type Profile,
 } from '../api/profile'
+import { useFolders, type Folder } from '../api/meetings'
 import { initials } from '../app/initials'
 import { useApiUrl } from '../auth/AuthProvider'
 import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
+import { assignableFolders, initialFolderChoice } from '../lib/folders/defaultFolder'
 import { mediaSrc } from '../lib/meetings/detail'
 import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
@@ -96,6 +98,7 @@ export function ProfilePage() {
       <PasswordSection />
       <AppearanceSection />
       <ModelSection />
+      <DefaultFolderSection />
       <UsageSection profile={profile.data} />
     </div>
   )
@@ -382,6 +385,81 @@ function ModelForm({ prefs }: { prefs: Preferences }) {
       <FormNote note={note} />
       <Button type="submit" variant="primary" aria-disabled={save.isPending} aria-busy={save.isPending}>
         {t('profile.model.save')}
+      </Button>
+    </form>
+  )
+}
+
+function DefaultFolderSection() {
+  const { t } = useTranslation()
+  const prefs = usePreferences()
+  const folders = useFolders()
+  const failed = prefs.isError || folders.isError
+  return (
+    <Section title={t('profile.folder.title')} body={t('profile.folder.body')}>
+      {prefs.data && folders.data ? (
+        <DefaultFolderForm saved={prefs.data.defaultFolderId} folders={folders.data} />
+      ) : failed ? (
+        <div>
+          <p className="tab-note">{t('detail.loadError')}</p>
+          <Button
+            onClick={() => {
+              if (prefs.isError) void prefs.refetch()
+              if (folders.isError) void folders.refetch()
+            }}
+          >
+            {t('common.tryAgain')}
+          </Button>
+        </div>
+      ) : (
+        <p className="tab-note">{t('common.loading')}</p>
+      )}
+    </Section>
+  )
+}
+
+function DefaultFolderForm({ saved, folders }: { saved: string | null; folders: Folder[] }) {
+  const { t } = useTranslation()
+  const save = useUpdatePreferences()
+  const targets = assignableFolders(folders)
+  // a default the user can no longer add meetings to is shown as "No folder"
+  const [value, setValue] = useState(initialFolderChoice(saved, folders) ?? '')
+  const [note, setNote] = useNote()
+  const id = useId()
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (save.isPending) return
+    setNote(null)
+    save
+      .mutateAsync({ defaultFolderId: value || null })
+      .then(() => setNote('profile.folder.saved', true))
+      .catch((err: unknown) => setNote(profileErrorKey('folder', err)))
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div className="field-row">
+        <label htmlFor={id}>{t('profile.folder.label')}</label>
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setNote(null)
+          }}
+        >
+          <option value="">{t('profile.folder.none')}</option>
+          {targets.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.myRole === 'owner' ? displayText(f.name) : `${displayText(f.name)} (${t('meetings.folders.shared')})`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <FormNote note={note} />
+      <Button type="submit" variant="primary" aria-disabled={save.isPending} aria-busy={save.isPending}>
+        {t('profile.folder.save')}
       </Button>
     </form>
   )

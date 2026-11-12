@@ -43,6 +43,17 @@ describe('uploadMeeting', () => {
     expect(progress.at(-1)).toBe(1)
   })
 
+  it('sends the chosen folder (PRF-07): an id, null for "no folder", nothing when not chosen', async () => {
+    for (const [folderId, sent] of [['f-1', 'f-1'], [null, null]] as const) {
+      const { d, calls } = deps({ 'POST /meetings': created, 'POST /meetings/m-1/uploaded': ok({ ok: true }) })
+      await uploadMeeting(d, blob, { ...meta, folderId })
+      expect(calls[0]?.body).toHaveProperty('folderId', sent)
+    }
+    const { d, calls } = deps({ 'POST /meetings': created, 'POST /meetings/m-1/uploaded': ok({ ok: true }) })
+    await uploadMeeting(d, blob, { ...meta, folderId: undefined })
+    expect(calls[0]?.body).not.toHaveProperty('folderId')
+  })
+
   it('never PUTs the file anywhere but the Drive upload host', async () => {
     for (const uploadUrl of [
       'https://evil.example/upload',

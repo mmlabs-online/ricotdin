@@ -216,6 +216,92 @@ def test_create_validation_and_folder_rules(client: TestClient, world: dict[str,
     assert r.status_code == 200
 
 
+def _folder_of(world: dict[str, Any], mid: str) -> Any:
+    return _sql(world["db"], "SELECT folder_id FROM meetings WHERE id = %s", mid)[0][0]
+
+
+def _default_of(world: dict[str, Any], who: str) -> Any:
+    return _sql(world["db"], "SELECT default_folder_id FROM profiles WHERE id = %s", world[who])[0][
+        0
+    ]
+
+
+def test_default_folder_preference(client: TestClient, world: dict[str, Any]) -> None:
+    """PRF-07: set / read / clear the default folder; only a folder the user may add to."""
+    f = str(world["f"])
+    pref = "/profile/preferences"
+    assert client.get(pref, headers=_as(client, "a")).json()["defaultFolderId"] is None
+    r = client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": f})
+    assert r.json() == {"ok": True}
+    assert client.get(pref, headers=_as(client, "a")).json()["defaultFolderId"] == f
+    # the model preference is left alone by a folder-only patch, and the other way round
+    assert _sql(world["db"], "SELECT default_provider FROM profiles WHERE id = %s", world["a"]) == [
+        (None,)
+    ]
+    # viewer of the folder, stranger, unknown id: 404; nothing stored
+    for who in "cd":
+        r = client.patch(pref, headers=_as(client, who), json={"defaultFolderId": f})
+        assert (r.status_code, _msg(r)) == (404, "Folder not found.")
+        assert _default_of(world, who) is None
+    r = client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": str(uuid.uuid4())})
+    assert r.status_code == 404
+    assert client.get(pref, headers=_as(client, "a")).json()["defaultFolderId"] == f
+    r = client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": "nope"})
+    assert (r.status_code, _msg(r)) == (422, "defaultFolderId must be a UUID string or null.")
+    r = client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": None})
+    assert r.json() == {"ok": True} and _default_of(world, "a") is None
+
+
+def test_create_uses_the_default_folder(client: TestClient, world: dict[str, Any]) -> None:
+    """PRF-07: no folderId → default; explicit null / "" / another folder overrides it."""
+    f = str(world["f"])
+    other = _sql(
+        world["db"],
+        "INSERT INTO folders (user_id, name) VALUES (%s, 'Other') RETURNING id",
+        world["b"],
+    )[0][0]
+    pref = "/profile/preferences"
+    assert (
+        client.patch(pref, headers=_as(client, "b"), json={"defaultFolderId": f}).status_code == 200
+    )
+    mid, _ = _create(client, "b", b"x")
+    assert str(_folder_of(world, mid)) == f
+    for none in (None, ""):
+        mid, _ = _create(client, "b", b"x", folderId=none)
+        assert _folder_of(world, mid) is None
+    mid, _ = _create(client, "b", b"x", folderId=str(other))
+    assert _folder_of(world, mid) == other
+
+
+def test_lost_default_folder_means_no_folder(client: TestClient, world: dict[str, Any]) -> None:
+    """PRF-07: the share was revoked → no folder (not an error); folder deleted → default cleared."""
+    shared = _sql(
+        world["db"],
+        "INSERT INTO folders (user_id, name) VALUES (%s, 'Shared') RETURNING id",
+        world["a"],
+    )[0][0]
+    _sql(
+        world["db"],
+        "INSERT INTO folder_shares (folder_id, user_id, role, invited_by) VALUES (%s, %s, 'editor', %s)",
+        shared, world["d"], world["a"],
+    )  # fmt: skip
+    pref = "/profile/preferences"
+    r = client.patch(pref, headers=_as(client, "d"), json={"defaultFolderId": str(shared)})
+    assert r.json() == {"ok": True}
+    _sql(
+        world["db"],
+        "DELETE FROM folder_shares WHERE folder_id = %s AND user_id = %s",
+        shared,
+        world["d"],
+    )
+    mid, _ = _create(client, "d", b"x")
+    assert _folder_of(world, mid) is None
+    assert client.get(pref, headers=_as(client, "d")).json()["defaultFolderId"] == str(shared)
+    r = client.delete(f"/folders/{shared}", headers=_as(client, "a"))
+    assert r.status_code == 200, r.text
+    assert _default_of(world, "d") is None
+
+
 def test_process_waits_for_the_upload(
     client: TestClient, world: dict[str, Any], drive: FakeDrive
 ) -> None:

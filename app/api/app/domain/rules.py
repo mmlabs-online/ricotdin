@@ -207,6 +207,23 @@ def parse_preferences(body: dict[str, Any], allowed: list[Pick]) -> tuple[str | 
     return provider, model
 
 
+def parse_preferences_patch(body: dict[str, Any], allowed: list[Pick]) -> dict[str, Any]:
+    """``PATCH /profile/preferences`` → the ``profiles`` columns to set. The model pair and the
+    default folder (PRF-07, ``defaultFolderId``: UUID or null) are independent: a body with only
+    one of them leaves the other unchanged. Whether the folder may be used is the caller's check."""
+    out: dict[str, Any] = {}
+    if "defaultFolderId" in body:
+        raw = body["defaultFolderId"]
+        folder = None if raw is None else parse_uuid(raw)
+        if raw is not None and folder is None:
+            raise UnprocessableEntity("defaultFolderId must be a UUID string or null.")
+        out["default_folder_id"] = folder
+    if "provider" in body or "model" in body or not out:
+        provider, model = parse_preferences(body, allowed)
+        out = {"default_provider": provider, "default_model": model, **out}
+    return out
+
+
 # --- activity ---------------------------------------------------------------------------------
 
 

@@ -12,7 +12,14 @@ import { RecordingNoticeDialog } from './RecordingNoticeDialog'
 import { UploadStatusView } from './UploadStatusView'
 import { Button } from './ui/Button'
 
-export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
+export function Recorder({
+  onBusyChange,
+  folderId,
+}: {
+  onBusyChange?: (busy: boolean) => void
+  /** PRF-07: chosen folder (null = none, undefined = the API's default) */
+  folderId?: string | null | undefined
+}) {
   const { t } = useTranslation()
   const fetchApi = useFetchApi()
   const { state: auth } = useAuth()
@@ -89,6 +96,7 @@ export function Recorder({ onBusyChange }: { onBusyChange?: (busy: boolean) => v
       source: 'recorded',
       durationSeconds: rec.elapsedSeconds,
       startedAt: startedAt.current ?? new Date().toISOString(),
+      folderId,
     })
   }
   const discard = () => {

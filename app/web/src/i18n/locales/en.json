@@ -900,7 +900,11 @@
     "selected": "Selected {{name}}, {{size}}",
     "removeNamed": "Remove {{name}}",
     "started": "Uploading…",
-    "progressLabel": "Upload progress"
+    "progressLabel": "Upload progress",
+    "folder": {
+      "label": "Save to folder",
+      "help": "Your default folder is picked for you. Change it in your profile."
+    }
   },
   "errors": {
     "network": "Cannot reach the server. Check your connection and try again.",
@@ -1340,6 +1344,14 @@
       "save": "Save model",
       "saved": "Default model saved."
     },
+    "folder": {
+      "title": "Default folder",
+      "body": "New meetings you record or upload go to this folder. You can still pick another one each time.",
+      "label": "Default folder",
+      "none": "No folder",
+      "save": "Save folder",
+      "saved": "Default folder saved."
+    },
     "usage": {
       "title": "Balance",
       "body": "What you can still use. Ask an administrator to top it up.",
@@ -1360,7 +1372,8 @@
       "modelNotAllowed": "That model is no longer available. Choose another.",
       "rateLimited": "Too many attempts. Wait a few minutes and try again.",
       "network": "No connection to the server. Check your network and try again.",
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "folderUnavailable": "This folder can no longer be used. Pick another one."
     }
   }
 }

@@ -900,7 +900,11 @@
     "selected": "Đã chọn {{name}}, {{size}}",
     "removeNamed": "Bỏ {{name}}",
     "started": "Đang tải lên…",
-    "progressLabel": "Tiến trình tải lên"
+    "progressLabel": "Tiến trình tải lên",
+    "folder": {
+      "label": "Lưu vào thư mục",
+      "help": "Thư mục mặc định được chọn sẵn. Đổi mặc định trong trang hồ sơ."
+    }
   },
   "errors": {
     "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
@@ -1340,6 +1344,14 @@
       "save": "Lưu mô hình",
       "saved": "Đã lưu mô hình mặc định."
     },
+    "folder": {
+      "title": "Thư mục mặc định",
+      "body": "Cuộc họp mới bạn ghi âm hoặc tải lên sẽ vào thư mục này. Mỗi lần tạo bạn vẫn chọn được thư mục khác.",
+      "label": "Thư mục mặc định",
+      "none": "Không có thư mục",
+      "save": "Lưu thư mục",
+      "saved": "Đã lưu thư mục mặc định."
+    },
     "usage": {
       "title": "Số dư",
       "body": "Phần bạn còn dùng được. Hãy nhờ quản trị viên nạp thêm.",
@@ -1360,7 +1372,8 @@
       "modelNotAllowed": "Mô hình này không còn dùng được. Hãy chọn mô hình khác.",
       "rateLimited": "Thử quá nhiều lần. Hãy chờ vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
-      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "folderUnavailable": "Thư mục này không còn dùng được. Hãy chọn thư mục khác."
     }
   }
 }
