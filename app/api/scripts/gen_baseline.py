@@ -1,7 +1,7 @@
 """Generate migrations/sql/0001_baseline.sql from the v1 schema (ARC-02).
 
-Replays legacy/schema.sql + migrations into a scratch database (Supabase shim), reads the
-catalog and renders the v2 baseline with the hand-written prelude/epilogue/overrides.
+Replays the frozen v1 schema (tests/fixtures/v1/schema) into a scratch database (Supabase shim),
+reads the catalog and renders the v2 baseline with the hand-written prelude/epilogue/overrides.
 
     cd app/api
     uv run --env-file .env python -m scripts.gen_baseline           # write the file

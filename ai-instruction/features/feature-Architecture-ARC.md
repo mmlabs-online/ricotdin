@@ -880,7 +880,20 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
 ---
 
 ### ARC-16 — Remove legacy & decommission Supabase
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** 🟡 Part 1 done (repo), part 2 after the cutover
+
+**Progress**
+- Part 1 (owner decision 2026-11-12, before the cutover; the owner kept a backup of `legacy/`):
+  `legacy/`, `ci.yml`, `release-dev.yml` and the root `.dockerignore` deleted; v1 `schema.sql` +
+  migrations 001–038 frozen as `app/api/tests/fixtures/v1/schema/` (replayed by `app/db/replay.py`
+  for the migration and parity tests and `gen_baseline` — this also covers the ARC-19 "freeze
+  before deleting legacy/" item); `legacy/CLAUDE.md` → `docs/architecture/v1-rules.md`; CLAUDE.md
+  (§0, §9k), README, PR template, skills and the status agent rewritten for v2. v1 lives on in
+  history and on `release/1.1`, which must no longer be merged into `main`/`dev`.
+- Part 2 (after ARC-15 and a stable period): delete `scripts/migrate_from_supabase.py`,
+  `app/migration/`, `services/storage/r2.py`, the v1 fixtures and the Supabase/R2 bits of
+  `backup.yml`; final Supabase backup, then shut down Supabase and the v1 R2 buckets; remove
+  `apps/ricotdin/` from the deployment repo. Irreversible steps — the owner confirms each.
 
 **User Story**  
 As a developer, I want all v1 code and Supabase dependencies removed so that the repo only contains `app/api`, `app/web`, `ai-instruction`, `docs` and tooling.

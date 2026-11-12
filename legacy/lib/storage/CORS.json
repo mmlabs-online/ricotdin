@@ -1,9 +1,0 @@
-[
-  {
-    "AllowedOrigins": ["https://your-domain.com"],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedHeaders": ["Content-Type", "Content-Length"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
