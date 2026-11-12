@@ -15,8 +15,9 @@ push staging/X.Y.Z (ricotdin)
 ```
 
 Decisions (owner, 2026-11-09):
-- Staging uses the **Neon dev branch** of the owner's local `app/api/.env`, so the local machine
-  and staging share the database, the Drive folder and the job queue.
+- Staging uses database `ricotdin` on the shared self-hosted Postgres (ARC-20, 2026-11-12; was the
+  Neon dev branch shared with local development). Migrations and logins run on the Mac:
+  `docs/ops/self-hosted-postgres.md`. Local development uses its own container database now.
 - **No access gate.** Instead there is **no SMTP**, so nobody can complete a registration (the API
   still stores an unverified sign-up, 5 per hour per client); sign in with an account that already
   exists in the dev database. Every dev account is reachable from the internet: give each one a

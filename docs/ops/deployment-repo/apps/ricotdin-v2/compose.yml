@@ -35,6 +35,7 @@ services:
     networks:
       tunnel:
         aliases: [ricotdin-api]
+      db: {} # shared Postgres, postgres:5432 (ARC-20)
 
   worker:
     image: ${RICOTDIN_API_IMAGE:?RICOTDIN_API_IMAGE is unset}
@@ -61,7 +62,7 @@ services:
       start_period: 30s
       retries: 3
     labels: [autoheal=true]
-    networks: [default] # outbound only: Postgres, Google Drive, AI / speech providers
+    networks: [default, db] # default: outbound (Google Drive, AI / speech providers); db: postgres:5432
 
   web:
     image: ${RICOTDIN_WEB_IMAGE:?RICOTDIN_WEB_IMAGE is unset}
@@ -100,3 +101,8 @@ networks:
     external: true
     # The network cloudflared is on — `web`, created by proxy/compose.yml.
     name: web
+  db:
+    external: true
+    # The shared Postgres network (internal, no internet), created by deploy-postgres (ARC-20).
+    name: db
+  default: {}

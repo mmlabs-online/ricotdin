@@ -8,7 +8,7 @@
 ### Checklist deploy v2.0.0 (đổi tên thành `[2.0.0]` khi phát hành; quy trình: `docs/ops/v2-cutover.md`)
 - Xoay vòng các khóa cũ trong lịch sử git (Supabase service_role + anon, Gemini key `AQ.A…`).
 - 2 lần diễn tập migrate có chép tệp sang Drive đều PASS; diễn tập staging toàn bộ runbook + thử rollback.
-- Neon `main`: `alembic upgrade head`, `provision_db_roles`, `connect_gdrive --folder ricotdin` + `drive_smoke`.
+- Postgres tự host (ARC-20, thay Neon `main`): merge PR repo deployment trước (image pgvector, `ricotdin.sql`), rồi trên Mac chạy `alembic upgrade head` + `provision_db_roles` trong image API trên mạng `db` (`docs/ops/self-hosted-postgres.md`); `connect_gdrive --folder ricotdin` + `drive_smoke`.
 - Server (MacBook, runner `macbook-runner`): `/Users/mingming/.config/ricotdin/api.env`, `worker.env`, `web.env` (600) (biến: xem `apps/ricotdin-v2/compose.yml`); `JWT_PRIVATE_KEY` sinh trên server; `KEY_ENCRYPTION_SECRET` = giá trị v1; SMTP tài khoản riêng; `WEB_ORIGIN`/`ALLOWED_ORIGINS` = `https://app.<domain>`; `FORWARDED_ALLOW_IPS` = đúng IP cố định của cloudflared (không cả subnet); không bật `API_DOCS`.
 - Docker Hub: repo `ricotdin-api`, `ricotdin-web`. Repo deployment: thêm `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml`, `pr-scope.yml` nhận `apps/ricotdin-v2/release.env` và bỏ duyệt cũ khi có commit mới.
 - DNS/cloudflared: `app.<domain>` → `ricotdin-web:8080`, `api.<domain>` → `ricotdin-api:8000`; bỏ query string của `/media` khỏi log.

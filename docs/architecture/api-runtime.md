@@ -22,8 +22,10 @@
   limits 20/10/5; rotation terminates old sessions) are created/rotated by
   `uv run --env-file .env python -m scripts.provision_db_roles` (needs the owner `DATABASE_URL`), which
   writes `DATABASE_URL_APP` / `_SERVICE` / `_WORKER` into `app/api/.env` (atomic, 0600). Never in a
-  migration. Neon accepts only plaintext passwords in CREATE/ALTER ROLE — never turn on statement
-  logging for that; re-run to rotate if a log may have captured one.
+  migration. The DDL carries the password in plaintext: never turn on statement logging for that;
+  re-run to rotate if a log may have captured one. Logins get CONNECT on the owner's database
+  (self-hosted Postgres revokes it from PUBLIC; ARC-20). On the Mac it runs in the API image on the
+  `db` network (`docs/ops/self-hosted-postgres.md`).
 - **`app/db/session.py` `Database`:** one asyncpg engine per configured login (pool below the role's
   connection limit, `hide_parameters=True`, `RESET ROLE; RESET ALL` + commit on every return to the
   pool); startup refuses a login that is superuser/BYPASSRLS/CREATEROLE/owner, inherits any role, or

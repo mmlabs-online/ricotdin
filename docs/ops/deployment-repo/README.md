@@ -40,7 +40,8 @@ runnable for a rollback until ARC-16.
   - Generate the production `JWT_PRIVATE_KEY` on the server:
     `uv run python -m scripts.gen_jwt_key --env-file /Users/mingming/.config/ricotdin/api.env`, or paste its
     output there.
-  - The logins come from `scripts.provision_db_roles` run against Neon `main`.
+  - The logins come from `scripts.provision_db_roles`, run on the Mac against `ricotdin` on the shared
+    Postgres (`docs/ops/self-hosted-postgres.md`, ARC-20). api + worker join the `db` network.
 - **cloudflared:** two public hostnames, sibling subdomains of one site:
   - `api.<domain>` → `http://ricotdin-api:8000`;
   - `app.<domain>` → `http://ricotdin-web:8080`.
@@ -83,9 +84,10 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
   *Actions → deploy-ricotdin-v2-staging → Run workflow*. A missing required secret fails the run by name
   before anything is replaced. Values must be one line without `'`.
   - Required: `RICOTDIN_DATABASE_URL_APP`, `RICOTDIN_DATABASE_URL_SERVICE`, `RICOTDIN_DATABASE_URL_WORKER`
-    (the Neon **dev** branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
+    (the `ricotdin` logins on the shared Postgres, `postgres:5432`, from
+    `docs/ops/self-hosted-postgres.md` (ARC-20); never the owner `DATABASE_URL`),
     `RICOTDIN_JWT_PRIVATE_KEY` (a staging key of its own, one line with escaped `\n`),
-    `RICOTDIN_KEY_ENCRYPTION_SECRET` (the value the dev branch's stored keys and `drive_config` were
+    `RICOTDIN_KEY_ENCRYPTION_SECRET` (the value the database's stored keys and `drive_config` were
     encrypted with).
   - Optional: `RICOTDIN_SENTRY_DSN`, `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` (during a key rotation).
   - `KEY_ENCRYPTION_SECRET` and `JWT_PRIVATE_KEY` must **not** be the production values: staging
@@ -100,7 +102,7 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
     clients share one address for the login/register rate limits (safe, just stricter).
   - Each file gets only its service's keys: worker = `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET`
     (+ `SENTRY_DSN`); web = `RICOTDIN_API_URL`.
-  - Re-running `provision_db_roles` against the dev branch **rotates these logins**: set the
+  - Re-running `provision_db_roles` against `ricotdin` **rotates these logins**: set the
     three new URL secrets at once and re-run the workflow, or staging stops.
   - Repository secrets are readable by **every** workflow in this repo (no Environments on the Free
     plan for a private repo). `DEPLOY_REPO_TOKEN` must therefore not have the *Workflows* permission.

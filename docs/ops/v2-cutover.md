@@ -1,5 +1,14 @@
 # v1 → v2 cutover and v2.0.0 release (ARC-15)
 
+> **ARC-20 (2026-11-12): the v2 database is no longer Neon.** It is `ricotdin` on the shared
+> self-hosted Postgres (deployment repo `postgres/`). That server is reachable only as
+> `postgres:5432` on the Mac's internal `db` network, so anything that talks to it runs **on the
+> Mac in the API image**. See `docs/ops/self-hosted-postgres.md` for migrations, logins and the
+> Neon data move. Read the Neon steps below with that substitution: the target `DATABASE_URL` is the
+> `ricotdin` owner URL from that page.
+> `migrate_from_supabase` needs the internet (Supabase, Drive) and `postgres:5432`. Start its
+> container on the default network, then `docker network connect db <container>` before it runs.
+
 **Owner:** project owner. Read the whole page before the window.
 
 Supabase and the v1 container are **never changed**, so going back to v1 stays possible until

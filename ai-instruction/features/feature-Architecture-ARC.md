@@ -1106,6 +1106,56 @@ Architecture review 2026-11-12 (owner decisions in `roadmap.md`, same date). Fin
 
 ---
 
+### ARC-20 — Self-hosted Postgres instead of Neon
+
+**User story:** As the owner, I want v2's database on the shared self-hosted Postgres of the
+deployment repository instead of Neon so that it runs next to the other apps, is backed up by the
+same sidecar, and costs nothing extra.
+
+**Acceptance criteria**
+- Deployment repo: Postgres image `pgvector/pgvector:pg17-trixie` (same Debian/glibc as the running
+  `postgres:17`, guarded in deploy-postgres); optional superuser SQL per app
+  (`postgres/sql/apps/<app>.sql`), for ricotdin `vector` + `pgcrypto` + `CREATEROLE`; ricotdin v2
+  api + worker join the `db` network; `restore-test.sh ricotdin` restores the nightly dump.
+- `alembic upgrade head` succeeds as the non-superuser owner `ricotdin`: migrations only ALTER a
+  role's CREATEDB / CREATEROLE / BYPASSRLS when it has one (same guarantee as before).
+- `provision_db_roles` creates and rotates logins as that owner and grants CONNECT on its database;
+  `drop_login` revokes it.
+- CI runs on `pgvector/pgvector:pg17-trixie`; the committed baseline is what PG 17 generates.
+- Runbook `docs/ops/self-hosted-postgres.md`: migrations and logins from the Mac (API image on the
+  `db` network), the rehearsed Neon → self-hosted data move, local dev container.
+
+**Test plan**
+- `tests/test_db_provision_integration.py`: a CREATEROLE-only owner on a database with no PUBLIC
+  privileges creates + rotates a login that can connect; the old password stops working.
+- Existing parity test (`test_committed_baseline_is_up_to_date`) on PG 17.
+- Manual, done 2026-11-12: deploy-postgres flow locally (fresh init + re-run), migrations + logins
+  as owner, isolation (no CONNECT to other app databases), nightly dump + restore-test for all four
+  apps, PG 18 dump → PG 17 restore with schema/ACL equal to a fresh migration.
+
+**Structural flags**
+- Edits `0001`'s prelude and `0002` (applied on Neon): same effect, privilege-compatible form.
+- Roles are cluster-wide: one ricotdin database per server. `ricotdin` = staging now, production
+  at cutover (owner 2026-11-12). Per-environment role names are a follow-up.
+
+**Done check**
+- Both branches pushed; after merge: deploy-postgres green, staging env files switched to the
+  `ricotdin` logins, `/health` + sign-in on staging.
+
+**Out of scope**
+- Configurable role prefix (two ricotdin databases on one server); deleting Neon and `backup.yml`
+  (owner, after a stable period).
+
+**Key files**
+- deployment: `postgres/compose.yml`, `postgres/sql/apps/ricotdin.sql`, `postgres/scripts/add-app-db.sh`,
+  `postgres/init/10-app-dbs.sh`, `.github/workflows/deploy-postgres.yml`, `ops/backup/restore-test.sh`,
+  `apps/ricotdin-v2-staging/compose.yml`
+- ricotdin: `app/api/app/db/provision.py`, `app/api/migrations/src/v2_prelude.sql`,
+  `app/api/migrations/sql/0002_runtime_roles.sql`, `.github/workflows/ci-api.yml`,
+  `docs/ops/self-hosted-postgres.md`, `docs/architecture/db.md`
+
+---
+
 ## Build Order
 
 ARC-00 → ARC-01 → ARC-02 → ARC-04 → ARC-03 → ARC-05 → ARC-06 → ARC-17 → ARC-07 → ARC-08 → ARC-09 → ARC-10 →

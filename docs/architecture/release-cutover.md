@@ -27,9 +27,10 @@
   `/Users/mingming/.config/ricotdin-staging/`, production v2 `/Users/mingming/.config/ricotdin/`) with
   restore on unhealthy.
   Hosts `ricotdin-staging.mmlabs.online` (web) + `ricotdin-staging-api.mmlabs.online` (one-level
-  names: the free Cloudflare certificate covers `*.mmlabs.online` only). Staging = the Neon **dev**
-  branch through the three app logins (owner decision 2026-11-09: shared with local development,
-  incl. Drive and the job queue; re-running `provision_db_roles` rotates them and stops staging),
+  names: the free Cloudflare certificate covers `*.mmlabs.online` only). Staging = database `ricotdin`
+  on the shared self-hosted Postgres through the three app logins (ARC-20, owner decision
+  2026-11-12; was the Neon dev branch; it becomes production at cutover, see
+  `docs/ops/self-hosted-postgres.md`; re-running `provision_db_roles` rotates them and stops staging),
   no `SMTP_*` (nobody can complete a registration), no access gate, its own autoheal label; never
   the production `KEY_ENCRYPTION_SECRET`, JWT key or Google client on the dev branch (staging is
   public and runs any pushed `staging/*` branch); never set `storage.audio_retention_days` on dev
@@ -47,7 +48,9 @@
   type annotation — add a file only after checking its "secret" is fake) + `secrets-scan.yml` (gitleaks 8.30.0 binary, sha256-checked: the tree and the new
   commits of every PR/push) + `.pre-commit-config.yaml` (`pre-commit install`). Older history is
   not rescanned: a finding there is rotated at the provider, never allowlisted.
-- **Backup (part 2) replaces v1 OPS-03:** `backup.yml` dumps Neon `main` with pg_dump 18
+- **Backup (part 2) replaces v1 OPS-03 — superseded by ARC-20:** the shared Postgres's `pg-backup`
+  sidecar dumps `ricotdin` nightly and syncs it offsite (deployment repo `ops/backup/`). Remove
+  `backup.yml` + secret `NEON_BACKUP_DATABASE_URL` once Neon is retired. Was: `backup.yml` dumps Neon `main` with pg_dump 18
   (`--format=custom`, secret `NEON_BACKUP_DATABASE_URL`: a `BYPASSRLS` + `pg_read_all_data` login —
   pg_dump fails on RLS tables without BYPASSRLS — direct URL), checks the archive lists
   `public.meetings`, age-encrypts it; a second job that never sees the DB secret installs packages

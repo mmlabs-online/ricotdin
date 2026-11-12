@@ -26,7 +26,7 @@ jobs:
     # Disposable Postgres + pgvector for the *_integration tests (no secrets involved).
     services:
       postgres:
-        image: pgvector/pgvector:pg18  # same major as Neon (baseline generated on PG 18)
+        image: pgvector/pgvector:pg17-trixie  # = production: deployment repo postgres/compose.yml (ARC-20)
         env:
           POSTGRES_PASSWORD: ci-only-password
         ports: ['5432:5432']
