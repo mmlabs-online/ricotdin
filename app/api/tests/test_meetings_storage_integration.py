@@ -259,6 +259,30 @@ def test_default_folder_preference(client: TestClient, world: dict[str, Any]) ->
     assert r.json() == {"ok": True} and _default_of(world, "a") is None
 
 
+def test_locale_preference(client: TestClient, world: dict[str, Any]) -> None:
+    """PRF-06: set / read / clear the UI language; independent of the model and the folder."""
+    pref = "/profile/preferences"
+    loc = "SELECT locale, default_folder_id, default_provider FROM profiles WHERE id = %s"
+    assert client.get(pref, headers=_as(client, "a")).json()["locale"] is None
+    f = str(world["f"])
+    assert client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": f}).json() == {
+        "ok": True
+    }
+    r = client.patch(pref, headers=_as(client, "a"), json={"locale": "vi"})
+    assert r.json() == {"ok": True}
+    assert client.get(pref, headers=_as(client, "a")).json()["locale"] == "vi"
+    assert _sql(world["db"], loc, world["a"]) == [("vi", uuid.UUID(f), None)]
+    for bad in ("fr", 3, ""):
+        r = client.patch(pref, headers=_as(client, "a"), json={"locale": bad})
+        assert (r.status_code, _msg(r)) == (422, 'locale must be "en", "vi" or null.')
+    assert _sql(world["db"], loc, world["a"])[0][0] == "vi"
+    # another user's language is their own
+    assert client.get(pref, headers=_as(client, "b")).json()["locale"] is None
+    r = client.patch(pref, headers=_as(client, "a"), json={"locale": None, "defaultFolderId": None})
+    assert r.json() == {"ok": True}
+    assert _sql(world["db"], loc, world["a"]) == [(None, None, None)]
+
+
 def test_create_uses_the_default_folder(client: TestClient, world: dict[str, Any]) -> None:
     """PRF-07: no folderId → default; explicit null / "" / another folder overrides it."""
     f = str(world["f"])

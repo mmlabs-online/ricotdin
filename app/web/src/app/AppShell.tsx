@@ -22,7 +22,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { ThemeSwatches } from '../components/ui/ThemeSwatches'
-import { setLocale } from '../i18n'
+import { useApplyAccountLocale, useChooseLocale } from '../i18n/useAccountLocale'
 import { useTheme } from '../theme/ThemeProvider'
 import { initials } from './initials'
 
@@ -42,6 +42,8 @@ export function AppShell() {
   const user = state.status === 'signedIn' ? state.user : null
   const isAdmin = user?.role === 'admin'
   const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
+  useApplyAccountLocale()
+  const setLocale = useChooseLocale() // PRF-06: also saved on the account
 
   useEffect(() => {
     if (!menuOpen) return

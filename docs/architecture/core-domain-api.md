@@ -78,6 +78,15 @@
   being sent) for both the recorder and the file upload; if the preferences cannot be loaded it
   offers "your default folder" and sends no `folderId`. The v1 → v2 copy skips the column
   (`V2_ONLY_COLUMNS`, §0.5).
+- **UI language (PRF-06, migration `0009`):** `profiles.locale` (`'en' | 'vi'` or NULL, CHECK
+  `profiles_locale_check`). `GET /profile/preferences` returns `locale`; `PATCH` takes `locale`
+  (`"en"`, `"vi"` or null, else 422) independently of the model and the folder. The web applies the
+  account value once per signed-in user per page load (`i18n/useAccountLocale.ts`, module state, so
+  switching between the user and admin shells never re-applies it) over the device's localStorage
+  choice; NULL keeps the device/browser language. The header toggle and the Profile select apply at
+  once, settle the value for that page load (a failed save keeps the local choice) and save in the
+  background, one PATCH after another (the last click wins). Emails stay bilingual. The v1 → v2
+  copy skips the column (`V2_ONLY_COLUMNS`).
 - **Validation** is pure in `app/domain/rules.py`; `.ics` in `app/domain/ics.py`; the model
   allow-list in `app/domain/models.py` (from `app_settings['generation.allowed_models']`, fallback
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
