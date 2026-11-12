@@ -22,7 +22,7 @@ Related runbooks:
 | 6 | API env file: `JWT_PRIVATE_KEY` (generate it on the server), `KEY_ENCRYPTION_SECRET` (the v1 value), the SMTP app password of a **dedicated** account, `MAIL_FROM`, `WEB_ORIGIN` = `ALLOWED_ORIGINS` = `https://app.<domain>`, `FORWARDED_ALLOW_IPS`, `SENTRY_DSN`. Never `API_DOCS=1`. | `docker compose config --quiet` ok |
 | 7 | Docker Hub repos `ricotdin-api` + `ricotdin-web`. Deployment repo PR with the drafts: `apps/ricotdin-v2/compose.yml`, `deploy-ricotdin-v2.yml`, and `pr-scope.yml` accepting `apps/ricotdin-v2/release.env` + dismissing stale approvals. | merged |
 | 8 | Backup environment secrets (`backup-restore.md`, one-time setup). | one manual run green |
-| 9 | Release candidate: bump `app/api/pyproject.toml` and `app/web/package.json` to `2.0.0`, PR `dev → main`, cut `release/2.0`, tag `v2.0.0-rc1` (images only, no deploy PR). | both images on Docker Hub |
+| 9 | Release candidate: `app/api/pyproject.toml` and `app/web/package.json` are `2.0.0` since OPS-02 (staging, `docs/ops/staging.md`: rehearse there first); PR `dev → main`, cut `release/2.0`, tag `v2.0.0-rc1` (images only, no deploy PR). | both images on Docker Hub |
 | 10 | **Staging rehearsal of this whole runbook** (acceptance criterion; details below), **including the rollback**. | staging log row filled |
 
 ### Staging rehearsal

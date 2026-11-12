@@ -137,7 +137,9 @@ jobs:
           WEB_DIGEST: ${{ steps.web.outputs.digest }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          BRANCH="release/$APP-$TAG"
+          # pr-scope.yml reads the app folder from ^release/([a-z0-9-]+)-v[0-9]: "release/ricotdin-v2.0.0"
+          # would read as "ricotdin" (v1) and fail the scope check, so the branch names ricotdin-v2 (OPS-02).
+          BRANCH="release/$APP-v2-$TAG"
           FILE="apps/$APP-v2/release.env"
           if [ -z "$API_DIGEST" ] || [ -z "$WEB_DIGEST" ]; then
             echo "::error::build-push-action returned no digest"
@@ -151,7 +153,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
 
-          mkdir -p "apps/$APP"
+          mkdir -p "apps/$APP-v2" # absent before the first v2 release (OPS-02 review of ARC-15)
           {
             echo "# Written by the $APP release workflow for $TAG (commit $GITHUB_SHA). Do not edit by hand."
             echo "RICOTDIN_API_IMAGE=$API_IMAGE:$TAG@$API_DIGEST"

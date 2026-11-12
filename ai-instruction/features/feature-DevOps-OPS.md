@@ -40,31 +40,53 @@ As a developer, I want automated tests to run before deploy to catch bugs early.
 
 ---
 
-### OPS-02 — Staging environment
-**Status:** ❌ Not started  
-**Mandatory:** Yes
+### OPS-02 — Staging deploy from staging branches
+**Priority:** High | **Status:** ❌ Not started
 
 **User Story**  
-As a developer, I want a staging environment separate from real data for safe testing.
+As the owner, I want pushing a staging/X.Y.Z branch to deploy v2 to ricotdin-staging.mmlabs.online so that I can try a release on the real server before production.
+
+**Context**
+v2 has CI and a tag-driven production release (`release.yml` → deployment PR, ARC-15), but nothing has ever run on the server, and the cutover runbook needs a staging rehearsal. Rewritten for v2 on 2026-11-09 (the v1 spec assumed two Supabase projects and Vercel). Owner decisions 2026-11-09: cutting `staging/X.Y.Z` from dev deploys staging, every push redeploys; same home server and self-hosted runner `mmlabs-server`; DB = the Neon dev branch already in the owner's local `.env`, used only through the three provisioned logins; hosts web `ricotdin-staging.mmlabs.online`, API `ricotdin-staging-api.mmlabs.online` (one-level sibling subdomains: host-only SameSite=Lax refresh cookie, Cloudflare's free certificate covers `*.mmlabs.online` only); no access gate but no SMTP (nobody can register); Drive folder shared with local (`drive_config` lives in the shared DB); v1 (`apps/ricotdin`) is in use and not touched. Rejected: a separate Neon branch (owner wants the current DB), deploying straight from the runner without a PR (no audit trail), Cloudflare Access (no SMTP is enough).
 
 **Use Cases**
-1. Staging is a separate deployment (separate Supabase project, separate Gemini key).
-2. Every merge to `main` auto-deploys to staging.
-3. Developer tests features in staging before promoting to production.
-4. Staging has its own `.env` with non-production credentials.
-5. Staging may use `gemini-2.5-flash-lite` to reduce costs during testing.
-6. Production deployment is manual (button click) or triggered by a release tag.
+1. The owner bumps the versions to 2.0.0 on dev, cuts `staging/2.0.0` and pushes it; about 15 min later staging runs the new build.
+2. The owner pushes a fix to `staging/2.0.0`; staging is redeployed with the new commit.
+3. A broken build fails its health check; the previous staging release is restored and the run and PR show red.
 
 **Frontend**
-- Staging URL: `staging.{domain}` or a platform preview URL (Vercel/Railway preview deployments).
-- A visible banner in staging: "Staging environment — not for real data."
+- None (the web image is reused; staging sets `RICOTDIN_API_URL` to the staging API host).
 
 **Backend**
-- Two Supabase projects: `ricotdin-staging` and `ricotdin-prod`.
-- Two sets of environment variables in the deployment platform.
-- Staging Supabase can be seeded with test data; prod never uses test data.
-- DB schema migrations are applied to staging first; then promoted to prod.
-- Recommended platforms: Vercel (Next.js-native) or Railway.
+- `.github/workflows/release-staging.yml` (push to `staging/**`): guard (branch name ↔ both version files), reuse `ci-api.yml` + `ci-web.yml` (`workflow_call`), build + push `mingming21400/ricotdin-api` and `ricotdin-web` as `:staging-X.Y.Z-<sha7>` (never `latest`), then open or update a PR on mmlabs-online/deployment writing only `apps/ricotdin-v2-staging/release.env` (`RICOTDIN_API_IMAGE` / `RICOTDIN_WEB_IMAGE` pinned `:tag@sha256:…`, `RICOTDIN_VERSION` = the tag) and enable auto-merge. Secrets: `DEPLOY_REPO_TOKEN`, `DOCKERHUB_*` (existing). Actions pinned by SHA.
+- Pure logic `app/api/app/ops/staging_release.py` used by the guard: `parse_staging_ref(ref)`, `staging_tag(version, sha)`, `check_versions(branch, api, web)`.
+- Deployment-repo drafts in `docs/ops/deployment-repo/`: `apps/ricotdin-v2-staging/compose.yml` (project `ricotdin-v2-staging`, network aliases `ricotdin-staging-api` / `ricotdin-staging-web`, env files `/etc/mmlabs/ricotdin-staging-{api,worker,web}.env`, same hardening as `ricotdin-v2`), `.github/workflows/deploy-ricotdin-v2-staging.yml` (like `deploy-ricotdin-v2.yml`: pull, `up --wait`, restore on unhealthy, revert push, PR comment; on push to main touching `apps/ricotdin-v2-staging/**`), `pr-scope.yml` accepting `apps/ricotdin-v2-staging/`, README steps.
+- Version bump: `app/api/pyproject.toml` + `app/web/package.json` → 2.0.0 on dev.
+- No migration step: the owner runs `alembic upgrade head` on the dev branch before cutting or pushing a staging branch that brings a migration.
+
+**Acceptance Criteria**
+- Given `staging/2.0.0` is pushed and both version files say 2.0.0, when release-staging runs, then both CI suites pass, two images tagged `staging-2.0.0-<sha7>` are on Docker Hub, and a deployment PR changing only `apps/ricotdin-v2-staging/release.env` (digest pins) has auto-merge enabled.
+- Given `staging/2.0` or `staging/2.0.1` while the files say 2.0.0, when it is pushed, then the guard fails before any build or push.
+- Given that PR is merged, when deploy-ricotdin-v2-staging runs on mmlabs-server, then api, worker and web are healthy, `https://ricotdin-staging-api.mmlabs.online/version.json` returns `staging-2.0.0-<sha7>` and an existing account signs in at `https://ricotdin-staging.mmlabs.online`.
+- Given a release whose API is unhealthy, when the deploy runs, then the previous `release.env` is restored and redeployed, the revert is pushed and the run is red.
+- Given a deployment PR from this workflow touching `apps/ricotdin/` or `apps/ricotdin-v2/`, then pr-scope rejects it: production and v1 are never changed by staging.
+
+**Test Plan**
+- Pure: `app/api/app/ops/staging_release.py`; tests `app/api/tests/test_staging_release.py` — valid / invalid refs (`staging/2.0.0`, `staging/2.0`, `staging/v2.0.0`, `staging/2.0.0-rc1`, `feature/x`), tag format, version mismatch.
+- Workflows: actionlint clean on the two new workflows; `docker compose -f …/compose.yml config` with a sample `release.env`.
+- End to end: the done check.
+
+**Structural flags**
+- New workflow here and in another repo (drafts copied by the owner); new server env files + cloudflared hostnames; Docker Hub repos `ricotdin-api` / `ricotdin-web` must exist; auto-merge enabled on the deployment repo. No migration, no new app env var.
+
+**Done check**
+- Cut `staging/2.0.0`: both hostnames answer with the right version; an empty commit pushed to the branch redeploys a new `<sha7>`.
+
+**Out of scope**
+- Production go-live (ARC-15 cutover), automatic migrations, an access gate, a staging banner, a separate staging DB or Drive folder, v1 deploys (OPS-05).
+
+**Key files (expected)**
+- `.github/workflows/release-staging.yml`, `app/api/app/ops/staging_release.py`, `app/api/tests/test_staging_release.py`, `docs/ops/deployment-repo/apps/ricotdin-v2-staging/compose.yml`, `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2-staging.yml`, `docs/ops/deployment-repo/README.md`, `docs/ops/staging.md`, `app/api/pyproject.toml`, `app/web/package.json`
 
 ---
 
@@ -385,12 +407,12 @@ The steps are spread over the CHANGELOG deploy checklists, `docs/ops/backup-rest
 
 1. **OPS-01** (CI) — lowest effort, highest confidence gain. Set up GitHub Actions in one session.
 2. **OPS-03** (backup) — if on Supabase paid tier, this is a single dashboard toggle. If free tier, write the backup script.
-3. **OPS-02** (staging) — requires provisioning a second Supabase project + deployment platform configuration.
+3. **OPS-02** (staging) — v2: `staging/X.Y.Z` branches deploy to ricotdin-staging.mmlabs.online through the deployment repo.
 
 ## Dependencies
 
 - **OPS-01 depends on:** existing test suite (`npm run test` already configured)
-- **OPS-02 depends on:** OPS-01 (CI must pass before staging auto-deploy)
+- **OPS-02 depends on:** OPS-04 (deployment-PR flow), ARC-15 (v2 release workflow + deployment drafts)
 - **OPS-03 depends on:** nothing; can be set up anytime
 - **OPS-04 depends on:** OPS-01 (the release verify job reuses the CI checks)
 - **OPS-05 depends on:** OPS-04 (release PRs must exist before the deployment repo can consume them)
