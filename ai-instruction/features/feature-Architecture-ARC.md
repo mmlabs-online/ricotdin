@@ -1154,6 +1154,16 @@ same sidecar, and costs nothing extra.
   `app/api/migrations/sql/0002_runtime_roles.sql`, `.github/workflows/ci-api.yml`,
   `docs/ops/self-hosted-postgres.md`, `docs/architecture/db.md`
 
+
+**Extension (owner, 2026-11-12): production only**
+- No staging environment, no v1, no Neon. Production v2 = `ricotdin.mmlabs.online` +
+  `ricotdin-api.mmlabs.online`, database `ricotdin`, started empty (no data carried over), deployed by
+  tag (`release.yml` → deployment PR → `deploy-ricotdin-v2.yml`).
+- Deployment repo: `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml` built from the running staging
+  ones (secrets → env files, SMTP added, prod hostnames, v2+ tag pins); staging and v1 folders removed.
+- ricotdin: `release-staging.yml`, `staging_release.py`, `backup.yml`, `backup_r2.py`, `backup_plan.py`
+  (+ their tests) removed; go-live runbook `docs/ops/go-live.md`; Supabase migration docs marked unused.
+- Done check: v2.0.0 live and healthy on the production hostnames, first admin signed in, Drive connected.
 ---
 
 ## Build Order

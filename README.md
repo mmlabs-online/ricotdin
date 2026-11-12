@@ -14,7 +14,7 @@ Google Drive (audio and avatars) · Gemini / OpenAI-compatible providers · Spee
 | [`app/web/`](app/web/README.md) | Frontend SPA |
 | `ai-instruction/` | Feature tracking, bugs, roadmap, runtime pipeline prompt (`ai-gen/`) |
 | `docs/architecture/` | Design rules per area (the `§0.x` sections cited in code) |
-| `docs/ops/` | Owner runbooks: staging, migration, cutover, backup/restore |
+| `docs/ops/` | Owner runbooks: go-live, database, backup/restore |
 
 The v1 app (Next.js + Supabase) was removed from `dev` in ARC-16. It is kept in git history and
 on the `release/1.1` branch (tags ≤ v1.1.1).
@@ -32,5 +32,6 @@ Local setup (database, env files, Google Drive connection) is in `app/api/README
 ## Release and deploy
 
 Tag `vX.Y.Z` on `release/X.Y` → `release.yml` builds `ricotdin-api` + `ricotdin-web` and opens the
-deployment PR; merging it deploys. Staging: push `staging/X.Y.Z`. Details: `CLAUDE.md` §9k,
-`docs/ops/staging.md`, `docs/ops/v2-cutover.md`.
+deployment PR; run the release's migrations on the Mac, then merge it to deploy to
+https://ricotdin.mmlabs.online (the only environment). Details: `CLAUDE.md` §9k, `docs/ops/go-live.md`,
+`docs/ops/self-hosted-postgres.md`.

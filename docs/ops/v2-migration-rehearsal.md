@@ -1,13 +1,8 @@
 # v2 data migration: Supabase → Neon + Google Drive (ARC-03, ARC-18)
 
-> **ARC-20 (2026-11-12): the v2 database is no longer Neon.** It is `ricotdin` on the shared
-> self-hosted Postgres (deployment repo `postgres/`). That server is reachable only as
-> `postgres:5432` on the Mac's internal `db` network, so anything that talks to it runs **on the
-> Mac in the API image**. See `docs/ops/self-hosted-postgres.md` for migrations, logins and the
-> Neon data move. Read the Neon steps below with that substitution: the target `DATABASE_URL` is the
-> `ricotdin` owner URL from that page.
-> `migrate_from_supabase` needs the internet (Supabase, Drive) and `postgres:5432`. Start its
-> container on the default network, then `docker network connect db <container>` before it runs.
+> **Not used (ARC-20, owner decision 2026-11-12):** v1 is retired and production v2 started with an
+> empty database, so no v1 data is migrated. This runbook and `migrate_from_supabase` are kept only
+> until ARC-16 removes the Supabase tooling. Do not run them against production.
 
 **Owner:** project owner. **Script:** `app/api/scripts/migrate_from_supabase.py`. Pure logic lives in
 `app/api/app/migration/`; tests are `app/api/tests/test_migration_{transform,storage,integration}.py`.

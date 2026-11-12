@@ -8,12 +8,12 @@
   `ricotdin` is **not a superuser** (CREATEROLE only); the superuser creates `vector` + `pgcrypto`
   (`postgres/sql/apps/ricotdin.sql`). PUBLIC has no privilege on any database there, so
   `provision_db_roles` grants CONNECT to each login. Role names are cluster-wide: **one ricotdin
-  database per server** (staging now, production at cutover). Runbook, migrations from the Mac, Neon
-  data move: `docs/ops/self-hosted-postgres.md`. **Never name CREATEDB / CREATEROLE / BYPASSRLS in an
+  database per server** (production; staging retired 2026-11-12). Runbook, migrations + logins from
+  the Mac: `docs/ops/self-hosted-postgres.md`. **Never name CREATEDB / CREATEROLE / BYPASSRLS in an
   ALTER ROLE unconditionally** (it needs that attribute; only ALTER when the role has it).
   Local dev + CI: a superuser `pgvector/pgvector:pg17-trixie` container (`app/api/.env`
-  `DATABASE_URL`, used for scratch databases); never the shared server. The Neon project
-  `ricotdin-sg` is retired after the data move (owner deletes it).
+  `DATABASE_URL`, used for scratch databases); never the shared server. Neon (`ricotdin-sg`) is no
+  longer used; production started with an empty database (owner deletes the Neon project).
 - **Schema = Alembic** in `app/api/migrations/` (version table in schema `alembic`).
   `uv run --env-file .env alembic upgrade head`. New schema changes = new Alembic revisions, never
   edits to `0001`.

@@ -6,11 +6,10 @@ name: Release
 #   3. build + push mingming21400/ricotdin-api:vX.Y.Z (API and worker share it) and
 #      mingming21400/ricotdin-web:vX.Y.Z (+ latest when it is the highest version);
 #   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest in
-#      apps/ricotdin-v2/release.env (v1 hotfix releases from release/1.1 still rewrite
-#      apps/ricotdin/release.env: separate dirs, so a v1 hotfix never drops the v2 pins).
-#      A prerelease tag (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
-# Deploy = review + merge that PR (OPS-04). A tag runs the workflow file of the tagged commit,
-# so v1 hotfix tags (v1.x on release/1.1) keep using the v1 release.yml of that branch.
+#      apps/ricotdin-v2/release.env (the only ricotdin deployment: v1 and staging are retired,
+#      ARC-20). A prerelease tag (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
+# Deploy = run the release's `alembic upgrade head` on the Mac, then review + merge that PR
+# (docs/ops/go-live.md).
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
@@ -39,7 +38,7 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           MAJOR="${TAG_VERSION%%.*}"
           if [ "$MAJOR" -lt 2 ]; then
-            echo "::error::$GITHUB_REF_NAME is a v1 tag: tag it on release/1.1, whose release.yml builds v1"
+            echo "::error::$GITHUB_REF_NAME is a v1 tag: v1 is retired (ARC-20), only v2+ is released"
             exit 1
           fi
           BRANCH="release/$(echo "$TAG_VERSION" | cut -d. -f1,2)"
@@ -138,7 +137,7 @@ jobs:
         run: |
           TAG="$GITHUB_REF_NAME"
           # pr-scope.yml reads the app folder from ^release/([a-z0-9-]+)-v[0-9]: "release/ricotdin-v2.0.0"
-          # would read as "ricotdin" (v1) and fail the scope check, so the branch names ricotdin-v2 (OPS-02).
+          # would read as "ricotdin" and fail the scope check, so the branch names ricotdin-v2 (OPS-02).
           BRANCH="release/$APP-v2-$TAG"
           FILE="apps/$APP-v2/release.env"
           if [ -z "$API_DIGEST" ] || [ -z "$WEB_DIGEST" ]; then

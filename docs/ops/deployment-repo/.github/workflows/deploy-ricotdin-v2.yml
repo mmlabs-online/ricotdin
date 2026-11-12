@@ -1,18 +1,19 @@
 name: deploy-ricotdin-v2
 
-# DRAFT for the deployment repository, kept in ricotdin/docs/ops/deployment-repo/ (ARC-15); copied
-# by the operator. Same flow as deploy-ricotdin.yml (v1): a merge to main that touches
-# apps/ricotdin-v2/ deploys ricotdin v2 (api + worker + web + autoheal) on the home server's
-# self-hosted runner: pull both images pinned in release.env, start them, wait until every
-# container is healthy. If not, restore apps/ricotdin-v2/ as it was before the push, redeploy that,
-# and push the revert. A restored deploy is still a red run. workflow_dispatch redeploys what main
-# pins. v1 (apps/ricotdin/, deploy-ricotdin.yml) is untouched by this workflow.
+# ricotdin v2, the only ricotdin (v1 and the v2 staging environment are retired, ARC-20). A merge to
+# main that touches apps/ricotdin-v2/ deploys it (api + worker + web + its own autoheal) on the
+# self-hosted runner macbook-runner: pull both images pinned in release.env, start them, wait until
+# every container is healthy. If not, restore apps/ricotdin-v2/ as it was before the push, redeploy
+# that, and push the revert. workflow_dispatch redeploys what main pins.
 #
-# Runtime secrets live ONLY in the three server env files below (never in any repository); the
-# deploy refuses to start without them.
-# No migrate step: apply a release's migrations BEFORE merging its PR (ricotdin CLAUDE.md §9k).
-# A restore never touches the database, so every migration must stay compatible with the
-# previous release's image.
+# The release PRs come from ricotdin's release.yml (tag vX.Y.Z on release/X.Y, branch
+# release/ricotdin-v2-vX.Y.Z); the owner reviews and merges them.
+# Runtime secrets are repository secrets of the deployment repo, one per key, named RICOTDIN_<KEY>
+# (step `envfile`). Each run rewrites the three env files below from them (chmod 600), so nobody
+# creates or edits those files by hand: change a secret, then Run workflow. Values are never printed.
+# No migrate step: run the release's `alembic upgrade head` on the Mac BEFORE merging its PR
+# (ricotdin docs/ops/self-hosted-postgres.md). A restore never touches the database, so every
+# migration must stay compatible with the previous release's image.
 
 on:
   push:
@@ -31,8 +32,8 @@ concurrency:
 env:
   APP_DIR: apps/ricotdin-v2
   PROJECT: ricotdin-v2
-  # Must match env_file in apps/ricotdin-v2/compose.yml. chmod 600, owned by the runner user.
-  RICOTDIN_ENV_FILES: /Users/mingming/.config/ricotdin/api.env /Users/mingming/.config/ricotdin/worker.env /Users/mingming/.config/ricotdin/web.env
+  # Must match env_file in apps/ricotdin-v2/compose.yml. Written by step `envfile` (chmod 600).
+  RICOTDIN_ENV_DIR: /Users/mingming/.config/ricotdin
 
 jobs:
   deploy:
@@ -92,17 +93,94 @@ jobs:
             echo "previous=$previous"
           } >> "$GITHUB_OUTPUT"
 
-      - name: server env file
+      # Writes api.env / worker.env / web.env from the repository secrets RICOTDIN_<KEY> plus the
+      # non-secret production values below. Each service gets only its own keys (the worker refuses to
+      # start with any other secret). Values are never printed: no echo, no argv (printf is a shell
+      # builtin). Values are written single-quoted, so compose does not interpolate a `$` in them.
+      # A missing required secret fails the run by NAME before any file is replaced or any
+      # container is touched. Optional keys are left out when empty ("" is not the same as unset).
+      - name: envfile
         id: envfile
         if: steps.release.outputs.skip != 'true'
+        env:
+          DATABASE_URL_APP: ${{ secrets.RICOTDIN_DATABASE_URL_APP }}
+          DATABASE_URL_SERVICE: ${{ secrets.RICOTDIN_DATABASE_URL_SERVICE }}
+          DATABASE_URL_WORKER: ${{ secrets.RICOTDIN_DATABASE_URL_WORKER }}
+          JWT_PRIVATE_KEY: ${{ secrets.RICOTDIN_JWT_PRIVATE_KEY }}
+          JWT_PREVIOUS_PUBLIC_KEY: ${{ secrets.RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY }}
+          KEY_ENCRYPTION_SECRET: ${{ secrets.RICOTDIN_KEY_ENCRYPTION_SECRET }}
+          SENTRY_DSN: ${{ secrets.RICOTDIN_SENTRY_DSN }}
+          # Registration + password reset mail. SMTP_PORT optional (default 465, implicit TLS).
+          SMTP_HOST: ${{ secrets.RICOTDIN_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.RICOTDIN_SMTP_PORT }}
+          SMTP_USER: ${{ secrets.RICOTDIN_SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.RICOTDIN_SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.RICOTDIN_MAIL_FROM }}
+          # Not secrets: reviewed here. No API_DOCS in production.
+          WEB_ORIGIN: https://ricotdin.mmlabs.online
+          ALLOWED_ORIGINS: https://ricotdin.mmlabs.online
+          RICOTDIN_API_URL: https://ricotdin-api.mmlabs.online
+          # FORWARDED_ALLOW_IPS is deliberately unset: cloudflared has no fixed address yet, and
+          # trusting the whole `web` subnet would let any container there forge X-Forwarded-For.
+          # Unset, uvicorn ignores the header (all clients share cloudflared's address for rate limits).
         run: |
-          # Only the path is ever printed; the file's contents never reach the log.
-          for f in $RICOTDIN_ENV_FILES; do
-            if [ ! -f "$f" ] || [ ! -r "$f" ]; then
-              echo "::error::Server env file $f is missing or not readable by the runner. Create it (see docs/ops/deployment-repo/README.md in ricotdin). Nothing was started."
-              exit 1
-            fi
+          set -f # the `?` markers below are not globs
+          umask 077
+          if [[ "$RICOTDIN_ENV_DIR" != "$HOME/"* ]]; then
+            echo "::error::RICOTDIN_ENV_DIR $RICOTDIN_ENV_DIR is not under $HOME. Nothing was started."
+            exit 1
+          fi
+          # NAME = required, NAME? = optional.
+          api_keys="DATABASE_URL_APP DATABASE_URL_SERVICE DATABASE_URL_WORKER JWT_PRIVATE_KEY JWT_PREVIOUS_PUBLIC_KEY? KEY_ENCRYPTION_SECRET SENTRY_DSN? SMTP_HOST SMTP_PORT? SMTP_USER SMTP_PASSWORD MAIL_FROM WEB_ORIGIN ALLOWED_ORIGINS"
+          worker_keys="DATABASE_URL_WORKER KEY_ENCRYPTION_SECRET SENTRY_DSN?"
+          web_keys="RICOTDIN_API_URL"
+          missing=""
+          bad=""
+          add_once() { case " $1 " in *" $2 "*) echo "$1" ;; *) echo "$1 $2" ;; esac; }
+          write_env() { # $1 = output file, then the key specs
+            local out="$1" spec name value
+            shift
+            : > "$out"
+            for spec in "$@"; do
+              name="${spec%\?}"
+              value="${!name}"
+              if [ -z "$value" ]; then
+                if [ "$name" = "$spec" ]; then missing="$(add_once "$missing" "RICOTDIN_$name")"; fi
+                continue
+              fi
+              case "$value" in
+                *"'"* | *$'\n'* | *$'\r'*) bad="$(add_once "$bad" "RICOTDIN_$name")"; continue ;;
+              esac
+              printf "%s='%s'\n" "$name" "$value" >> "$out"
+            done
+          }
+          install -d -m 700 "$RICOTDIN_ENV_DIR"
+          tmps=""
+          trap 'rm -f $tmps' EXIT
+          for svc in api worker web; do
+            tmp="$(mktemp "$RICOTDIN_ENV_DIR/.$svc.env.XXXXXX")"
+            tmps="$tmps $tmp"
+            case "$svc" in
+              api) write_env "$tmp" $api_keys ;;
+              worker) write_env "$tmp" $worker_keys ;;
+              web) write_env "$tmp" $web_keys ;;
+            esac
           done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s) in the deployment repo:$missing. Set them (gh secret set <NAME> -R mmlabs-online/deployment), then Run workflow. Nothing was started."
+            exit 1
+          fi
+          if [ -n "$bad" ]; then
+            echo "::error::Secret(s)$bad hold a quote or a line break (JWT_PRIVATE_KEY must be one line with escaped \\n). Nothing was started."
+            exit 1
+          fi
+          set -- $tmps
+          for svc in api worker web; do
+            chmod 600 "$1"
+            mv -f "$1" "$RICOTDIN_ENV_DIR/$svc.env"
+            shift
+          done
+          trap - EXIT
 
       - name: deploy
         id: deploy
@@ -182,7 +260,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$ENVFILE" = "failure" ]; then
-            msg="env-missing: a server env file ($RICOTDIN_ENV_FILES) is missing or unreadable; nothing was started (main still pins \`$IMAGE\`). Create it, then Actions → deploy-ricotdin-v2 → Run workflow."
+            msg="env-missing: a RICOTDIN_* repository secret is missing or malformed (names in the run log); nothing was started (main still pins \`$IMAGE\`). Set it, then Actions → deploy-ricotdin-v2 → Run workflow."
           else
           case "$DEPLOY:$RESULT" in
             success:)                  msg="deployed: \`$IMAGE\` is running and healthy." ;;
