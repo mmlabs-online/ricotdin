@@ -11,33 +11,31 @@
 Ricotdin is a meeting assistant our own team trusts with sensitive meetings: audio is purged
 on a schedule, every release reaches the home server through one reviewed, health-checked,
 reversible merge — on a v2 stack we control end to end (FastAPI API + SPA web, our own
-Postgres and auth, no Supabase).
+Postgres on the home server and our own auth, no Supabase, no Neon).
 
 ## Current goal
 
 | Field | Value |
 |---|---|
-| Goal | **Finish the backlog on v2, then rehearse and test, then fix the bugs found, then cut over (ARC-15).** Owner decision 2026-11-09. Three phases. **Phase 1 – build:** every open ticket that has its own UI and its own API, plus the small pre-go-live items. **Phase 2 – dry-run + test:** the migration rehearsal, production prep, and the staging rehearsal of `docs/ops/v2-cutover.md`. **Phase 3 – bugs:** the owner reports findings, each becomes a `BUG-NNN` via `/fix-bug`; then the cutover window. v1 stays frozen (hotfixes only on `release/1.1`). |
+| Goal | **Finish the backlog on v2, then go live on an empty production and test there, then fix the bugs found.** Owner decisions 2026-11-09 + 2026-11-12. **Phase 1 – build:** every open ticket that has its own UI and its own API. **Phase 2 – go-live + test:** deploy v2.0.0 to the only environment (`ricotdin.mmlabs.online`, database `ricotdin` on the shared self-hosted Postgres, started empty) following `docs/ops/go-live.md`, then the owner tests every phase-1 feature there. **Phase 3 – bugs:** each finding becomes a `BUG-NNN` via `/fix-bug`, shipped as `v2.0.x` hotfixes. v1, staging and Neon are retired; no data migration (ARC-20). |
 | Horizon | No fixed date. *Inference:* about 25–35 `/ship-feature` runs in phase 1. At the ARC pace (2–3 PRs a day), that is 2–3 weeks of agent work; the real limit is the owner's spec Q&A (`/add-feature`) and PR reviews. Phases 2–3 take five owner sessions plus the bug rounds. |
-| Success measures | (1) Every phase-1 code is `[x]` in `tracking.md`, with an API test + a web test and EN/VI strings. (2) Two migration PASS reports with the Drive copy: rehearsal 1 + the staging rehearsal. (3) Staging rehearsal incl. a timed rollback. (4) No open S1/S2 bug at the cutover. (5) v2.0.0 live: the production smoke checklist passes; the first nightly Neon backup is uploaded. |
-| Constraints (people, time, budget) | All code by AI agents; the owner specs (Q&A), reviews and does the dashboard/server steps, a few sessions a week. Meetings contain **sensitive data**. Current AI keys for all models (2026-10-23). **Low AI budget.** Production stays on its current v1 until the cutover. Supabase has no automated backup (`backup.yml` dumps Neon since ARC-15 part 2): it is covered by manual encrypted dumps. |
+| Success measures | (1) Every phase-1 code is `[x]` in `tracking.md`, with an API test + a web test and EN/VI strings. (2) v2.0.0 live on `ricotdin.mmlabs.online`: `/health` + `/version.json` answer, first admin signed in, Google Drive connected, provider keys added. (3) The first nightly `pg-backup` dump of `ricotdin` exists and `restore-test.sh ricotdin` passes; rclone offsite sync runs. (4) Owner tested every phase-1 feature on production. (5) No open S1/S2 bug. |
+| Constraints (people, time, budget) | All code by AI agents; the owner specs (Q&A), reviews and does the dashboard/server steps, a few sessions a week. Meetings contain **sensitive data**. Current AI keys for all models (2026-10-23). **Low AI budget.** One environment only (no staging): a bad release is caught by the health-checked deploy and its automatic restore, or rolled back by a deployment PR; migrations must stay compatible with the previous image. Backups = the shared Postgres's nightly sidecar dumps (one day of data at risk; no WAL archiving). |
 
 ## Now (in progress / next up)
 
 | Item | Codes | Why now | Done when |
 |---|---|---|---|
-| 1. Owner, now: encrypted manual Supabase dump (`pg_dump -Fc` + `age`, kept offline) + rotate the leaked keys (Supabase service_role/anon, Gemini `AQ.A…`), then update v1 prod env + `/admin/keys` with the new ones. Owner checklist: GitHub issue #71 (#72, #73, #74) | ARC-15 prep step 1, CLAUDE.md §0.11 | Independent of testing; data has no backup and the leaked keys still work | Dump stored; old keys rejected; v1 prod still works |
-| 2. Agent: block bidi / zero-width characters in folder + meeting names in the API | needs `/add-feature` | Pre-go-live (owner 2026-11-09); small, unblocks nothing else | API 4xx on such names, tests green |
-| 3. Agent: implement the three decisions of 2026-11-09 (issue #75): set-password link instead of 409 for an unverified email, 90-day absolute refresh lifetime, no chat refund for provider refusals | needs `/add-feature` (one code with the bidi check) | Pre-go-live; PRF-11 builds on the refresh lifetime | Each behaviour tested; CLAUDE.md §0.3/§0.8 "Open" lines replaced |
-| 4. Agent: content tools — tags, transcript edit, PDF/MD export | PRO-06 | Unblocks PRF-07 | PRO-06 `[x]` |
-| 5. Agent: default folder | PRF-07 | Needs PRO-06 | PRF-07 `[x]` |
+| 1. Owner: merge the ARC-20 PRs (ricotdin + deployment PR #54) | ARC-20 | Production deploy path and docs are ready only after both are merged | Both merged; `deploy-ricotdin-v2.yml` on the deployment repo's `main` |
+| 2. Owner: rotate the Gemini key leaked in git history (`AQ.A…`); take a final encrypted Supabase dump (`pg_dump -Fc` + `age`, kept offline) before Supabase is shut down | ARC-16 prep, CLAUDE.md §0.11 | The leaked key still works; v1's data has no other copy | Old key rejected; dump stored offline |
+| 3. Agent: next phase-1 tickets (see Next) | PRF-09, PRO-05 | Phase 1 continues | Codes `[x]` |
 
 ## Next (phase 1, in this order unless a spec changes it)
 
 | Item | Codes | Depends on |
 |---|---|---|
-| Per-user UI language; own activity feed; library search | PRF-06, PRF-09, PRO-05 | — |
-| Active sessions + remote sign-out; then 2FA (TOTP) | PRF-11, PRF-12 | Now 3 (refresh lifetime) |
+| Own activity feed; library search | PRF-09, PRO-05 | — |
+| Active sessions + remote sign-out; then 2FA (TOTP) | PRF-11, PRF-12 | — (90-day refresh lifetime shipped in SEC-05) |
 | Speaker naming / personalised diarization | PRO-04 | — |
 | Admin data retention + user export / full erase (built together) | ADM-11, PRF-13 | — |
 | Auto-email results; proactive reminders; notification settings | PRO-01, PRO-03, PRF-10 | PRO-03 + PRF-10 after PRO-01; **PRO-03 lifts the CLAUDE.md §1 exclusion (owner 2026-11-09): update §1 in that PR** |
@@ -47,12 +45,12 @@ Postgres and auth, no Supabase).
 
 | Item | Codes | Note |
 |---|---|---|
-| **Phase 2 – dry-run + test (owner sessions):** ② migration rehearsal 1 with Drive (C1) + wallet drift count; ③ production prep (cutover prep 3–8); RC `v2.0.0-rc1` (agent); ④ staging rehearsal = migration PASS #2 + timed rollback (C4) + manual test of every phase-1 feature | ARC-03, ARC-18, ARC-15 | After phase 1; a fresh manual Supabase dump before each rehearsal |
-| **Phase 3 – bugs:** owner reports, `/fix-bug` per finding (S1/S2 before go-live); ⑤ cutover window | `BUG-NNN`, ARC-15 | After phase 2 |
-| Post-cutover restructure: feature-sliced api/web, repo layer + access-checked write helper, `app/jobs`, prompt into the api package, trim agents, freeze baseline before ARC-16 (slice 1 = CLAUDE.md split, done now) | ARC-19 | After ARC-15, module by module (owner 2026-11-12) |
+| **Phase 2 – go-live + test (owner sessions):** retire staging, production secrets (incl. SMTP), tag `v2.0.0`, migrations + logins on the Mac, Cloudflare hostnames, deploy, first admin, Drive, keys (`docs/ops/go-live.md`); then a manual test of every phase-1 feature on production; rclone offsite backup + one `restore-test.sh ricotdin` | ARC-15, ARC-20 | After phase 1 |
+| **Phase 3 – bugs:** owner reports, `/fix-bug` per finding (S1/S2 first), shipped as `v2.0.x` hotfixes on `release/2.0` | `BUG-NNN` | After phase 2 |
+| Post-go-live restructure: feature-sliced api/web, repo layer + access-checked write helper, `app/jobs`, prompt into the api package, trim agents (slice 1 = CLAUDE.md split, done) | ARC-19 | After go-live, module by module (owner 2026-11-12) |
 | Drive orphan sweeper, ffmpeg sandbox | needs `/add-feature` | After go-live (owner 2026-11-09) |
-| `storage.audio_retention_days` | — | After the final migration's file copy |
-| Remove legacy + Supabase + v1 R2 buckets | ARC-16 | Irreversible — owner confirms |
+| `storage.audio_retention_days` | — | Any time after go-live (no migration copy to wait for) |
+| Remove the Supabase tooling (`migrate_from_supabase`, `app/migration/`, `r2.py`), shut down Supabase and the v1 R2 buckets, delete the Neon project | ARC-16 | After the final Supabase dump (Now 2). Irreversible — owner confirms |
 | Small v2 follow-ups: `KEY_ENCRYPTION_SECRET` rotation, `--border-strong` contrast, `/process` on a `done` meeting, CI Node = image Node | `/add-feature` / `/fix-bug` | Low risk, internal use |
 
 ## Not doing (explicitly parked)
@@ -62,13 +60,10 @@ Postgres and auth, no Supabase).
 | PRO-02 Google Calendar sync | Out of MVP scope (CLAUDE.md §1); not chosen 2026-11-09 | Explicit owner go decision |
 | PRO-07 native app (Tauri), PRO-08 AI quality, COM-04 tenant isolation | No UI + API of their own (owner rule 2026-11-09); PRO-07 is a project of its own | After v2 is live |
 | COM-02 legal docs | Not code (needs a lawyer) | Before outside users or real payments |
-| BUG-021 hotfix on v1 | v2's `wallet_reconcile` sets wallets to the ledger sum; drift counted in rehearsal 1 | Drift count is large |
-| Automated Supabase backup job | Manual encrypted dumps instead (owner 2026-11-09) | Cutover slips past January 2027 |
 | Dependabot | Owner decision 2026-11-09 | — |
-| Skipping the staging rehearsal | ARC-15 acceptance criterion | — |
-| New v1 features / v1 ops | v1 frozen (2026-10-25) | An S1 bug needs app code on prod |
 | PRV-01 Gemini billing | Owner decision 2026-10-23 | Outside users, commercialisation, legal requirement |
-| PRV-03, CST-02 | Superseded (PRV-02 purge; storage is Drive, ARC-17) — close both | — |
+| PRV-03, CST-02 | Superseded (PRV-02 purge; storage is Drive, ARC-17) — close CST-02 | — |
+| Staging environment, v1, v1 → v2 data migration (ARC-03, BUG-021) | Retired 2026-11-12 (ARC-20): production starts empty, no v1 data | v2 opens to outside users and needs a pre-production check |
 | WebM remux, 39 v1 lint warnings | Low impact | Users complain |
 
 ---
@@ -139,3 +134,9 @@ supersedes it.
 - **Options considered:** restructure now vs after the cutover (after, chosen); feature-sliced vs layered + repositories only (feature-sliced, chosen); rename `app/` → `apps/` (not chosen).
 - **Why:** a large move now would conflict with the 25–35 phase 1 feature PRs; the 166 KB CLAUDE.md costs context in every session and mixes v1 and v2 rules; one folder per module matches the one-ticket-one-module workflow; renaming only adds churn.
 - **Revisit if:** the cutover slips far enough that phase 1 work starts suffering from the router/SQL layout, or the split CLAUDE.md files drift apart.
+
+### 2026-11-12 — Production only, on the self-hosted Postgres; v1, staging and Neon retired (ARC-20)
+- **Decision:** (1) ricotdin v2 is the **only** ricotdin: v1 is retired completely (no hotfixes, no data carried over). (2) **No staging environment**: one production environment, `https://ricotdin.mmlabs.online` + `https://ricotdin-api.mmlabs.online`. (3) Its database is `ricotdin` on the deployment repo's shared Postgres (kept on PG 17, image `pgvector/pgvector:pg17-trixie`), **started empty**. Neon is no longer used and its backup workflow is removed; the Postgres sidecar dumps nightly. (4) Releases stay **tag-driven** (`release.yml` → deployment PR → merge). Supersedes the cutover plan in the 2026-10-25 and 2026-11-09 entries: no migration rehearsals, no staging rehearsal, no cutover window, no v1 rollback.
+- **Options considered:** for two environments on one Postgres: a separate cluster for staging, or configurable role prefixes (81 files hard-code the role names); then dropping staging altogether (chosen). Data: carry Neon's test data over, migrate v1 from Supabase, or start empty (chosen). Deploy: push-a-branch (staging style) or tag release (chosen). Postgres: upgrade the shared cluster to PG 18, a separate PG 18 container, or keep PG 17 + pgvector (chosen).
+- **Why:** The owner wants one version and one place to run it, without Neon. Role names are cluster-wide, so staging and production could not share the server safely without a large refactor. With no v1 data to keep, the migration tooling and rehearsals lose their purpose.
+- **Revisit if:** v2 opens to outside users (a pre-production environment becomes worth its cost: separate cluster), a release breaks production in a way the automatic restore does not catch, or v1 data turns out to be needed (the final Supabase dump keeps it recoverable).
