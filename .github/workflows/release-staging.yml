@@ -164,11 +164,19 @@ jobs:
             exit 1
           fi
           # Wait for pr-scope (at most 10 min), then merge exactly the commit that was checked.
+          # Read through the Actions API (DEPLOY_REPO_TOKEN needs Actions: read). `gh pr checks`
+          # needs the check-status rollup, which a fine-grained PAT cannot read (first staging run).
+          HEAD="$(git rev-parse HEAD)"
+          STATE=""
           for _ in $(seq 40); do
-            STATE="$(gh pr checks "$PR" --json name,bucket -q '.[] | select(.name == "pr-scope") | .bucket' || true)"
-            case "$STATE" in
-              pass) break ;;
-              fail|cancel) echo "::error::pr-scope did not pass on $PR. Not merging."; exit 1 ;;
+            if ! RUNS="$(gh run list -R "$DEPLOY_REPO" --workflow pr-scope.yml --commit "$HEAD" --event pull_request --json status,conclusion -q 'map(select(.status == "completed")) | .[0].conclusion // ""')"; then
+              echo "::error::Cannot read pr-scope runs on $DEPLOY_REPO: DEPLOY_REPO_TOKEN needs Actions: read."
+              exit 1
+            fi
+            case "$RUNS" in
+              success) STATE=pass; break ;;
+              "") ;;
+              *) echo "::error::pr-scope ended '$RUNS' on $PR. Not merging."; exit 1 ;;
             esac
             sleep 15
           done
@@ -176,4 +184,4 @@ jobs:
             echo "::error::pr-scope did not finish on $PR within 10 minutes. Merge it by hand once it passes."
             exit 1
           fi
-          gh pr merge "$PR" --squash --match-head-commit "$(git rev-parse HEAD)"
+          gh pr merge "$PR" --squash --match-head-commit "$HEAD"

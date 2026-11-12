@@ -36,9 +36,9 @@ the main session fixes.
 1. Read the feature's row in `ai-instruction/tracking.md` (user story, description,
    constraint, note) and its `### <CODE>` section in `ai-instruction/features/feature-*-<PREFIX>.md`.
 2. Read the relevant `CLAUDE.md` sections (§5 conventions, §6 DB, §7 Gemini, and any
-   §9x design section for the module — in `legacy/CLAUDE.md` since ARC-19; v2 design sections
+   §9x design section for the module — in `docs/architecture/v1-rules.md`; v2 design sections
    §0.x are in `docs/architecture/*.md`, see the table in the root `CLAUDE.md`).
-3. Check scope against `CLAUDE.md` §1 "Explicitly OUT of MVP scope" (`legacy/CLAUDE.md`). If the feature needs
+3. Check scope against `CLAUDE.md` §1 "Explicitly OUT of MVP scope" (`docs/architecture/v1-rules.md`). If the feature needs
    something out of scope, stop and flag it.
 4. For an unfamiliar or drifted area, **Codebase Archaeologist** may map the current code
    (read-only).
@@ -71,16 +71,15 @@ auth/RLS/keys, or more than ~10 files. For a structural change, present the plan
 
 ## Phase 3 — Tests first (TDD, mandatory)
 
-1. Extract the new logic as **pure functions** in `/lib` (no I/O).
-2. Write `tests/<topic>.test.ts` (node:test + tsx, no mocks, no I/O) **before** the
-   implementation. When changing existing logic, update its tests first.
-3. Add the new file to the `test` script in `package.json`.
-4. Run `node --import tsx --test tests/<topic>.test.ts` and confirm it **fails** for the
-   right reason.
+1. Extract the new logic as **pure functions** (no I/O): `app/api/app/domain/` or the module it
+   belongs to; web logic in `app/web/src/lib/` or the feature folder.
+2. Write the tests (no mocks, no I/O) **before** the implementation. When changing existing
+   logic, update its tests first. DB behaviour (RLS, grants, SQL) goes in `test_*_integration.py`.
+3. Run them and confirm they **fail** for the right reason.
 
-   **Where (CLAUDE.md §0):** v1 code in `legacy/` → the paths below are under `legacy/`, run from `legacy/`.
-   v2 api → `app/api/tests/test_<topic>.py` (pytest; run `cd app/api && uv run pytest -q tests/test_<topic>.py`).
-   v2 web → `app/web/src/**/<name>.test.ts(x)` (vitest; `cd app/web && npx vitest run <file>`).
+   **Where (CLAUDE.md §0):**
+   api → `app/api/tests/test_<topic>.py` (pytest; run `cd app/api && uv run pytest -q tests/test_<topic>.py`).
+   web → `app/web/src/**/<name>.test.ts(x)` (vitest; `cd app/web && npx vitest run <file>`).
 
 Note: **Test Automation Engineer** targets Playwright/Cypress e2e. This repo has no e2e
 suite, so do not use it for this phase.
@@ -94,12 +93,14 @@ Delegate a self-contained slice to a specialist only when it clearly helps
 (e.g. **Frontend Developer** for a component, **RAG Pipeline Engineer** for retrieval).
 Hard rules regardless of who writes the code:
 
-- Gemini is called **only** through `/lib/gemini`.
-- `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `KEY_ENCRYPTION_SECRET` and decrypted keys
+- AI providers are called **only** through `app/services/ai` (CLAUDE.md §0.7).
+- Provider keys, `KEY_ENCRYPTION_SECRET`, `JWT_PRIVATE_KEY`, database URLs and decrypted keys
   never reach the browser or logs.
-- Typed errors in `/lib`, mapped to HTTP in routes; friendly user messages.
-- New migrations: next number in `migrations/`, `snake_case`, RLS on.
-- Admin routes use `requireAdmin`; meeting routes use `checkMeetingAccess`.
+- Typed errors in the domain layer, mapped to HTTP by the routers; friendly user messages (EN + VI).
+- Schema changes: a new Alembic revision in `app/api/migrations/` with its down script, RLS on,
+  grants per `docs/architecture/db.md` (§0.1).
+- Admin routes require the admin dependency; meeting routes check `can_access_meeting` (editor
+  writes are enforced in the API, §0.1).
 
 ## Phase 5 — Verify
 
@@ -107,7 +108,6 @@ Run them all and paste the exact output of any failure (do not summarize it away
 Run the set for every area the change touches (CLAUDE.md §0):
 
 ```
-cd legacy  && npm run lint && npm run typecheck && npm run test && npm run build   # v1
 cd app/api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q   # v2 api
 cd app/web && npm run typecheck && npm test && npm run build   # v2 web
 ```
@@ -123,9 +123,9 @@ diff (`git diff dev...HEAD` or the uncommitted diff) and the acceptance criteria
 | Gate | Agent | When |
 |---|---|---|
 | Correctness & maintainability | **Code Reviewer** | always |
-| RLS, secrets, injection, authz | **AI-Generated Code Security Auditor** | touches `legacy/app/api/**`, `legacy/migrations/**`, `legacy/lib/{access,keys,crypto}`, `app/api/**` (v2: routers, auth, DB/Alembic, crypto, keys), auth |
+| RLS, secrets, injection, authz | **AI-Generated Code Security Auditor** | touches `app/api/**` (routers, auth, DB/Alembic, crypto, keys), auth |
 | Credential handling | **Secrets & Credential Hygiene Engineer** | new/changed env vars or key storage |
-| UI quality | **UI Finish-Gate Reviewer** | touches `legacy/components/**`, `legacy/app/(routes)/**` or `app/web/src/**` |
+| UI quality | **UI Finish-Gate Reviewer** | touches `app/web/src/**` |
 | Accessibility | **Accessibility Auditor** | new interactive UI |
 | Ship / no-ship verdict | **Reality Checker** | always, **last**, given the Phase 5 output + the other reviewers' findings |
 
@@ -142,10 +142,9 @@ Handling findings:
 2. `ai-instruction/features/feature-*-<PREFIX>.md`: update the feature's **Status** line and
    key files.
 3. DB feature registry: tell the user to update the status at `/admin/features`.
-   **Do not re-run `scripts/seed-features.ts`** — its upsert overwrites edits made in the UI.
 4. `CLAUDE.md`: if the feature introduced a design worth remembering (new table, flag,
-   env var, dashboard step), add/update the relevant §6 / §8 / §9x section (`legacy/CLAUDE.md`)
-   or, for v2, the §0.x file in `docs/architecture/`. New migration → add it to §9a.
+   env var, dashboard step), add/update the §0.x file in `docs/architecture/`. New Alembic revision → list it in the
+   CHANGELOG deploy checklist.
 5. `CHANGELOG.md`: add a bullet under `## [Unreleased]` → `### Tính năng`, ending with the
    code: `- … (RAG-05)` (create the section above the latest release if missing). Note new
    migrations / env vars / dashboard steps for the deploy checklist.

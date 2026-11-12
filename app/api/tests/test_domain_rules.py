@@ -19,6 +19,7 @@ from app.domain.rules import (
     parse_lookup,
     parse_meeting_patch,
     parse_preferences,
+    parse_preferences_patch,
     parse_profile_patch,
     parse_reorder,
     parse_share_create,
@@ -255,6 +256,73 @@ def test_preferences_set_and_clear() -> None:
 )
 def test_preferences_errors(body: dict[str, Any], message: str) -> None:
     assert _fails(parse_preferences, body, ALLOWED) == (400, message)
+
+
+# --- default folder (PRF-07) ---------------------------------------------------------------------
+
+FOLDER = "33333333-3333-3333-3333-333333333333"
+
+
+def test_preferences_patch_model_only_keeps_the_folder() -> None:
+    assert parse_preferences_patch({"provider": "openai", "model": "gpt-4o"}, ALLOWED) == {
+        "default_provider": "openai",
+        "default_model": "gpt-4o",
+    }
+
+
+def test_preferences_patch_folder_only_keeps_the_model() -> None:
+    assert parse_preferences_patch({"defaultFolderId": FOLDER}, ALLOWED) == {
+        "default_folder_id": uuid.UUID(FOLDER)
+    }
+    assert parse_preferences_patch({"defaultFolderId": None}, ALLOWED) == {
+        "default_folder_id": None
+    }
+
+
+def test_preferences_patch_both() -> None:
+    assert parse_preferences_patch(
+        {"provider": None, "model": None, "defaultFolderId": FOLDER}, ALLOWED
+    ) == {"default_provider": None, "default_model": None, "default_folder_id": uuid.UUID(FOLDER)}
+
+
+def test_preferences_patch_locale_only_keeps_the_rest() -> None:
+    """PRF-06: the UI language is independent of the model pair and the default folder."""
+    assert parse_preferences_patch({"locale": "vi"}, ALLOWED) == {"locale": "vi"}
+    assert parse_preferences_patch({"locale": "en"}, ALLOWED) == {"locale": "en"}
+    assert parse_preferences_patch({"locale": None}, ALLOWED) == {"locale": None}
+    assert parse_preferences_patch({"locale": "en", "defaultFolderId": None}, ALLOWED) == {
+        "locale": "en",
+        "default_folder_id": None,
+    }
+    assert parse_preferences_patch(
+        {"provider": "openai", "model": "gpt-4o", "locale": "vi"}, ALLOWED
+    ) == {"default_provider": "openai", "default_model": "gpt-4o", "locale": "vi"}
+
+
+LOCALE_MESSAGE = 'locale must be "en", "vi" or null.'
+
+
+@pytest.mark.parametrize("raw", ["fr", "", "VI", "en-US", 1, True, ["vi"], {"vi": 1}])
+def test_preferences_patch_locale_errors(raw: Any) -> None:
+    assert _fails(parse_preferences_patch, {"locale": raw}, ALLOWED) == (422, LOCALE_MESSAGE)
+
+
+@pytest.mark.parametrize(
+    ("body", "status", "message"),
+    [
+        ({}, 400, "provider and model must both be strings, or both null."),
+        ({"defaultFolderId": ""}, 422, "defaultFolderId must be a UUID string or null."),
+        ({"defaultFolderId": "nope"}, 422, "defaultFolderId must be a UUID string or null."),
+        ({"defaultFolderId": 7}, 422, "defaultFolderId must be a UUID string or null."),
+        (
+            {"defaultFolderId": None, "provider": "openai"},
+            400,
+            "provider and model must both be strings, or both null.",
+        ),
+    ],
+)
+def test_preferences_patch_errors(body: dict[str, Any], status: int, message: str) -> None:
+    assert _fails(parse_preferences_patch, body, ALLOWED) == (status, message)
 
 
 # --- activity ---------------------------------------------------------------------------------

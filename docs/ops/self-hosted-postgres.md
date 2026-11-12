@@ -57,10 +57,25 @@ docker run --rm --network db --user "$(id -u)" -e DATABASE_URL="$OWNER" \
   -v ~/.config/ricotdin-staging:/out "$IMG" python -m scripts.provision_db_roles --env-file /out/db.env
 ```
 
-Copy `DATABASE_URL_APP`, `DATABASE_URL_SERVICE` and `DATABASE_URL_WORKER` from `db.env` into
-`api.env`, and only `DATABASE_URL_WORKER` into `worker.env`, then delete `db.env`. The URLs point at
-`postgres:5432`, which works because api and worker join the `db` network (deployment repo,
-`apps/ricotdin-v2-staging/compose.yml`). The owner URL never goes into an app env file.
+Staging's env files are written by the deploy from deployment-repo secrets (OPS-02), never by hand.
+Set the three URLs from `db.env`, then delete `db.env` and re-run the deploy:
+
+```bash
+gh secret set RICOTDIN_DATABASE_URL_APP -R mmlabs-online/deployment
+```
+
+```bash
+gh secret set RICOTDIN_DATABASE_URL_SERVICE -R mmlabs-online/deployment
+```
+
+```bash
+gh secret set RICOTDIN_DATABASE_URL_WORKER -R mmlabs-online/deployment
+```
+
+Then run *Actions → deploy-ricotdin-v2-staging → Run workflow*. The URLs point at `postgres:5432`,
+which works because api and worker join the `db` network (deployment repo,
+`apps/ricotdin-v2-staging/compose.yml`). The owner URL never goes into a secret or an app env file.
+Re-running `provision_db_roles` rotates all three: set the three secrets again at once, or staging stops.
 
 Shell access: `docker compose -p postgres -f ~/srv/postgres/compose.yml exec postgres psql -U postgres -d ricotdin`,
 or pgAdmin (`pgadmin.mmlabs.online`).
@@ -93,8 +108,8 @@ For a re-run, the superuser drops and recreates it, then re-runs `add-app-db.sh 
      pg_restore --exit-on-error --no-owner --use-list=/tmp/l -d "$0" /in/neon.dump
      psql -v ON_ERROR_STOP=1 -q "$0" -c "ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"' "$OWNER"
    ```
-4. `alembic upgrade head` (above) must report nothing to do. Provision the logins (above), update the
-   env files, start api + worker, then check `/health` and that a login works.
+4. `alembic upgrade head` (above) must report nothing to do. Provision the logins (above), set the three
+   `RICOTDIN_DATABASE_URL_*` secrets, re-run the staging deploy, then check `/health` and that a login works.
 5. After a stable period, delete the Neon project. That is irreversible, so the owner confirms it.
    Also remove the `NEON_BACKUP_DATABASE_URL` secret and `backup.yml` (the sidecar backs up `ricotdin` now).
 

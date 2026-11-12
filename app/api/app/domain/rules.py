@@ -207,6 +207,32 @@ def parse_preferences(body: dict[str, Any], allowed: list[Pick]) -> tuple[str | 
     return provider, model
 
 
+LOCALES = ("en", "vi")  # PRF-06; mirrors profiles_locale_check (migration 0009)
+
+
+def parse_preferences_patch(body: dict[str, Any], allowed: list[Pick]) -> dict[str, Any]:
+    """``PATCH /profile/preferences`` → the ``profiles`` columns to set. The model pair and the
+    default folder (PRF-07, ``defaultFolderId``: UUID or null) are independent: a body with only
+    one of them leaves the other unchanged. Whether the folder may be used is the caller's check.
+    The UI language (PRF-06, ``locale``: "en" | "vi" | null) is independent of both."""
+    out: dict[str, Any] = {}
+    if "locale" in body:
+        raw_locale = body["locale"]
+        if raw_locale is not None and raw_locale not in LOCALES:
+            raise UnprocessableEntity('locale must be "en", "vi" or null.')
+        out["locale"] = raw_locale
+    if "defaultFolderId" in body:
+        raw = body["defaultFolderId"]
+        folder = None if raw is None else parse_uuid(raw)
+        if raw is not None and folder is None:
+            raise UnprocessableEntity("defaultFolderId must be a UUID string or null.")
+        out["default_folder_id"] = folder
+    if "provider" in body or "model" in body or not out:
+        provider, model = parse_preferences(body, allowed)
+        out = {"default_provider": provider, "default_model": model, **out}
+    return out
+
+
 # --- activity ---------------------------------------------------------------------------------
 
 

@@ -350,6 +350,14 @@ def test_migration_matches_source_and_is_idempotent(dbs: tuple[str, str]) -> Non
         tgt, "SELECT count(*) FROM pg_trigger WHERE NOT tgenabled = 'O' AND NOT tgisinternal"
     ) == [(0,)]
 
+    # PRF-07: a v2-only column is never copied, so a user's choice made between two runs stays.
+    assert _q(tgt, "SELECT default_folder_id FROM profiles WHERE id = %s", ADMIN) == [(None,)]
+    with psycopg.connect(tgt, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE profiles SET default_folder_id = %s, locale = 'vi' WHERE id = %s",
+            (FOLDER, ADMIN),
+        )
+
     # Second run: same counts, nothing uploaded or downloaded, audio stays gdrive, same digest.
     uploads = len(drive.sessions)
     again = _run(src, tgt, store, r2, drive)
@@ -362,6 +370,9 @@ def test_migration_matches_source_and_is_idempotent(dbs: tuple[str, str]) -> Non
     assert len(drive.sessions) == uploads and store.downloads == [LEGACY_KEY]
     assert again.storage.digest == report.storage.digest
     assert _q(tgt, "SELECT storage_provider FROM meetings WHERE id = %s", M_LEGACY) == [("gdrive",)]
+    assert _q(tgt, "SELECT default_folder_id, locale FROM profiles WHERE id = %s", ADMIN) == [
+        (uuid.UUID(FOLDER), "vi")
+    ]
 
 
 def test_storage_failure_fails_the_report_and_keeps_the_v1_provider(dbs: tuple[str, str]) -> None:

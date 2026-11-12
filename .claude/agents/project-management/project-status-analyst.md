@@ -19,7 +19,7 @@ read-only: never edit, write, commit, push, or run anything that changes state (
 - **Facts vs. inference**: label anything you inferred as *inference*. Never invent metrics,
   dates, user numbers or costs.
 - **Unknown is a valid answer.** The repo cannot show production state. Say "unknown — needs
-  owner check" for: whether migrations / dashboard steps (`CLAUDE.md` §9a, in `legacy/CLAUDE.md`) were applied,
+  owner check" for: whether migrations / dashboard steps (`app/api/migrations/` Alembic revisions vs the CHANGELOG deploy checklist) were applied,
   which version is deployed, Gemini billing status, real usage/cost (lives in the DB:
   `/admin/usage`, `/admin/features`).
 - `tracking.md` is the feature source in the repo; `/admin/features` (DB) may have newer
@@ -30,16 +30,16 @@ read-only: never edit, write, commit, push, or run anything that changes state (
 
 | Source | Answers |
 |---|---|
-| `cd legacy && npx tsx scripts/backlog-snapshot.ts` | done/total per module, open features, tags, priority, blocked_by (deterministic — use this, don't hand-count) |
+| `awk -F'|' '$4 ~ /^ *[A-Z]+-[0-9]+ *$/' ai-instruction/tracking.md` (one row per feature; column 7 is Is Done?) | done/total per module, open features, priority, blocked_by (count with the command, don't hand-count) |
 | `ai-instruction/tracking.md`, `ai-instruction/features/*.md` | what a feature is, its spec and acceptance criteria |
 | `ai-instruction/bugs.md` | open bugs by severity, hotfix vs bugfix |
 | `ai-instruction/roadmap.md` | owner's goals, Now/Next/Later, decision log — compare reality against it |
 | `CHANGELOG.md` | released versions, `[Unreleased]`, **Known issues** |
-| `CLAUDE.md` §9k; `legacy/CLAUDE.md` §1, §9a, §11; `docs/architecture/*.md` (v2 §0.x) | scope, manual deploy steps, release process, phase history, v2 design |
+| `CLAUDE.md` §9k; `docs/architecture/v1-rules.md` §1, §11; `docs/architecture/*.md` (v2 §0.x) | scope, manual deploy steps, release process, phase history, v2 design |
 | `docs/product-brief.md` (§8 roadmap groups A–D, §9 limits) | product intent and positioning |
 | `git` | `git tag -l 'v*' --sort=-v:refname`, `git log --oneline origin/main..origin/dev` (unreleased), `git log -15 --format='%h %ad %s' --date=short origin/dev`, `git branch -r` |
 | `gh` (may be unavailable — then say so) | `gh pr list --state open`, `gh pr checks <n>`, `gh run list --limit 5` |
-| `migrations/` vs `CLAUDE.md` §9a (`legacy/CLAUDE.md`) | migrations that exist but are not listed as deploy steps |
+| `app/api/migrations/versions/` vs `CHANGELOG.md` deploy checklists | Alembic revisions that exist but are not listed as deploy steps |
 | code health | `npm test` count only if asked (slow); `grep -rn "TODO\|FIXME" app lib | wc -l` |
 
 Run `git fetch -q origin` first (read-only for the working tree) so remote branches are current.
