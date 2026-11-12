@@ -8,7 +8,7 @@
 # hand at the cutover (docs/ops/v2-cutover.md); Supabase stays untouched until ARC-16.
 #
 # Secrets live in the GitHub Environment `backup` (deployment branches: main + dev — `schedule`
-# runs from the default branch `dev`):
+# runs from the default branch `main` since 2026-11-12):
 #   NEON_BACKUP_DATABASE_URL      DIRECT (not -pooler) URL of the Neon `main` branch, sslmode=require;
 #                                 ricotdin_backup_login (BYPASSRLS + pg_read_all_data: pg_dump turns
 #                                 row security off and fails without BYPASSRLS), never the owner or
