@@ -10,8 +10,9 @@
 #
 # No published ports. cloudflared (on the `web` network) reaches the API as
 # http://ricotdin-staging-api:8000 (https://ricotdin-staging-api.mmlabs.online) and the SPA as
-# http://ricotdin-staging-web:8080 (https://ricotdin-staging.mmlabs.online). Staging uses the Neon
-# dev branch through the three app logins only (never the owner DATABASE_URL) and has no SMTP_*
+# http://ricotdin-staging-web:8080 (https://ricotdin-staging.mmlabs.online). Staging uses the shared
+# Postgres (postgres/, database `ricotdin`, as postgres:5432 on the internal `db` network, no TLS)
+# through the three app logins only (never the owner DATABASE_URL) and has no SMTP_*
 # (nobody can register). Its worker shares the job queue with any worker the owner runs locally.
 
 name: ricotdin-v2-staging
@@ -36,6 +37,7 @@ services:
     networks:
       tunnel:
         aliases: [ricotdin-staging-api]
+      db: {} # postgres:5432
 
   worker:
     image: ${RICOTDIN_API_IMAGE:?RICOTDIN_API_IMAGE is unset}
@@ -62,7 +64,7 @@ services:
       start_period: 30s
       retries: 3
     labels: [autoheal-ricotdin-staging=true]
-    networks: [default] # outbound only: Postgres, Google Drive, AI / speech providers
+    networks: [default, db] # default: outbound (Google Drive, AI / speech providers); db: postgres:5432
 
   web:
     image: ${RICOTDIN_WEB_IMAGE:?RICOTDIN_WEB_IMAGE is unset}
@@ -101,3 +103,8 @@ networks:
     external: true
     # The network cloudflared is on — `web`, created by proxy/compose.yml.
     name: web
+  db:
+    external: true
+    # The shared Postgres network (internal, no internet), created by deploy-postgres.
+    name: db
+  default: {}

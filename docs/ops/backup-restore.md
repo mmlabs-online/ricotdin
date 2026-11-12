@@ -1,5 +1,14 @@
 # DB backup & restore (v2 Neon, ARC-15; was OPS-03 for Supabase)
 
+> **ARC-20 (2026-11-12): the v2 database is no longer Neon.** It is `ricotdin` on the shared
+> self-hosted Postgres (deployment repo `postgres/`). That server is reachable only as
+> `postgres:5432` on the Mac's internal `db` network, so anything that talks to it runs **on the
+> Mac in the API image**. See `docs/ops/self-hosted-postgres.md` for migrations, logins and the
+> Neon data move. Read the Neon steps below with that substitution: the target `DATABASE_URL` is the
+> `ricotdin` owner URL from that page.
+> Backups are now the deployment repo's `pg-backup` sidecar + offsite sync (`ops/backup/`,
+> `restore-test.sh ricotdin`). `backup.yml` below only backs up Neon until Neon is deleted.
+
 **Owner:** project owner. Workflow: `.github/workflows/backup.yml` · naming + retention:
 `app/api/app/ops/backup_plan.py` (tests `app/api/tests/test_backup_plan.py`) · upload / prune:
 `app/api/scripts/backup_r2.py`.

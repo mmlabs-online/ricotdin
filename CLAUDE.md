@@ -42,11 +42,11 @@ through this table. **Read the file before working in that area**; its rules are
 
 | § | File | Read before working on |
 |---|---|---|
-| §0.1 | `docs/architecture/db.md` | Neon schema, Alembic, DB roles, RLS request context, grants |
+| §0.1 | `docs/architecture/db.md` | self-hosted Postgres (ARC-20), schema, Alembic, DB roles, RLS request context, grants |
 | §0.2 | `docs/architecture/api-runtime.md` | FastAPI factory, middleware, logins/pools, `Database` session, image |
 | §0.3 | `docs/architecture/auth.md` | register/login/refresh, passwords, JWT, email tokens |
 | §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive / R2 storage |
-| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (Supabase → Neon, R2 → Drive) |
+| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (Supabase → self-hosted Postgres, R2 → Drive) |
 | §0.6 | `docs/architecture/core-domain-api.md` | meetings, folders/shares, content, profile, quota routes |
 | §0.7 | `docs/architecture/worker.md` | pipeline worker, transcription, AI analyse, embed, schedulers |
 | §0.8 | `docs/architecture/chat-rag.md` | chat sessions, retrieval scope, grounded answers, citations |
@@ -65,8 +65,10 @@ From §0 (above):
 
 From §0.1 (`docs/architecture/db.md`):
 
-  The old us-east-2 project `lucky-king-55263595` is unused. Local `app/api/.env` holds `DATABASE_URL`
-  (dev branch, **direct** connection, never pooled for migrations/tests); never commit or print it.
+- (ARC-20) Role names are cluster-wide: **one ricotdin database per server** (staging now, production
+  at cutover). Runbook, migrations from the Mac, Neon data move: `docs/ops/self-hosted-postgres.md`.
+  **Never name CREATEDB / CREATEROLE / BYPASSRLS in an ALTER ROLE unconditionally** (it needs that
+  attribute; only ALTER when the role has it). Local dev + CI: a superuser container, never the shared server.
 - **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN (RLS does not govern them), and INSERT/UPDATE/DELETE only
   where a policy for that command exists. All meeting content is SELECT-only for the app, so

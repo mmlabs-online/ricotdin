@@ -10,7 +10,7 @@ _SSL_MODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full
 def asyncpg_engine_args(
     url: str, *, statement_timeout_ms: int, lock_timeout_ms: int, application_name: str
 ) -> tuple[str, dict[str, Any]]:
-    """SQLAlchemy asyncpg URL and ``connect_args`` for a libpq-style URL (as Neon prints it).
+    """SQLAlchemy asyncpg URL and ``connect_args`` for a libpq-style URL (``postgresql://…?sslmode=…``).
 
     asyncpg does not take ``sslmode``/``channel_binding`` in the URL: the SSL mode moves to
     ``connect_args`` unchanged (``verify-full`` stays ``verify-full``). ``sslrootcert`` is refused

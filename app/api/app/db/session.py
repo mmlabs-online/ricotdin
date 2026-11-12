@@ -112,7 +112,7 @@ def _engine_for(settings: Settings, group: str, url: str) -> AsyncEngine:
         pool_size=pool_size,
         max_overflow=overflow,
         pool_pre_ping=True,
-        pool_recycle=300,  # Neon suspends idle compute
+        pool_recycle=300,  # drop connections a Postgres restart or idle timeout left dead
         hide_parameters=True,
     )
     event.listen(engine.sync_engine, "reset", _reset_on_return)

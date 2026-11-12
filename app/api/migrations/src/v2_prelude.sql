@@ -17,9 +17,23 @@ BEGIN
     CREATE ROLE ricotdin_service NOLOGIN;
   END IF;
 END $$;
--- A pre-existing role must not keep LOGIN / BYPASSRLS from somewhere else.
-ALTER ROLE ricotdin_app NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
-ALTER ROLE ricotdin_service NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+-- A pre-existing role must not keep LOGIN / BYPASSRLS / CREATEDB / CREATEROLE from somewhere else.
+-- Only ALTER when one is set: naming an attribute in ALTER ROLE needs that attribute yourself, so an
+-- unconditional ALTER fails for an owner that is not a superuser (self-hosted Postgres: the owner
+-- has CREATEROLE only). A role created just above has none of them.
+DO $$
+DECLARE
+  r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['ricotdin_app', 'ricotdin_service'] LOOP
+    IF EXISTS (
+      SELECT 1 FROM pg_roles
+      WHERE rolname = r AND (rolcanlogin OR rolbypassrls OR rolcreatedb OR rolcreaterole)
+    ) THEN
+      EXECUTE format('ALTER ROLE %I NOLOGIN NOBYPASSRLS NOCREATEDB NOCREATEROLE', r);
+    END IF;
+  END LOOP;
+END $$;
 
 GRANT USAGE ON SCHEMA public TO ricotdin_app, ricotdin_service;
 

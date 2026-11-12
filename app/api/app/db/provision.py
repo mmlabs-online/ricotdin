@@ -4,8 +4,8 @@ Each runtime group gets its own LOGIN role: NOINHERIT and granted its group ``WI
 FALSE, SET TRUE`` (PG16+ per-grant option — no privileges until ``SET ROLE <group>``), member of
 exactly that group, with statement / lock / idle-in-transaction timeouts and a connection
 limit. Passwords are generated here, written only to the caller's env file and never printed.
-Neon only accepts plaintext passwords in CREATE/ALTER ROLE (a pre-hashed SCRAM verifier is
-rejected by its control plane), so the DDL carries the password: never enable statement logging
+The DDL carries the password in plaintext (Neon rejected pre-hashed SCRAM verifiers; kept for the
+self-hosted server too): never enable statement logging
 for these commands and rotate (re-run) if server logs may have captured one.
 Migrations never contain passwords, which is why this is a script and not a revision.
 """
@@ -75,17 +75,40 @@ def ensure_login(
     password = secrets.token_urlsafe(32)
     ident = sql.Identifier(name)
     with psycopg.connect(owner_url, autocommit=True) as conn:
-        exists = conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (name,)).fetchone()
-        verb = "ALTER" if exists else "CREATE"
-        conn.execute(
-            sql.SQL(
-                verb + " ROLE {} LOGIN NOINHERIT NOCREATEDB NOCREATEROLE NOBYPASSRLS "
-                "CONNECTION LIMIT {} PASSWORD {}"
-            ).format(ident, sql.Literal(connection_limit), sql.Literal(password))
-        )
+        row = conn.execute(
+            "SELECT rolcreatedb OR rolcreaterole OR rolbypassrls FROM pg_roles WHERE rolname = %s",
+            (name,),
+        ).fetchone()
+        exists = row is not None
+        if row is None:
+            conn.execute(
+                sql.SQL(
+                    "CREATE ROLE {} LOGIN NOINHERIT NOCREATEDB NOCREATEROLE NOBYPASSRLS "
+                    "CONNECTION LIMIT {} PASSWORD {}"
+                ).format(ident, sql.Literal(connection_limit), sql.Literal(password))
+            )
+        else:
+            conn.execute(
+                sql.SQL("ALTER ROLE {} LOGIN NOINHERIT CONNECTION LIMIT {} PASSWORD {}").format(
+                    ident, sql.Literal(connection_limit), sql.Literal(password)
+                )
+            )
+            # Naming CREATEDB / CREATEROLE / BYPASSRLS in ALTER ROLE needs that attribute yourself,
+            # which a self-hosted owner (CREATEROLE only) lacks: strip them only if one is set.
+            if row[0]:
+                conn.execute(
+                    sql.SQL("ALTER ROLE {} NOCREATEDB NOCREATEROLE NOBYPASSRLS").format(ident)
+                )
         for other in GROUP_LOGINS:
             if other != group:
                 conn.execute(sql.SQL("REVOKE {} FROM {}").format(sql.Identifier(other), ident))
+        # Self-hosted Postgres revokes CONNECT from PUBLIC on every database (deployment repo,
+        # postgres/sql/app-db.sql); Neon does not. Grant it on the owner's database only.
+        conn.execute(
+            sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                sql.Identifier(_current_database(conn)), ident
+            )
+        )
         # Explicit per-grant options: re-granting updates an existing membership's options.
         conn.execute(
             sql.SQL("GRANT {} TO {} WITH INHERIT FALSE, SET TRUE").format(
@@ -113,6 +136,21 @@ def ensure_login(
     return Login(group, name, password)
 
 
+def _current_database(conn: psycopg.Connection[tuple[str]]) -> str:
+    row = conn.execute("SELECT current_database()").fetchone()
+    if row is None:
+        raise RuntimeError("no current database")
+    return row[0]
+
+
 def drop_login(owner_url: str, name: str) -> None:
+    ident = sql.Identifier(name)
     with psycopg.connect(owner_url, autocommit=True) as conn:
-        conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(name)))
+        if conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (name,)).fetchone():
+            # A role that still holds a database privilege cannot be dropped.
+            conn.execute(
+                sql.SQL("REVOKE CONNECT ON DATABASE {} FROM {}").format(
+                    sql.Identifier(_current_database(conn)), ident
+                )
+            )
+        conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(ident))

@@ -14,7 +14,8 @@ name: Release staging
 #      auto-merge would merge at once without waiting for pr-scope (OPS-02 review).
 # The deployment repo's deploy-ricotdin-v2-staging.yml then deploys it on the macbook-runner. Every
 # push to the branch redeploys. No migration step: run `alembic upgrade head` on the staging
-# database (the Neon dev branch) before pushing a commit that brings a migration.
+# database (shared Postgres on the Mac, docs/ops/self-hosted-postgres.md) before pushing a commit
+# that brings a migration.
 on:
   push:
     branches: ['staging/**']

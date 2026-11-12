@@ -40,7 +40,8 @@ runnable for a rollback until ARC-16.
   - Generate the production `JWT_PRIVATE_KEY` on the server:
     `uv run python -m scripts.gen_jwt_key --env-file /Users/mingming/.config/ricotdin/api.env`, or paste its
     output there.
-  - The logins come from `scripts.provision_db_roles` run against Neon `main`.
+  - The logins come from `scripts.provision_db_roles`, run on the Mac against `ricotdin` on the shared
+    Postgres (`docs/ops/self-hosted-postgres.md`, ARC-20). api + worker join the `db` network.
 - **cloudflared:** two public hostnames, sibling subdomains of one site:
   - `api.<domain>` → `http://ricotdin-api:8000`;
   - `app.<domain>` → `http://ricotdin-web:8080`.
@@ -78,8 +79,9 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
   allowing only `apps/<app>/release.env` on `release/*` branches.
 - **Three server env files** `/Users/mingming/.config/ricotdin-staging/{api,worker,web}.env` (`chmod 600`,
   owned by the runner user). They use the same names as production, with staging values:
-  - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
-    branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
+  - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the `ricotdin`
+    logins on the shared Postgres, `postgres:5432`, from `docs/ops/self-hosted-postgres.md`; never the
+    owner `DATABASE_URL`),
     `JWT_PRIVATE_KEY` (a staging key of its own), `KEY_ENCRYPTION_SECRET` (the value the dev
     branch's stored keys and `drive_config` were encrypted with), `WEB_ORIGIN` =
     `ALLOWED_ORIGINS` = `https://ricotdin-staging.mmlabs.online`, `FORWARDED_ALLOW_IPS` =

@@ -9,13 +9,16 @@ uv run uvicorn app.main:create_app --factory --reload   # http://localhost:8000/
 
 # checks (integration tests are skipped without DATABASE_URL)
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q
-uv run --env-file .env pytest -q                # incl. *_integration.py against the Neon dev branch
+uv run --env-file .env pytest -q                # incl. *_integration.py against the local container
 ```
 
 ## Database
 
-`app/api/.env` (gitignored, one line): `DATABASE_URL=postgresql://…` — the Neon **dev** branch,
-**direct** (non-pooled) connection.
+`app/api/.env` (gitignored, one line): `DATABASE_URL=postgresql://postgres:dev@localhost:5432/postgres`,
+a local superuser container with the production image (tests create scratch databases):
+`docker run -d --name ricotdin-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 pgvector/pgvector:pg17-trixie`.
+The deployed database (shared self-hosted Postgres, no published port) is handled on the Mac:
+`docs/ops/self-hosted-postgres.md` (ARC-20).
 
 ```bash
 uv run --env-file .env alembic upgrade head               # migrate the dev database
