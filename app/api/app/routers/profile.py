@@ -249,7 +249,7 @@ async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
         row = (
             await conn.execute(
                 text(
-                    "SELECT default_provider, default_model, default_folder_id "
+                    "SELECT default_provider, default_model, default_folder_id, locale "
                     "FROM public.profiles WHERE id = :me"
                 ),
                 {"me": identity.user_id},
@@ -260,6 +260,7 @@ async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
         "provider": row.default_provider if row else None,
         "model": row.default_model if row else None,
         "defaultFolderId": str(folder) if folder else None,
+        "locale": row.locale if row else None,
         "allowedModels": [
             {"provider": p, "model": m, "label": model_label(p, m)} for p, m in allowed
         ],
@@ -287,6 +288,11 @@ async def update_preferences(request: Request, identity: Identity, db: Db) -> di
                     "m": changes["default_model"],
                     "me": identity.user_id,
                 },
+            )
+        if "locale" in changes:  # PRF-06: "en" | "vi" | None, checked by parse_preferences_patch
+            await conn.execute(
+                text("UPDATE public.profiles SET locale = :l WHERE id = :me"),
+                {"l": changes["locale"], "me": identity.user_id},
             )
         if "default_folder_id" in changes:
             try:

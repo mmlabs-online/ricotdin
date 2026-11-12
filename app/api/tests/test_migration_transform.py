@@ -463,6 +463,7 @@ def test_every_column_added_after_the_baseline_is_v2_only() -> None:
         for table, body in re.findall(r"ALTER TABLE public\.(\w+)\s+([^;]*);", text):
             added |= {(table, c) for c in re.findall(r"ADD COLUMN (?:IF NOT EXISTS )?(\w+)", body)}
     assert ("profiles", "default_folder_id") in added
+    assert ("profiles", "locale") in added  # PRF-06
     for table, column in added:
         assert table in V2_ONLY_TABLES or column in V2_ONLY_COLUMNS.get(table, set()), (
             f"{table}.{column}: add it to V2_ONLY_COLUMNS (app/migration/plan.py)"

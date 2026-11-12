@@ -45,7 +45,8 @@ def load_order(tables: set[str], fks: Iterable[tuple[str, str]]) -> list[str]:
 # Columns of shared tables that v1 never had (v2 migrations after the baseline). The copy does not
 # read, compare or write them: they keep their v2 default, and a re-run keeps a user's value.
 V2_ONLY_COLUMNS: dict[str, frozenset[str]] = {
-    "profiles": frozenset({"default_folder_id"}),  # PRF-07, migration 0008
+    # PRF-07 (migration 0008), PRF-06 (migration 0009)
+    "profiles": frozenset({"default_folder_id", "locale"}),
 }
 
 
