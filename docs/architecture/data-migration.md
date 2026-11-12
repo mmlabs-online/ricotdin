@@ -2,6 +2,9 @@
 
 ### 0.5 v1 → v2 data migration (ARC-03, files ARC-18)
 
+> **Not used (ARC-20, 2026-11-12):** v1 is retired and production started empty; nothing is migrated.
+> The tooling below stays until ARC-16 removes it.
+
 - `app/api/scripts/migrate_from_supabase.py` is an owner-run CLI; the pure logic lives in
   `app/migration/`. Runbook and rehearsal log: `docs/ops/v2-migration-rehearsal.md`.
 - Env lives only in the git-ignored `app/api/.env.migrate`:

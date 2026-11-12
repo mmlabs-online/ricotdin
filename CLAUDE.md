@@ -16,8 +16,8 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md
 ```
 
 - **v1 (Next.js + Supabase) is gone from `dev`/`main`.** It lives in git history and on
-  `release/1.1` (tags ≤ v1.1.1, v1 at the repo root there), still running in production until the
-  ARC-15 cutover. v1 hotfixes are made on `release/1.1` only and are **not merged back** (§9k).
+  `release/1.1` (tags ≤ v1.1.1, v1 at the repo root there). **v1 is retired** (owner decision
+  2026-11-12, ARC-20): no hotfixes, no data carried over; v2 is the only ricotdin.
   Its rules and designs: `docs/architecture/v1-rules.md` (was `legacy/CLAUDE.md`).
 - The frozen v1 schema (`schema.sql` + migrations 001–038) is a test fixture in
   `app/api/tests/fixtures/v1/schema/`: the migration integration test, the schema parity test and
@@ -28,8 +28,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md
 - **TDD (same rule as §10):** pure logic first, tests before implementation.
   api → `app/api/tests/test_<topic>.py` (pytest, no network/DB unless it is an explicit integration test
   named `test_*_integration.py`); web → `app/web/src/**/<name>.test.ts(x)` (vitest).
-- **CI is path-filtered:** `ci-api.yml`, `ci-web.yml`; releases `release.yml` (tags) and
-  `release-staging.yml` (`staging/X.Y.Z` branches).
+- **CI is path-filtered:** `ci-api.yml`, `ci-web.yml`; releases `release.yml` (tags).
+- **One environment: production** (`https://ricotdin.mmlabs.online`, API `https://ricotdin-api.mmlabs.online`)
+  on the Mac, database `ricotdin` on the shared self-hosted Postgres. No staging (retired 2026-11-12,
+  ARC-20). Go-live and release steps: `docs/ops/go-live.md`.
 - v2 security rules are the v1 rules (§5–§7, §9b, §9f, §9m) re-stated per ARC spec; secrets stay server-only.
 - (ARC-19) §0.1–§0.11 live in `docs/architecture/` (table below); the v1 sections (§1–§9, §9a–§9j,
   §9m–§9o, §11) in `docs/architecture/v1-rules.md`.
@@ -45,7 +47,7 @@ through this table. **Read the file before working in that area**; its rules are
 | §0.2 | `docs/architecture/api-runtime.md` | FastAPI factory, middleware, logins/pools, `Database` session, image |
 | §0.3 | `docs/architecture/auth.md` | register/login/refresh, passwords, JWT, email tokens |
 | §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive / R2 storage |
-| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (Supabase → self-hosted Postgres, R2 → Drive) |
+| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (not used since ARC-20; tooling kept until ARC-16) |
 | §0.6 | `docs/architecture/core-domain-api.md` | meetings, folders/shares, content, profile, quota routes |
 | §0.7 | `docs/architecture/worker.md` | pipeline worker, transcription, AI analyse, embed, schedulers |
 | §0.8 | `docs/architecture/chat-rag.md` | chat sessions, retrieval scope, grounded answers, citations |
@@ -63,8 +65,8 @@ From §0 (above):
 
 From §0.1 (`docs/architecture/db.md`):
 
-- (ARC-20) Role names are cluster-wide: **one ricotdin database per server** (staging now, production
-  at cutover). Runbook, migrations from the Mac, Neon data move: `docs/ops/self-hosted-postgres.md`.
+- (ARC-20) Role names are cluster-wide: **one ricotdin database per server** (production). Runbook,
+  migrations + logins from the Mac: `docs/ops/self-hosted-postgres.md`.
   **Never name CREATEDB / CREATEROLE / BYPASSRLS in an ALTER ROLE unconditionally** (it needs that
   attribute; only ALTER when the role has it). Local dev + CI: a superuser container, never the shared server.
 - **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
@@ -110,15 +112,13 @@ From v1 §5 / §6 (`docs/architecture/v1-rules.md`; the same rules bind v2 per �
 Full detail: `docs/architecture/release-cutover.md` (§0.11); owner runbooks in `docs/ops/`.
 
 **Branches** (GitHub default branch = `main` since 2026-11-12 (owner decision, ARC-19), so fresh clones
-land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows (e.g. `backup.yml`) run
+land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows run
 from `main` — always pass `--base` explicitly; day-to-day PRs still go into `dev`):
 - `dev` — day-to-day work.
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
   only**, never new features. All `vX.Y.Z` tags live here.
-- `staging/X.Y.Z` — pushing it deploys that commit to staging (`release-staging.yml`, OPS-02,
-  `docs/ops/staging.md`). One staging branch at a time.
-- `release/1.1` — v1 only (frozen, hotfixes only). Its tags run the v1 `release.yml` of that branch.
+- `release/1.1` — v1, retired (ARC-20): nothing is released from it any more.
   **Never merge `release/1.1` into `main` or `dev`**: it has v1 at the repo root and would bring
   the deleted v1 code back.
 
@@ -147,10 +147,12 @@ commit is not on `release/X.Y`.
 
 **Deploy = merge the deployment PR (OPS-04):** the PR writes ONLY `apps/ricotdin-v2/release.env`
 (`RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE`, both `:tag@digest`, + `RICOTDIN_VERSION`); runtime
-secrets live ONLY in the server env files, never in a repo. The secret `DEPLOY_REPO_TOKEN` is a
+secrets are `RICOTDIN_*` repository secrets of the deployment repo, written to the server env files by
+each deploy, never committed anywhere. The secret `DEPLOY_REPO_TOKEN` is a
 fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW). The version is
 served by public `GET /version.json`; `GET /health` backs the image `HEALTHCHECK`. Never deploy
-`dev` or `latest`. Run that release's `alembic upgrade head` BEFORE merging the deployment PR.
+`dev` or `latest`. Run that release's `alembic upgrade head` (on the Mac, `docs/ops/self-hosted-postgres.md`)
+BEFORE merging the deployment PR.
 Rollback = a deployment PR pinning the previous release's digests (only safe if no destructive
 migration ran in between).
 
