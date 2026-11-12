@@ -148,25 +148,65 @@ As a user, I want to switch between light/dark theme (and accent) so the UI matc
 ---
 
 ### PRF-06 — Language preference
-**Status:** ❌ Not started
+**Priority:** Medium | **Status:** ❌ Not started
 
 **User Story**  
-As a user, I want to choose my UI language (Vietnamese/English) so the app speaks my language.
+As a user, I want my UI language (Vietnamese/English) saved on my account so that every device I sign in on speaks my language.
+
+**Context**
+v2 already switches EN/VI from the header (AppShell, AuthLayout), but the choice lives in
+localStorage per device, so a new device or a cleared browser falls back to the browser language.
+Owner decisions 2026-11-12: store it on the account; the account value wins after sign-in; emails
+stay bilingual (PRO-01 may use the stored value later). Rejected: closing PRF-06 as covered by the
+toggle; single-language emails (bigger scope, not needed for internal use).
 
 **Use Cases**
-1. User selects a language from the Preferences section.
-2. UI re-renders in the selected language on save.
+1. A user picks VI in the header toggle → saved on the device and on the account.
+2. The same user signs in on another device (browser in EN) → the UI switches to VI.
+3. A user with no saved language signs in → the UI keeps the device/browser language; nothing is saved until they choose.
+4. The user changes the language in Profile → Preferences; the UI switches at once.
 
 **Frontend**
-- Language selector (en / vi) in profile preferences.
-- Requires i18n scaffolding (next-intl or similar).
+- Pure `app/web/src/i18n/locale.ts` → `accountLocaleToApply(account, current)`: returns the locale to switch to, or null (no value / same).
+- AppShell: once preferences load, apply the account locale (setLocale, also stored on the device). The header toggle calls setLocale + PATCH `{ locale }` (fire-and-forget; a failure keeps the local choice, no error toast).
+- ProfilePage Preferences: a Language select (English / Tiếng Việt) bound to the same value.
+- AuthLayout (signed out): unchanged, device only.
+- EN/VI strings for the new label.
 
 **Backend**
-- `PATCH /api/profile/preferences` — `{ locale?: 'en'|'vi' }`.
+- Migration `0009_profile_locale`: `profiles.locale text NULL CHECK (locale IN ('en','vi'))`, `GRANT UPDATE (locale) ON profiles TO ricotdin_app`.
+- `GET /profile/preferences` adds `locale` (string or null).
+- `PATCH /profile/preferences` accepts `locale: 'en'|'vi'|null` via `parse_preferences_patch`; anything else → 422; independent of the model and folder fields.
+- Migration script: add `locale` to `V2_ONLY_COLUMNS["profiles"]` (v1 has no such column).
 
-**Depends on:** PRF-01
+**Acceptance Criteria**
+- Given PATCH `{ "locale": "vi" }`, when GET preferences, then `locale` is `"vi"`, and model/folder preferences are unchanged.
+- Given PATCH `{ "locale": "fr" }` or a non-string, then 422 and nothing is stored; `{ "locale": null }` clears it.
+- Given an account with `locale = "vi"` and a device set to EN, when the signed-in app loads, then the UI renders in VI and `<html lang="vi">`.
+- Given an account with no locale, when the app loads, then the device/browser language stays and no PATCH is sent.
+- Given a signed-in user clicks the EN toggle, then the UI switches at once and PATCH `{ "locale": "en" }` is sent; a failed PATCH keeps EN locally.
+- Given the v1→v2 copy runs again, then `profiles.locale` keeps its value (V2_ONLY_COLUMNS test).
 
-**Note:** Larger i18n effort — defer unless i18n scaffolding exists.
+**Test Plan**
+- Pure: `app/api/app/domain/rules.py::parse_preferences_patch` (locale cases) → `app/api/tests/test_domain_rules.py`.
+- Pure: `app/web/src/i18n/locale.ts::accountLocaleToApply` → `app/web/src/i18n/locale.test.ts`.
+- Integration: preferences test (set / clear / 422 / independence) next to the PRF-07 ones.
+- `test_migration_transform.py` enforcement test covers the new column; `test_migration_integration.py` asserts it survives a re-run.
+
+**Structural flags**
+- New migration `0009_profile_locale` (High tier: Ming merges). No env var, no provider, no RLS policy change (column grant only).
+
+**Done check**
+- `cd app/api && uv run pytest -q tests/test_domain_rules.py` + the integration test; `cd app/web && npm run typecheck && npm test`; manual: set VI on one browser, sign in on a second browser in EN → VI.
+
+**Out of scope**
+- Single-language emails (PRO-01 may use `profiles.locale`).
+- More languages than en/vi.
+
+**Key files (expected)**
+- `app/api/migrations/sql/0009_profile_locale{,_down}.sql`, `migrations/versions/0009_profile_locale.py`
+- `app/api/app/domain/rules.py`, `app/api/app/routers/profile.py`, `app/api/app/migration/plan.py`
+- `app/web/src/i18n/locale.ts`, `app/web/src/app/AppShell.tsx`, `app/web/src/routes/ProfilePage.tsx`, `app/web/src/api/profile.ts`, `app/web/src/i18n/locales/{en,vi}.json`
 
 ---
 
