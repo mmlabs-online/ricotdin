@@ -1,40 +1,30 @@
-# Dependencies — reinstalled inside the image
-node_modules
+# ARC-00: build context is the repo root. Only the v1 app (legacy/) and the runtime prompt
+# (ai-instruction/ai-gen/) are needed by legacy/Dockerfile — everything else is excluded.
+*
+!legacy/
+!ai-instruction/ai-gen/
 
-# Build output — produced inside the image
-.next
-dist
-out
+# Inside legacy/: reinstalled / rebuilt inside the image
+legacy/node_modules
+legacy/.next
+legacy/dist
+legacy/out
 
 # Secrets — must NEVER be baked into the image
-.env
-.env.*
-.env.local
-.env.production
-
-# Git history
-.git
-.gitignore
+legacy/**/.env
+legacy/**/.env.*
+**/*.pem
+**/*.key
+!legacy/.env.example
 
 # Dev/CI files not needed in the image
-tests
-scripts
-migrations
-*.test.ts
-
-# ai-instruction/ is mostly dev docs, but ai-instruction/ai-gen/ holds the
-# analysis system prompt read at RUNTIME — exclude only the dev-only parts and
-# keep ai-gen/ in the build context so it ships in the image (fixes ENOENT on
-# /app/ai-instruction/ai-gen/generate-meeting.md).
-ai-instruction/features
-ai-instruction/tracking.md
-ai-instruction/ui-design_default.md
-ai-instruction/ui-design_luxury.md
-ai-instruction/ui-design_playfull.md
+legacy/tests
+legacy/scripts
+legacy/migrations
+legacy/**/*.test.ts
 
 # Editor / OS noise
-.DS_Store
-*.log
-npm-debug.log*
-.vscode
-.idea
+legacy/.vscode
+legacy/.idea
+**/.DS_Store
+**/*.log

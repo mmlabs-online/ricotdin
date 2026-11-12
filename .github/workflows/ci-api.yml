@@ -1,0 +1,131 @@
+name: CI (api)
+
+# v2 backend (FastAPI) in app/api — ARC-00 onward.
+on:
+  push:
+    branches: [main, dev, 'release/**']
+    # legacy schema/migrations feed the v1↔v2 parity test (ARC-02).
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+  pull_request:
+    branches: [main, dev, 'release/**']
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+
+  # release.yml runs the same checks for a v2 tag (ARC-15).
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/api
+
+    # Disposable Postgres + pgvector for the *_integration tests (no secrets involved).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18  # same major as Neon (baseline generated on PG 18)
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: app/api/uv.lock
+
+      - name: Install (locked)
+        run: uv sync --locked
+
+      - name: ffmpeg (worker integration tests make and probe real audio)
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Mypy (strict)
+        run: uv run mypy
+
+      - name: Pytest
+        run: uv run pytest -q
+
+      - name: OpenAPI document
+        run: uv run python -m scripts.dump_openapi openapi.json
+
+      - name: Web API types match the API (app/web/scripts/gen-api.sh)
+        env:
+          npm_config_ignore_scripts: 'true'
+        run: |
+          npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 \
+            openapi-typescript openapi.json -o ../web/src/api/schema.d.ts
+          git diff --exit-code -- ../web/src/api/schema.d.ts \
+            || { echo "::error::app/web/src/api/schema.d.ts is stale: run app/web/scripts/gen-api.sh"; exit 1; }
+
+      - name: Upload openapi.json
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openapi
+          path: app/api/openapi.json
+          if-no-files-found: error
+
+  image:
+    # The API image builds, starts as a non-root user and answers /health + /version.json.
+    name: docker build · health
+    needs: api
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image (no push)
+        # Context = repo root (the worker needs ai-instruction/ai-gen/); ignore rules in
+        # app/api/Dockerfile.dockerignore.
+        run: docker build -f app/api/Dockerfile --build-arg BUILD_COMMIT=${{ github.sha }} -t ricotdin-api:ci .
+
+      - name: Container is healthy and reports its version
+        run: |
+          docker run -d --name api -p 8000:8000 ricotdin-api:ci
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' api)"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          echo "health status: $status"
+          [ "$status" = "healthy" ] || { docker logs api; exit 1; }
+          curl -fsS http://127.0.0.1:8000/health
+          version="$(curl -fsS http://127.0.0.1:8000/version.json)"
+          echo "$version"
+          echo "$version" | grep -q "${{ github.sha }}"
+          [ "$(docker exec api id -u)" = "10001" ]
+          docker exec api ffmpeg -version | head -1
+
+      - name: Worker image checks (prompt present, refuses extra credentials)
+        run: |
+          docker run --rm ricotdin-api:ci python -c \
+            "from app.services.ai.prompts import load_prompt; assert load_prompt().startswith('# Meeting Analysis')"
+          docker run --rm ricotdin-api:ci sh -c 'test ! -e /app/tests && test ! -e /app/.env'
+          set +e
+          docker run --rm -e DATABASE_URL_WORKER=postgresql://w@127.0.0.1:1/x \
+            -e DATABASE_URL_SERVICE=postgresql://s@127.0.0.1:1/x ricotdin-api:ci python -m app.worker
+          code=$?
+          set -e
+          [ "$code" = "2" ] || { echo "worker should refuse a service credential (exit $code)"; exit 1; }
+          if docker run --rm ricotdin-api:ci python -m app.worker.health; then
+            echo "health check passed without a heartbeat"; exit 1
+          fi

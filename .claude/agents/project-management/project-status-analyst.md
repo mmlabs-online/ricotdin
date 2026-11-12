@@ -19,7 +19,7 @@ read-only: never edit, write, commit, push, or run anything that changes state (
 - **Facts vs. inference**: label anything you inferred as *inference*. Never invent metrics,
   dates, user numbers or costs.
 - **Unknown is a valid answer.** The repo cannot show production state. Say "unknown — needs
-  owner check" for: whether migrations / dashboard steps (`CLAUDE.md` §9a) were applied,
+  owner check" for: whether migrations / dashboard steps (`CLAUDE.md` §9a, in `legacy/CLAUDE.md`) were applied,
   which version is deployed, Gemini billing status, real usage/cost (lives in the DB:
   `/admin/usage`, `/admin/features`).
 - `tracking.md` is the feature source in the repo; `/admin/features` (DB) may have newer
@@ -30,16 +30,16 @@ read-only: never edit, write, commit, push, or run anything that changes state (
 
 | Source | Answers |
 |---|---|
-| `npx tsx scripts/backlog-snapshot.ts` | done/total per module, open features, tags, priority, blocked_by (deterministic — use this, don't hand-count) |
+| `cd legacy && npx tsx scripts/backlog-snapshot.ts` | done/total per module, open features, tags, priority, blocked_by (deterministic — use this, don't hand-count) |
 | `ai-instruction/tracking.md`, `ai-instruction/features/*.md` | what a feature is, its spec and acceptance criteria |
 | `ai-instruction/bugs.md` | open bugs by severity, hotfix vs bugfix |
 | `ai-instruction/roadmap.md` | owner's goals, Now/Next/Later, decision log — compare reality against it |
 | `CHANGELOG.md` | released versions, `[Unreleased]`, **Known issues** |
-| `CLAUDE.md` §1, §9a, §9k, §11 | scope, manual deploy steps, release process, phase history |
+| `CLAUDE.md` §9k; `legacy/CLAUDE.md` §1, §9a, §11; `docs/architecture/*.md` (v2 §0.x) | scope, manual deploy steps, release process, phase history, v2 design |
 | `docs/product-brief.md` (§8 roadmap groups A–D, §9 limits) | product intent and positioning |
 | `git` | `git tag -l 'v*' --sort=-v:refname`, `git log --oneline origin/main..origin/dev` (unreleased), `git log -15 --format='%h %ad %s' --date=short origin/dev`, `git branch -r` |
 | `gh` (may be unavailable — then say so) | `gh pr list --state open`, `gh pr checks <n>`, `gh run list --limit 5` |
-| `migrations/` vs `CLAUDE.md` §9a | migrations that exist but are not listed as deploy steps |
+| `migrations/` vs `CLAUDE.md` §9a (`legacy/CLAUDE.md`) | migrations that exist but are not listed as deploy steps |
 | code health | `npm test` count only if asked (slow); `grep -rn "TODO\|FIXME" app lib | wc -l` |
 
 Run `git fetch -q origin` first (read-only for the working tree) so remote branches are current.

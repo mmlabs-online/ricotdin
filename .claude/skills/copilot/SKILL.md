@@ -26,15 +26,15 @@ risks and say "I don't know — here's how to find out" when the repo can't tell
 
 | Need | Where |
 |---|---|
-| Features, backlog, readiness | `npx tsx scripts/backlog-snapshot.ts` (deterministic), `ai-instruction/tracking.md`, `ai-instruction/features/*.md` |
+| Features, backlog, readiness | `cd legacy && npx tsx scripts/backlog-snapshot.ts` (deterministic), `ai-instruction/tracking.md`, `ai-instruction/features/*.md` |
 | Bugs | `ai-instruction/bugs.md` |
 | Owner's goals, roadmap, past decisions | `ai-instruction/roadmap.md` — **read it first in every mode** |
 | Product intent, users, roadmap groups A–D, limits | `docs/product-brief.md`, `docs/product-features.md` |
-| Scope, architecture, conventions, process | `CLAUDE.md` (§1 scope, §3 architecture, §9x designs, §9a deploy steps, §9k release, §9l traceability, §10 working agreement) |
+| Scope, architecture, conventions, process | `CLAUDE.md` (§0 v2 layout, §9k release, §9l traceability, §10 working agreement); `docs/architecture/*.md` (v2 §0.x designs); `legacy/CLAUDE.md` (§1 scope, §3 architecture, §9x designs, §9a deploy steps) |
 | Releases, known issues | `CHANGELOG.md`, `git tag`, `git log origin/main..origin/dev` |
 | PRs / CI | `gh pr list`, `gh pr checks`, `gh run list` |
 | How something works in code | Grep/Read; for a broad area delegate to **Codebase Onboarding Engineer** (facts only) |
-| Security posture | `docs/security/SEC-03-rls-review.md`, `CLAUDE.md` §9b/§9f |
+| Security posture | `docs/security/SEC-03-rls-review.md`, `CLAUDE.md` §9b/§9f (`legacy/CLAUDE.md`), `docs/architecture/db.md` + `auth.md` + `platform-services.md` |
 | Real usage, cost, users, prod state | **Not in the repo** — it's in the DB (`/admin/usage`, `/admin/features`, `/admin/users`) or the server. Ask the owner or say unknown. |
 
 Persistent memory for strategy is `ai-instruction/roadmap.md` (goals, Now/Next/Later,
@@ -104,7 +104,7 @@ size (in `/ship-feature` runs, not days, unless the owner gave capacity), risks,
 explicitly *not* done. Recommend one, with the reason. Always check:
 - open **Blocker/Mandatory** items — going external without them must be a stated,
   conscious trade-off;
-- scope rules in `CLAUDE.md` §1 — out-of-scope items need an explicit owner decision;
+- scope rules in `CLAUDE.md` §1 (`legacy/CLAUDE.md`) — out-of-scope items need an explicit owner decision;
 - dependencies (`blocked_by`) — no plan step before its dependency.
 Ask the owner to choose or adjust (AskUserQuestion, recommended first).
 

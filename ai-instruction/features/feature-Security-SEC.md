@@ -127,6 +127,67 @@ As the system, I want proper secret management (no hard-coding) to avoid key lea
 
 ---
 
+### SEC-05 — v2 pre-go-live hardening
+**Priority:** High | **Status:** ✅ Done
+
+**User Story**  
+As the owner, I want v2 to close the four security gaps left open before go-live so that nobody can take over an account under someone else's email, keep a stolen session forever, spoof names with invisible characters, or farm chat refunds.
+
+**Context**
+CLAUDE.md §0.3, §0.8 and §0.10 list these as open: (1) someone can register a victim's email with their own password; the victim's re-registration gets 409, and if the victim clicks the verify link the attacker owns a verified account; (2) refresh sessions slide 30 days forever; (3) the web hides bidi / zero-width characters in names, but the API stores them; (4) a refused chat answer is refunded although the provider call cost us. Owner decisions 2026-11-09 (issue #75): the verify link sets the password, re-registration re-sends it, 90-day absolute lifetime (sessions already older expire at once), reject (not strip) bad characters in folder + meeting names only, refund only failures on our side. Rejected: replacing the unverified account after 24 h, a 30-day limit, stripping characters silently, a daily refund cap, two codes.
+
+**Use Cases**
+1. A victim's email was pre-registered by someone else. The victim registers: the answer is the same as for a new account, and a fresh verify link reaches the victim's inbox. Opening it, the victim sets a password and the account is theirs; the other password no longer works.
+2. A user who signed in 90 days ago refreshes: 401, sign in again.
+3. A folder owner renames a shared folder with U+202E in the name: the API refuses it with a clear message.
+4. A user asks chat questions the provider refuses: each one costs one agent query.
+
+**Frontend**
+- `/verify-email`: after the Confirm click, the page asks for a new password (+ confirmation, the same rules as `src/auth/validate.ts`), then posts token + password. Success → sign-in page with a "verified, sign in with your new password" notice. EN + VI strings.
+- Folder dialog and meeting rename show a localized "invisible characters are not allowed" error (new error code mapped in `folderErrorKey` / `actionErrorKey`).
+- Regenerate `src/api/schema.d.ts`.
+
+**Backend**
+- `POST /auth/verify-email {token, password}`: password validated before the token is consumed; in one transaction: consume the token, set the password hash (argon2id), mark verified, revoke every refresh token of the user. Expired / used token → the existing invalid-link answer.
+- `POST /auth/register`: an email that belongs to an **unverified** account → no new row; issue one more `verify_email` token for the existing account **without voiding earlier links** (review round 1: otherwise an attacker re-registering could keep cancelling the owner's link) and mail it; answer 201 with the same body as a new registration. The password is dropped; a free username replaces the pre-registered one. Re-sends have their own silent limit (3/h per address: over it nothing is sent, same answer). Username taken by another account → 409 as today; a **verified** email → 409 as today (owner decision 2026-10-26). Mail sends follow the existing per-address limit (3/h).
+- Refresh rotation: a family older than 90 days (`min(created_at)` of the family, DB clock) → outcome `expired` (401, token revoked). New tokens never get `expires_at` beyond family start + 90 days. Pure rule in `app/auth/` (`ABSOLUTE_TTL = 90 days`).
+- `parse_folder_name` / `parse_meeting_patch` (and the meeting title on create, if accepted there): reject Unicode bidi controls (U+202A–U+202E, U+2066–U+2069), zero-width and format characters (U+200B–U+200F, U+2060–U+2064, U+FEFF) and C0/C1 controls → 400 (folders) / 422 (meetings) with code `invalid_characters`. Same set as `app/web/src/lib/text.ts`.
+- Chat `_answer`: `AIRefused` (the model refused the content: `ModelRefused`, a subclass of `AIRejected`) → reply `ANSWER_ERROR_REPLY`, **no refund**; every other failure keeps today's refund (retrieval error, `AIUnavailable`, `AIBadOutput`, plain `AIRejected` = unknown/retired model or prompt too large, timeout, cancel). No separate `answer_rejected` metadata is written.
+- Replace the three "Open (owner decision pending)" lines in CLAUDE.md §0.3/§0.8 and the §0.10 bidi follow-up with the new rules.
+
+**Acceptance Criteria**
+- Given an unverified account for `a@x.com`, when anyone registers `a@x.com` with a free username, then the answer equals a new registration (201, same body), no second user exists, and the address gets one more verify link; once the account is verified through any link, every other link stops working.
+- Given a verify link, when it is posted with a valid password, then the account is verified, only the new password signs in, and all its refresh tokens are revoked; when posted without a valid password, then 422 and the token still works.
+- Given a refresh family whose first token is 90 days + 1 s old, when it is refreshed, then 401 and the token is revoked; a family 89 days old refreshes and its new token expires no later than day 90.
+- Given a folder or meeting name containing U+202E or U+200B, when it is created / renamed, then the API refuses it with `invalid_characters` and nothing is stored; plain Vietnamese names with diacritics are accepted.
+- Given a chat question whose answer call raises `AIRefused`, then the user is charged one query and no `agent:<id>:refund` ledger row exists; given `AIUnavailable` or a plain `AIRejected`, then the refund row exists as today.
+
+**Test Plan**
+- Pure logic first:
+  - `app/domain/rules.py` → `has_invisible_characters()` + both parsers. Tests in `app/api/tests/test_rules.py`: each blocked code point, Vietnamese text, emoji, whitespace.
+  - `app/auth/` refresh rule → `absolute_expiry()` / outcome for an old family. Tests in `app/api/tests/test_refresh_rules.py`.
+  - `app/rag/answer.py` (or `chat.py` helper) → `refund_reason(exc)`. Tests in `app/api/tests/test_chat_refund.py`.
+- Integration: `app/api/tests/test_auth_integration.py`: register an unverified email, verify with password, refresh after 90 days (DB clock moved by updating `created_at`); `test_chat_integration.py`: refusal charged, unavailable refunded.
+- Web: pure `newPasswordError` / `passwordField` (`src/auth/validate.test.ts`), `isInvisibleCharactersError` + `displayText` (`src/lib/text.test.ts`), error keys (`detail.test.ts`, `folderErrors.test.ts`). No component test (the repo has no jsdom setup) and e2e never opens a verify link: the page is checked by hand (done check).
+
+**Structural flags**
+- Auth contract change: `/auth/verify-email` now requires `password` (web + e2e updated in the same PR; v2 is not live yet). No migration, no env var, no new provider. ~12–16 files.
+
+**Done check**
+- `cd app/api && uv run pytest -q` and `cd app/web && npm test && npm run e2e` green; manual: register twice with the same unverified email, open the second link, set a password, sign in.
+
+**Out of scope**
+- Username bidi check (owner chose folders + meetings only).
+- Changing the 409 for a verified email (account enumeration; decided 2026-10-26).
+- PRF-11 session list / remote sign-out (builds on the 90-day rule).
+
+**Key files (expected)**
+- `app/api/app/routers/auth.py`, `app/api/app/auth/service.py`, `app/api/app/auth/` (refresh rule), `app/api/app/domain/rules.py`, `app/api/app/routers/chat.py`, `app/api/app/email/templates.py`
+- `app/web/src/routes/auth/VerifyEmailPage.tsx`, `app/web/src/auth/*`, `app/web/src/lib/*/errors`, `app/web/src/i18n/locales/{en,vi}.json`, `app/web/src/api/schema.d.ts`, `app/web/e2e/core-flow.spec.ts`
+- `CLAUDE.md` §0.3, §0.8, §0.10
+
+---
+
 ## Implementation Order
 
 1. **SEC-04** (secret management audit) — verify `.gitignore`, scan for leaked secrets in git history with `git-secrets` or `trufflehog`. Low effort, high value.

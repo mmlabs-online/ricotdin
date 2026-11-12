@@ -1,0 +1,1366 @@
+{
+  "app": {
+    "name": "Ricotdin",
+    "loading": "Đang tải…",
+    "privacy": "Cuộc họp của bạn là riêng tư"
+  },
+  "nav": {
+    "main": "Điều hướng chính",
+    "mobile": "Điều hướng trên di động",
+    "meetings": "Cuộc họp",
+    "record": "Ghi âm",
+    "chat": "Trò chuyện",
+    "profile": "Hồ sơ",
+    "admin": "Quản trị",
+    "collapse": "Thu gọn thanh bên",
+    "expand": "Mở rộng thanh bên"
+  },
+  "menu": {
+    "language": "Ngôn ngữ",
+    "colorTheme": "Màu giao diện",
+    "lightMode": "Giao diện sáng",
+    "darkMode": "Giao diện tối",
+    "signOut": "Đăng xuất",
+    "useTheme": "Dùng giao diện {{name}}",
+    "openFor": "Menu tài khoản của {{name}}"
+  },
+  "theme": {
+    "rose": "Hồng",
+    "sage": "Xanh xô thơm",
+    "plum": "Mận",
+    "ocean": "Đại dương"
+  },
+  "language": {
+    "label": "Ngôn ngữ",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "enShort": "EN",
+    "viShort": "VI"
+  },
+  "auth": {
+    "welcome": "Chào mừng trở lại",
+    "title": "Đăng nhập vào Ricotdin",
+    "subtitle": "Tiếp tục đến các cuộc họp, ghi chú và trợ lý của bạn.",
+    "identifier": "Email hoặc tên người dùng",
+    "identifierPlaceholder": "Nhập email hoặc tên người dùng",
+    "password": "Mật khẩu",
+    "passwordPlaceholder": "Mật khẩu của bạn",
+    "forgot": "Quên mật khẩu?",
+    "submit": "Đăng nhập",
+    "submitting": "Đang đăng nhập…",
+    "newHere": "Chưa có tài khoản?",
+    "createAccount": "Tạo tài khoản",
+    "errors": {
+      "missing": "Nhập email hoặc tên người dùng và mật khẩu.",
+      "invalid_credentials": "Email, tên người dùng hoặc mật khẩu không đúng.",
+      "email_not_verified": "Vui lòng xác minh email trước. Hãy kiểm tra hộp thư để lấy liên kết.",
+      "account_disabled": "Tài khoản này đã bị vô hiệu hóa. Hãy liên hệ quản trị viên.",
+      "rate_limited": "Bạn thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đăng nhập thất bại. Vui lòng thử lại.",
+      "invalidLink": "Liên kết không hợp lệ hoặc đã hết hạn.",
+      "unavailable": "Hiện chưa thể đăng ký. Hãy thử lại sau."
+    },
+    "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt.",
+    "resendLink": "Gửi lại email xác minh",
+    "backToSignIn": "Quay lại đăng nhập",
+    "linkSent": "Nếu có tài khoản với địa chỉ này, chúng tôi đã gửi liên kết. Hãy kiểm tra hộp thư (cả thư rác).",
+    "forgotTitle": "Đặt lại mật khẩu",
+    "forgotHelp": "Nhập email tài khoản. Chúng tôi sẽ gửi liên kết để bạn chọn mật khẩu mới.",
+    "forgotSubmit": "Gửi liên kết đặt lại",
+    "validation": {
+      "usernameShort": "Tên người dùng cần ít nhất 3 ký tự.",
+      "usernameLong": "Tên người dùng tối đa 30 ký tự.",
+      "usernameChars": "Chỉ dùng chữ thường, số, dấu gạch ngang và gạch dưới.",
+      "email": "Nhập địa chỉ email hợp lệ.",
+      "passwordShort": "Mật khẩu cần ít nhất 8 ký tự.",
+      "passwordLong": "Mật khẩu tối đa 256 ký tự.",
+      "mismatch": "Hai mật khẩu không khớp."
+    },
+    "register": {
+      "eyebrow": "Bắt đầu",
+      "title": "Tạo tài khoản",
+      "subtitle": "Ghi âm cuộc họp và nhận bản ghi, ghi chú, việc cần làm.",
+      "email": "Email",
+      "username": "Tên người dùng",
+      "usernameHelp": "3–30 ký tự: chữ thường, số, - hoặc _. Có thể dùng để đăng nhập.",
+      "passwordHelp": "Ít nhất 8 ký tự.",
+      "confirm": "Nhập lại mật khẩu",
+      "submit": "Tạo tài khoản",
+      "submitting": "Đang tạo tài khoản…",
+      "haveAccount": "Đã có tài khoản?",
+      "checkInbox": "Kiểm tra hộp thư",
+      "sent": "Chúng tôi đã gửi liên kết xác minh tới {{email}}. Mở liên kết để kích hoạt tài khoản rồi đăng nhập.",
+      "notSent": "Tài khoản đã được tạo nhưng hiện chưa gửi được email xác minh. Hãy yêu cầu gửi lại từ trang đăng nhập sau.",
+      "taken": "Email hoặc tên người dùng này đã được dùng.",
+      "invalid": "Hãy kiểm tra lại thông tin rồi thử lại."
+    },
+    "verify": {
+      "done": "Email đã được xác minh và mật khẩu đã được đặt. Hãy đăng nhập bằng mật khẩu này.",
+      "resendHelp": "Cần liên kết xác minh mới? Nhập email của bạn.",
+      "resend": "Gửi email xác minh",
+      "confirmHelp": "Chọn mật khẩu cho tài khoản. Bước này xác minh email và kích hoạt tài khoản.",
+      "confirm": "Xác minh và đặt mật khẩu",
+      "password": "Mật khẩu"
+    },
+    "reset": {
+      "help": "Chọn mật khẩu mới. Bạn sẽ bị đăng xuất trên mọi thiết bị.",
+      "newPassword": "Mật khẩu mới",
+      "submit": "Đặt mật khẩu mới",
+      "done": "Đã đổi mật khẩu. Hãy đăng nhập bằng mật khẩu mới.",
+      "newLink": "Yêu cầu liên kết mới"
+    }
+  },
+  "page": {
+    "workspace": "Không gian làm việc",
+    "comingSoon": "Màn hình này đang được kết nối với hệ thống mới.",
+    "meetings": {
+      "title": "Cuộc họp",
+      "subtitle": "Tìm kiếm, xem lại và đặt câu hỏi về mọi cuộc trò chuyện."
+    },
+    "meetingDetail": {
+      "title": "Cuộc họp",
+      "subtitle": "Tóm tắt, ghi chú, việc cần làm và bản ghi.",
+      "back": "Quay lại danh sách cuộc họp"
+    },
+    "record": {
+      "eyebrow": "Cuộc họp mới",
+      "title": "Ghi âm hoặc tải tệp lên",
+      "subtitle": "Ghi lại cuộc trò chuyện. Ricotdin sẽ xử lý phần còn lại."
+    },
+    "chat": {
+      "title": "Hỏi về các cuộc họp",
+      "subtitle": "Câu trả lời có liên kết về nguồn."
+    },
+    "profile": {
+      "eyebrow": "Tài khoản",
+      "title": "Hồ sơ & tùy chọn",
+      "subtitle": "Quản lý tài khoản, giao diện và mức sử dụng."
+    },
+    "notFound": {
+      "title": "Không tìm thấy trang",
+      "subtitle": "Trang bạn tìm không tồn tại.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "forbidden": {
+      "title": "Không có quyền truy cập",
+      "subtitle": "Bạn cần quyền quản trị để mở trang này.",
+      "home": "Về danh sách cuộc họp"
+    },
+    "verifyEmail": {
+      "title": "Xác minh email"
+    },
+    "resetPassword": {
+      "title": "Đặt lại mật khẩu"
+    }
+  },
+  "admin": {
+    "brand": "Quản trị",
+    "eyebrow": "Quản trị",
+    "subtitle": "Quản lý hạ tầng, quyền truy cập và vận hành của hệ thống.",
+    "sections": "Mục quản trị",
+    "returnToApp": "Quay lại không gian làm việc",
+    "tabs": {
+      "overview": "Tổng quan",
+      "users": "Người dùng",
+      "pipeline": "Pipeline",
+      "usage": "Mức sử dụng",
+      "keys": "Khóa API",
+      "storage": "Lưu trữ",
+      "config": "Cấu hình",
+      "activity": "Hoạt động",
+      "audit": "Nhật ký kiểm tra",
+      "features": "Tính năng",
+      "health": "Tình trạng",
+      "docs": "Tài liệu API"
+    },
+    "errors": {
+      "refused": "Máy chủ từ chối thay đổi này. Bạn không thể thay đổi tài khoản của chính mình hay gỡ quản trị viên cuối cùng, và chỉ tài khoản đang hoạt động, đã xác minh mới được làm quản trị viên.",
+      "forbidden": "Không xác nhận được quyền quản trị của bạn. Hãy đăng nhập lại.",
+      "notFound": "Người dùng này không còn tồn tại.",
+      "rateLimited": "Quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.",
+      "unavailable": "Một dịch vụ tạm thời không khả dụng. Hãy thử lại sau.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "conflict": "Không làm được ở trạng thái hiện tại (ví dụ đang chạy, hoặc thiếu tệp). Hãy tải lại và kiểm tra.",
+      "invalid": "Máy chủ từ chối giá trị này. Hãy kiểm tra rồi thử lại.",
+      "duplicate": "Đã tồn tại (ví dụ mã tính năng đã được dùng).",
+      "gone": "Mục này không còn nữa (có thể admin khác đã xóa). Danh sách đã được tải lại."
+    },
+    "pagination": {
+      "label": "Trang",
+      "range": "{{from}}–{{to}} / {{total}}",
+      "previous": "Trước",
+      "next": "Sau"
+    },
+    "users": {
+      "subtitle": "Tài khoản, quyền và truy cập. Mọi thay đổi được ghi vào nhật ký quản trị.",
+      "search": "Tìm người dùng",
+      "searchPlaceholder": "Tìm email hoặc tên người dùng",
+      "month": "Tháng sử dụng",
+      "caption": "Người dùng, kèm mức dùng AI tháng {{month}}",
+      "selectAll": "Chọn mọi người dùng trên trang này",
+      "select": "Chọn {{name}}",
+      "you": "Bạn",
+      "never": "Chưa bao giờ",
+      "empty": "Chưa có người dùng.",
+      "noMatch": "Không có người dùng nào khớp.",
+      "usageValue": "{{tokens}} token · {{h}} giờ {{m}} phút",
+      "deleted": "Đã xóa người dùng.",
+      "deletedWarning": "Đã xóa người dùng, nhưng một số tệp của họ chưa xóa được khỏi kho lưu trữ.",
+      "col": {
+        "user": "Người dùng",
+        "username": "Tên người dùng",
+        "role": "Quyền",
+        "status": "Trạng thái",
+        "meetings": "Cuộc họp",
+        "usage": "Mức dùng tháng này",
+        "lastSignIn": "Đăng nhập gần nhất",
+        "created": "Ngày tạo"
+      },
+      "role": {
+        "user": "Người dùng",
+        "admin": "Quản trị viên"
+      },
+      "status": {
+        "active": "Hoạt động",
+        "unverified": "Chưa xác minh",
+        "disabled": "Đã khóa"
+      },
+      "actions": {
+        "makeAdmin": "Cấp quyền quản trị",
+        "makeUser": "Bỏ quyền quản trị",
+        "disable": "Khóa",
+        "enable": "Mở khóa",
+        "reset": "Gửi link đặt lại mật khẩu",
+        "delete": "Xóa người dùng"
+      },
+      "bulk": {
+        "label": "Thao tác cho người dùng đã chọn",
+        "selected_one": "Đã chọn {{count}}",
+        "selected_other": "Đã chọn {{count}}",
+        "clear": "Bỏ chọn",
+        "apply": "Áp dụng",
+        "confirmTitle_one": "Thay đổi {{count}} người dùng?",
+        "confirmTitle_other": "Thay đổi {{count}} người dùng?",
+        "confirm": {
+          "disable": "Họ không đăng nhập lại được cho tới khi được kích hoạt, và bị chặn khỏi trang quản trị ngay. Phiên đang mở vẫn dùng được tối đa 15 phút. Không bao giờ gồm chính bạn.",
+          "enable": "Họ đăng nhập lại được.",
+          "role_admin": "Họ có toàn quyền quản trị. Chỉ tài khoản đang hoạt động, đã xác minh mới được cấp; nếu có người không đủ điều kiện thì không có gì thay đổi.",
+          "role_user": "Họ mất trang quản trị ngay; quyền quản trị còn lại hết trong vòng 15 phút. Không thể hạ quyền admin cuối cùng; nếu vậy sẽ không có gì thay đổi."
+        },
+        "done": "Xong: đã thay đổi {{processed}}.",
+        "partial": "Đã thay đổi {{processed}}, {{failed}} không tìm thấy."
+      },
+      "handle": "@{{name}}",
+      "searchSubmit": "Tìm"
+    },
+    "userDetail": {
+      "title": "Người dùng",
+      "back": "Quay lại danh sách",
+      "notFound": "Không tìm thấy người dùng",
+      "actions": "Thao tác tài khoản",
+      "activity": "Hoạt động gần đây",
+      "noActivity": "Chưa có hoạt động nào.",
+      "promoteHint": "Chỉ tài khoản đang hoạt động, đã xác minh mới được làm quản trị viên.",
+      "selfHint": "Bạn không thể đổi quyền, trạng thái hay xóa chính mình.",
+      "done": {
+        "promote": "Người dùng đã là quản trị viên. Áp dụng ở lần làm mới phiên kế tiếp (trong 15 phút).",
+        "demote": "Người dùng không còn là quản trị viên. Các trang quản trị ngừng hoạt động với họ ngay.",
+        "disable": "Đã khóa và đăng xuất người dùng khỏi mọi thiết bị.",
+        "enable": "Người dùng đăng nhập lại được.",
+        "reset": "Đã gửi email link đặt lại mật khẩu.",
+        "resetNoMail": "Không gửi được email: máy chủ chưa cấu hình gửi mail."
+      },
+      "confirm": {
+        "promote": {
+          "title": "Cấp quyền quản trị?",
+          "body": "{{name}} sẽ có toàn quyền quản trị, gồm mọi cuộc họp và mọi cài đặt.",
+          "action": "Cấp quyền"
+        },
+        "demote": {
+          "title": "Bỏ quyền quản trị?",
+          "body": "{{name}} sẽ thành người dùng thường. Trang quản trị chặn ngay; quyền quản trị còn lại hết trong vòng 15 phút.",
+          "action": "Bỏ quyền"
+        },
+        "disable": {
+          "title": "Khóa tài khoản này?",
+          "body": "{{name}} không đăng nhập lại được cho tới khi bạn kích hoạt lại tài khoản. Phiên đang mở vẫn dùng được tối đa 15 phút.",
+          "action": "Khóa"
+        },
+        "enable": {
+          "title": "Mở khóa tài khoản?",
+          "body": "{{name}} đăng nhập lại được.",
+          "action": "Mở khóa"
+        },
+        "reset": {
+          "title": "Gửi link đặt lại mật khẩu?",
+          "body": "{{name}} nhận email có link để đặt mật khẩu mới. Mật khẩu hiện tại vẫn dùng được cho đến lúc đó.",
+          "action": "Gửi email"
+        },
+        "delete": {
+          "title": "Xóa vĩnh viễn người dùng này?",
+          "body": "{{name}} và mọi thứ họ sở hữu sẽ bị xóa: cuộc họp, bản ghi âm, bản ghi lời, thư mục và chat. Không thể hoàn tác.",
+          "action": "Xóa vĩnh viễn"
+        }
+      },
+      "viewActivity": "Xem mọi hoạt động"
+    },
+    "quota": {
+      "title": "Số dư",
+      "grantTitle": "Nạp thêm",
+      "minutes": "Số phút âm thanh",
+      "queries": "Lượt hỏi",
+      "note": "Ghi chú (tùy chọn)",
+      "grant": "Nạp",
+      "granted": "Đã cập nhật số dư.",
+      "history": "Thay đổi gần đây",
+      "noHistory": "Chưa có thay đổi.",
+      "minutesDelta": "{{value}} phút",
+      "col": {
+        "when": "Thời điểm",
+        "reason": "Lý do",
+        "audio": "Âm thanh",
+        "queries": "Lượt hỏi"
+      },
+      "reason": {
+        "topup": "Nạp tiền",
+        "admin_grant": "Quản trị viên nạp",
+        "generate": "Xử lý",
+        "agent_query": "Câu hỏi chat",
+        "refund": "Hoàn lại",
+        "adjustment": "Điều chỉnh",
+        "other": "Khác"
+      },
+      "errors": {
+        "empty": "Hãy nhập số phút hoặc lượt hỏi cần nạp.",
+        "negative": "Không được nhập số âm.",
+        "number": "Chỉ nhập số.",
+        "whole": "Lượt hỏi phải là số nguyên.",
+        "tooLarge": "Vượt mức một lần nạp (100.000 phút, 1.000.000 lượt hỏi).",
+        "grouping": "Nhập số không có dấu phân cách hàng nghìn (ví dụ 1000)."
+      },
+      "confirmTitle": "Cộng hạn mức này?",
+      "confirmBody": "Cộng {{minutes}} phút âm thanh và {{queries}} lượt hỏi cho {{name}}? Không hoàn tác được tại đây."
+    },
+    "overview": {
+      "allOk": "Mọi hệ thống hoạt động bình thường",
+      "degraded": "Có mục cần chú ý",
+      "users": "Người dùng",
+      "usersHint": "Tất cả tài khoản",
+      "meetings": "Cuộc họp",
+      "successRate": "{{rate}}% xử lý thành công",
+      "noRuns": "Chưa xử lý cuộc họp nào",
+      "inProgress": "Đang chạy",
+      "inProgressHint": "Đang tải lên hoặc xử lý",
+      "avgTime": "Thời gian xử lý trung bình",
+      "avgTimeHint": "Từ tải lên đến có kết quả",
+      "minutes": "{{m}} phút",
+      "pipeline": "Xử lý",
+      "viewPipeline": "Xem theo dõi",
+      "health": "Tình trạng hệ thống",
+      "viewHealth": "Xem tình trạng",
+      "recent": "Thao tác quản trị gần đây",
+      "viewAudit": "Xem nhật ký",
+      "noRecent": "Chưa có thao tác quản trị.",
+      "system": "Hệ thống",
+      "auditLine": "{{actor}} · {{action}}",
+      "count": {
+        "processing": "Đang xử lý",
+        "pending": "Đang chờ",
+        "stuck": "Bị kẹt",
+        "failed": "Thất bại",
+        "done": "Xong"
+      }
+    },
+    "health": {
+      "check": {
+        "database": "Cơ sở dữ liệu",
+        "storage": "Lưu trữ Google Drive",
+        "key_encryption": "Mã hóa khóa",
+        "worker": "Tác vụ worker",
+        "gemini": "Gemini",
+        "speechmatics": "Speechmatics",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "other": "Mục khác"
+      },
+      "status": {
+        "ok": "Ổn",
+        "warning": "Cảnh báo",
+        "error": "Lỗi",
+        "unknown": "Không rõ"
+      },
+      "subtitle": "Kiểm tra cơ sở dữ liệu, kho tệp, key và tác vụ của worker.",
+      "checks": "Các mục kiểm tra",
+      "refresh": "Kiểm tra lại",
+      "msg": {
+        "noActiveKey": "Không có key đang dùng.",
+        "allKeysFailing": "Mọi key đang dùng đều lỗi ở lần kiểm tra gần nhất.",
+        "noSecret": "Máy chủ chưa đặt KEY_ENCRYPTION_SECRET.",
+        "tasks": "Quá hạn hoặc lỗi: {{tasks}}",
+        "database": "Cơ sở dữ liệu không phản hồi."
+      },
+      "recheckOk": "Đã kiểm tra lại: mọi thứ ổn.",
+      "recheckBad": "Đã kiểm tra lại: có mục cần xem."
+    },
+    "pipeline": {
+      "subtitle": "Các cuộc họp trong hàng đợi xử lý. \"Xử lý lại\" chạy lại cuộc họp bị lỗi hoặc bị treo.",
+      "autoRefresh": "Tự cập nhật mỗi 10 giây",
+      "updated": "Cập nhật lúc {{time}}",
+      "countsLabel": "Cuộc họp theo trạng thái",
+      "filterLabel": "Hiện cuộc họp",
+      "avgTime": "Thời gian xử lý TB",
+      "all": "Tất cả",
+      "duration": "{{h}}:{{m}}:{{s}}",
+      "status": {
+        "pending": "Đang chờ",
+        "processing": "Đang xử lý",
+        "stuck": "Bị treo",
+        "failed": "Thất bại",
+        "done": "Xong"
+      },
+      "jobStatus": {
+        "queued": "đang chờ",
+        "running": "đang chạy",
+        "done": "xong",
+        "failed": "lỗi",
+        "other": "không rõ"
+      },
+      "jobState": "{{status}} · {{step}} · lần {{attempts}}",
+      "requeueAll_one": "Xử lý lại {{count}} cuộc ở trang này",
+      "requeueAll_other": "Xử lý lại {{count}} cuộc ở trang này",
+      "requeue": "Xử lý lại",
+      "requeueOne": "Xử lý lại {{title}}",
+      "confirmTitle_one": "Xử lý lại cuộc họp này?",
+      "confirmTitle_other": "Xử lý lại {{count}} cuộc họp?",
+      "confirmBody_one": "Cuộc họp được xử lý lại từ đầu và chủ cuộc họp bị trừ số phút âm thanh thêm lần nữa. Bản ghi lời và ghi chú hiện tại vẫn giữ cho tới khi lần chạy mới thay thế.",
+      "confirmBody_other": "Mỗi cuộc họp được xử lý lại từ đầu và mỗi chủ cuộc họp bị trừ số phút âm thanh thêm lần nữa. Bản ghi lời và ghi chú hiện tại vẫn giữ cho tới khi lần chạy mới thay thế.",
+      "requeued_one": "Đã xếp lại {{count}} cuộc họp.",
+      "requeued_other": "Đã xếp lại {{count}} cuộc họp.",
+      "requeuePartial": "Đã xếp lại {{count}}; {{failed}} bị từ chối (đang chạy, hoặc thiếu tệp âm thanh): {{titles}}.",
+      "empty": "Không có cuộc họp nào.",
+      "caption": "Cuộc họp trong hàng đợi xử lý",
+      "col": {
+        "status": "Trạng thái",
+        "meeting": "Cuộc họp",
+        "owner": "Chủ sở hữu",
+        "created": "Tạo lúc",
+        "duration": "Độ dài",
+        "job": "Lượt xử lý gần nhất",
+        "error": "Lỗi",
+        "actions": "Thao tác"
+      },
+      "tasks": {
+        "title": "Tác vụ của worker",
+        "none": "Worker chưa chạy tác vụ nào.",
+        "last": "Xong lần cuối {{time}}",
+        "never": "Chưa xong lần nào",
+        "stale": "Quá hạn",
+        "name": {
+          "key_health": "Kiểm tra API key",
+          "retention_purge": "Xóa âm thanh hết hạn lưu",
+          "wallet_reconcile": "Đối soát hạn mức",
+          "stuck_meetings": "Kiểm tra cuộc họp bị treo",
+          "other": "{{name}}"
+        }
+      },
+      "hoursMinutes": "{{h}} giờ {{m}} phút",
+      "minutesSeconds": "{{m}} phút {{s}} giây",
+      "pause": "Tạm dừng tự cập nhật",
+      "resume": "Tiếp tục tự cập nhật",
+      "autoRefreshPaused": "Đã tạm dừng tự cập nhật",
+      "refreshFailed": "Cập nhật lỗi; đang hiện danh sách trước"
+    },
+    "usage": {
+      "subtitle": "Số lần gọi nhà cung cấp AI trong một khoảng ngày. Token và phút âm thanh được tính riêng.",
+      "from": "Từ",
+      "to": "Đến",
+      "byOperation": "Tách theo thao tác",
+      "apply": "Áp dụng",
+      "showing": "Đang xem {{from}} đến {{to}} (UTC).",
+      "errors": {
+        "date": "Hãy chọn cả hai ngày.",
+        "order": "Ngày bắt đầu phải trước ngày kết thúc.",
+        "tooLong": "Chọn tối đa {{days}} ngày.",
+        "filterDates": "Kiểm tra lại ngày: ngày bắt đầu phải trước ngày kết thúc."
+      },
+      "aiCalls": "Lần gọi AI (token)",
+      "totalTokens": "Tổng {{n}} token",
+      "inOut": "Token vào / ra",
+      "inOutValue": "{{input}} / {{output}}",
+      "tokensOnly": "Mô hình văn bản và embedding",
+      "audio": "Âm thanh đã chép lời",
+      "minutesValue": "{{n}} phút",
+      "audioCalls": "{{n}} lần chép lời",
+      "limitedErrors": "Bị giới hạn / lỗi",
+      "limitedErrorsValue": "{{limited}} / {{errors}}",
+      "ofCalls": "Trên {{n}} lần gọi",
+      "chartTokens": "Token mỗi ngày",
+      "chartAudio": "Phút âm thanh mỗi ngày",
+      "legend": "Nhà cung cấp",
+      "chartSummary": "{{days}} ngày có sử dụng, ngày cao nhất {{max}}. Bảng bên dưới có đủ số liệu.",
+      "tokensValue": "{{n}} token",
+      "tipLine": "{{name}}: {{value}}",
+      "noData": "Không có sử dụng trong khoảng này.",
+      "tokenTable": "Tính theo token",
+      "audioTable": "Tính theo âm thanh",
+      "keyLabel": "{{label}} ••••{{last4}}",
+      "envKey": "Cài đặt máy chủ",
+      "col": {
+        "date": "Ngày",
+        "model": "Nhà cung cấp / mô hình",
+        "operation": "Thao tác",
+        "key": "Key",
+        "calls": "Lần gọi",
+        "input": "Token vào",
+        "output": "Token ra",
+        "minutes": "Phút",
+        "limited": "Bị giới hạn",
+        "errors": "Lỗi",
+        "total": "Tổng token"
+      },
+      "provider": {
+        "gemini": "Gemini",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "speechmatics": "Speechmatics",
+        "gemini-embedding": "Gemini embedding"
+      },
+      "meetingsTitle": "Cuộc họp và lưu trữ",
+      "meetingsTotal": "Cuộc họp",
+      "last7": "7 ngày qua",
+      "last30": "30 ngày qua",
+      "failureRate": "Thất bại",
+      "percent": "{{n}} %",
+      "files": "Tệp đã lưu",
+      "stored": "Dung lượng đã dùng",
+      "tableOf": "{{title}} (bảng)",
+      "noUsageDay": "Không có sử dụng",
+      "showTableOf": "Xem {{title}} dạng bảng",
+      "pointHint": "Trỏ vào một ngày để xem số liệu. Bảng có đủ mọi giá trị."
+    },
+    "activity": {
+      "subtitle": "Người dùng đã làm gì, mới nhất trước.",
+      "type": "Sự kiện",
+      "allTypes": "Mọi sự kiện",
+      "forUser": "Đang xem một người dùng: {{email}}",
+      "allUsers": "Xem mọi người dùng",
+      "empty": "Không có hoạt động nào khớp bộ lọc.",
+      "deletedUser": "Người dùng đã xóa"
+    },
+    "audit": {
+      "subtitle": "Mọi thay đổi do admin thực hiện, mới nhất trước.",
+      "action": "Thao tác bắt đầu bằng",
+      "forActor": "Đang xem một admin: {{email}}",
+      "allActors": "Xem mọi admin",
+      "empty": "Không có mục nào khớp bộ lọc.",
+      "userTarget": "Người dùng",
+      "col": {
+        "when": "Thời điểm",
+        "actor": "Admin",
+        "action": "Thao tác",
+        "target": "Đối tượng",
+        "details": "Chi tiết",
+        "ip": "Địa chỉ IP"
+      }
+    },
+    "events": {
+      "login": "Đăng nhập",
+      "logout": "Đăng xuất",
+      "record_start": "Bắt đầu ghi âm",
+      "record_stop": "Dừng ghi âm",
+      "recording_notice_ack": "Xác nhận thông báo ghi âm",
+      "meeting_created": "Tạo cuộc họp",
+      "meeting_deleted": "Xóa cuộc họp",
+      "processing_done": "Xử lý xong",
+      "processing_failed": "Xử lý thất bại",
+      "chat_message": "Đặt câu hỏi",
+      "meeting_shared": "Chia sẻ cuộc họp",
+      "meeting_unshared": "Bỏ chia sẻ cuộc họp",
+      "other": "Sự kiện khác"
+    },
+    "keys": {
+      "subtitle": "API key của nhà cung cấp. Key đã lưu không thể xem lại; chỉ hiện nhãn và 4 ký tự cuối.",
+      "lastCheck": "Kiểm tra gần nhất {{time}}",
+      "neverChecked": "Chưa kiểm tra key lần nào",
+      "runCheck": "Kiểm tra ngay",
+      "checking": "Đang kiểm tra…",
+      "checked": "Đã kiểm tra: {{healthy}} tốt, {{unhealthy}} lỗi, {{unknown}} không rõ.",
+      "noKeys": "Chưa lưu key nào. Dùng cài đặt trên máy chủ nếu có.",
+      "masked": "••••{{last4}}",
+      "status": {
+        "active": "Đang dùng",
+        "disabled": "Đã tắt"
+      },
+      "health": {
+        "healthy": "Tốt",
+        "unhealthy": "Lỗi",
+        "unknown": "Chưa kiểm tra",
+        "inconclusive": "Chưa rõ"
+      },
+      "lastUsed": "Dùng lần cuối {{time}}",
+      "neverUsed": "Chưa dùng",
+      "reason": "Lý do: {{reason}}",
+      "disable": "Tắt",
+      "enable": "Bật",
+      "delete": "Xóa",
+      "disableOne": "Tắt {{label}}",
+      "enableOne": "Bật {{label}}",
+      "deleteOne": "Xóa {{label}}",
+      "reasonLabel": "Lý do (không bắt buộc)",
+      "confirm": {
+        "disable": {
+          "title": "Tắt key này?",
+          "body": "{{label}} (••••{{last4}}) ngừng được dùng ngay. Tắt không phải thu hồi: key bị lộ phải thu hồi tại nhà cung cấp. Không thể tắt key đang dùng cuối cùng của một nhà cung cấp."
+        },
+        "enable": {
+          "title": "Bật key này?",
+          "body": "{{label}} (••••{{last4}}) được dùng lại cho các yêu cầu mới."
+        },
+        "delete": {
+          "title": "Xóa key này?",
+          "body": "{{label}} (••••{{last4}}) bị xóa hẳn. Không thể xóa key đang dùng cuối cùng của một nhà cung cấp."
+        }
+      },
+      "done": {
+        "disable": "Đã tắt key.",
+        "enable": "Đã bật key.",
+        "delete": "Đã xóa key."
+      },
+      "addTitle": "Thêm key",
+      "provider": "Nhà cung cấp",
+      "label": "Nhãn",
+      "key": "Key",
+      "add": "Lưu key",
+      "saved": "Đã lưu key. Không thể xem lại key này.",
+      "errors": {
+        "label": "Hãy nhập nhãn.",
+        "labelLong": "Nhãn tối đa 80 ký tự.",
+        "keyShort": "Key quá ngắn (ít nhất 8 ký tự).",
+        "keyLong": "Key quá dài (tối đa 512 ký tự).",
+        "keyChars": "Key không được chứa khoảng trắng hay ký tự đặc biệt.",
+        "lastActive": "Đây là key đang dùng cuối cùng của nhà cung cấp này. Hãy thêm key khác trước.",
+        "noSecret": "Máy chủ chưa lưu được key: chưa đặt KEY_ENCRYPTION_SECRET.",
+        "keyEmpty": "Hãy nhập key."
+      },
+      "secureTitle": "Key chỉ ghi, không đọc lại",
+      "secureBody": "Key được mã hóa khi lưu và không bao giờ gửi lại về trình duyệt.",
+      "endingIn": "key kết thúc bằng {{last4}}",
+      "statusLabel": "Trạng thái:",
+      "healthLabel": "Tình trạng:",
+      "checkedAt": "Kiểm tra lúc {{time}}"
+    },
+    "config": {
+      "subtitle": "Cài đặt chung. Mỗi thay đổi đều hỏi xác nhận và được ghi vào nhật ký kiểm toán.",
+      "title": "Cài đặt",
+      "empty": "Không có cài đặt.",
+      "none": "chưa đặt",
+      "on": "Bật",
+      "off": "Tắt",
+      "save": "Lưu",
+      "keepForever": "Để trống = giữ mãi",
+      "updated": "Đổi lúc {{time}}",
+      "keys": {
+        "retention": {
+          "name": "Thời gian giữ âm thanh (ngày)",
+          "help": "Bản ghi gốc cũ hơn số ngày này bị worker xóa mỗi ngày một lần. Bản ghi lời, ghi chú và chat vẫn giữ. Để trống = giữ mãi."
+        },
+        "hack": {
+          "name": "Sửa tua cho bản ghi từ trình duyệt",
+          "help": "Cho phép tua trong bản ghi làm trên trình duyệt, bằng cách tải cả tệp trước."
+        }
+      },
+      "confirmTitle": "Đổi \"{{name}}\"?",
+      "confirmBody": "Từ {{from}} thành {{to}}.",
+      "retentionWarning": "Ở lần chạy tới, worker sẽ xóa vĩnh viễn âm thanh của mọi cuộc họp cũ hơn {{days}} ngày. Không thể hoàn tác.",
+      "saved": "Đã lưu \"{{name}}\".",
+      "errors": {
+        "retention": "Nhập số ngày nguyên từ 1 đến 3650, hoặc để trống.",
+        "number": "Hãy nhập một số.",
+        "tooLong": "Tối đa 2000 ký tự."
+      },
+      "noChanges": "Không có gì thay đổi.",
+      "saveOne": "Lưu {{name}}"
+    },
+    "models": {
+      "title": "Mô hình AI",
+      "allowed": "Mô hình người dùng được chọn",
+      "default": "Mặc định của hệ thống",
+      "help": "Cuộc họp đã xử lý vẫn giữ mô hình đã dùng.",
+      "save": "Lưu mô hình",
+      "confirmTitle": "Lưu mô hình AI?",
+      "confirmDefault": "Mặc định: {{model}}.",
+      "confirmAllowed": "Người dùng được chọn: {{models}}.",
+      "saved": "Đã lưu mô hình AI.",
+      "errors": {
+        "empty": "Cho phép ít nhất một mô hình.",
+        "default": "Mô hình mặc định phải nằm trong danh sách được chọn."
+      }
+    },
+    "features": {
+      "subtitle": "Danh mục tính năng: trạng thái và ghi chú của từng tính năng.",
+      "search": "Tìm tính năng",
+      "searchPlaceholder": "Tìm theo mã, tên hoặc mô tả",
+      "module": "Mô-đun",
+      "allModules": "Mọi mô-đun",
+      "status": "Trạng thái",
+      "allStatuses": "Mọi trạng thái",
+      "statuses": {
+        "done": "Xong",
+        "partial": "Một phần",
+        "not_started": "Chưa làm"
+      },
+      "priority": "Ưu tiên",
+      "noPriority": "Không",
+      "priorities": {
+        "high": "Cao",
+        "medium": "Vừa",
+        "low": "Thấp"
+      },
+      "empty": "Không có tính năng nào khớp.",
+      "notFound": "Không tìm thấy tính năng này.",
+      "caption_one": "{{count}} tính năng",
+      "caption_other": "{{count}} tính năng",
+      "col": {
+        "key": "Mã",
+        "title": "Tên",
+        "status": "Trạng thái"
+      },
+      "editTitle": "Sửa {{key}}",
+      "close": "Đóng",
+      "meta": "{{module}} · đổi lúc {{time}} bởi {{by}}",
+      "description": "Mô tả",
+      "content": "Chi tiết (markdown, hiện dạng chữ)",
+      "changeNote": "Ghi chú thay đổi",
+      "lists": {
+        "note_tags": "Thẻ",
+        "depends_on": "Phụ thuộc",
+        "blocks": "Chặn",
+        "key_files": "Tệp chính"
+      },
+      "listHint": "Danh sách: mỗi dòng một mục.",
+      "save": "Lưu thay đổi",
+      "saved": "Đã lưu {{key}}.",
+      "noChanges": "Không có gì thay đổi.",
+      "createTitle": "Thêm tính năng",
+      "pickHint": "Chọn một tính năng trong danh sách để sửa, hoặc thêm mới.",
+      "create": {
+        "key": "Mã (TIỀN TỐ-SỐ)",
+        "module_prefix": "Tiền tố mô-đun",
+        "module_name": "Tên mô-đun",
+        "title": "Tên"
+      },
+      "createButton": "Thêm tính năng",
+      "created": "Đã thêm {{key}}.",
+      "errors": {
+        "key": "Hãy nhập mã, ví dụ ARC-20.",
+        "title": "Hãy nhập tên.",
+        "module_prefix": "Hãy nhập tiền tố mô-đun.",
+        "module_name": "Hãy nhập tên mô-đun.",
+        "keyFormat": "Mã có dạng TIỀNTỐ-SỐ, ví dụ ARC-20.",
+        "prefixFormat": "Tiền tố mô-đun gồm 1–10 chữ hoặc số."
+      },
+      "shown_one": "Đang hiện {{count}} tính năng",
+      "shown_other": "Đang hiện {{count}} tính năng"
+    },
+    "storage": {
+      "subtitle": "Bản ghi và ảnh đại diện được lưu trong Google Drive.",
+      "connection": "Google Drive",
+      "connected": "Đã kết nối",
+      "noAccount": "Chưa kết nối tài khoản",
+      "problem": {
+        "not_configured": "Chưa kết nối",
+        "token_refresh_failed": "Quyền truy cập hết hạn",
+        "root_missing": "Thiếu thư mục",
+        "shared_root": "Thư mục đang được chia sẻ",
+        "error": "Lỗi"
+      },
+      "files": "Tệp đã lưu",
+      "filesHint": "Bản ghi và ảnh đại diện",
+      "used": "Dung lượng app dùng",
+      "usedHint": "Tổng các tệp đã lưu",
+      "quota": "Dung lượng Drive",
+      "quotaOf": "trên {{limit}}",
+      "noLimit": "Drive không báo giới hạn",
+      "howTitle": "Kết nối hoặc kết nối lại Drive",
+      "howBody": "Drive được kết nối trên máy chủ bằng script connect_gdrive (xem hướng dẫn vận hành). Không đổi được từ trang này."
+    },
+    "docs": {
+      "subtitle": "Tài liệu API, khi được bật.",
+      "title": "Tài liệu API",
+      "on": "Có sẵn",
+      "off": "Đang tắt",
+      "swagger": "Tài liệu tương tác (Swagger)",
+      "redoc": "Tài liệu tham khảo (ReDoc)",
+      "openapi": "Tệp OpenAPI (JSON)",
+      "newTab": "(mở trong tab mới)",
+      "offHelp": "API chỉ phục vụ tài liệu khi máy chủ bật API_DOCS=1. Nên tắt ở môi trường thật nếu không cần.",
+      "unreachable": "Không kết nối được API để kiểm tra tài liệu. Hãy thử lại sau."
+    }
+  },
+  "error": {
+    "title": "Đã xảy ra lỗi",
+    "body": "Trang gặp lỗi không mong muốn. Hãy tải lại để thử lại.",
+    "reload": "Tải lại",
+    "config": "Ứng dụng chưa được cấu hình đúng. Hãy liên hệ quản trị viên.",
+    "unavailable": "Hiện không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    "retry": "Thử lại"
+  },
+  "common": {
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "tryAgain": "Thử lại",
+    "save": "Lưu",
+    "dismiss": "Đóng thông báo",
+    "loading": "Đang tải…",
+    "opensInNewTab": "(mở trong tab mới)"
+  },
+  "player": {
+    "scanning": "Đang chuẩn bị phát…",
+    "loading": "Đang tải bản ghi âm…"
+  },
+  "record": {
+    "start": "Bắt đầu ghi âm",
+    "waiting": "Đang chờ cấp quyền…",
+    "stop": "Dừng ghi âm",
+    "elapsed": "Thời gian ghi",
+    "preview": "Nghe lại bản ghi",
+    "discard": "Bỏ bản ghi",
+    "upload": "Tải lên và xử lý",
+    "another": "Ghi cuộc họp khác",
+    "stopped": "Đã ghi {{time}} ({{size}}). Nghe lại rồi tải lên để xử lý.",
+    "noTabAudio": "Không ghi được âm thanh tab hoặc hệ thống — chỉ có micro của bạn. Để có tiếng người khác, hãy dừng, bắt đầu lại và tick \"Chia sẻ âm thanh tab\" trong hộp thoại chia sẻ.",
+    "noTabAudioAfter": "Bản ghi này chỉ có micro của bạn: chưa chia sẻ âm thanh tab hoặc hệ thống.",
+    "card": {
+      "title": "Ghi âm cuộc họp này",
+      "body": "Ghi âm micro và âm thanh từ tab hoặc hệ thống một cách an toàn ngay trong trình duyệt."
+    },
+    "capture": {
+      "mic": "Âm thanh micro",
+      "tab": "Âm thanh tab hoặc hệ thống",
+      "secure": "Tải lên được mã hóa"
+    },
+    "notice": {
+      "title": "Trước khi ghi âm",
+      "body": "Ứng dụng sẽ ghi âm và chép lời cuộc họp. Mọi người tham gia cần biết và đồng ý trước khi bạn bắt đầu. Quy định về ghi âm khác nhau tùy nơi.",
+      "scriptLabel": "Câu mở đầu gợi ý",
+      "script": "“Trước khi bắt đầu: tôi sẽ ghi âm cuộc họp này để chép lời và ghi chú. Nếu ai không muốn bị ghi âm, xin cho tôi biết ngay bây giờ.”",
+      "confirm": "Tôi đã hiểu — bắt đầu ghi âm"
+    },
+    "unsupported": {
+      "title": "Trình duyệt này không ghi âm cuộc họp được",
+      "body": "Hãy dùng Chrome hoặc Edge bản mới trên máy tính. Bạn vẫn có thể tải bản ghi lên ở bên dưới. Còn thiếu:"
+    },
+    "missing": {
+      "browser": "Môi trường trình duyệt",
+      "display": "Chia sẻ màn hình hoặc tab",
+      "mic": "Quyền dùng micro",
+      "recorder": "Ghi phương tiện (MediaRecorder)",
+      "codec": "Định dạng âm thanh được hỗ trợ (WebM, Ogg hoặc MP4)"
+    },
+    "errors": {
+      "denied": "Bị từ chối quyền — hãy cho phép micro và chia sẻ màn hình rồi thử lại.",
+      "noMic": "Không tìm thấy micro — hãy cắm micro rồi thử lại.",
+      "cancelled": "Đã hủy chia sẻ màn hình.",
+      "state": "Trình ghi âm dừng bất ngờ — hãy thử lại.",
+      "generic": "Không bắt đầu ghi âm được. Hãy thử lại."
+    },
+    "leaveConfirm": "Bạn đang ghi âm hoặc tải lên. Rời trang và mất bản ghi này?",
+    "startedAnnounce": "Đã bắt đầu ghi âm.",
+    "stoppedAnnounce": "Đã dừng ghi âm sau {{time}}."
+  },
+  "upload": {
+    "or": "hoặc tải tệp lên",
+    "drop": "Thả tệp âm thanh hoặc video vào đây",
+    "choose": "Chọn tệp",
+    "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM hoặc video (MP4, MOV, AVI, MKV, M4V) · tối đa {{max}}",
+    "date": "Ngày họp",
+    "dateHelp": "Dùng để sắp xếp dòng thời gian của bạn.",
+    "start": "Tải lên và xử lý",
+    "uploading": "Đang tải lên… {{pct}}%",
+    "done": "Đã tải lên. Đang xử lý — thường mất vài phút.",
+    "openMeeting": "Mở cuộc họp",
+    "errors": {
+      "type": "Không hỗ trợ loại tệp “{{ext}}”. Hãy dùng tệp âm thanh hoặc video.",
+      "size": "Tệp quá lớn. Tối đa {{max}}.",
+      "empty": "Tệp trống.",
+      "network": "Tải lên bị gián đoạn — kiểm tra mạng rồi thử lại.",
+      "aborted": "Đã hủy tải lên.",
+      "tooMany": "Đang có quá nhiều lượt tải lên. Đợi một lúc hoặc xóa các bản tải dở, rồi thử lại.",
+      "rejected": "Máy chủ từ chối tệp này.",
+      "unavailable": "Kho lưu trữ đang không dùng được. Hãy thử lại sau.",
+      "drive": "Không lưu được tệp. Hãy thử lại.",
+      "confirm": "Tệp đã tải lên nhưng chưa kiểm tra được. Mở danh sách cuộc họp hoặc thử lại.",
+      "generic": "Tải lên thất bại. Hãy thử lại.",
+      "avatarType": "Hãy dùng ảnh JPEG, PNG hoặc WebP.",
+      "avatarSize": "Ảnh phải nhỏ hơn 2 MB."
+    },
+    "title": "Tải tệp lên",
+    "selected": "Đã chọn {{name}}, {{size}}",
+    "removeNamed": "Bỏ {{name}}",
+    "started": "Đang tải lên…",
+    "progressLabel": "Tiến trình tải lên"
+  },
+  "errors": {
+    "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    "forbidden": "Bạn không có quyền làm việc này.",
+    "notFound": "Mục này không còn tồn tại.",
+    "rateLimited": "Quá nhiều yêu cầu. Đợi một lát rồi thử lại.",
+    "generic": "Đã có lỗi. Hãy thử lại.",
+    "invisibleCharacters": "Tên và tiêu đề không được chứa ký tự ẩn hoặc ký tự đổi chiều văn bản. Hãy gõ lại thay vì dán, rồi thử lại."
+  },
+  "meetings": {
+    "upload": "Tải tệp lên",
+    "record": "Ghi âm cuộc họp",
+    "search": "Tìm kiếm cuộc họp…",
+    "count_one": "{{count}} cuộc họp",
+    "count_other": "{{count}} cuộc họp",
+    "insight": {
+      "title": "Bộ nhớ cuộc họp của bạn đã sẵn sàng",
+      "body_one": "Hỏi Ricotdin về quyết định, việc cần làm hoặc nội dung trong {{count}} cuộc họp đã xử lý.",
+      "body_other": "Hỏi Ricotdin về quyết định, việc cần làm hoặc nội dung trong {{count}} cuộc họp đã xử lý.",
+      "cta": "Bắt đầu trò chuyện"
+    },
+    "folders": {
+      "filter": "Lọc theo thư mục",
+      "all": "Tất cả cuộc họp",
+      "none": "Không có thư mục",
+      "shared": "Chia sẻ",
+      "manage": "Quản lý thư mục",
+      "loadError": "Không tải được thư mục nên tên thư mục và quyền biên tập chia sẻ chưa hiển thị."
+    },
+    "empty": {
+      "first": "Chưa có cuộc họp nào",
+      "firstBody": "Ghi âm hoặc tải lên cuộc họp đầu tiên để có bản ghi, ghi chú và việc cần làm.",
+      "title": "Không tìm thấy cuộc họp",
+      "body": "Thử đổi từ khóa tìm kiếm hoặc thư mục."
+    },
+    "duration": {
+      "m": "{{m}} phút",
+      "hm": "{{h}} giờ {{m}} phút"
+    },
+    "source": {
+      "recorded": "Ghi âm",
+      "uploaded": "Tải lên",
+      "video": "Video"
+    },
+    "status": {
+      "success": "Xong",
+      "processing": "Đang xử lý",
+      "danger": "Lỗi"
+    },
+    "actions": {
+      "more": "Thao tác khác cho {{title}}",
+      "rename": "Đổi tên",
+      "renameLabel": "Tiêu đề cuộc họp",
+      "move": "Chuyển thư mục",
+      "delete": "Xóa",
+      "pin": "Ghim {{title}}",
+      "unpin": "Bỏ ghim {{title}}"
+    },
+    "move": {
+      "title": "Chuyển “{{title}}”",
+      "legend": "Thư mục đích",
+      "confirm": "Chuyển"
+    },
+    "delete": {
+      "title": "Xóa cuộc họp?",
+      "body": "“{{title}}” sẽ bị xóa vĩnh viễn, cùng bản ghi âm, bản ghi, ghi chú, việc cần làm và các cuộc trò chuyện.",
+      "confirm": "Xóa vĩnh viễn",
+      "done": "Đã xóa cuộc họp.",
+      "warning": "Đã xóa cuộc họp nhưng chưa xóa được tệp ghi âm khỏi kho lưu trữ. Quản trị viên có thể dọn sau."
+    }
+  },
+  "folders": {
+    "title": "Quản lý thư mục",
+    "mine": "Thư mục của bạn",
+    "empty": "Bạn chưa có thư mục nào.",
+    "newLabel": "Tên thư mục mới",
+    "newPlaceholder": "Tên thư mục mới",
+    "create": "Tạo thư mục",
+    "renameLabel": "Tên mới cho {{name}}",
+    "rename": "Đổi tên {{name}}",
+    "up": "Chuyển {{name}} lên",
+    "down": "Chuyển {{name}} xuống",
+    "share": {
+      "title": "Chia sẻ “{{name}}”",
+      "back": "Quay lại danh sách thư mục",
+      "help": "Người được thêm sẽ thấy mọi cuộc họp trong thư mục. Người biên tập còn đổi tên cuộc họp và cập nhật việc cần làm.",
+      "none": "Chưa chia sẻ với ai.",
+      "members": "Người có quyền truy cập",
+      "roleFor": "Vai trò của {{name}}",
+      "remove": "Bỏ {{name}}",
+      "invite": "Mời người khác",
+      "identifier": "Email hoặc tên người dùng",
+      "placeholder": "ten@congty.com hoặc tên người dùng",
+      "role": "Vai trò",
+      "inviteButton": "Mời",
+      "roleHelp": "Xem: đọc và trò chuyện. Biên tập: thêm quyền đổi tên cuộc họp và cập nhật việc cần làm.",
+      "notFound": "Không tìm thấy tài khoản với email hoặc tên người dùng này.",
+      "conflict": "Người này đã có quyền truy cập, hoặc đó là bạn.",
+      "invalid": "Nhập email hoặc tên người dùng.",
+      "addedWho": "Đã thêm {{name}} với vai trò {{role}}.",
+      "changed": "{{name}} giờ là {{role}}.",
+      "removed": "Đã bỏ {{name}}."
+    },
+    "deleteLabel": "Xóa {{name}}",
+    "members_one": "{{count}} thành viên",
+    "members_other": "{{count}} thành viên",
+    "sharedWithMe": "Được chia sẻ với bạn",
+    "sharedBy": "của {{owner}} · {{role}}",
+    "roles": {
+      "owner": "Chủ sở hữu",
+      "editor": "Biên tập",
+      "viewer": "Xem"
+    },
+    "errors": {
+      "duplicate": "Bạn đã có thư mục cùng tên.",
+      "name": "Nhập tên thư mục (tối đa 100 ký tự)."
+    },
+    "delete": {
+      "title": "Xóa “{{name}}”?",
+      "chatNotice": "Lịch sử trò chuyện của thư mục sẽ bị xóa.",
+      "chatNoticeShared_one": "Lịch sử trò chuyện của thư mục sẽ bị xóa với mọi người, kể cả của {{count}} thành viên được chia sẻ.",
+      "chatNoticeShared_other": "Lịch sử trò chuyện của thư mục sẽ bị xóa với mọi người, kể cả của {{count}} thành viên được chia sẻ.",
+      "alsoMeetings_one": "Xóa luôn {{count}} cuộc họp của tôi trong thư mục này",
+      "alsoMeetings_other": "Xóa luôn {{count}} cuộc họp của tôi trong thư mục này",
+      "othersMoved_one": "{{count}} cuộc họp của thành viên khác sẽ trở về “Không có thư mục” của chủ sở hữu.",
+      "othersMoved_other": "{{count}} cuộc họp của thành viên khác sẽ trở về “Không có thư mục” của chủ sở hữu.",
+      "meetingsGone": "Các cuộc họp của bạn trong thư mục sẽ bị xóa vĩnh viễn.",
+      "meetingsKept": "Các cuộc họp của bạn sẽ được giữ, chuyển về “Không có thư mục”.",
+      "confirm": "Xóa thư mục"
+    },
+    "shareLabel": "Chia sẻ {{name}}",
+    "moved": "Đã chuyển {{name}} tới vị trí {{pos}}/{{total}}.",
+    "deleted": "Đã xóa thư mục {{name}}."
+  },
+  "detail": {
+    "loadError": "Không tải được nội dung. Kiểm tra kết nối rồi thử lại.",
+    "notFound": {
+      "title": "Không tìm thấy cuộc họp",
+      "body": "Cuộc họp có thể đã bị xóa, hoặc bạn không còn quyền truy cập."
+    },
+    "status": {
+      "pending": "Đang tải lên",
+      "queued": "Đang chờ"
+    },
+    "state": {
+      "pendingTitle": "Đang chờ tải lên",
+      "pendingBody": "Việc xử lý bắt đầu ngay khi tệp tải lên được xác nhận.",
+      "processingTitle": "Đang xử lý cuộc họp",
+      "processingBody": "Đang chép lời và viết ghi chú. Thường mất vài phút; trang này tự cập nhật.",
+      "queuedTitle": "Đang chờ đến lượt xử lý",
+      "queuedBody": "Việc xử lý đã được xếp hàng và bắt đầu ngay khi có máy rảnh. Trang này tự cập nhật.",
+      "doneAnnounce": "Đã xử lý xong. Kết quả đã sẵn sàng.",
+      "failedAnnounce": "Xử lý thất bại."
+    },
+    "failed": {
+      "title": "Xử lý thất bại",
+      "body": "Hãy chạy lại, hoặc nhờ quản trị viên nếu vẫn lỗi.",
+      "quotaTitle": "Không đủ số phút âm thanh",
+      "quotaBody": "Không thể xử lý bản ghi này vì số dư phút âm thanh của bạn quá thấp. Hãy nhờ quản trị viên nạp thêm rồi chạy lại."
+    },
+    "reprocess": {
+      "action": "Xử lý lại",
+      "busy": "Đang bắt đầu…",
+      "started": "Đã bắt đầu xử lý.",
+      "confirmTitle": "Xử lý lại cuộc họp này?",
+      "confirmBody": "Bản ghi sẽ được chép lời và phân tích lại. Việc này dùng số phút âm thanh trong số dư của bạn.",
+      "confirm": "Xử lý lại"
+    },
+    "regenerate": {
+      "action": "Tạo lại tóm tắt",
+      "busy": "Đang tạo lại…",
+      "done": "Đã tạo lại tóm tắt và ghi chú.",
+      "confirmTitle": "Tạo lại tóm tắt và ghi chú?",
+      "confirmBody": "AI sẽ viết lại tóm tắt và ghi chú từ bản ghi lời. Việc này dùng số phút âm thanh trong số dư của bạn. Việc cần làm và đề xuất lịch giữ nguyên. Nội dung hiện tại được giữ trong lịch sử.",
+      "confirm": "Tạo lại"
+    },
+    "audio": {
+      "purged": "Bản ghi âm đã bị xóa theo chính sách lưu trữ. Bản ghi lời và ghi chú vẫn được giữ.",
+      "label": "Bản ghi âm của {{title}}",
+      "error": "Không tải được bản ghi âm."
+    },
+    "tabsLabel": "Kết quả cuộc họp",
+    "tabs": {
+      "summary": "Tóm tắt",
+      "notes": "Ghi chú",
+      "todos": "Việc cần làm",
+      "calendar": "Lịch",
+      "transcript": "Bản ghi lời",
+      "openCount_one": "{{count}} việc chưa xong",
+      "openCount_other": "{{count}} việc chưa xong"
+    },
+    "export": "Xuất bản ghi lời (.{{format}})",
+    "rename": {
+      "title": "Đổi tên cuộc họp",
+      "empty": "Hãy nhập tên."
+    },
+    "summary": {
+      "label": "Tóm tắt do AI tạo",
+      "empty": "Cuộc họp này chưa có tóm tắt.",
+      "model": "Viết bởi {{model}}"
+    },
+    "notes": {
+      "label": "Ghi chú cuộc họp",
+      "copy": "Sao chép ghi chú",
+      "copied": "Đã sao chép ghi chú.",
+      "copyFailed": "Không sao chép được ghi chú.",
+      "empty": "Cuộc họp này chưa có ghi chú."
+    },
+    "todos": {
+      "label": "Việc cần làm",
+      "empty": "Không tìm thấy việc cần làm nào trong cuộc họp này.",
+      "markOpen": "Đánh dấu “{{item}}” là chưa xong",
+      "markDone": "Đánh dấu “{{item}}” là đã xong",
+      "overdue": "Quá hạn · {{date}}",
+      "due": "Hạn {{date}}",
+      "noDue": "Không có hạn",
+      "dismiss": "Bỏ qua “{{item}}”"
+    },
+    "source": "Đến nguồn · {{time}}",
+    "calendar": {
+      "label": "Đề xuất lịch",
+      "empty": "Cuộc họp này không nhắc đến sự kiện nào.",
+      "noTime": "Không có ngày giờ cụ thể.",
+      "mention": "Được nhắc là: “{{text}}”",
+      "ics": "Tải tệp .ics",
+      "manual": "Hãy tự thêm vào lịch của bạn.",
+      "dismiss": "Bỏ qua “{{title}}”",
+      "noSync": "Ricotdin không đồng bộ với lịch của bạn: hãy tải tệp và mở bằng ứng dụng lịch."
+    },
+    "transcript": {
+      "label": "Bản ghi lời cuộc họp",
+      "search": "Tìm trong bản ghi lời",
+      "searchPlaceholder": "Tìm trong bản ghi lời…",
+      "matches_one": "{{count}} dòng khớp",
+      "matches_other": "{{count}} dòng khớp",
+      "empty": "Cuộc họp này không có bản ghi lời.",
+      "noMatch": "Không có dòng nào khớp.",
+      "unknownSpeaker": "Người nói",
+      "playFrom": "Phát từ {{time}} ({{speaker}})"
+    },
+    "chat": {
+      "title": "Hỏi về cuộc họp này",
+      "notReady": "Bạn có thể đặt câu hỏi khi xử lý xong.",
+      "loadError": "Không tải được cuộc trò chuyện.",
+      "emptyTitle": "Bạn muốn biết điều gì?",
+      "emptyBody": "Câu trả lời lấy từ cuộc họp này và dẫn nguồn theo thời điểm.",
+      "history": "Cuộc trò chuyện",
+      "inputLabel": "Câu hỏi của bạn về cuộc họp này",
+      "placeholder": "Đặt câu hỏi về cuộc họp…",
+      "hint": "Enter để gửi, Shift+Enter để xuống dòng. Câu trả lời chỉ dùng cuộc họp này."
+    },
+    "errors": {
+      "quota": "Không còn đủ số phút âm thanh. Hãy nhờ quản trị viên nạp thêm.",
+      "busy": "Cuộc họp đang được xử lý. Hãy thử lại khi xong.",
+      "noTranscript": "Cuộc họp này không có bản ghi lời để dùng.",
+      "aiUnavailable": "Dịch vụ AI tạm thời không khả dụng. Hãy thử lại sau vài phút.",
+      "cannotProcess": "Chưa thể xử lý cuộc họp này: bản ghi âm bị thiếu hoặc vẫn đang tải lên.",
+      "icsNoTime": "Sự kiện này không có ngày giờ cụ thể nên không tạo được tệp lịch.",
+      "icsFailed": "Không tải được tệp lịch.",
+      "saveFailed": "Không lưu được thay đổi, đã hoàn tác.",
+      "rateLimited": "Quá nhiều yêu cầu. Hãy chờ một chút rồi thử lại.",
+      "forbidden": "Bạn không có quyền làm việc này.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    },
+    "edit": {
+      "action": "Sửa",
+      "editing": "Đang sửa: {{what}}",
+      "label": {
+        "summary": "Nội dung tóm tắt",
+        "notes": "Nội dung ghi chú"
+      },
+      "preview": "Xem trước",
+      "previewLabel": "Xem trước",
+      "markdownHelp": "Markdown: # tiêu đề, **đậm**, *nghiêng*, - danh sách, [chữ](https://…)",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "saved": "Đã lưu.",
+      "leaveConfirm": "Rời trang và mất các thay đổi chưa lưu?",
+      "discardConfirm": "Bỏ các thay đổi chưa lưu?",
+      "errors": {
+        "changed": "Có người vừa sửa nội dung này. Hãy xem bên dưới, rồi lưu đè hoặc huỷ.",
+        "notDone": "Chỉ sửa được khi meeting đã xử lý xong.",
+        "characters": "Nội dung có ký tự không lưu được. Hãy xoá chúng rồi thử lại.",
+        "invalid": "Không lưu được nội dung. Có thể nội dung quá dài.",
+        "failed": "Không lưu được thay đổi. Hãy thử lại."
+      },
+      "actionSummary": "Sửa tóm tắt",
+      "actionNotes": "Sửa ghi chú",
+      "latestHelp": "Đây là nội dung vừa được lưu. Bản nháp của bạn vẫn còn trong ô soạn.",
+      "useLatest": "Lưu đè lên bản mới nhất",
+      "mode": {
+        "label": "Chế độ soạn",
+        "rich": "Trực quan",
+        "markdown": "Markdown"
+      },
+      "rich": {
+        "help": "Chỉ giữ những gì trang này hiển thị được: tiêu đề, đậm, nghiêng, code, danh sách và liên kết https. Trong danh sách, Tab để thụt vào, Shift+Tab để lùi ra.",
+        "loading": "Đang tải trình soạn…",
+        "unavailable": "Không tải được trình soạn thảo. Bạn vẫn có thể sửa nội dung dạng Markdown.",
+        "toolbar": "Định dạng",
+        "bold": "Đậm (Ctrl/⌘+B)",
+        "italic": "Nghiêng (Ctrl/⌘+I)",
+        "code": "Code (Ctrl/⌘+E)",
+        "link": "Liên kết",
+        "heading": "Tiêu đề",
+        "subheading": "Tiêu đề phụ",
+        "bulletList": "Danh sách gạch đầu dòng",
+        "orderedList": "Danh sách đánh số",
+        "codeBlock": "Khối code",
+        "undo": "Hoàn tác (Ctrl/⌘+Z)",
+        "redo": "Làm lại (Ctrl/⌘+Shift+Z)",
+        "linkGroup": "Liên kết",
+        "linkUrl": "Địa chỉ liên kết (https)",
+        "linkApply": "Gắn liên kết",
+        "linkRemove": "Bỏ liên kết",
+        "linkInvalid": "Hãy nhập đầy đủ địa chỉ https://.",
+        "linkEdit": "Sửa liên kết"
+      }
+    },
+    "history": {
+      "actionSummary": "Lịch sử tóm tắt",
+      "actionNotes": "Lịch sử ghi chú",
+      "title": {
+        "summary": "Lịch sử tóm tắt",
+        "notes": "Lịch sử ghi chú"
+      },
+      "help": "Các phiên bản trước, mới nhất ở trên. Giữ tối đa 50 phiên bản; mọi người mở được meeting này đều đọc được.",
+      "empty": "Chưa có phiên bản nào. Mỗi lần sửa hoặc tạo lại nội dung sẽ lưu một phiên bản.",
+      "listLabel": "Các phiên bản",
+      "source": {
+        "ai": "Do AI viết",
+        "user": "Sửa bởi {{who}}",
+        "restore": "Khôi phục bởi {{who}}"
+      },
+      "unknownUser": "tài khoản đã bị xoá",
+      "previewTitle": "Phiên bản lúc {{when}}",
+      "previewTitleNoDate": "Phiên bản đã chọn",
+      "emptyText": "Phiên bản này để trống.",
+      "isCurrent": "Đây là nội dung hiện tại.",
+      "restore": "Khôi phục phiên bản này",
+      "confirm": "Khôi phục phiên bản này? Nội dung hiện tại vẫn nằm trong lịch sử nên bạn có thể quay lại.",
+      "confirmAction": "Khôi phục",
+      "restoring": "Đang khôi phục…",
+      "restored": "Đã khôi phục phiên bản.",
+      "errors": {
+        "changed": "Có người vừa sửa nội dung này. Hãy đóng lịch sử, xem nội dung mới nhất rồi thử lại.",
+        "gone": "Phiên bản này không còn trong lịch sử.",
+        "failed": "Đã có lỗi xảy ra. Hãy thử lại."
+      }
+    }
+  },
+  "chat": {
+    "thinking": "Đang suy nghĩ…",
+    "answered": "Đã có câu trả lời.",
+    "you": "Bạn:",
+    "assistant": "Ricotdin:",
+    "sources": "Nguồn",
+    "playFrom": "Phát bản ghi âm từ {{time}}",
+    "send": "Gửi câu hỏi",
+    "errors": {
+      "empty": "Hãy nhập câu hỏi trước.",
+      "tooLong": "Câu hỏi quá dài (tối đa 4000 ký tự).",
+      "noQuota": "Bạn đã hết lượt hỏi. Hãy nhờ quản trị viên nạp thêm.",
+      "rateLimited": "Bạn hỏi quá nhiều trong thời gian ngắn. Hãy chờ vài phút rồi thử lại.",
+      "forbidden": "Bạn không còn quyền truy cập cuộc trò chuyện này.",
+      "network": "Không kết nối được máy chủ. Câu hỏi chưa được gửi.",
+      "generic": "Không trả lời được câu hỏi. Vui lòng thử lại."
+    }
+  },
+  "chatPage": {
+    "new": "Cuộc trò chuyện mới",
+    "newStarted": "Đã bắt đầu cuộc trò chuyện mới.",
+    "askAbout": "Hỏi về",
+    "scopes": "Phạm vi hỏi",
+    "all": "Mọi cuộc họp",
+    "folderUnknown": "Thư mục không còn",
+    "folderUnknownBody": "Thư mục này đã bị xóa hoặc không còn được chia sẻ với bạn. Hãy chọn phạm vi khác.",
+    "scopeLine": "Câu trả lời lấy từ {{scope}} và dẫn về đúng nguồn.",
+    "emptyTitle": "Bạn muốn biết điều gì?",
+    "emptyAll": "Hỏi về quyết định, việc cần làm hay nội dung đã bàn trong bất kỳ cuộc họp nào bạn mở được.",
+    "emptyFolder": "Hỏi về các cuộc họp trong thư mục này.",
+    "inputLabel": "Câu hỏi của bạn",
+    "placeholder": "Hỏi về quyết định, việc cần làm hoặc nội dung đã bàn…",
+    "hint": "Enter để gửi, Shift+Enter để xuống dòng. Ricotdin chỉ trả lời từ các cuộc họp bạn được xem.",
+    "citation": "{{title}} · {{time}}",
+    "citationUnknown": "Cuộc họp · {{time}}",
+    "switch": "Xem",
+    "notReady": "Cuộc trò chuyện đang tải. Hãy thử lại sau giây lát.",
+    "separator": ", "
+  },
+  "profile": {
+    "details": {
+      "title": "Thông tin cá nhân",
+      "body": "Danh tính của bạn trong không gian làm việc.",
+      "username": "Tên người dùng",
+      "displayName": "Tên hiển thị",
+      "email": "Email",
+      "save": "Lưu thay đổi",
+      "saved": "Đã lưu thông tin.",
+      "unchanged": "Không có gì để lưu."
+    },
+    "avatar": {
+      "upload": "Tải ảnh lên",
+      "uploading": "Đang tải… {{percent}}%",
+      "hint": "JPEG, PNG hoặc WebP, tối đa 2 MB.",
+      "saved": "Đã cập nhật ảnh đại diện.",
+      "alt": "Ảnh đại diện của bạn"
+    },
+    "password": {
+      "title": "Mật khẩu",
+      "body": "Đổi mật khẩu sẽ đăng xuất bạn trên mọi thiết bị khác.",
+      "current": "Mật khẩu hiện tại",
+      "new": "Mật khẩu mới",
+      "confirm": "Nhập lại mật khẩu mới",
+      "submit": "Đổi mật khẩu",
+      "changed": "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất.",
+      "currentRequired": "Hãy nhập mật khẩu hiện tại.",
+      "mismatch": "Hai mật khẩu mới không khớp.",
+      "same": "Mật khẩu mới phải khác mật khẩu hiện tại."
+    },
+    "appearance": {
+      "title": "Giao diện",
+      "body": "Chọn cách Ricotdin hiển thị trên thiết bị này.",
+      "mode": "Sáng hoặc tối",
+      "light": "Sáng",
+      "lightHint": "Sáng sủa, rõ ràng",
+      "dark": "Tối",
+      "darkHint": "Dịu mắt",
+      "color": "Bảng màu"
+    },
+    "model": {
+      "title": "Mô hình AI",
+      "body": "Dùng cho các cuộc họp mới bạn tải lên. Quản trị viên quyết định có những mô hình nào.",
+      "label": "Mô hình mặc định",
+      "systemDefault": "Mặc định của hệ thống",
+      "save": "Lưu mô hình",
+      "saved": "Đã lưu mô hình mặc định."
+    },
+    "usage": {
+      "title": "Số dư",
+      "body": "Phần bạn còn dùng được. Hãy nhờ quản trị viên nạp thêm.",
+      "audio": "Số phút âm thanh còn lại",
+      "audioValue": "{{h}} giờ {{m}} phút",
+      "questions": "Lượt hỏi còn lại",
+      "questionsValue_one": "{{count}} lượt",
+      "questionsValue_other": "{{count}} lượt",
+      "meetings": "Cuộc họp của bạn",
+      "folders": "Thư mục của bạn"
+    },
+    "errors": {
+      "usernameTaken": "Tên người dùng đã có người dùng. Hãy chọn tên khác.",
+      "invalid": "Hãy kiểm tra lại các ô rồi thử lại.",
+      "wrongPassword": "Mật khẩu hiện tại không đúng.",
+      "passwordChanged": "Mật khẩu vừa được đổi ở nơi khác. Hãy thử lại.",
+      "passwordRejected": "Mật khẩu mới không được chấp nhận. Hãy chọn mật khẩu dài hơn.",
+      "modelNotAllowed": "Mô hình này không còn dùng được. Hãy chọn mô hình khác.",
+      "rateLimited": "Thử quá nhiều lần. Hãy chờ vài phút rồi thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  }
+}

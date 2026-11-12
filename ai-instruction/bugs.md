@@ -28,6 +28,10 @@
 | BUG-015 | Folder delete confirm shows the wrong meeting count (skips pinned meetings, counts other users' meetings) | S3 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-015-folder-delete-count, PR #21 |
 | BUG-016 | After "Delete folder" (keep meetings), shared members' meetings show as ghost rows in the owner's Uncategorized until reload | S4 | fixed | v1.0.0 | MMG-04 | bugfix | v1.1.1 | fix/BUG-016-folder-delete-ghost-rows, PR #23 |
 | BUG-017 | Docs drift: CLAUDE.md §11 has no v1.1.0 line; PRV-03 spec says Not started while tracking marks it done (superseded) | S4 | fixed | v1.1.0 | PRV-03 | bugfix | v1.1.1 | fix/BUG-017-docs-drift, PR #24 |
+| BUG-018 | Docs drift: default branch is dev (not main), backup environment has no branch policy and no secrets, §11 missing v1.1.1, PRF-08 still open | S4 | fixed | v1.1.1 | OPS-03 | bugfix | dev | fix/BUG-018-docs-drift-backup-branch, PR #30 |
+| BUG-019 | migrate_from_supabase crashes printing the report on a Windows console (cp1252) and exits 1 even on PASS | S3 | fixed | dev | ARC-03 | bugfix | dev | fix/BUG-019-migrate-console-encoding, PR #39 |
+| BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
+| BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 
 ---
 
@@ -355,3 +359,90 @@ Close-out steps for the v1.1.0 release and the PRV-03 supersede decision updated
 
 **Fix**
 §11: added a "v1.1.0 released (2026-10-22)" line. PRV-03 spec status → `✅ Done — superseded by PRV-02`. **No automated regression test** — documentation only, no logic; verified that the seeder parser still reads PRV-03 as `done` (`parseModuleFile` + `mergeWithTracking`).
+
+## BUG-018 — Docs drift: default branch, backup environment, §11 v1.1.1, PRF-08
+
+**Reported:** 2026-10-25 · **Severity:** S4 · **Found in:** v1.1.1 · **Feature:** OPS-03 (also PRF-08)
+
+From the 2026-10-25 `/copilot plan` snapshot (roadmap Now 4) and the first manual `db-backup` run on `dev` (run 40164320128).
+
+**Actual**
+- `CLAUDE.md` §9k says the GitHub default branch is `main`; it is `dev` (`gh repo view --json defaultBranchRef`). The `/fix-bug` skill repeats it.
+- `CLAUDE.md` §9o, `docs/ops/backup-restore.md` and comments in `.github/workflows/backup.yml` say the `backup` environment releases secrets to `main` only and that `schedule` runs from `main`. In fact `schedule` runs from the default branch `dev`; the environment has no branch policy and **no secrets** (`gh secret list --env backup` is empty). Every scheduled and manual run failed at "Check secrets are set" (`missing secret SUPABASE_DB_URL` …).
+- `CLAUDE.md` §11 has no line for v1.1.1 (released 2026-10-25).
+- `tracking.md` PRF-08 is `[ ]` and its spec says `❌ Not started`, although AIP-06 delivered it (migration 027 `profiles.default_provider/default_model`, `/api/profile/preferences` rejects models outside the allow-list).
+
+**Root cause**
+The docs assumed the default branch was `main` (true at some point or never set); nobody re-checked after OPS-03 shipped. The backup secrets were never created, which the docs hid by blaming the branch. AIP-06 close-out did not tick PRF-08.
+
+**Fix**
+Docs and comments now state the real setup: default branch `dev`; `backup` environment must release secrets to `dev` (recommended branches `main` + `dev`) and needs the six environment secrets; manual run `gh workflow run backup.yml --ref dev`. §11 gained the v1.1.1 line. PRF-08 `[x]` + spec `✅ Done — delivered by AIP-06`. Workflow behaviour unchanged (comments only). **No automated regression test** — documentation only, no logic; verified the seeder still parses PRF-08 as `done`. Owner action still open: create the six `backup` environment secrets and restrict its branches to `main` + `dev`.
+
+## BUG-019 — migrate_from_supabase crashes printing the report on a Windows console (cp1252)
+
+**Reported:** 2026-10-29 · **Severity:** S3 · **Found in:** dev (ARC-03 rehearsal 1) · **Feature:** ARC-03
+
+**Steps to reproduce**
+1. Windows, PowerShell or Git Bash, no `PYTHONIOENCODING`.
+2. `uv run --env-file .env.migrate python -m scripts.migrate_from_supabase --confirm-target <host> --skip-storage --dry-run`
+
+**Expected**
+The report is printed and the exit code is 0 (PASS or dry run), 1 (FAIL) or 2 (blocked).
+
+**Actual**
+`UnicodeEncodeError: 'charmap' codec can't encode character '→' in position 134: character maps to <undefined>`
+from `print(text)` in `main()`. The report file is complete, but the exit code is always 1.
+
+**Root cause**
+`main()` prints the Markdown report (it contains `→`, `✅`, `❌`) with `print()`. On Windows stdout uses the console
+code page (cp1252) with the `strict` error handler, so the first non-cp1252 character raises before `main()` returns
+its exit code. stderr uses `backslashreplace`, which is why the `source → target` line did not crash.
+
+**Fix**
+`emit_report(text, stream)` in `scripts/migrate_from_supabase.py` writes the report re-encoded with the stream's own
+encoding and `errors="replace"` (characters the console lacks become `?`; a missing stdout is a no-op); `main()` uses it
+instead of `print()`. The report file is unchanged (UTF-8, full text). Regression tests:
+`app/api/tests/test_migration_transform.py` — `test_bug019_report_prints_on_a_cp1252_console` (strict cp1252 stream; asserts
+the `→` became `?`) and `test_bug019_report_keeps_unicode_on_a_utf8_console`. Verified: the original dry run on Windows
+without `PYTHONIOENCODING`, stdout piped, now prints and exits 0.
+
+## BUG-020 — Migration preflight blocks every run: v2-only tables from migration 0003 not skipped
+
+**Reported:** 2026-11-02 · **Severity:** S2 · **Found in:** dev (after PR #41) · **Feature:** ARC-17, ARC-03
+
+**Steps to reproduce**
+1. `dev` after PR #41 (ARC-17, Alembic revision `0003_drive_storage`).
+2. Target migrated to head; run `python -m scripts.migrate_from_supabase --confirm-target <host> --skip-storage --dry-run`
+   (or `pytest tests/test_migration_integration.py` against Postgres 18).
+
+**Expected**
+Preflight passes; tables are copied in FK order.
+
+**Actual**
+Report blocked: `source has no table public.drive_config`, `source has no table public.storage_objects`.
+8 tests in `test_migration_integration.py` fail, so `ci-api` on `dev` is red. Not caught in PR #41 because the
+sandbox could not run the DB integration tests (no Postgres 18 at the time).
+
+**Root cause**
+`scripts/migrate_from_supabase.py` lists tables with no v1 counterpart by hand: `V2_ONLY_TABLES` (preflight) and a
+second hard-coded `{"refresh_tokens", "email_tokens"}` in `migrate_tables`. Migration 0003 added `drive_config` and
+`storage_objects` without updating either list.
+
+**Fix**
+Both tables added to `V2_ONLY_TABLES`; `migrate_tables` now skips `NOT_COPIED_TABLES = V2_ONLY_TABLES - {"users"}`
+(one source of truth). Regression test `app/api/tests/test_migration_transform.py` —
+`test_bug020_every_table_created_after_the_baseline_is_v2_only`: every table created by a v2-only migration
+(`migrations/sql/0002+`, not `_down`) must be in both sets, so a future migration that forgets this fails in the pure
+suite. Verified against `pgvector/pgvector:pg18`: full `pytest -q` 819 passed (8 failures before).
+
+
+## BUG-021 — v1 wallet reconcile never closes a drift
+
+- **Where:** `legacy/lib/quota/reconcileWallets.ts` (QUO-04, every 5 min in the worker loop).
+- **Root cause:** on a drift (`ledger_sum − wallet`) it calls `applyQuotaMovement(delta = drift)`,
+  which adds `drift` to the wallet AND inserts a ledger row of `drift`. Both sides move by the
+  same amount, so the drift stays; the next run (new run id, new dedup key) adds it again. The
+  balance keeps moving by `drift` every 5 minutes (free credit or a drained wallet).
+- **Status:** v1 is frozen to hotfixes and v1.1.1 is not deployed, so no hotfix is planned unless
+  v1 goes live again. Found while porting it to v2 (ARC-08e, 2026-11-03), where the ledger stays
+  the source of truth and the wallet is SET to the ledger sum, with a zero-delta audit row.

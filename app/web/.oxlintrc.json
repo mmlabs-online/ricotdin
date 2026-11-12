@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "categories": { "correctness": "error" },
+  "ignorePatterns": ["design/**", "dist/**", "src/api/schema.d.ts"],
+  "rules": {
+    "react/jsx-no-literals": ["error", { "noStrings": true, "ignoreProps": true, "allowedStrings": [" ", "·", "—"] }],
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "error",
+    "no-console": ["error", { "allow": ["error"] }]
+  },
+  "overrides": [
+    { "files": ["**/*.test.ts", "**/*.test.tsx"], "rules": { "react/jsx-no-literals": "off" } },
+    { "files": ["scripts/**"], "rules": { "no-console": "off" } }
+  ]
+}

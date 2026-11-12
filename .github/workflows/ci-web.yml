@@ -1,0 +1,147 @@
+name: CI (web)
+
+# v2 frontend (Vite + React SPA) in app/web — ARC-00 onward.
+on:
+  push:
+    branches: [main, dev, 'release/**']
+    paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
+  pull_request:
+    branches: [main, dev, 'release/**']
+    paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
+
+  # release.yml runs the same checks for a v2 tag (ARC-15).
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'   # vitest 5 / vite 8 need Node >= 22.12
+          cache: 'npm'
+          cache-dependency-path: app/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint (incl. no hard-coded user-facing strings)
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: e2e core flow (EN + VI) + admin smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: web
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # scratch databases only (app/api/tests/e2e_server.py drops its own on exit)
+      DATABASE_URL: postgresql://postgres:ci-only-password@localhost:5432/postgres
+    defaults:
+      run:
+        working-directory: app/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install API dependencies
+        working-directory: app/api
+        run: uv sync --locked
+
+      - name: Setup Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/web/package-lock.json
+
+      - name: Install web dependencies and Chromium
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Playwright
+        run: npm run e2e
+
+      - name: Upload the report on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            app/web/playwright-report
+            app/web/test-results
+          retention-days: 7
+
+  image:
+    name: nginx image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the image
+        run: docker build -t ricotdin-web:ci app/web
+
+      - name: Refuses to start without a valid API origin
+        run: |
+          for bad in 'https://x.test/;evil' 'http://api.example.test' "$(printf 'https://a.test\n;evil')" ''; do
+            rc=0; timeout 30 docker run --rm -e RICOTDIN_API_URL="$bad" ricotdin-web:ci || rc=$?
+            # 0 = exited cleanly, 124 = still running after 30 s: both mean it accepted the value.
+            if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
+              echo "started with a bad RICOTDIN_API_URL: $bad"; exit 1
+            fi
+          done
+
+      - name: Serves the app, its runtime config and the security headers
+        run: |
+          docker run -d --name web -p 8080:8080 -e RICOTDIN_API_URL=https://api.example.test ricotdin-web:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/config.json | tee /dev/stderr \
+            | grep -qx '{"apiUrl":"https://api.example.test","authUrl":"https://api.example.test"}'
+          curl -fsS http://127.0.0.1:8080/meetings/abc | grep -q '<div id="root">'
+          headers="$(curl -fsSI http://127.0.0.1:8080/)"
+          echo "$headers"
+          echo "$headers" | grep -qi "^content-security-policy: default-src 'none'; script-src 'self'"
+          echo "$headers" | grep -qi "connect-src 'self' https://api.example.test"
+          echo "$headers" | grep -qi '^cache-control: no-store'
+          echo "$headers" | grep -qi '^x-content-type-options: nosniff'
+          [ "$(docker exec web id -u)" != "0" ]
+
+      - name: Logs on failure
+        if: failure()
+        run: docker logs web || true

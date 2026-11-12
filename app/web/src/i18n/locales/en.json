@@ -1,0 +1,1366 @@
+{
+  "app": {
+    "name": "Ricotdin",
+    "loading": "Loading…",
+    "privacy": "Your meetings are private"
+  },
+  "nav": {
+    "main": "Main navigation",
+    "mobile": "Mobile navigation",
+    "meetings": "Meetings",
+    "record": "Record",
+    "chat": "Chat",
+    "profile": "Profile",
+    "admin": "Admin",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
+  },
+  "menu": {
+    "language": "Language",
+    "colorTheme": "Color theme",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "signOut": "Sign out",
+    "useTheme": "Use the {{name}} theme",
+    "openFor": "Account menu for {{name}}"
+  },
+  "theme": {
+    "rose": "Rose",
+    "sage": "Sage",
+    "plum": "Plum",
+    "ocean": "Ocean"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "enShort": "EN",
+    "viShort": "VI"
+  },
+  "auth": {
+    "welcome": "Welcome back",
+    "title": "Sign in to Ricotdin",
+    "subtitle": "Continue to your meetings, notes, and assistant.",
+    "identifier": "Email or username",
+    "identifierPlaceholder": "Enter your email or username",
+    "password": "Password",
+    "passwordPlaceholder": "Your password",
+    "forgot": "Forgot password?",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "newHere": "New to Ricotdin?",
+    "createAccount": "Create an account",
+    "errors": {
+      "missing": "Enter your email or username and your password.",
+      "invalid_credentials": "That email, username or password is not right.",
+      "email_not_verified": "Please verify your email first. Check your inbox for the link.",
+      "account_disabled": "This account has been disabled. Contact an administrator.",
+      "rate_limited": "Too many attempts. Wait a few minutes and try again.",
+      "network": "Cannot reach the server. Check your connection and try again.",
+      "generic": "Sign-in failed. Please try again.",
+      "invalidLink": "This link is invalid or has expired.",
+      "unavailable": "Sign-up is not available right now. Try again later."
+    },
+    "signOutFailed": "We could not end your session on the server. On a shared computer, sign in and sign out again, or close the browser.",
+    "resendLink": "Send a new verification email",
+    "backToSignIn": "Back to sign in",
+    "linkSent": "If an account exists for that address, we have sent it a link. Check your inbox (and spam folder).",
+    "forgotTitle": "Reset your password",
+    "forgotHelp": "Enter the email of your account. We will send you a link to choose a new password.",
+    "forgotSubmit": "Send reset link",
+    "validation": {
+      "usernameShort": "Username must be at least 3 characters.",
+      "usernameLong": "Username must be at most 30 characters.",
+      "usernameChars": "Use only lowercase letters, digits, hyphens and underscores.",
+      "email": "Enter a valid email address.",
+      "passwordShort": "Password must be at least 8 characters.",
+      "passwordLong": "Password must be at most 256 characters.",
+      "mismatch": "The passwords do not match."
+    },
+    "register": {
+      "eyebrow": "Get started",
+      "title": "Create your account",
+      "subtitle": "Record meetings and get transcripts, notes and to-dos.",
+      "email": "Email",
+      "username": "Username",
+      "usernameHelp": "3–30 lowercase letters, digits, - or _. You can sign in with it.",
+      "passwordHelp": "At least 8 characters.",
+      "confirm": "Confirm password",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "haveAccount": "Already have an account?",
+      "checkInbox": "Check your inbox",
+      "sent": "We sent a verification link to {{email}}. Open it to activate your account, then sign in.",
+      "notSent": "Your account was created, but the verification email could not be sent right now. Ask for a new one from the sign-in page later.",
+      "taken": "That email or username is already in use.",
+      "invalid": "Check your details and try again."
+    },
+    "verify": {
+      "done": "Your email is verified and your password is set. Sign in with it now.",
+      "resendHelp": "Need a new verification link? Enter your email.",
+      "resend": "Send verification email",
+      "confirmHelp": "Choose the password for your account. This confirms your email address and activates the account.",
+      "confirm": "Verify and set password",
+      "password": "Password"
+    },
+    "reset": {
+      "help": "Choose a new password. You will be signed out on every device.",
+      "newPassword": "New password",
+      "submit": "Set new password",
+      "done": "Your password was changed. Sign in with the new password.",
+      "newLink": "Request a new link"
+    }
+  },
+  "page": {
+    "workspace": "Workspace",
+    "comingSoon": "This screen is being connected to the new backend.",
+    "meetings": {
+      "title": "Meetings",
+      "subtitle": "Search, revisit, and ask questions across every conversation."
+    },
+    "meetingDetail": {
+      "title": "Meeting",
+      "subtitle": "Summary, notes, to-dos and transcript.",
+      "back": "Back to meetings"
+    },
+    "record": {
+      "eyebrow": "New meeting",
+      "title": "Record or upload",
+      "subtitle": "Capture the conversation. Ricotdin will handle the rest."
+    },
+    "chat": {
+      "title": "Ask your meetings",
+      "subtitle": "Answers include links back to the source."
+    },
+    "profile": {
+      "eyebrow": "Account",
+      "title": "Profile & preferences",
+      "subtitle": "Manage your account, appearance, and usage."
+    },
+    "notFound": {
+      "title": "Page not found",
+      "subtitle": "The page you are looking for does not exist.",
+      "home": "Go to meetings"
+    },
+    "forbidden": {
+      "title": "No access",
+      "subtitle": "You need administrator rights to open this page.",
+      "home": "Go to meetings"
+    },
+    "verifyEmail": {
+      "title": "Verify your email"
+    },
+    "resetPassword": {
+      "title": "Reset your password"
+    }
+  },
+  "admin": {
+    "brand": "Administration",
+    "eyebrow": "Administration",
+    "subtitle": "Manage your workspace infrastructure, access, and operations.",
+    "sections": "Admin sections",
+    "returnToApp": "Return to workspace",
+    "tabs": {
+      "overview": "Overview",
+      "users": "Users",
+      "pipeline": "Pipeline",
+      "usage": "Usage",
+      "keys": "API keys",
+      "storage": "Storage",
+      "config": "Config",
+      "activity": "Activity",
+      "audit": "Audit log",
+      "features": "Features",
+      "health": "Health",
+      "docs": "API docs"
+    },
+    "errors": {
+      "refused": "The server refused this change. You cannot change your own account or remove the last admin, and only an active, verified account can become an admin.",
+      "forbidden": "Your admin rights could not be confirmed. Sign in again.",
+      "notFound": "This user no longer exists.",
+      "rateLimited": "Too many requests. Wait a little and try again.",
+      "unavailable": "A service is unavailable right now. Try again later.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again.",
+      "conflict": "This cannot be done in the current state (for example it is already running, or a file is missing). Refresh and check.",
+      "invalid": "The server refused this value. Check it and try again.",
+      "duplicate": "This already exists (for example the feature key is taken).",
+      "gone": "This item no longer exists (another admin may have removed it). The list has been refreshed."
+    },
+    "pagination": {
+      "label": "Pages",
+      "range": "{{from}}–{{to}} of {{total}}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "users": {
+      "subtitle": "Accounts, roles and access. Changes are written to the audit log.",
+      "search": "Search users",
+      "searchPlaceholder": "Search email or username",
+      "month": "Usage month",
+      "caption": "Users, with AI usage for {{month}}",
+      "selectAll": "Select every user on this page",
+      "select": "Select {{name}}",
+      "you": "You",
+      "never": "Never",
+      "empty": "No users yet.",
+      "noMatch": "No users match this search.",
+      "usageValue": "{{tokens}} tokens · {{h}} h {{m}} min",
+      "deleted": "User deleted.",
+      "deletedWarning": "User deleted, but some of their files could not be removed from storage.",
+      "col": {
+        "user": "User",
+        "username": "Username",
+        "role": "Role",
+        "status": "Status",
+        "meetings": "Meetings",
+        "usage": "Usage this month",
+        "lastSignIn": "Last sign-in",
+        "created": "Created"
+      },
+      "role": {
+        "user": "User",
+        "admin": "Admin"
+      },
+      "status": {
+        "active": "Active",
+        "unverified": "Unverified",
+        "disabled": "Disabled"
+      },
+      "actions": {
+        "makeAdmin": "Make admin",
+        "makeUser": "Make user",
+        "disable": "Disable",
+        "enable": "Enable",
+        "reset": "Send password reset",
+        "delete": "Delete user"
+      },
+      "bulk": {
+        "label": "Actions for the selected users",
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "clear": "Clear selection",
+        "apply": "Apply",
+        "confirmTitle_one": "Change {{count}} user?",
+        "confirmTitle_other": "Change {{count}} users?",
+        "confirm": {
+          "disable": "They cannot sign in again until enabled, and the admin pages refuse them at once. A session already open keeps working for up to 15 minutes. You are never included.",
+          "enable": "They can sign in again.",
+          "role_admin": "They get full admin access. Only active, verified accounts can be promoted; if one cannot, nothing changes.",
+          "role_user": "They lose the admin pages at once; other admin-level access ends within 15 minutes. The last remaining admin cannot be demoted; if that would happen, nothing changes."
+        },
+        "done": "Done: {{processed}} changed.",
+        "partial": "{{processed}} changed, {{failed}} not found."
+      },
+      "handle": "@{{name}}",
+      "searchSubmit": "Search"
+    },
+    "userDetail": {
+      "title": "User",
+      "back": "Back to users",
+      "notFound": "User not found",
+      "actions": "Account actions",
+      "activity": "Recent activity",
+      "noActivity": "No activity recorded yet.",
+      "promoteHint": "Only an active, verified account can become an admin.",
+      "selfHint": "You cannot change your own role or status, or delete yourself.",
+      "done": {
+        "promote": "The user is now an admin. It applies at their next sign-in refresh (within 15 minutes).",
+        "demote": "The user is no longer an admin. Admin pages stop working for them at once.",
+        "disable": "The user is disabled and signed out everywhere.",
+        "enable": "The user can sign in again.",
+        "reset": "A password reset link was emailed.",
+        "resetNoMail": "The reset link could not be emailed: mail is not set up on the server."
+      },
+      "confirm": {
+        "promote": {
+          "title": "Make this user an admin?",
+          "body": "{{name}} will get full admin access, including every meeting and every setting.",
+          "action": "Make admin"
+        },
+        "demote": {
+          "title": "Remove admin access?",
+          "body": "{{name}} will become a normal user. The admin pages refuse them at once; other admin-level access ends within 15 minutes.",
+          "action": "Remove access"
+        },
+        "disable": {
+          "title": "Disable this account?",
+          "body": "{{name}} cannot sign in again until you enable the account. A session already open keeps working for up to 15 minutes.",
+          "action": "Disable"
+        },
+        "enable": {
+          "title": "Enable this account?",
+          "body": "{{name}} can sign in again.",
+          "action": "Enable"
+        },
+        "reset": {
+          "title": "Send a password reset?",
+          "body": "{{name}} receives an email with a link to choose a new password. Their current password keeps working until then.",
+          "action": "Send email"
+        },
+        "delete": {
+          "title": "Delete this user permanently?",
+          "body": "{{name}} and everything they own are deleted: meetings, recordings, transcripts, folders and chats. This cannot be undone.",
+          "action": "Delete permanently"
+        }
+      },
+      "viewActivity": "View all activity"
+    },
+    "quota": {
+      "title": "Balance",
+      "grantTitle": "Add to the balance",
+      "minutes": "Audio minutes",
+      "queries": "Chat questions",
+      "note": "Note (optional)",
+      "grant": "Add",
+      "granted": "The balance was updated.",
+      "history": "Recent changes",
+      "noHistory": "No changes yet.",
+      "minutesDelta": "{{value}} min",
+      "col": {
+        "when": "When",
+        "reason": "Reason",
+        "audio": "Audio",
+        "queries": "Questions"
+      },
+      "reason": {
+        "topup": "Top-up",
+        "admin_grant": "Admin grant",
+        "generate": "Processing",
+        "agent_query": "Chat question",
+        "refund": "Refund",
+        "adjustment": "Adjustment",
+        "other": "Other"
+      },
+      "errors": {
+        "empty": "Enter minutes or questions to add.",
+        "negative": "Values cannot be negative.",
+        "number": "Enter numbers only.",
+        "whole": "Chat questions must be a whole number.",
+        "tooLarge": "That is more than one grant allows (100,000 minutes, 1,000,000 questions).",
+        "grouping": "Type the number without thousands separators (for example 1000)."
+      },
+      "confirmTitle": "Add this quota?",
+      "confirmBody": "Add {{minutes}} audio minutes and {{queries}} questions to {{name}}? This cannot be undone here."
+    },
+    "overview": {
+      "allOk": "All systems operational",
+      "degraded": "Something needs attention",
+      "users": "Users",
+      "usersHint": "All accounts",
+      "meetings": "Meetings",
+      "successRate": "{{rate}}% processed successfully",
+      "noRuns": "None processed yet",
+      "inProgress": "In progress",
+      "inProgressHint": "Uploading or processing",
+      "avgTime": "Average processing",
+      "avgTimeHint": "Upload to results",
+      "minutes": "{{m}} min",
+      "pipeline": "Pipeline",
+      "viewPipeline": "View monitor",
+      "health": "System health",
+      "viewHealth": "View health",
+      "recent": "Recent admin activity",
+      "viewAudit": "View audit log",
+      "noRecent": "No admin actions yet.",
+      "system": "System",
+      "auditLine": "{{actor}} · {{action}}",
+      "count": {
+        "processing": "Processing",
+        "pending": "Waiting",
+        "stuck": "Stuck",
+        "failed": "Failed",
+        "done": "Done"
+      }
+    },
+    "health": {
+      "check": {
+        "database": "Database",
+        "storage": "Google Drive storage",
+        "key_encryption": "Key encryption",
+        "worker": "Worker tasks",
+        "gemini": "Gemini",
+        "speechmatics": "Speechmatics",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "other": "Other check"
+      },
+      "status": {
+        "ok": "OK",
+        "warning": "Warning",
+        "error": "Error",
+        "unknown": "Unknown"
+      },
+      "subtitle": "Checks of the database, file storage, keys and worker tasks.",
+      "checks": "Checks",
+      "refresh": "Check again",
+      "msg": {
+        "noActiveKey": "No active key.",
+        "allKeysFailing": "Every active key failed its last check.",
+        "noSecret": "KEY_ENCRYPTION_SECRET is not set on the server.",
+        "tasks": "Overdue or failing: {{tasks}}",
+        "database": "The database did not answer."
+      },
+      "recheckOk": "Checked again: everything is OK.",
+      "recheckBad": "Checked again: something needs attention."
+    },
+    "pipeline": {
+      "subtitle": "Meetings in the processing queue. Requeue runs a failed or stuck meeting again.",
+      "autoRefresh": "Refreshes every 10 s",
+      "updated": "Updated {{time}}",
+      "countsLabel": "Meetings by status",
+      "filterLabel": "Show meetings",
+      "avgTime": "Avg. processing time",
+      "all": "All",
+      "duration": "{{h}}:{{m}}:{{s}}",
+      "status": {
+        "pending": "Pending",
+        "processing": "Processing",
+        "stuck": "Stuck",
+        "failed": "Failed",
+        "done": "Done"
+      },
+      "jobStatus": {
+        "queued": "queued",
+        "running": "running",
+        "done": "done",
+        "failed": "failed",
+        "other": "unknown"
+      },
+      "jobState": "{{status}} · {{step}} · try {{attempts}}",
+      "requeueAll_one": "Requeue {{count}} on this page",
+      "requeueAll_other": "Requeue {{count}} on this page",
+      "requeue": "Requeue",
+      "requeueOne": "Requeue {{title}}",
+      "confirmTitle_one": "Requeue this meeting?",
+      "confirmTitle_other": "Requeue {{count}} meetings?",
+      "confirmBody_one": "It is processed again from the start, and the owner is charged audio minutes again. Its current transcript and notes stay until the new run replaces them.",
+      "confirmBody_other": "Each is processed again from the start, and each owner is charged audio minutes again. Current transcripts and notes stay until the new runs replace them.",
+      "requeued_one": "{{count}} meeting queued again.",
+      "requeued_other": "{{count}} meetings queued again.",
+      "requeuePartial": "{{count}} queued again; {{failed}} refused (already running, or the audio is missing): {{titles}}.",
+      "empty": "No meetings here.",
+      "caption": "Meetings in the processing pipeline",
+      "col": {
+        "status": "Status",
+        "meeting": "Meeting",
+        "owner": "Owner",
+        "created": "Created",
+        "duration": "Length",
+        "job": "Latest job",
+        "error": "Error",
+        "actions": "Actions"
+      },
+      "tasks": {
+        "title": "Worker tasks",
+        "none": "The worker has not run any task yet.",
+        "last": "Last finished {{time}}",
+        "never": "Never finished",
+        "stale": "Overdue",
+        "name": {
+          "key_health": "API key health check",
+          "retention_purge": "Audio retention purge",
+          "wallet_reconcile": "Quota reconcile",
+          "stuck_meetings": "Stuck meeting check",
+          "other": "{{name}}"
+        }
+      },
+      "hoursMinutes": "{{h}} h {{m}} min",
+      "minutesSeconds": "{{m}} min {{s}} s",
+      "pause": "Pause auto-refresh",
+      "resume": "Resume auto-refresh",
+      "autoRefreshPaused": "Auto-refresh paused",
+      "refreshFailed": "Refresh failed; showing the last list"
+    },
+    "usage": {
+      "subtitle": "AI provider calls for a date range. Tokens and audio minutes are counted separately.",
+      "from": "From",
+      "to": "To",
+      "byOperation": "Break down by operation",
+      "apply": "Apply",
+      "showing": "Showing {{from}} to {{to}} (UTC).",
+      "errors": {
+        "date": "Choose both dates.",
+        "order": "The start date must be before the end date.",
+        "tooLong": "Choose at most {{days}} days.",
+        "filterDates": "Check the dates: the start must be before the end."
+      },
+      "aiCalls": "AI calls (tokens)",
+      "totalTokens": "{{n}} tokens in total",
+      "inOut": "Input / output tokens",
+      "inOutValue": "{{input}} / {{output}}",
+      "tokensOnly": "Text and embedding models",
+      "audio": "Audio transcribed",
+      "minutesValue": "{{n}} min",
+      "audioCalls": "{{n}} transcription calls",
+      "limitedErrors": "Rate-limited / errors",
+      "limitedErrorsValue": "{{limited}} / {{errors}}",
+      "ofCalls": "Of {{n}} calls",
+      "chartTokens": "Tokens per day",
+      "chartAudio": "Audio minutes per day",
+      "legend": "Providers",
+      "chartSummary": "{{days}} days with usage, highest day {{max}}. The table below has every value.",
+      "tokensValue": "{{n}} tokens",
+      "tipLine": "{{name}}: {{value}}",
+      "noData": "No usage in this range.",
+      "tokenTable": "Token-metered",
+      "audioTable": "Audio-metered",
+      "keyLabel": "{{label}} ••••{{last4}}",
+      "envKey": "Server setting",
+      "col": {
+        "date": "Date",
+        "model": "Provider / model",
+        "operation": "Operation",
+        "key": "Key",
+        "calls": "Calls",
+        "input": "Input tokens",
+        "output": "Output tokens",
+        "minutes": "Minutes",
+        "limited": "Rate-limited",
+        "errors": "Errors",
+        "total": "Total tokens"
+      },
+      "provider": {
+        "gemini": "Gemini",
+        "openai": "OpenAI",
+        "grok": "Grok",
+        "speechmatics": "Speechmatics",
+        "gemini-embedding": "Gemini embeddings"
+      },
+      "meetingsTitle": "Meetings and storage",
+      "meetingsTotal": "Meetings",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "failureRate": "Failed",
+      "percent": "{{n}} %",
+      "files": "Stored files",
+      "stored": "Storage used",
+      "tableOf": "{{title}} (table)",
+      "noUsageDay": "No usage",
+      "showTableOf": "Show {{title}} as a table",
+      "pointHint": "Point at a day to see its numbers. The table has every value."
+    },
+    "activity": {
+      "subtitle": "What users did, newest first.",
+      "type": "Event",
+      "allTypes": "All events",
+      "forUser": "Showing one user: {{email}}",
+      "allUsers": "Show all users",
+      "empty": "No activity matches these filters.",
+      "deletedUser": "Deleted user"
+    },
+    "audit": {
+      "subtitle": "Every change made by an admin, newest first.",
+      "action": "Action starts with",
+      "forActor": "Showing one admin: {{email}}",
+      "allActors": "Show all admins",
+      "empty": "No entries match these filters.",
+      "userTarget": "User",
+      "col": {
+        "when": "When",
+        "actor": "Admin",
+        "action": "Action",
+        "target": "Target",
+        "details": "Details",
+        "ip": "IP address"
+      }
+    },
+    "events": {
+      "login": "Signed in",
+      "logout": "Signed out",
+      "record_start": "Started recording",
+      "record_stop": "Stopped recording",
+      "recording_notice_ack": "Accepted recording notice",
+      "meeting_created": "Meeting created",
+      "meeting_deleted": "Meeting deleted",
+      "processing_done": "Processing done",
+      "processing_failed": "Processing failed",
+      "chat_message": "Asked a question",
+      "meeting_shared": "Meeting shared",
+      "meeting_unshared": "Meeting unshared",
+      "other": "Other event"
+    },
+    "keys": {
+      "subtitle": "Provider API keys. A saved key can never be viewed again; only its label and last 4 characters are shown.",
+      "lastCheck": "Last health check {{time}}",
+      "neverChecked": "Keys have not been checked yet",
+      "runCheck": "Run health check now",
+      "checking": "Checking…",
+      "checked": "Health check done: {{healthy}} healthy, {{unhealthy}} failing, {{unknown}} unknown.",
+      "noKeys": "No stored key. The server setting is used if one is set.",
+      "masked": "••••{{last4}}",
+      "status": {
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "unhealthy": "Failing",
+        "unknown": "Not checked",
+        "inconclusive": "Inconclusive"
+      },
+      "lastUsed": "Last used {{time}}",
+      "neverUsed": "Never used",
+      "reason": "Reason: {{reason}}",
+      "disable": "Disable",
+      "enable": "Enable",
+      "delete": "Delete",
+      "disableOne": "Disable {{label}}",
+      "enableOne": "Enable {{label}}",
+      "deleteOne": "Delete {{label}}",
+      "reasonLabel": "Reason (optional)",
+      "confirm": {
+        "disable": {
+          "title": "Disable this key?",
+          "body": "{{label}} (••••{{last4}}) stops being used at once. Disabling does not revoke it: revoke a leaked key at the provider. The last active key of a provider cannot be disabled."
+        },
+        "enable": {
+          "title": "Enable this key?",
+          "body": "{{label}} (••••{{last4}}) is used again for new requests."
+        },
+        "delete": {
+          "title": "Delete this key?",
+          "body": "{{label}} (••••{{last4}}) is removed for good. The last active key of a provider cannot be deleted."
+        }
+      },
+      "done": {
+        "disable": "Key disabled.",
+        "enable": "Key enabled.",
+        "delete": "Key deleted."
+      },
+      "addTitle": "Add a key",
+      "provider": "Provider",
+      "label": "Label",
+      "key": "Key",
+      "add": "Save key",
+      "saved": "Key saved. It cannot be viewed again.",
+      "errors": {
+        "label": "Enter a label.",
+        "labelLong": "Use at most 80 characters for the label.",
+        "keyShort": "The key is too short (at least 8 characters).",
+        "keyLong": "The key is too long (at most 512 characters).",
+        "keyChars": "The key cannot contain spaces or special characters.",
+        "lastActive": "This is the last active key of its provider. Add another key first.",
+        "noSecret": "The server cannot store keys: KEY_ENCRYPTION_SECRET is not set.",
+        "keyEmpty": "Enter the key."
+      },
+      "secureTitle": "Keys are write-only",
+      "secureBody": "Keys are encrypted at rest and never sent back to the browser.",
+      "endingIn": "key ending in {{last4}}",
+      "statusLabel": "Status:",
+      "healthLabel": "Health:",
+      "checkedAt": "Checked {{time}}"
+    },
+    "config": {
+      "subtitle": "Workspace settings. Each change asks first and is written to the audit log.",
+      "title": "Settings",
+      "empty": "No settings.",
+      "none": "not set",
+      "on": "On",
+      "off": "Off",
+      "save": "Save",
+      "keepForever": "Empty = keep forever",
+      "updated": "Changed {{time}}",
+      "keys": {
+        "retention": {
+          "name": "Audio retention (days)",
+          "help": "Original recordings older than this are deleted by the worker once a day. Transcripts, notes and chats stay. Empty = keep forever."
+        },
+        "hack": {
+          "name": "Seek fix for browser recordings",
+          "help": "Lets the player seek in recordings made in the browser, by downloading the whole file first."
+        }
+      },
+      "confirmTitle": "Change \"{{name}}\"?",
+      "confirmBody": "From {{from}} to {{to}}.",
+      "retentionWarning": "On its next run the worker permanently deletes the audio of every meeting older than {{days}} days. This cannot be undone.",
+      "saved": "\"{{name}}\" saved.",
+      "errors": {
+        "retention": "Enter a whole number of days from 1 to 3650, or leave it empty.",
+        "number": "Enter a number.",
+        "tooLong": "Use at most 2000 characters."
+      },
+      "noChanges": "Nothing changed.",
+      "saveOne": "Save {{name}}"
+    },
+    "models": {
+      "title": "AI models",
+      "allowed": "Models users can choose",
+      "default": "System default",
+      "help": "Existing meetings keep the model they were processed with.",
+      "save": "Save models",
+      "confirmTitle": "Save the AI models?",
+      "confirmDefault": "System default: {{model}}.",
+      "confirmAllowed": "Users can choose: {{models}}.",
+      "saved": "AI models saved.",
+      "errors": {
+        "empty": "Allow at least one model.",
+        "default": "The system default must be one of the allowed models."
+      }
+    },
+    "features": {
+      "subtitle": "The feature registry: status and notes for every tracked feature.",
+      "search": "Search features",
+      "searchPlaceholder": "Search key, title or description",
+      "module": "Module",
+      "allModules": "All modules",
+      "status": "Status",
+      "allStatuses": "All statuses",
+      "statuses": {
+        "done": "Done",
+        "partial": "Partial",
+        "not_started": "Not started"
+      },
+      "priority": "Priority",
+      "noPriority": "None",
+      "priorities": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "empty": "No feature matches.",
+      "notFound": "This feature was not found.",
+      "caption_one": "{{count}} feature",
+      "caption_other": "{{count}} features",
+      "col": {
+        "key": "Key",
+        "title": "Title",
+        "status": "Status"
+      },
+      "editTitle": "Edit {{key}}",
+      "close": "Close",
+      "meta": "{{module}} · changed {{time}} by {{by}}",
+      "description": "Description",
+      "content": "Details (markdown, shown as text)",
+      "changeNote": "Change note",
+      "lists": {
+        "note_tags": "Tags",
+        "depends_on": "Depends on",
+        "blocks": "Blocks",
+        "key_files": "Key files"
+      },
+      "listHint": "Lists: one item per line.",
+      "save": "Save changes",
+      "saved": "{{key}} saved.",
+      "noChanges": "Nothing changed.",
+      "createTitle": "Add a feature",
+      "pickHint": "Pick a feature in the list to edit it, or add a new one.",
+      "create": {
+        "key": "Key (PREFIX-ID)",
+        "module_prefix": "Module prefix",
+        "module_name": "Module name",
+        "title": "Title"
+      },
+      "createButton": "Add feature",
+      "created": "{{key}} added.",
+      "errors": {
+        "key": "Enter a key such as ARC-20.",
+        "title": "Enter a title.",
+        "module_prefix": "Enter a module prefix.",
+        "module_name": "Enter a module name.",
+        "keyFormat": "The key looks like PREFIX-ID, for example ARC-20.",
+        "prefixFormat": "The module prefix is 1–10 letters or digits."
+      },
+      "shown_one": "{{count}} feature shown",
+      "shown_other": "{{count}} features shown"
+    },
+    "storage": {
+      "subtitle": "Recordings and avatars are stored in Google Drive.",
+      "connection": "Google Drive",
+      "connected": "Connected",
+      "noAccount": "No account connected",
+      "problem": {
+        "not_configured": "Not connected",
+        "token_refresh_failed": "Access expired",
+        "root_missing": "Folder missing",
+        "shared_root": "Folder is shared",
+        "error": "Error"
+      },
+      "files": "Stored files",
+      "filesHint": "Recordings and avatars",
+      "used": "Space used by the app",
+      "usedHint": "Sum of the stored files",
+      "quota": "Drive usage",
+      "quotaOf": "of {{limit}}",
+      "noLimit": "No quota limit reported",
+      "howTitle": "Connecting or reconnecting Drive",
+      "howBody": "Drive is connected on the server with the connect_gdrive script (see the operations guide). It cannot be changed from this page."
+    },
+    "docs": {
+      "subtitle": "The API reference, when it is turned on.",
+      "title": "API reference",
+      "on": "Available",
+      "off": "Turned off",
+      "swagger": "Interactive docs (Swagger)",
+      "redoc": "Reference (ReDoc)",
+      "openapi": "OpenAPI document (JSON)",
+      "newTab": "(opens in a new tab)",
+      "offHelp": "The API serves its reference only when the server setting API_DOCS=1 is on. Keep it off in production unless you need it.",
+      "unreachable": "The API could not be reached to check its reference. Try again later."
+    }
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "The page hit an unexpected error. Reload to try again.",
+    "reload": "Reload",
+    "config": "The app is not configured correctly. Contact an administrator.",
+    "unavailable": "Cannot reach the server right now. Check your connection, then try again.",
+    "retry": "Try again"
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "tryAgain": "Try again",
+    "save": "Save",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "opensInNewTab": "(opens in a new tab)"
+  },
+  "player": {
+    "scanning": "Preparing playback…",
+    "loading": "Loading the recording…"
+  },
+  "record": {
+    "start": "Start recording",
+    "waiting": "Waiting for permission…",
+    "stop": "Stop recording",
+    "elapsed": "Recording time",
+    "preview": "Recording preview",
+    "discard": "Discard",
+    "upload": "Upload and process",
+    "another": "Record another meeting",
+    "stopped": "Recorded {{time}} ({{size}}). Listen back, then upload it for processing.",
+    "noTabAudio": "No tab or system audio is being recorded — only your microphone. To include the other participants, stop, start again and tick \"Share tab audio\" in the sharing dialog.",
+    "noTabAudioAfter": "This recording has only your microphone: tab or system audio was not shared.",
+    "card": {
+      "title": "Record this meeting",
+      "body": "Capture your microphone and tab or system audio securely in your browser."
+    },
+    "capture": {
+      "mic": "Microphone audio",
+      "tab": "Tab or system audio",
+      "secure": "Encrypted upload"
+    },
+    "notice": {
+      "title": "Before you record",
+      "body": "This app will record and transcribe the meeting. Everyone taking part should know about the recording and agree to it before you start. Recording laws vary by location.",
+      "scriptLabel": "Suggested opening",
+      "script": "“Before we begin: I'm going to record this meeting so I can transcribe it and take notes. Please let me know now if you don't want to be recorded.”",
+      "confirm": "I understand — start recording"
+    },
+    "unsupported": {
+      "title": "This browser cannot record meetings",
+      "body": "Use a recent Chrome or Edge on a computer. You can still upload a recording below. Missing:"
+    },
+    "missing": {
+      "browser": "A browser environment",
+      "display": "Screen or tab capture",
+      "mic": "Microphone access",
+      "recorder": "Media recording",
+      "codec": "A supported audio format (WebM, Ogg or MP4)"
+    },
+    "errors": {
+      "denied": "Permission denied — allow microphone and screen access, then try again.",
+      "noMic": "No microphone found — connect a microphone and try again.",
+      "cancelled": "Screen sharing was cancelled.",
+      "state": "The recorder stopped unexpectedly — try again.",
+      "generic": "Recording could not start. Try again."
+    },
+    "leaveConfirm": "You have a recording or upload in progress. Leave this page and lose it?",
+    "startedAnnounce": "Recording started.",
+    "stoppedAnnounce": "Recording stopped after {{time}}."
+  },
+  "upload": {
+    "or": "or upload a file",
+    "drop": "Drop an audio or video file here",
+    "choose": "Choose file",
+    "formats": "MP3, M4A, WAV, AAC, OGG, FLAC, WEBM or video (MP4, MOV, AVI, MKV, M4V) · max {{max}}",
+    "date": "Meeting date",
+    "dateHelp": "Used to organise your timeline.",
+    "start": "Upload and process",
+    "uploading": "Uploading… {{pct}}%",
+    "done": "Uploaded. Processing has started — it usually takes a few minutes.",
+    "openMeeting": "Open meeting",
+    "errors": {
+      "type": "Unsupported file type “{{ext}}”. Use an audio or video file.",
+      "size": "The file is too large. The maximum is {{max}}.",
+      "empty": "The file is empty.",
+      "network": "Upload interrupted — check your connection and try again.",
+      "aborted": "Upload cancelled.",
+      "tooMany": "Too many uploads right now. Wait a while, or delete unfinished uploads, then try again.",
+      "rejected": "The server refused this file.",
+      "unavailable": "Storage is not available right now. Try again later.",
+      "drive": "The file could not be stored. Try again.",
+      "confirm": "The file was uploaded but could not be checked. Open your meetings list, or try again.",
+      "generic": "Upload failed. Try again.",
+      "avatarType": "Use a JPEG, PNG or WebP image.",
+      "avatarSize": "The image must be smaller than 2 MB."
+    },
+    "title": "Upload a file",
+    "selected": "Selected {{name}}, {{size}}",
+    "removeNamed": "Remove {{name}}",
+    "started": "Uploading…",
+    "progressLabel": "Upload progress"
+  },
+  "errors": {
+    "network": "Cannot reach the server. Check your connection and try again.",
+    "forbidden": "You do not have permission to do that.",
+    "notFound": "It no longer exists.",
+    "rateLimited": "Too many requests. Wait a moment and try again.",
+    "generic": "Something went wrong. Try again.",
+    "invisibleCharacters": "Names and titles cannot contain invisible or text-direction characters. Retype the text without pasting it, then try again."
+  },
+  "meetings": {
+    "upload": "Upload",
+    "record": "Record meeting",
+    "search": "Search meetings…",
+    "count_one": "{{count}} meeting",
+    "count_other": "{{count}} meetings",
+    "insight": {
+      "title": "Your meeting memory is ready",
+      "body_one": "Ask Ricotdin about decisions, action items or anything discussed in your {{count}} processed meeting.",
+      "body_other": "Ask Ricotdin about decisions, action items or anything discussed in your {{count}} processed meetings.",
+      "cta": "Start a chat"
+    },
+    "folders": {
+      "filter": "Filter by folder",
+      "all": "All meetings",
+      "none": "No folder",
+      "shared": "Shared",
+      "manage": "Manage",
+      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown."
+    },
+    "empty": {
+      "first": "No meetings yet",
+      "firstBody": "Record or upload your first meeting to get a transcript, notes and to-dos.",
+      "title": "No meetings found",
+      "body": "Try changing your search or folder filter."
+    },
+    "duration": {
+      "m": "{{m}} min",
+      "hm": "{{h}} hr {{m}} min"
+    },
+    "source": {
+      "recorded": "Recorded",
+      "uploaded": "Uploaded",
+      "video": "Video"
+    },
+    "status": {
+      "success": "Done",
+      "processing": "Processing",
+      "danger": "Failed"
+    },
+    "actions": {
+      "more": "More actions for {{title}}",
+      "rename": "Rename",
+      "renameLabel": "Meeting title",
+      "move": "Move to folder",
+      "delete": "Delete",
+      "pin": "Pin {{title}}",
+      "unpin": "Unpin {{title}}"
+    },
+    "move": {
+      "title": "Move “{{title}}”",
+      "legend": "Destination folder",
+      "confirm": "Move"
+    },
+    "delete": {
+      "title": "Delete meeting?",
+      "body": "“{{title}}” will be deleted permanently, with its recording, transcript, notes, to-dos and chats.",
+      "confirm": "Delete permanently",
+      "done": "Meeting deleted.",
+      "warning": "Meeting deleted, but its recording could not be removed from storage. An administrator can clean it up."
+    }
+  },
+  "folders": {
+    "title": "Manage folders",
+    "mine": "Your folders",
+    "empty": "You have no folders yet.",
+    "newLabel": "New folder name",
+    "newPlaceholder": "New folder name",
+    "create": "Create folder",
+    "renameLabel": "New name for {{name}}",
+    "rename": "Rename {{name}}",
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down",
+    "share": {
+      "title": "Share “{{name}}”",
+      "back": "Back to folders",
+      "help": "People you add see every meeting in this folder. Editors can also rename meetings and update to-dos.",
+      "none": "Not shared with anyone yet.",
+      "members": "People with access",
+      "roleFor": "Role of {{name}}",
+      "remove": "Remove {{name}}",
+      "invite": "Invite someone",
+      "identifier": "Email or username",
+      "placeholder": "name@company.com or username",
+      "role": "Role",
+      "inviteButton": "Invite",
+      "roleHelp": "Viewer: can read and chat. Editor: can also rename meetings and update to-dos.",
+      "notFound": "No account found with that email or username.",
+      "conflict": "That person already has access, or it is you.",
+      "invalid": "Enter an email or username.",
+      "addedWho": "Added {{name}} as {{role}}.",
+      "changed": "{{name}} is now {{role}}.",
+      "removed": "Removed {{name}}."
+    },
+    "deleteLabel": "Delete {{name}}",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "sharedWithMe": "Shared with you",
+    "sharedBy": "by {{owner}} · {{role}}",
+    "roles": {
+      "owner": "Owner",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    },
+    "errors": {
+      "duplicate": "You already have a folder with that name.",
+      "name": "Enter a folder name (up to 100 characters)."
+    },
+    "delete": {
+      "title": "Delete “{{name}}”?",
+      "chatNotice": "The folder's chat history will be deleted.",
+      "chatNoticeShared_one": "The folder's chat history will be deleted for everyone, including the chats of its {{count}} shared member.",
+      "chatNoticeShared_other": "The folder's chat history will be deleted for everyone, including the chats of its {{count}} shared members.",
+      "alsoMeetings_one": "Also delete my {{count}} meeting in this folder",
+      "alsoMeetings_other": "Also delete my {{count}} meetings in this folder",
+      "othersMoved_one": "{{count}} meeting of another member goes back to its owner's “No folder”.",
+      "othersMoved_other": "{{count}} meetings of other members go back to their owners' “No folder”.",
+      "meetingsGone": "Your meetings in it will be deleted permanently.",
+      "meetingsKept": "Your meetings in it will be kept, under “No folder”.",
+      "confirm": "Delete folder"
+    },
+    "shareLabel": "Share {{name}}",
+    "moved": "{{name}} moved to position {{pos}} of {{total}}.",
+    "deleted": "Folder {{name}} deleted."
+  },
+  "detail": {
+    "loadError": "This could not be loaded. Check your connection and try again.",
+    "notFound": {
+      "title": "Meeting not found",
+      "body": "It may have been deleted, or you no longer have access to it."
+    },
+    "status": {
+      "pending": "Uploading",
+      "queued": "Queued"
+    },
+    "state": {
+      "pendingTitle": "Waiting for the upload",
+      "pendingBody": "Processing starts as soon as the upload is confirmed.",
+      "processingTitle": "Processing the meeting",
+      "processingBody": "Transcribing and writing the notes. This usually takes a few minutes; this page updates by itself.",
+      "queuedTitle": "Waiting for a free worker",
+      "queuedBody": "Processing is queued and starts as soon as a worker is free. This page updates by itself.",
+      "doneAnnounce": "Processing finished. The results are ready.",
+      "failedAnnounce": "Processing failed."
+    },
+    "failed": {
+      "title": "Processing failed",
+      "body": "Run it again, or ask an administrator if it keeps failing.",
+      "quotaTitle": "Not enough audio minutes",
+      "quotaBody": "This recording could not be processed because your audio balance is too low. Ask an administrator to top it up, then run processing again."
+    },
+    "reprocess": {
+      "action": "Process again",
+      "busy": "Starting…",
+      "started": "Processing started.",
+      "confirmTitle": "Process this meeting again?",
+      "confirmBody": "The recording is transcribed and analysed again. This uses audio minutes from your balance.",
+      "confirm": "Process again"
+    },
+    "regenerate": {
+      "action": "Regenerate summary",
+      "busy": "Regenerating…",
+      "done": "Summary and notes regenerated.",
+      "confirmTitle": "Regenerate the summary and notes?",
+      "confirmBody": "The AI rewrites the summary and notes from the transcript. The current text is kept in the history. This uses audio minutes from your balance. To-dos and calendar suggestions stay as they are.",
+      "confirm": "Regenerate"
+    },
+    "audio": {
+      "purged": "The recording was deleted under the retention policy. The transcript and notes are kept.",
+      "label": "Recording of {{title}}",
+      "error": "The recording could not be loaded."
+    },
+    "tabsLabel": "Meeting results",
+    "tabs": {
+      "summary": "Summary",
+      "notes": "Notes",
+      "todos": "To-dos",
+      "calendar": "Calendar",
+      "transcript": "Transcript",
+      "openCount_one": "{{count}} open",
+      "openCount_other": "{{count}} open"
+    },
+    "export": "Export transcript (.{{format}})",
+    "rename": {
+      "title": "Rename meeting",
+      "empty": "Enter a title."
+    },
+    "summary": {
+      "label": "AI-generated summary",
+      "empty": "No summary was written for this meeting.",
+      "model": "Written by {{model}}"
+    },
+    "notes": {
+      "label": "Meeting notes",
+      "copy": "Copy notes",
+      "copied": "Notes copied.",
+      "copyFailed": "The notes could not be copied.",
+      "empty": "No notes were written for this meeting."
+    },
+    "todos": {
+      "label": "Action items",
+      "empty": "No to-dos were found in this meeting.",
+      "markOpen": "Mark “{{item}}” as not done",
+      "markDone": "Mark “{{item}}” as done",
+      "overdue": "Overdue · {{date}}",
+      "due": "Due {{date}}",
+      "noDue": "No due date",
+      "dismiss": "Dismiss “{{item}}”"
+    },
+    "source": "Jump to source · {{time}}",
+    "calendar": {
+      "label": "Calendar suggestions",
+      "empty": "No events were mentioned in this meeting.",
+      "noTime": "No specific date or time was mentioned.",
+      "mention": "Mentioned as: “{{text}}”",
+      "ics": "Download .ics",
+      "manual": "Add it to your calendar by hand.",
+      "dismiss": "Dismiss “{{title}}”",
+      "noSync": "Ricotdin does not sync with your calendar: download the file and open it in your calendar app."
+    },
+    "transcript": {
+      "label": "Meeting transcript",
+      "search": "Search the transcript",
+      "searchPlaceholder": "Search transcript…",
+      "matches_one": "{{count}} matching line",
+      "matches_other": "{{count}} matching lines",
+      "empty": "This meeting has no transcript.",
+      "noMatch": "No lines match your search.",
+      "unknownSpeaker": "Speaker",
+      "playFrom": "Play from {{time}} ({{speaker}})"
+    },
+    "chat": {
+      "title": "Ask about this meeting",
+      "notReady": "You can ask questions once processing is done.",
+      "loadError": "The conversation could not be loaded.",
+      "emptyTitle": "What would you like to know?",
+      "emptyBody": "Answers come from this meeting and cite the exact moments.",
+      "history": "Conversation",
+      "inputLabel": "Your question about this meeting",
+      "placeholder": "Ask about this meeting…",
+      "hint": "Enter sends, Shift+Enter adds a line. Answers only use this meeting."
+    },
+    "errors": {
+      "quota": "Not enough audio minutes left. Ask an administrator to top up your balance.",
+      "busy": "This meeting is busy processing. Try again when it is done.",
+      "noTranscript": "This meeting has no transcript to work from.",
+      "aiUnavailable": "The AI service is unavailable right now. Try again in a few minutes.",
+      "cannotProcess": "This meeting cannot be processed now: its recording is missing or still uploading.",
+      "icsNoTime": "This event has no specific date or time, so no calendar file can be made.",
+      "icsFailed": "The calendar file could not be downloaded.",
+      "saveFailed": "The change could not be saved and was undone.",
+      "rateLimited": "Too many requests. Wait a little and try again.",
+      "forbidden": "You do not have permission to do this.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "edit": {
+      "action": "Edit",
+      "editing": "Editing: {{what}}",
+      "label": {
+        "summary": "Summary text",
+        "notes": "Notes text"
+      },
+      "preview": "Preview",
+      "previewLabel": "Preview",
+      "markdownHelp": "Markdown: # heading, **bold**, *italic*, - list, [text](https://…)",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved.",
+      "leaveConfirm": "Leave and lose the changes you have not saved?",
+      "discardConfirm": "Discard the changes you have not saved?",
+      "errors": {
+        "changed": "Someone changed this text in the meantime. Compare it below, then save over it or cancel.",
+        "notDone": "This meeting cannot be edited until it has finished processing.",
+        "characters": "The text contains characters that cannot be saved. Remove them and try again.",
+        "invalid": "The text could not be saved. It may be too long.",
+        "failed": "The changes could not be saved. Try again."
+      },
+      "actionSummary": "Edit summary",
+      "actionNotes": "Edit notes",
+      "latestHelp": "This is the text saved in the meantime. Your draft is still in the editor.",
+      "useLatest": "Save over the latest text",
+      "mode": {
+        "label": "Editing mode",
+        "rich": "Rich text",
+        "markdown": "Markdown"
+      },
+      "rich": {
+        "help": "Keeps only what this page can show: headings, bold, italic, code, lists and https links. In a list, Tab indents and Shift+Tab outdents.",
+        "loading": "Loading the editor…",
+        "unavailable": "The rich-text editor could not be loaded. You can edit the Markdown text instead.",
+        "toolbar": "Formatting",
+        "bold": "Bold (Ctrl/⌘+B)",
+        "italic": "Italic (Ctrl/⌘+I)",
+        "code": "Code (Ctrl/⌘+E)",
+        "link": "Link",
+        "heading": "Heading",
+        "subheading": "Subheading",
+        "bulletList": "Bulleted list",
+        "orderedList": "Numbered list",
+        "codeBlock": "Code block",
+        "undo": "Undo (Ctrl/⌘+Z)",
+        "redo": "Redo (Ctrl/⌘+Shift+Z)",
+        "linkGroup": "Link",
+        "linkUrl": "Link address (https)",
+        "linkApply": "Apply link",
+        "linkRemove": "Remove link",
+        "linkInvalid": "Enter a full https:// address.",
+        "linkEdit": "Edit link"
+      }
+    },
+    "history": {
+      "actionSummary": "Summary history",
+      "actionNotes": "Notes history",
+      "title": {
+        "summary": "Summary history",
+        "notes": "Notes history"
+      },
+      "help": "Earlier versions, newest first. Up to 50 are kept, and everyone who can open this meeting can read them.",
+      "empty": "No earlier versions yet. One is saved each time the text is edited or regenerated.",
+      "listLabel": "Versions",
+      "source": {
+        "ai": "Written by the AI",
+        "user": "Edited by {{who}}",
+        "restore": "Restored by {{who}}"
+      },
+      "unknownUser": "a deleted account",
+      "previewTitle": "Version of {{when}}",
+      "previewTitleNoDate": "Selected version",
+      "emptyText": "This version was empty.",
+      "isCurrent": "This is the current text.",
+      "restore": "Restore this version",
+      "confirm": "Restore this version? The current text stays in the history, so you can switch back.",
+      "confirmAction": "Restore",
+      "restoring": "Restoring…",
+      "restored": "Version restored.",
+      "errors": {
+        "changed": "Someone changed this text in the meantime. Close the history, check the latest text, then try again.",
+        "gone": "This version is no longer in the history.",
+        "failed": "Something went wrong. Try again."
+      }
+    }
+  },
+  "chat": {
+    "thinking": "Thinking…",
+    "answered": "Answer received.",
+    "you": "You:",
+    "assistant": "Ricotdin:",
+    "sources": "Sources",
+    "playFrom": "Play the recording from {{time}}",
+    "send": "Send question",
+    "errors": {
+      "empty": "Type a question first.",
+      "tooLong": "The question is too long (at most 4000 characters).",
+      "noQuota": "You have no chat questions left. Ask an administrator to top up your balance.",
+      "rateLimited": "Too many questions in a short time. Wait a few minutes and try again.",
+      "forbidden": "You no longer have access to this conversation.",
+      "network": "No connection to the server. Your question was not sent.",
+      "generic": "The question could not be answered. Please try again."
+    }
+  },
+  "chatPage": {
+    "new": "New chat",
+    "newStarted": "New chat started.",
+    "askAbout": "Ask about",
+    "scopes": "Chat scope",
+    "all": "All meetings",
+    "folderUnknown": "Folder not available",
+    "folderUnknownBody": "This folder was deleted or is no longer shared with you. Pick another scope.",
+    "scopeLine": "Answers come from {{scope}} and link back to the source.",
+    "emptyTitle": "What would you like to know?",
+    "emptyAll": "Ask about decisions, action items or past discussions in any meeting you can open.",
+    "emptyFolder": "Ask about the meetings in this folder.",
+    "inputLabel": "Your question",
+    "placeholder": "Ask about decisions, action items, or past discussions…",
+    "hint": "Enter sends, Shift+Enter adds a line. Ricotdin answers only from meetings you can access.",
+    "citation": "{{title}} · {{time}}",
+    "citationUnknown": "Meeting · {{time}}",
+    "switch": "Show",
+    "notReady": "The conversation is still loading. Try again in a moment.",
+    "separator": ", "
+  },
+  "profile": {
+    "details": {
+      "title": "Personal details",
+      "body": "Your identity across the workspace.",
+      "username": "Username",
+      "displayName": "Display name",
+      "email": "Email",
+      "save": "Save changes",
+      "saved": "Your details were saved.",
+      "unchanged": "Nothing to save."
+    },
+    "avatar": {
+      "upload": "Upload photo",
+      "uploading": "Uploading… {{percent}}%",
+      "hint": "JPEG, PNG or WebP, up to 2 MB.",
+      "saved": "Your photo was updated.",
+      "alt": "Your profile photo"
+    },
+    "password": {
+      "title": "Password",
+      "body": "Changing it signs you out on every other device.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "submit": "Change password",
+      "changed": "Password changed. Other devices were signed out.",
+      "currentRequired": "Enter your current password.",
+      "mismatch": "The new passwords do not match.",
+      "same": "The new password must be different from the current one."
+    },
+    "appearance": {
+      "title": "Appearance",
+      "body": "Choose how Ricotdin looks for you on this device.",
+      "mode": "Light or dark",
+      "light": "Light",
+      "lightHint": "Clean and bright",
+      "dark": "Dark",
+      "darkHint": "Easy on the eyes",
+      "color": "Color theme"
+    },
+    "model": {
+      "title": "AI model",
+      "body": "Used for new meetings you upload. An administrator decides which models are available.",
+      "label": "Default model",
+      "systemDefault": "System default",
+      "save": "Save model",
+      "saved": "Default model saved."
+    },
+    "usage": {
+      "title": "Balance",
+      "body": "What you can still use. Ask an administrator to top it up.",
+      "audio": "Audio minutes left",
+      "audioValue": "{{h}} h {{m}} min",
+      "questions": "Chat questions left",
+      "questionsValue_one": "{{count}} question",
+      "questionsValue_other": "{{count}} questions",
+      "meetings": "Your meetings",
+      "folders": "Your folders"
+    },
+    "errors": {
+      "usernameTaken": "That username is taken. Choose another.",
+      "invalid": "Check the fields and try again.",
+      "wrongPassword": "Your current password is incorrect.",
+      "passwordChanged": "Your password was just changed elsewhere. Try again.",
+      "passwordRejected": "That new password is not accepted. Choose a longer one.",
+      "modelNotAllowed": "That model is no longer available. Choose another.",
+      "rateLimited": "Too many attempts. Wait a few minutes and try again.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Run with (from legacy/):  docker compose up --build -d      → http://localhost:3333
+# ARC-00: build context is the repo root (..) so ai-instruction/ai-gen/ is in the image.
+#
+# .env.local is used twice:
+#   - at BUILD time as a BuildKit secret (`build.secrets: [env]`): the Dockerfile reads only its
+#     NEXT_PUBLIC_* lines and inlines them into the browser bundle; nothing is written to a layer.
+#   - at RUN time via `env_file`: server-only secrets reach the container, never the image.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: legacy/Dockerfile
+      secrets:
+        - env
+    ports:
+      # Host 3333 -> container 3000 (the image sets PORT=3000 / EXPOSE 3000).
+      - "3333:3000"
+    env_file:
+      - .env.local    # server-only secrets injected at runtime, never baked in
+    environment:
+      NODE_ENV: production
+      # Pinned so a PORT in .env.local can't break the 3333:3000 mapping or the
+      # image HEALTHCHECK (which probes :3000). `environment` beats `env_file`.
+      PORT: "3000"
+    restart: unless-stopped
+    # Health is checked by the image's own HEALTHCHECK (GET /api/health on :3000).
+
+secrets:
+  env:
+    file: .env.local

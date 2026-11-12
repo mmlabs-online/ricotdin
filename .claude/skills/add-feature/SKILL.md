@@ -29,7 +29,7 @@ Do this quietly so your questions and options are specific to this repo:
    - Exists, not done → tell the user the code; offer to brainstorm/refine that spec instead.
    - Partial overlap → keep the related codes; they shape the options and dependencies.
 2. **Scope:** compare with `CLAUDE.md` §1 "Explicitly OUT of MVP scope" and the hard rules
-   in §5–§7. Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
+   in §5–§7 (all in `legacy/CLAUDE.md` since ARC-19; v2 rules in `docs/architecture/*.md`). Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
    or go to the **PRO** module.
 3. **Code reality:** Grep/Glob for what already exists that the idea could build on
    (tables, routes, components, `lib/` helpers). Note reusable pieces — they make an option
@@ -88,7 +88,8 @@ Turn the chosen option into a concrete spec and check it against the
 - [ ] **3–6 acceptance criteria**, each testable and phrased "Given … when … then …" or as
       an observable check. No "should be fast/nice".
 - [ ] **Test plan:** the pure function(s) to extract into `/lib` and the test file name
-      (`tests/<topic>.test.ts`) — this is what `/ship-feature` Phase 3 writes first.
+      (`tests/<topic>.test.ts` for v1 in `legacy/`; v2: `app/api/tests/test_<topic>.py` or
+      `app/web/src/**/<name>.test.ts` — CLAUDE.md §0) — this is what `/ship-feature` Phase 3 writes first.
 - [ ] **Touch list:** expected files/routes/components, from the Step 1 code scan.
 - [ ] **Structural flags called out:** new migration, env var, provider, auth/RLS change,
       or >~10 files. Allowed, but stated, so `/ship-feature` knows to stop for plan approval.
@@ -192,7 +193,7 @@ Format rules (the seeder depends on them):
 ## Step 8 — Sync the DB registry
 
 ```
-npx tsx scripts/seed-features.ts --only <CODE>[,<CODE>]
+cd legacy && npx tsx scripts/seed-features.ts --only <CODE>[,<CODE>]
 ```
 
 - **Never run the seeder without `--only`** — a full run overwrites every edit made at

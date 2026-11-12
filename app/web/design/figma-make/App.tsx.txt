@@ -1,0 +1,544 @@
+import { useEffect, useMemo, useState } from 'react'
+import { createBrowserRouter, RouterProvider, useLocation, useNavigate, useParams } from 'react-router'
+import {
+  Archive,
+  ArrowUpRight,
+  Activity,
+  BarChart3,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  CircleUserRound,
+  Clock3,
+  CloudUpload,
+  FileAudio,
+  Folder,
+  FolderCog,
+  Gauge,
+  HardDrive,
+  Languages,
+  ListTodo,
+  LogOut,
+  Home,
+  LoaderCircle,
+  MessageSquareText,
+  Mic2,
+  KeyRound,
+  Moon,
+  MoreHorizontal,
+  PanelLeftClose,
+  Pin,
+  Play,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Square,
+  Sun,
+  Upload,
+  Users,
+  X,
+} from 'lucide-react'
+
+type Screen = 'meetings' | 'detail' | 'record' | 'chat' | 'profile' | 'admin' | 'auth'
+type Language = 'en' | 'vi'
+type ColorTheme = 'rose' | 'sage' | 'plum' | 'ocean'
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+}
+
+function Button({ variant = 'secondary', className = '', ...props }: ButtonProps) {
+  return <button className={`button button-${variant} ${className}`} {...props} />
+}
+
+function Status({ type, children }: { type: string; children: React.ReactNode }) {
+  return <span className={`status status-${type}`}><span className="status-dot" />{children}</span>
+}
+
+const meetings = [
+  { id: 'weekly-product-sync', title: 'Weekly product sync', meta: 'Today, 10:02 AM', duration: '42 min', source: 'Recorded', status: 'Done', folder: 'Product', pinned: true },
+  { id: 'q2-planning-kickoff', title: 'Q2 planning kickoff', meta: 'Yesterday, 2:30 PM', duration: '58 min', source: 'Recorded', status: 'Processing', folder: 'Leadership', pinned: true },
+  { id: 'customer-discovery-northstar', title: 'Customer discovery — Northstar', meta: 'May 21, 3:00 PM', duration: '31 min', source: 'Uploaded', status: 'Done', folder: 'Research', pinned: false },
+  { id: 'engineering-standup', title: 'Engineering standup', meta: 'May 20, 9:15 AM', duration: '16 min', source: 'Recorded', status: 'Failed', folder: 'Product', pinned: false },
+  { id: 'brand-review-studio', title: 'Brand review with Studio', meta: 'May 19, 1:00 PM', duration: '1 hr 12 min', source: 'Uploaded', status: 'Done', folder: 'Marketing', pinned: false },
+]
+
+const screenPaths: Record<Screen, string> = {
+  meetings: '/meetings',
+  detail: '/meetings/weekly-product-sync',
+  record: '/record',
+  chat: '/chat',
+  profile: '/profile',
+  admin: '/admin',
+  auth: '/sign-in',
+}
+
+function getScreen(pathname: string): Screen {
+  if (/^\/meetings\/[^/]+/.test(pathname)) return 'detail'
+  if (pathname.startsWith('/record')) return 'record'
+  if (pathname.startsWith('/chat')) return 'chat'
+  if (pathname.startsWith('/profile')) return 'profile'
+  if (pathname.startsWith('/admin')) return 'admin'
+  if (pathname.startsWith('/sign-in')) return 'auth'
+  return 'meetings'
+}
+
+function WorkspaceApp() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const screen = getScreen(pathname)
+  const setScreen = (next: Screen) => navigate(screenPaths[next])
+  const [dark, setDark] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  const [search, setSearch] = useState('')
+  const [folder, setFolder] = useState('All meetings')
+  const [folderModal, setFolderModal] = useState(false)
+  const [notice, setNotice] = useState(false)
+  const [language, setLanguage] = useState<Language>('en')
+  const [userMenu, setUserMenu] = useState(false)
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(() => (localStorage.getItem('ricotdin-theme') as ColorTheme) || 'rose')
+
+  useEffect(() => {
+    localStorage.setItem('ricotdin-theme', colorTheme)
+  }, [colorTheme])
+
+  const filtered = useMemo(() => meetings.filter(m =>
+    m.title.toLowerCase().includes(search.toLowerCase()) &&
+    (folder === 'All meetings' || m.folder === folder)
+  ), [search, folder])
+
+  if (screen === 'auth') return <AuthView language={language} setLanguage={setLanguage} onSignIn={() => setScreen('meetings')} dark={dark} colorTheme={colorTheme} />
+
+  return (
+    <div className={`app theme-${colorTheme}${dark ? ' dark' : ''}`}>
+      <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+        <div className="brand">
+          <div className="logo"><Sparkles size={17} /></div>
+          {!collapsed && <span>Ricotdin</span>}
+          <Button variant="ghost" className="collapse-btn" aria-label="Collapse sidebar" onClick={() => setCollapsed(!collapsed)}>
+            <PanelLeftClose size={18} />
+          </Button>
+        </div>
+        <nav className="nav" aria-label="Main navigation">
+          <NavItem icon={<Home />} label={language === 'vi' ? 'Cuộc họp' : 'Meetings'} active={screen === 'meetings' || screen === 'detail'} collapsed={collapsed} onClick={() => setScreen('meetings')} />
+          <NavItem icon={<Mic2 />} label={language === 'vi' ? 'Ghi âm' : 'Record'} active={screen === 'record'} collapsed={collapsed} onClick={() => setScreen('record')} />
+          <NavItem icon={<MessageSquareText />} label={language === 'vi' ? 'Trò chuyện' : 'Chat'} active={screen === 'chat'} collapsed={collapsed} onClick={() => setScreen('chat')} />
+          <NavItem icon={<CircleUserRound />} label={language === 'vi' ? 'Hồ sơ' : 'Profile'} active={screen === 'profile'} collapsed={collapsed} onClick={() => setScreen('profile')} />
+        </nav>
+        {!collapsed && <div className="sidebar-section">
+          <span className="eyebrow">Workspace</span>
+          <div className="side-link"><Users size={16} /> Shared with me <span className="count">3</span></div>
+          <div className="side-link"><Archive size={16} /> Archive</div>
+          <button className={`side-link admin-link ${screen === 'admin' ? 'active' : ''}`} onClick={() => setScreen('admin')}><Settings size={16} /> Admin</button>
+        </div>}
+        <div className="quota">
+          {!collapsed && <><div className="quota-row"><span>Monthly usage</span><strong>7h 42m</strong></div><div className="progress"><i /></div><small>2h 18m remaining</small></>}
+          {collapsed && <Clock3 size={18} />}
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <div className="mobile-brand"><div className="logo"><Sparkles size={16} /></div><strong>Ricotdin</strong></div>
+          <span className="privacy"><span className="privacy-dot" /> Your meetings are private</span>
+          <div className="top-actions">
+            <Button variant="ghost" aria-label="Toggle theme" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</Button>
+            <button className="user-trigger" onClick={() => setUserMenu(!userMenu)} aria-expanded={userMenu}><div className="avatar">AM</div><ChevronDown size={15} /></button>
+            {userMenu && <div className="user-menu">
+              <button onClick={() => { setScreen('profile'); setUserMenu(false) }}><CircleUserRound size={16} />{language === 'vi' ? 'Hồ sơ' : 'Profile'}</button>
+              <div className="menu-language"><Languages size={16} /><span>{language === 'vi' ? 'Ngôn ngữ' : 'Language'}</span><div><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button><button className={language === 'vi' ? 'active' : ''} onClick={() => setLanguage('vi')}>VI</button></div></div>
+              <div className="menu-theme"><span>{language === 'vi' ? 'Màu giao diện' : 'Color theme'}</span><ThemeSwatches value={colorTheme} onChange={setColorTheme} /></div>
+              <button onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}{dark ? (language === 'vi' ? 'Giao diện sáng' : 'Light mode') : (language === 'vi' ? 'Giao diện tối' : 'Dark mode')}</button>
+              <button onClick={() => { setScreen('auth'); setUserMenu(false) }}><LogOut size={16} />{language === 'vi' ? 'Đăng xuất' : 'Sign out'}</button>
+            </div>}
+          </div>
+        </header>
+        <div className="content">
+          {screen === 'meetings' && <MeetingsView language={language} search={search} setSearch={setSearch} folder={folder} setFolder={setFolder} filtered={filtered} openFolders={() => setFolderModal(true)} goRecord={() => setScreen('record')} openDetail={(meetingId: string) => navigate(`/meetings/${meetingId}`)} />}
+          {screen === 'detail' && <MeetingDetail language={language} goBack={() => setScreen('meetings')} />}
+          {screen === 'record' && <RecordView language={language} openNotice={() => setNotice(true)} />}
+          {screen === 'chat' && <ChatView />}
+          {screen === 'profile' && <ProfileView dark={dark} setDark={setDark} colorTheme={colorTheme} setColorTheme={setColorTheme} />}
+          {screen === 'admin' && <AdminView />}
+        </div>
+      </main>
+
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        {[
+          ['meetings', Home, language === 'vi' ? 'Cuộc họp' : 'Meetings'], ['record', Mic2, language === 'vi' ? 'Ghi âm' : 'Record'], ['chat', MessageSquareText, language === 'vi' ? 'Trò chuyện' : 'Chat'], ['admin', Settings, 'Admin'], ['profile', CircleUserRound, language === 'vi' ? 'Hồ sơ' : 'Profile']
+        ].map(([id, Icon, label]) => {
+          const I = Icon as typeof Home
+          return <button key={id as string} className={screen === id ? 'active' : ''} onClick={() => setScreen(id as Screen)}><I size={20} /><span>{label as string}</span></button>
+        })}
+      </nav>
+
+      {folderModal && <Modal title="Manage folders" onClose={() => setFolderModal(false)}>
+        <div className="modal-list">
+          {['Product', 'Leadership', 'Research', 'Marketing'].map((item, i) => <div className="folder-row" key={item}><span className="drag">⠿</span><Folder size={17} /><span>{item}</span>{i === 1 && <span className="badge">Shared</span>}<MoreHorizontal size={18} /></div>)}
+        </div>
+        <Button className="full"><Plus size={16} /> Create folder</Button>
+        <div className="share-box"><span className="eyebrow">Share Leadership</span><p>Invite people by email or username.</p><div className="inline"><input placeholder="name@company.com" /><select><option>Viewer</option><option>Editor</option></select><Button variant="primary">Invite</Button></div></div>
+      </Modal>}
+      {notice && <Modal title="Recording notice" onClose={() => setNotice(false)}>
+        <div className="notice-icon"><Mic2 /></div>
+        <p className="modal-copy">Before recording, make sure everyone knows and agrees. Recording laws vary by location.</p>
+        <div className="script"><span className="eyebrow">Suggested script</span><p>“I’d like to record this meeting to create a transcript and notes. Is everyone comfortable with that?”</p></div>
+        <div className="modal-actions"><Button variant="ghost" onClick={() => setNotice(false)}>Cancel</Button><Button variant="primary" onClick={() => setNotice(false)}><Mic2 size={16} /> I understand — start recording</Button></div>
+      </Modal>}
+    </div>
+  )
+}
+
+function NavItem({ icon, label, active, collapsed, onClick }: { icon: React.ReactNode; label: string; active: boolean; collapsed: boolean; onClick: () => void }) {
+  return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>{icon}{!collapsed && <span>{label}</span>}</button>
+}
+
+function MeetingsView({ language, search, setSearch, folder, setFolder, filtered, openFolders, goRecord, openDetail }: any) {
+  const vi = language === 'vi'
+  const folders = ['All meetings', 'Product', 'Leadership', 'Research']
+  return <>
+    <div className="page-head">
+      <div><span className="eyebrow">{vi ? 'Không gian làm việc' : 'Workspace'}</span><h1>{vi ? 'Cuộc họp' : 'Meetings'}</h1><p>{vi ? 'Tìm kiếm, xem lại và đặt câu hỏi về mọi cuộc trò chuyện.' : 'Search, revisit, and ask questions across every conversation.'}</p></div>
+      <div className="head-actions"><Button><Upload size={16} /> {vi ? 'Tải tệp lên' : 'Upload'}</Button><Button variant="primary" onClick={goRecord}><Mic2 size={16} /> {vi ? 'Ghi âm cuộc họp' : 'Record meeting'}</Button></div>
+    </div>
+    <section className="insight">
+      <div className="insight-icon"><Sparkles size={20} /></div>
+      <div><strong>{vi ? 'Bộ nhớ cuộc họp của bạn đã sẵn sàng' : 'Your meeting memory is ready'}</strong><p>{vi ? 'Hỏi Ricotdin về quyết định, công việc cần làm hoặc nội dung trong 24 cuộc họp đã lập chỉ mục.' : 'Ask Ricotdin about decisions, action items, or anything discussed in your 24 indexed meetings.'}</p></div>
+      <Button variant="ghost">{vi ? 'Bắt đầu trò chuyện' : 'Start a chat'} <ArrowUpRight size={16} /></Button>
+    </section>
+    <div className="toolbar">
+      <label className="search"><Search size={18} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder={vi ? 'Tìm kiếm cuộc họp…' : 'Search meetings...'} /></label>
+      <div className="folder-pills">
+        {folders.map(f => <button className={folder === f ? 'active' : ''} onClick={() => setFolder(f)} key={f}>{f}{f === 'Leadership' && <span className="tiny-shared">Shared</span>}</button>)}
+        <Button variant="ghost" onClick={openFolders}><FolderCog size={17} /> {vi ? 'Quản lý thư mục' : 'Manage'}</Button>
+      </div>
+    </div>
+    <div className="list-head"><span>{filtered.length} meetings</span><button>Last updated <ChevronDown size={14} /></button></div>
+    <div className="meeting-list">
+      {filtered.length === 0 ? <div className="empty"><div className="empty-icon"><FileAudio /></div><h2>No meetings found</h2><p>Try changing your search or folder filter.</p><Button variant="primary" onClick={goRecord}>Record a meeting</Button></div> :
+      filtered.map((m: any) => <article className="meeting-row" key={m.id} onClick={() => openDetail(m.id)}>
+        <button className={`pin ${m.pinned ? 'pinned' : ''}`} aria-label="Pin meeting"><Pin size={16} fill={m.pinned ? 'currentColor' : 'none'} /></button>
+        <div className="meeting-icon"><FileAudio size={19} /></div>
+        <div className="meeting-primary"><button className="meeting-title">{m.title}</button><span>{m.meta} · {m.duration}</span></div>
+        <span className="folder-cell"><Folder size={15} /> {m.folder}</span>
+        <span className="source">{m.source}</span>
+        {m.status === 'Done' && <Status type="success">Done</Status>}
+        {m.status === 'Processing' && <Status type="processing">Processing · 68%</Status>}
+        {m.status === 'Failed' && <Status type="danger">Failed</Status>}
+        <Button variant="ghost" aria-label="More meeting actions"><MoreHorizontal size={19} /></Button>
+      </article>)}
+    </div>
+  </>
+}
+
+function RecordView({ openNotice, language }: { openNotice: () => void; language: Language }) {
+  const vi = language === 'vi'
+  return <div className="narrow">
+    <div className="page-head"><div><span className="eyebrow">{vi ? 'Cuộc họp mới' : 'New meeting'}</span><h1>{vi ? 'Ghi âm hoặc tải tệp lên' : 'Record or upload'}</h1><p>{vi ? 'Ghi lại cuộc trò chuyện. Ricotdin sẽ xử lý phần còn lại.' : 'Capture the conversation. Ricotdin will handle the rest.'}</p></div><div className="usage-chip"><Clock3 size={16} /> {vi ? 'Còn lại 2 giờ 18 phút' : '2h 18m remaining'}</div></div>
+    <section className="record-card">
+      <div className="record-orb"><Mic2 size={35} /></div><h2>{vi ? 'Ghi âm cuộc họp này' : 'Record this meeting'}</h2><p>{vi ? 'Ghi âm micro và âm thanh từ tab hoặc hệ thống một cách an toàn ngay trong trình duyệt.' : 'Capture your microphone and tab or system audio securely in your browser.'}</p>
+      <Button variant="primary" className="start-btn" onClick={openNotice}><span className="record-dot" /> {vi ? 'Bắt đầu ghi âm' : 'Start recording'}</Button>
+      <div className="capture-list"><span><Check size={16} /> {vi ? 'Âm thanh micro' : 'Microphone audio'}</span><span><Check size={16} /> {vi ? 'Âm thanh tab hoặc hệ thống' : 'Tab or system audio'}</span><span><Check size={16} /> {vi ? 'Tải lên được mã hóa' : 'Encrypted upload'}</span></div>
+    </section>
+    <div className="or"><span>{vi ? 'hoặc tải tệp lên' : 'or upload a file'}</span></div>
+    <section className="dropzone"><CloudUpload size={27} /><strong>{vi ? 'Thả tệp âm thanh vào đây' : 'Drop an audio file here'}</strong><p>MP3, M4A, WAV, AAC, OGG, FLAC or WEBM · {vi ? 'tối đa' : 'max'} 500 MB</p><Button>{vi ? 'Chọn tệp' : 'Choose file'}</Button></section>
+    <div className="date-row"><div><strong>Meeting date</strong><p>Used to organize your timeline.</p></div><input type="date" defaultValue="2025-05-23" /></div>
+  </div>
+}
+
+function ChatView() {
+  return <div className="chat-layout">
+    <aside className="chat-history"><Button variant="primary" className="full"><Plus size={16} /> New chat</Button><span className="eyebrow">Today</span>{['Product launch decisions', 'What did I commit to?', 'Northstar feedback'].map((x, i) => <button className={i === 0 ? 'chat-link active' : 'chat-link'} key={x}>{x}</button>)}</aside>
+    <section className="conversation">
+      <div className="chat-head"><div><h1>Ask your meetings</h1><p>Answers include links back to the source.</p></div><button className="scope">All meetings <ChevronDown size={15} /></button></div>
+      <div className="messages">
+        <div className="user-bubble">What did we decide about the beta launch?</div>
+        <div className="assistant-row"><div className="ai-avatar"><Sparkles size={16} /></div><div className="answer"><p>The team agreed to keep the private beta on <strong>June 12</strong>, limited to 30 design partners. Maya will finalize onboarding, and engineering will add the remaining analytics events before June 7.</p><div className="citations"><button>Weekly product sync · 18:42 <Play size={11} /></button><button>Q2 planning kickoff · 36:10 <Play size={11} /></button></div></div></div>
+      </div>
+      <div className="composer"><textarea placeholder="Ask about decisions, action items, or past discussions…" /><Button variant="primary" aria-label="Send message"><ArrowUpRight size={18} /></Button><small>Ricotdin answers only from meetings you can access.</small></div>
+    </section>
+  </div>
+}
+
+function ProfileView({ dark, setDark, colorTheme, setColorTheme }: { dark: boolean; setDark: (v: boolean) => void; colorTheme: ColorTheme; setColorTheme: (v: ColorTheme) => void }) {
+  return <div className="narrow">
+    <div className="page-head"><div><span className="eyebrow">Account</span><h1>Profile & preferences</h1><p>Manage your account, appearance, and usage.</p></div></div>
+    <section className="settings-card"><div className="section-title"><h2>Personal details</h2><p>Your identity across the workspace.</p></div><div className="profile-line"><div className="avatar large">AM</div><Button>Upload photo</Button></div><label>Username<input defaultValue="alex.morgan" /></label><label>Email<input value="alex@acme.com" readOnly /></label><Button variant="primary">Save changes</Button></section>
+    <section className="settings-card"><div className="section-title"><h2>Appearance</h2><p>Choose how Ricotdin looks for you.</p></div><div className="theme-grid"><button className={!dark ? 'selected' : ''} onClick={() => setDark(false)}><Sun size={20} /><strong>Light</strong><span>Clean and bright</span></button><button className={dark ? 'selected' : ''} onClick={() => setDark(true)}><Moon size={20} /><strong>Dark</strong><span>Easy on the eyes</span></button></div></section>
+    <section className="settings-card"><div className="section-title"><h2>Color theme</h2><p>Apply an accent palette across the entire system.</p></div><div className="theme-choice-grid">{(['rose','sage','plum','ocean'] as ColorTheme[]).map(theme => <button className={colorTheme === theme ? 'selected' : ''} onClick={() => setColorTheme(theme)} key={theme}><span className={`theme-preview preview-${theme}`}><i /><i /><i /></span><strong>{theme[0].toUpperCase() + theme.slice(1)}</strong>{colorTheme === theme && <Check size={16} />}</button>)}</div></section>
+    <section className="settings-card"><div className="section-title"><h2>Usage this month</h2><p>Resets June 1.</p></div><div className="usage-number"><strong>7h 42m</strong><span>of 10 hours</span></div><div className="progress big"><i /></div></section>
+  </div>
+}
+
+function MeetingDetail({ language, goBack }: { language: Language; goBack: () => void }) {
+  const { meetingId } = useParams()
+  const meeting = meetings.find(item => item.id === meetingId) ?? meetings[0]
+  const vi = language === 'vi'
+  const [activeTab, setActiveTab] = useState<'summary' | 'notes' | 'todos' | 'calendar' | 'transcript'>('summary')
+  const [currentTime, setCurrentTime] = useState('12:34')
+  const [transcriptSearch, setTranscriptSearch] = useState('')
+  const tabs = [
+    ['summary', vi ? 'Tóm tắt' : 'Summary'],
+    ['notes', vi ? 'Ghi chú' : 'Notes'],
+    ['todos', vi ? 'Việc cần làm' : 'To-dos'],
+    ['calendar', vi ? 'Lịch' : 'Calendar'],
+    ['transcript', vi ? 'Bản ghi' : 'Transcript'],
+  ] as const
+  const seekTo = (time: string) => {
+    setCurrentTime(time)
+    setActiveTab('transcript')
+  }
+  return <div className="detail-page">
+    <Button variant="ghost" className="back-button" onClick={goBack}>← {vi ? 'Quay lại danh sách cuộc họp' : 'Back to meetings'}</Button>
+    <div className="detail-head">
+      <div><span className="eyebrow">{meeting.folder} · {meeting.meta}</span><h1>{vi && meeting.id === 'weekly-product-sync' ? 'Đồng bộ sản phẩm hàng tuần' : meeting.title}</h1><div className="detail-meta"><Status type={meeting.status === 'Done' ? 'success' : meeting.status === 'Failed' ? 'danger' : 'processing'}>{meeting.status}</Status><span><Clock3 size={14} /> {meeting.duration}</span><span><Users size={14} /> 6 {vi ? 'người tham gia' : 'participants'}</span></div></div>
+      <Button><Folder size={15} /> {meeting.folder}</Button>
+    </div>
+    <div className="audio-player"><Button variant="primary" aria-label={vi ? 'Phát' : 'Play'}><Play size={16} fill="currentColor" /></Button><span>{currentTime}</span><div className="audio-track"><i /></div><span>42:18</span><Button variant="ghost"><MoreHorizontal size={18} /></Button></div>
+    <div className="detail-layout">
+      <section className="detail-main">
+        <div className="detail-tabs" role="tablist">{tabs.map(([id, label]) => <button role="tab" aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''} onClick={() => setActiveTab(id)} key={id}>{label}{id === 'todos' && <span>4</span>}</button>)}</div>
+        {activeTab === 'summary' && <article className="summary-card tab-content"><div className="section-label"><Sparkles size={16} />{vi ? 'Tóm tắt do AI tạo' : 'AI-generated summary'}</div><h2>{vi ? 'Tổng quan' : 'Overview'}</h2><p>{vi ? 'Nhóm đã thống nhất giữ ngày 12 tháng 6 cho đợt beta riêng tư với 30 đối tác thiết kế. Trọng tâm tuần này là hoàn thiện quy trình hướng dẫn và bổ sung các sự kiện phân tích còn thiếu.' : 'The team agreed to keep June 12 for the private beta with 30 design partners. This week’s focus is finalizing onboarding and adding the remaining analytics events.'}</p><h2>{vi ? 'Các quyết định chính' : 'Key decisions'}</h2><ul><li>{vi ? 'Giới hạn đợt beta ở 30 đối tác thiết kế.' : 'Limit the beta to 30 design partners.'}</li><li>{vi ? 'Không thêm tính năng mới trước khi ra mắt.' : 'No additional features before launch.'}</li><li>{vi ? 'Đánh giá mức độ sẵn sàng vào ngày 7 tháng 6.' : 'Review launch readiness on June 7.'}</li></ul></article>}
+        {activeTab === 'notes' && <article className="summary-card tab-content notes-content"><div className="section-label"><FileAudio size={16} />{vi ? 'Ghi chú cuộc họp' : 'Meeting notes'}</div><h2>{vi ? 'Mục tiêu' : 'Goal'}</h2><p>{vi ? 'Chốt phạm vi và mức độ sẵn sàng cho đợt beta riêng tư.' : 'Confirm scope and readiness for the private beta.'}</p><h2>{vi ? 'Nội dung thảo luận' : 'Discussion'}</h2><ul><li>{vi ? 'Quy trình onboarding đã hoàn thành khoảng 80%.' : 'The onboarding flow is approximately 80% complete.'}</li><li>{vi ? 'Đội kỹ thuật còn sáu sự kiện analytics cần triển khai.' : 'Engineering has six analytics events left to implement.'}</li><li>{vi ? 'Danh sách đối tác sẽ được duyệt vào thứ Sáu.' : 'The partner list will be approved on Friday.'}</li></ul><Button>{vi ? 'Sao chép ghi chú' : 'Copy notes'}</Button></article>}
+        {activeTab === 'todos' && <section className="todo-card tab-content"><div className="section-label"><ListTodo size={16} />{vi ? 'Việc cần làm' : 'Action items'}</div>{[
+          vi ? 'Hoàn thiện nội dung hướng dẫn người dùng mới' : 'Finalize new-user onboarding copy',
+          vi ? 'Bổ sung các sự kiện phân tích còn thiếu' : 'Add remaining analytics events',
+          vi ? 'Gửi danh sách đối tác beta để phê duyệt' : 'Send beta partner list for approval',
+        ].map((x,i) => <label className="todo-row" key={x}><input type="checkbox" defaultChecked={i === 0} /><span><strong>{x}</strong><small>{i === 2 ? (vi ? 'Quá hạn · Hôm qua' : 'Overdue · Yesterday') : (vi ? 'Hạn 7 tháng 6 · Alex Morgan' : 'Due Jun 7 · Alex Morgan')}</small></span><button onClick={() => seekTo(['08:42','18:42','31:08'][i])}>{vi ? 'Đến nguồn' : 'Jump to source'} · {['08:42','18:42','31:08'][i]}</button></label>)}</section>}
+        {activeTab === 'calendar' && <section className="calendar-content tab-content"><div className="section-label"><CalendarDays size={16} />{vi ? 'Đề xuất lịch' : 'Calendar suggestions'}</div><div className="calendar-event"><div className="calendar-date"><strong>07</strong><span>JUN</span></div><div><strong>{vi ? 'Đánh giá mức độ sẵn sàng ra mắt' : 'Launch readiness review'}</strong><p>{vi ? 'Thứ Sáu, 7 tháng 6 · 10:00–10:30' : 'Friday, June 7 · 10:00–10:30 AM'}</p><small>{vi ? 'Được đề xuất từ nội dung tại 28:16' : 'Suggested from discussion at 28:16'}</small></div><Button>{vi ? 'Tải tệp .ics' : 'Download .ics'}</Button></div><p className="calendar-note">{vi ? 'Ricotdin không tự động đồng bộ với lịch của bạn.' : 'Ricotdin does not automatically sync with your calendar.'}</p></section>}
+        {activeTab === 'transcript' && <section className="transcript-content tab-content"><div className="transcript-toolbar"><div className="section-label"><MessageSquareText size={16} />{vi ? 'Bản ghi cuộc họp' : 'Meeting transcript'}</div><label className="search"><Search size={15} /><input value={transcriptSearch} onChange={e => setTranscriptSearch(e.target.value)} placeholder={vi ? 'Tìm trong bản ghi…' : 'Search transcript…'} /></label></div>{[
+          ['08:42','Alex Morgan',vi ? 'Chúng ta nên giữ phạm vi beta ở 30 đối tác thiết kế để có thể hỗ trợ kỹ hơn.' : 'We should keep the beta limited to 30 design partners so we can support them closely.'],
+          ['18:42','Maya Chen',vi ? 'Tôi sẽ hoàn thiện nội dung onboarding trước ngày 7 tháng 6.' : 'I’ll finalize the onboarding copy before June 7.'],
+          ['31:08','Sam Rivera',vi ? 'Tôi sẽ gửi danh sách đối tác cuối cùng để mọi người phê duyệt.' : 'I’ll send the final partner list around for approval.'],
+        ].filter(row => row.join(' ').toLowerCase().includes(transcriptSearch.toLowerCase())).map(row => <div className="transcript-row" key={row[0]}><button onClick={() => setCurrentTime(row[0])}>{row[0]}</button><div><strong>{row[1]}</strong><p>{row[2]}</p></div></div>)}</section>}
+      </section>
+      <aside className="detail-chat"><div className="section-label"><MessageSquareText size={16} />{vi ? 'Hỏi về cuộc họp này' : 'Ask about this meeting'}</div><div className="detail-chat-empty"><div className="ai-avatar"><Sparkles size={16} /></div><strong>{vi ? 'Bạn muốn biết điều gì?' : 'What would you like to know?'}</strong><p>{vi ? 'Tôi sẽ trả lời dựa trên nội dung cuộc họp và dẫn nguồn theo thời gian.' : 'I’ll answer from this meeting and cite the exact moments.'}</p></div><div className="detail-composer"><textarea placeholder={vi ? 'Đặt câu hỏi về cuộc họp…' : 'Ask about this meeting…'} /><Button variant="primary"><ArrowUpRight size={17} /></Button></div></aside>
+    </div>
+  </div>
+}
+
+function ThemeSwatches({ value, onChange }: { value: ColorTheme; onChange: (theme: ColorTheme) => void }) {
+  return <div className="theme-swatches">{(['rose','sage','plum','ocean'] as ColorTheme[]).map(theme => <button key={theme} className={`${theme} ${value === theme ? 'active' : ''}`} onClick={() => onChange(theme)} aria-label={`Use ${theme} theme`} title={theme} />)}</div>
+}
+
+function AuthView({ language, setLanguage, onSignIn, dark, colorTheme }: { language: Language; setLanguage: (l: Language) => void; onSignIn: () => void; dark: boolean; colorTheme: ColorTheme }) {
+  const vi = language === 'vi'
+  return <div className={`auth-page theme-${colorTheme}${dark ? ' dark' : ''}`}>
+    <div className="auth-top"><div className="brand"><div className="logo"><Sparkles size={17} /></div><span>Ricotdin</span></div><div className="language-switch"><Languages size={15} /><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>English</button><button className={language === 'vi' ? 'active' : ''} onClick={() => setLanguage('vi')}>Tiếng Việt</button></div></div>
+    <main className="auth-card">
+      <span className="eyebrow">{vi ? 'Chào mừng trở lại' : 'Welcome back'}</span><h1>{vi ? 'Đăng nhập vào Ricotdin' : 'Sign in to Ricotdin'}</h1><p>{vi ? 'Tiếp tục đến các cuộc họp, ghi chú và trợ lý của bạn.' : 'Continue to your meetings, notes, and assistant.'}</p>
+      <label>{vi ? 'Email hoặc tên người dùng' : 'Email or username'}<input placeholder={vi ? 'Nhập email hoặc tên người dùng' : 'Enter your email or username'} /></label>
+      <label>{vi ? 'Mật khẩu' : 'Password'}<input type="password" placeholder="••••••••" /></label>
+      <button className="forgot">{vi ? 'Quên mật khẩu?' : 'Forgot password?'}</button>
+      <Button variant="primary" className="full" onClick={onSignIn}>{vi ? 'Đăng nhập' : 'Sign in'}</Button>
+      <small>{vi ? 'Chưa có tài khoản?' : 'New to Ricotdin?'} <button>{vi ? 'Tạo tài khoản' : 'Create an account'}</button></small>
+    </main>
+  </div>
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onMouseDown={e => e.stopPropagation()}><div className="modal-head"><h2 id="modal-title">{title}</h2><Button variant="ghost" onClick={onClose} aria-label="Close dialog"><X size={18} /></Button></div>{children}</div></div>
+}
+
+type AdminTab = 'Overview' | 'Users' | 'Pipeline' | 'Usage' | 'API Keys' | 'Storage' | 'Config' | 'Activity' | 'Audit log' | 'Features' | 'Health' | 'API docs'
+const adminTabs: AdminTab[] = ['Overview', 'Users', 'Pipeline', 'Usage', 'API Keys', 'Storage', 'Config', 'Activity', 'Audit log', 'Features', 'Health', 'API docs']
+
+function AdminView() {
+  const [tab, setTab] = useState<AdminTab>('Overview')
+  return <div className="admin-area">
+    <div className="page-head admin-heading"><div><span className="eyebrow">Administration</span><h1>{tab}</h1><p>Manage your workspace infrastructure, access, and operations.</p></div><Status type="success">All systems operational</Status></div>
+    <div className="admin-shell">
+      <nav className="admin-nav" aria-label="Admin sections">
+        {adminTabs.map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{adminIcon(item)}<span>{item}</span></button>)}
+      </nav>
+      <div className="admin-panel">
+        {tab === 'Overview' && <AdminOverview setTab={setTab} />}
+        {tab === 'Users' && <UsersAdmin />}
+        {tab === 'Pipeline' && <PipelineAdmin />}
+        {tab === 'Usage' && <UsageAdmin />}
+        {tab === 'API Keys' && <KeysAdmin />}
+        {tab === 'Storage' && <StorageAdmin />}
+        {tab === 'Config' && <ConfigAdmin />}
+        {(tab === 'Activity' || tab === 'Audit log') && <LogsAdmin audit={tab === 'Audit log'} />}
+        {tab === 'Features' && <FeaturesAdmin />}
+        {tab === 'Health' && <HealthAdmin />}
+        {tab === 'API docs' && <DocsAdmin />}
+      </div>
+    </div>
+  </div>
+}
+
+function AdminPage() {
+  const navigate = useNavigate()
+  return <div className="admin-standalone">
+    <header className="standalone-admin-header">
+      <div className="admin-brand"><div className="admin-brand-mark"><ShieldCheck size={18} /></div><div><strong>Ricotdin</strong><span>Administration</span></div></div>
+      <div className="admin-header-actions">
+        <Status type="success">Systems operational</Status>
+        <button className="return-to-app" onClick={() => navigate('/meetings')}>Return to workspace <ArrowUpRight size={14} /></button>
+        <div className="avatar">AM</div>
+      </div>
+    </header>
+    <main className="standalone-admin-main"><AdminView /></main>
+  </div>
+}
+
+function adminIcon(item: AdminTab) {
+  const Icon = item === 'Users' ? Users : item === 'Pipeline' ? Activity : item === 'Usage' ? BarChart3 : item === 'API Keys' ? KeyRound : item === 'Storage' ? HardDrive : item === 'Health' ? Gauge : item === 'Features' || item === 'Config' ? SlidersHorizontal : item === 'Overview' ? Home : ShieldCheck
+  return <Icon size={16} />
+}
+
+function AdminOverview({ setTab }: { setTab: (tab: AdminTab) => void }) {
+  return <>
+    <div className="admin-kpis">
+      <Stat label="Total users" value="1,284" meta="+38 this month" />
+      <Stat label="Meetings processed" value="8,492" meta="98.7% success rate" />
+      <Stat label="Audio transcribed" value="3,918h" meta="This billing period" />
+      <Stat label="Storage used" value="742 GB" meta="74% of 1 TB" />
+    </div>
+    <div className="admin-grid">
+      <section className="admin-card"><CardHead title="Pipeline" action="View monitor" onClick={() => setTab('Pipeline')} /><div className="pipeline-summary"><div><Status type="processing">12 processing</Status><strong>48</strong><span>jobs in queue</span></div><div><Status type="danger">3 need attention</Status><strong>4m 18s</strong><span>average time</span></div></div></section>
+      <section className="admin-card"><CardHead title="System health" action="View health" onClick={() => setTab('Health')} />{['Database', 'R2 storage', 'OpenAI', 'Speechmatics'].map((x, i) => <div className="health-line" key={x}><span>{x}</span><Status type={i === 2 ? 'processing' : 'success'}>{i === 2 ? 'Degraded' : 'Operational'}</Status><small>{[28, 84, 618, 392][i]} ms</small></div>)}</section>
+    </div>
+    <section className="admin-card"><CardHead title="Recent admin activity" action="View audit log" onClick={() => setTab('Audit log')} /><div className="timeline"><Event badge="User" text="Jamie Chen disabled user sam@acme.com" time="8 minutes ago" /><Event badge="Key" text="OpenAI production key passed health check" time="24 minutes ago" /><Event badge="Config" text="Audio retention changed from 60 to 45 days" time="Yesterday, 4:12 PM" /></div></section>
+  </>
+}
+
+function Stat({ label, value, meta }: { label: string; value: string; meta: string }) {
+  return <div className="stat-card"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>
+}
+function CardHead({ title, action, onClick }: { title: string; action?: string; onClick?: () => void }) {
+  return <div className="card-head"><h2>{title}</h2>{action && <button onClick={onClick}>{action} <ArrowUpRight size={13} /></button>}</div>
+}
+
+const adminUsers = [
+  ['alex@acme.com', 'alex.morgan', 'Admin', 'Active', '84', '8.2 / 10h', '2 min ago', 'Jan 12, 2024'],
+  ['maya@acme.com', 'maya.chen', 'User', 'Active', '42', '4.1 / 10h', '1 hour ago', 'Feb 8, 2024'],
+  ['sam@acme.com', 'sam.rivera', 'User', 'Disabled', '18', '2.4 / 10h', 'May 18', 'Mar 21, 2024'],
+  ['priya@acme.com', 'priya.shah', 'User', 'Unverified', '0', '0 / 10h', 'Never', 'May 22, 2025'],
+]
+function UsersAdmin() {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('All statuses')
+  const rows = adminUsers.filter(u => u[0].includes(query.toLowerCase()) && (status === 'All statuses' || u[3] === status))
+  return <>
+    <AdminToolbar><label className="search"><Search size={17} /><input placeholder="Search email or username…" value={query} onChange={e => setQuery(e.target.value)} /></label><select value={status} onChange={e => setStatus(e.target.value)}><option>All statuses</option><option>Active</option><option>Unverified</option><option>Disabled</option></select><Button variant="primary"><Plus size={15} /> Add user</Button></AdminToolbar>
+    <div className="data-table users-table">
+      <div className="table-row table-header"><span>User</span><span>Role</span><span>Status</span><span>Meetings</span><span>Quota</span><span>Last sign-in</span><span>Created</span><span /></div>
+      {rows.map((u, i) => <div className="table-row" key={u[0]}>
+        <div className="user-cell"><div className="avatar">{u[1].slice(0,2).toUpperCase()}</div><div><strong>{u[0]}</strong><small>@{u[1]}</small></div>{i === 0 && <span className="you-badge">You</span>}</div>
+        <span data-label="Role"><span className="role-badge">{u[2]}</span></span><span data-label="Status"><Status type={u[3] === 'Active' ? 'success' : u[3] === 'Disabled' ? 'danger' : 'warning'}>{u[3]}</Status></span><span data-label="Meetings">{u[4]}</span><span data-label="Quota">{u[5]}</span><span data-label="Last sign-in">{u[6]}</span><span data-label="Created">{u[7]}</span><Button variant="ghost" disabled={i === 0}><MoreHorizontal size={18} /></Button>
+      </div>)}
+    </div>
+    <Pagination count="1–4 of 1,284 users" />
+  </>
+}
+
+function AdminToolbar({ children }: { children: React.ReactNode }) { return <div className="admin-toolbar">{children}</div> }
+function Pagination({ count }: { count: string }) { return <div className="pagination"><span>{count}</span><Button disabled>Previous</Button><Button>Next</Button></div> }
+
+const jobs = [
+  ['Processing', 'Q2 roadmap review', 'maya@acme.com', '2 min ago', '42:18', '—'],
+  ['Stuck', 'Customer interview — Delta', 'sam@acme.com', '18 min ago', '58:04', 'Transcription timeout after 900s'],
+  ['Failed', 'Weekly product sync', 'alex@acme.com', '32 min ago', '36:11', 'Provider returned status 503'],
+  ['Done', 'Design critique', 'priya@acme.com', '1 hr ago', '44:50', '—'],
+]
+function PipelineAdmin() {
+  const [filter, setFilter] = useState('All jobs')
+  return <>
+    <div className="refresh-line"><span><span className="live-dot" /> Auto-refresh every 10s</span><span>Updated just now</span></div>
+    <div className="pipeline-stats">{[['Pending','48'],['Processing','12'],['Stuck','3'],['Failed','7'],['Done','8,422'],['Avg. time','4m 18s']].map(x => <button key={x[0]} onClick={() => setFilter(x[0])}><span>{x[0]}</span><strong>{x[1]}</strong></button>)}</div>
+    <AdminToolbar><div className="filter-tabs">{['All jobs','Processing','Stuck','Failed','Done'].map(x => <button className={filter === x ? 'active' : ''} onClick={() => setFilter(x)} key={x}>{x}</button>)}</div><Button variant="danger">Requeue all stuck / failed</Button></AdminToolbar>
+    <div className="data-table jobs-table"><div className="table-row table-header"><span>Status</span><span>Meeting</span><span>Owner</span><span>Created</span><span>Duration</span><span>Error</span><span /></div>{jobs.map(j => <div className="table-row" key={j[1]}><span data-label="Status"><Status type={j[0] === 'Done' ? 'success' : j[0] === 'Failed' ? 'danger' : j[0] === 'Stuck' ? 'warning' : 'processing'}>{j[0]}</Status></span><strong>{j[1]}</strong><span data-label="Owner">{j[2]}</span><span data-label="Created">{j[3]}</span><span data-label="Duration">{j[4]}</span><span className="error-snippet" data-label="Error">{j[5]}</span><Button disabled={!['Failed','Stuck'].includes(j[0])}>Requeue</Button></div>)}</div>
+  </>
+}
+
+function UsageAdmin() {
+  return <>
+    <AdminToolbar><input type="date" defaultValue="2025-05-01" /><span>to</span><input type="date" defaultValue="2025-05-23" /><label className="toggle-label"><input type="checkbox" /> Break down by operation</label></AdminToolbar>
+    <div className="admin-kpis usage-kpis"><Stat label="AI calls" value="24,812" meta="+12.4% vs prior period" /><Stat label="Input / output tokens" value="18.2M / 4.8M" meta="Across 4 providers" /><Stat label="Audio minutes" value="82,420" meta="1,374 hours" /><Stat label="Rate-limited / errors" value="128 / 42" meta="0.68% of requests" /></div>
+    <section className="admin-card"><CardHead title="Daily usage by provider" /><div className="chart-legend"><span><i className="gemini" /> Gemini</span><span><i className="openai" /> OpenAI</span><span><i className="grok" /> Grok</span></div><div className="bar-chart">{[56,72,61,84,67,93,78,88,64,74,96,82,69,90].map((h,i) => <div className="bar-stack" key={i} title={`${(h*14).toLocaleString()} calls`}><i style={{height:`${h*.45}%`}} /><b style={{height:`${h*.35}%`}} /><em style={{height:`${h*.2}%`}} /></div>)}</div></section>
+    <div className="meter-grid"><MeterTable title="Token-metered" rows={[['Gemini 2.5 Pro','8.4M','2.1M','$42.18'],['GPT-4.1 mini','6.2M','1.8M','$31.04'],['Grok 3','3.6M','0.9M','$18.70']]} /><MeterTable title="Audio-metered" rows={[['Speechmatics','68,240 min','99.1%','$512.40'],['Whisper fallback','14,180 min','97.8%','$85.08']]} /></div>
+  </>
+}
+function MeterTable({ title, rows }: { title: string; rows: string[][] }) { return <section className="admin-card compact"><CardHead title={title} /><div className="mini-table">{rows.map(r => <div key={r[0]}>{r.map((x,i) => i === 0 ? <strong key={x}>{x}</strong> : <span key={x}>{x}</span>)}</div>)}</div></section> }
+
+function KeysAdmin() {
+  return <>
+    <AdminToolbar><span className="last-check"><Check size={15} /> Health checks last run 4 min ago</span><Button>Run health check now</Button><Button variant="primary"><Plus size={15} /> Add API key</Button></AdminToolbar>
+    {['Gemini','OpenAI','Speechmatics','Grok'].map((provider,i) => <section className="admin-card provider-card" key={provider}><CardHead title={provider} /><div className="key-row"><div><strong>{i < 2 ? 'Production' : 'Primary'}</strong><small>••••••••{['7k2a','9f4c','2m8p','6x1q'][i]}</small></div><Status type={i === 3 ? 'warning' : 'success'}>{i === 3 ? 'Unknown' : 'Healthy'}</Status><span className="key-used">Last used {i+1} min ago</span><Button>Disable</Button><Button variant="ghost"><MoreHorizontal size={17} /></Button></div></section>)}
+    <div className="secure-note"><ShieldCheck size={18} /><div><strong>Keys are write-only</strong><p>Secret values are encrypted at rest and can never be viewed again after saving.</p></div></div>
+  </>
+}
+
+function StorageAdmin() {
+  return <>
+    <div className="admin-kpis"><Stat label="Total objects" value="18,420" meta="Audio and exports" /><Stat label="Storage used" value="742 GB" meta="74% of capacity" /><Stat label="Orphan files" value="28" meta="4.2 GB recoverable" /><Stat label="Audio retained" value="45 days" meta="Workspace policy" /></div>
+    <section className="admin-card config-form"><CardHead title="Cloudflare R2 connection" /><div className="form-grid"><label>Account ID<input value="8c92••••••••3fa1" readOnly /></label><label>Bucket name<input defaultValue="ricotdin-production" /></label><label>Access key<input defaultValue="R2PROD••••••" /></label><label>Secret key<input type="password" placeholder="Write-only — enter to replace" /></label></div><div className="form-actions"><Status type="success">Connected</Status><Button>Test connection</Button><Button variant="primary">Save configuration</Button></div></section>
+    <section className="admin-card"><CardHead title="Orphan files" action="Clean up all" /><div className="mini-table">{['audio/bd72f.webm · 284 MB','audio/a81cd.m4a · 92 MB','exports/9fa2.zip · 18 MB'].map(x => <div key={x}><strong>{x}</strong><span>Not linked to a meeting</span><Button variant="ghost">Delete</Button></div>)}</div></section>
+  </>
+}
+
+function ConfigAdmin() {
+  const configs = [['Audio retention','Delete original audio after this many days','45','number'],['Audio render hack','Use compatibility processing for unsupported codecs','Enabled','toggle'],['Auto requeue','Retry failed transcription jobs once','Enabled','toggle'],['Meeting size limit','Maximum upload size in megabytes','500','number']]
+  return <>
+    <section className="admin-card"><CardHead title="Workspace configuration" />{configs.map(c => <div className="setting-row" key={c[0]}><div><strong>{c[0]}</strong><p>{c[1]}</p></div>{c[3] === 'toggle' ? <button className="switch on" aria-label={`Toggle ${c[0]}`}><i /></button> : <input type="number" defaultValue={c[2]} />}</div>)}</section>
+    <section className="admin-card config-form"><CardHead title="AI model allow-list" /><div className="model-list">{['Gemini 2.5 Pro','GPT-4.1 mini','Grok 3'].map((m,i) => <label key={m}><input type="checkbox" defaultChecked /><span>{m}</span>{i === 0 && <span className="badge">System default</span>}</label>)}</div><Button variant="primary">Save settings</Button></section>
+  </>
+}
+
+function LogsAdmin({ audit }: { audit: boolean }) {
+  return <>
+    <AdminToolbar><label className="search"><Search size={17} /><input placeholder="Filter by user or event…" /></label><select><option>All event types</option><option>User</option><option>Meeting</option><option>Configuration</option></select><input type="date" defaultValue="2025-05-23" /></AdminToolbar>
+    <section className="admin-card timeline-card">{audit ? <>
+      <Audit actor="Jamie Chen" action="Disabled user" target="sam@acme.com" ip="172.16.4.28" time="10:42:18" />
+      <Audit actor="Alex Morgan" action="Updated setting" target="audio_retention_days" ip="172.16.4.12" time="09:18:04" />
+      <Audit actor="System" action="Requeued job" target="job_8fa29b" ip="—" time="08:54:31" />
+    </> : <div className="timeline"><Event badge="Meeting" text="Q2 roadmap review finished processing" time="2 minutes ago" /><Event badge="User" text="priya@acme.com verified their email" time="18 minutes ago" /><Event badge="Pipeline" text="Job job_8fa29b failed after final retry" time="34 minutes ago" /><Event badge="Storage" text="Retention cleanup removed 42 audio objects" time="1 hour ago" /></div>}</section><Pagination count="1–25 of 8,492 events" />
+  </>
+}
+function Event({ badge, text, time }: { badge: string; text: string; time: string }) { return <div className="event"><span className={`event-badge event-${badge.toLowerCase()}`}>{badge}</span><strong>{text}</strong><small>{time}</small></div> }
+function Audit({ actor, action, target, ip, time }: { actor:string; action:string; target:string; ip:string; time:string }) { return <div className="audit-row"><strong>{actor}</strong><span>{action}</span><code>{target}</code><span>{ip}</span><small>{time}</small></div> }
+
+function FeaturesAdmin() {
+  const [selected, setSelected] = useState('REC-01')
+  return <div className="features-split"><aside><label className="search"><Search size={16} /><input placeholder="Search features…" /></label><span className="eyebrow">Recording</span>{[['REC-01','Browser recording'],['REC-02','System audio capture'],['REC-04','Audio upload']].map(f => <button className={selected === f[0] ? 'active' : ''} onClick={() => setSelected(f[0])} key={f[0]}><code>{f[0]}</code><span>{f[1]}</span><Status type="success">Live</Status></button>)}<span className="eyebrow">Intelligence</span>{[['AI-01','Meeting summaries'],['AI-04','Meeting chat']].map(f => <button key={f[0]}><code>{f[0]}</code><span>{f[1]}</span><Status type="processing">Beta</Status></button>)}</aside><section className="feature-editor"><div className="feature-editor-head"><div><code>{selected}</code><h2>Browser recording</h2></div><Button variant="primary">Save changes</Button></div><div className="form-grid"><label>Status<select><option>Live</option><option>Beta</option><option>Planned</option></select></label><label>Priority<select><option>P0 — Critical</option><option>P1 — High</option></select></label><label>Title<input defaultValue="Browser recording" /></label><label>Tags<input defaultValue="recording, core" /></label></div><label>Description<textarea defaultValue="Capture microphone and system audio directly in supported browsers." /></label><label>Dependencies<input defaultValue="AUTH-01, PIPE-02" /></label><label>Markdown content<textarea className="markdown-box" defaultValue={"## Acceptance criteria\n- Capture microphone\n- Capture shared tab audio\n- Show live audio levels"} /></label><label>Change note<input placeholder="Summarize this change…" /></label></section></div>
+}
+
+function HealthAdmin() {
+  return <>
+    <div className="health-grid">{[['Database','Operational','28 ms'],['R2 storage','Operational','84 ms'],['Gemini','Operational','442 ms'],['OpenAI','Degraded','618 ms'],['Speechmatics','Operational','392 ms'],['Grok','Unknown','—']].map(s => <section className="health-card" key={s[0]}><div className="service-icon"><Activity size={18} /></div><div><strong>{s[0]}</strong><Status type={s[1] === 'Operational' ? 'success' : s[1] === 'Degraded' ? 'warning' : 'processing'}>{s[1]}</Status></div><span>{s[2]}</span><small>Checked 42s ago</small></section>)}</div>
+    <section className="admin-card"><CardHead title="Page uptime · last 30 days" />{[['Web application','99.998%'],['API','99.982%'],['Processing workers','99.954%'],['Authentication','100%']].map(x => <div className="uptime-row" key={x[0]}><strong>{x[0]}</strong><div className="uptime-blocks">{Array.from({length:30}).map((_,i)=><i className={i === 18 && x[0] === 'Processing workers' ? 'incident' : ''} key={i} />)}</div><span>{x[1]}</span></div>)}</section>
+  </>
+}
+
+function DocsAdmin() {
+  return <div className="docs-layout"><aside><strong>API reference</strong>{['Introduction','Authentication','Meetings','Transcripts','Webhooks','Errors'].map(x => <button className={x === 'Authentication' ? 'active' : ''} key={x}>{x}</button>)}</aside><article><span className="eyebrow">API reference</span><h1>Authentication</h1><p>Authenticate requests using a workspace API key in the authorization header.</p><pre><code>{`curl https://api.ricotdin.com/v1/meetings \\\n  -H "Authorization: Bearer $RICOTDIN_API_KEY"`}</code></pre><h2>Security</h2><p>Keep API keys server-side. Never expose them in browser code or public repositories.</p></article></div>
+}
+
+const router = createBrowserRouter([
+  {
+    path: '/admin/*',
+    Component: AdminPage,
+  },
+  {
+    path: '/',
+    Component: WorkspaceApp,
+    children: [
+      { index: true },
+      { path: 'meetings' },
+      { path: 'meetings/:meetingId' },
+      { path: 'record' },
+      { path: 'chat' },
+      { path: 'profile' },
+      { path: 'sign-in' },
+      { path: '*' },
+    ],
+  },
+])
+
+export default function App() {
+  return <RouterProvider router={router} />
+}

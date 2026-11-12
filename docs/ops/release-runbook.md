@@ -12,7 +12,9 @@ It links to the detailed docs instead of copying them:
 Every step ends with a **Verify** line. Don't move on until it passes.
 
 `verify:deploy` runs from a ricotdin checkout on any machine with Node 20 (read-only, no secrets).
-Run `npm ci` once first (`tsx` is a dev dependency):
+Since ARC-00 the v1 app is in `legacy/`: every `npm` command and every `migrations/…` / `scripts/…`
+path in this runbook is **inside `legacy/`** (`cd legacy` first). Run `npm ci` once first (`tsx` is a
+dev dependency):
 
 ```bash
 npm run verify:deploy -- https://<ricotdin host> --expect vX.Y.Z
@@ -94,7 +96,7 @@ Do these in order. Afterwards, use **Every release** below.
 
 1. Check the one-time setup in `docs/ops/backup-restore.md` → *One-time setup* is done: age key pair
    (private key offline), R2 bucket + scoped token, GitHub Environment `backup` with its secrets.
-2. Run it: `gh workflow run backup.yml --ref main`, then `gh run watch`.
+2. Run it: `gh workflow run backup.yml --ref dev`, then `gh run watch`.
    **Verify:** the `db-backup` run is green and a new object is in the backup bucket.
 3. Restore into a **scratch** Supabase project, following `docs/ops/backup-restore.md` → *Restore*.
    **Verify:** row counts match. Add a line to that file's *Restore-test log*, then tick OPS-03 in

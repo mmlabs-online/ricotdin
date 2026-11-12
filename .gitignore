@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,12 +11,12 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/dist/
-/out/
+.next/
+dist/
+out/
 
 # production
 /build
@@ -42,3 +42,18 @@ yarn-error.log*
 next-env.d.ts
 
 .agent 
+
+# python (app/api, ARC-00)
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+app/api/openapi.json
+*.env
+
+# ARC-03 migration reports (user ids, storage keys): keep local
+migration-report*.md
+test-results/
+playwright-report/

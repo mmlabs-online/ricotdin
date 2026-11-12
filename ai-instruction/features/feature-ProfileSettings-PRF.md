@@ -196,7 +196,7 @@ As a user, I want to set a default folder for new meetings so I don't have to pi
 ---
 
 ### PRF-08 — Default AI model preference
-**Status:** ❌ Not started
+**Status:** ✅ Done — delivered by AIP-06 (`profiles.default_provider` / `default_model`, `GET/PATCH /api/profile/preferences` within the admin allow-list)
 
 **User Story**  
 As a user, I want to choose my default processing model (Flash ↔ Flash-Lite) so I can trade speed/cost myself.

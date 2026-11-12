@@ -12,6 +12,93 @@ that needs **runtime secrets**, which live only in a server-side env file.
 `apps/ricotdin/release.env` is **not** a draft: ricotdin's `release.yml` writes it in the
 `ricotdin vX.Y.Z` PR (OPS-04). `pr-scope.yml` already accepts `release/ricotdin-v…` branches.
 
+## v2 (ARC-15): `apps/ricotdin-v2/`
+
+v2 lives in its own app directory, so a v1 hotfix or a v1 deploy never touches it and v1 stays
+runnable for a rollback until ARC-16.
+
+| Draft (this repo) | Copy to (deployment repo) |
+|---|---|
+| `docs/ops/deployment-repo/apps/ricotdin-v2/compose.yml` | `apps/ricotdin-v2/compose.yml` |
+| `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2.yml` | `.github/workflows/deploy-ricotdin-v2.yml` |
+
+- **Release pins:** ricotdin's `release.yml` (v2) writes `apps/ricotdin-v2/release.env` with
+  `RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE` (both `:vX.Y.Z@sha256:…`) and `RICOTDIN_VERSION`,
+  in a PR from `release/ricotdin-v2-vX.Y.Z`.
+- **`pr-scope.yml`:** needs no change: it reads the app folder from the branch
+  (`^release/([a-z0-9-]+)-v[0-9]` → `ricotdin-v2`), so that PR may change only `apps/ricotdin-v2/`.
+  (Before OPS-02 the branch was `release/ricotdin-vX.Y.Z`, which pr-scope read as `ricotdin`, the
+  v1 folder, and refused.) Still to do: **dismiss stale approvals on new commits** (a re-run for
+  the same tag force-pushes the branch), and add gitleaks.
+- **Three server env files**, all `chmod 600` and owned by the runner user, never in a repo.
+  Names are listed in `compose.yml`.
+  - `/Users/mingming/.config/ricotdin/api.env`: the API.
+  - `/Users/mingming/.config/ricotdin/worker.env`: the worker. It must hold **only** the worker values, or
+    the worker refuses to start.
+  - `/Users/mingming/.config/ricotdin/web.env`: `RICOTDIN_API_URL`, not a secret.
+  - `KEY_ENCRYPTION_SECRET` is the **same value as v1**.
+  - Generate the production `JWT_PRIVATE_KEY` on the server:
+    `uv run python -m scripts.gen_jwt_key --env-file /Users/mingming/.config/ricotdin/api.env`, or paste its
+    output there.
+  - The logins come from `scripts.provision_db_roles` run against Neon `main`.
+- **cloudflared:** two public hostnames, sibling subdomains of one site:
+  - `api.<domain>` → `http://ricotdin-api:8000`;
+  - `app.<domain>` → `http://ricotdin-web:8080`.
+  - `FORWARDED_ALLOW_IPS` = **only cloudflared's address**, never the whole `web` subnet. Other
+    containers share that network: trusting all of it lets any of them forge `X-Forwarded-For`
+    and slip past the per-client login and register limits. Give cloudflared a fixed
+    `ipv4_address` in `proxy/compose.yml` and put that one address here.
+  - Strip query strings for `/media` from the tunnel / access logs.
+  - `WEB_ORIGIN` and `ALLOWED_ORIGINS` = `https://app.<domain>`.
+- **autoheal** restarts containers labelled `autoheal=true` once they turn unhealthy. It acts on
+  **every** container on the host with that label, not only this project. It holds the Docker
+  socket, which is host root, so it is pinned by digest and has no network.
+  - Follow-up: put a docker-socket-proxy in front of it that allows only list and restart.
+- **Order and rollback:** `docs/ops/v2-cutover.md` in ricotdin.
+
+## v2 staging (OPS-02): `apps/ricotdin-v2-staging/`
+
+Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Production
+(`apps/ricotdin-v2/`) and v1 (`apps/ricotdin/`) are never touched. Owner checklist:
+`docs/ops/staging.md` in ricotdin.
+
+| Draft (this repo) | Copy to (deployment repo) |
+|---|---|
+| `docs/ops/deployment-repo/apps/ricotdin-v2-staging/compose.yml` | `apps/ricotdin-v2-staging/compose.yml` |
+| `docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2-staging.yml` | `.github/workflows/deploy-ricotdin-v2-staging.yml` |
+
+- **Release pins:** ricotdin's `release-staging.yml` writes `apps/ricotdin-v2-staging/release.env`
+  (both images `:staging-X.Y.Z-<sha7>@sha256:…`, `RICOTDIN_VERSION=staging-X.Y.Z-<sha7>`) in a PR
+  from `release/ricotdin-v2-staging-vX.Y.Z`. pr-scope reads that as `ricotdin-v2-staging`. The
+  release run itself waits for `pr-scope`, checks the PR changes only that `release.env` and then
+  squash-merges it (no GitHub auto-merge: on the Free plan this private repo has no branch
+  protection, so auto-merge would not wait for the check). Nothing here *enforces* that rule: the
+  token can push to `main`. Proper fix (debt): GitHub Team or a public repo, a protected `main`
+  requiring `pr-scope`, CODEOWNERS on `/apps/ricotdin*/`, `/proxy/`, `/.github/`, and`pr-scope`
+  allowing only `apps/<app>/release.env` on `release/*` branches.
+- **Three server env files** `/Users/mingming/.config/ricotdin-staging/{api,worker,web}.env` (`chmod 600`,
+  owned by the runner user). They use the same names as production, with staging values:
+  - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
+    branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
+    `JWT_PRIVATE_KEY` (a staging key of its own), `KEY_ENCRYPTION_SECRET` (the value the dev
+    branch's stored keys and `drive_config` were encrypted with), `WEB_ORIGIN` =
+    `ALLOWED_ORIGINS` = `https://ricotdin-staging.mmlabs.online`, `FORWARDED_ALLOW_IPS` =
+    cloudflared's fixed address (pin it with `ipv4_address` in `proxy/compose.yml`; never the
+    subnet). **No `SMTP_*`**: nobody can complete a registration on staging.
+  - `KEY_ENCRYPTION_SECRET` and `JWT_PRIVATE_KEY` must **not** be the production values: staging
+    is public and deploys any pushed `staging/*` branch.
+  - worker: `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET` only.
+  - web: `RICOTDIN_API_URL=https://ricotdin-staging-api.mmlabs.online`.
+  - Re-running `provision_db_roles` against the dev branch **rotates these logins**: copy the
+    new three URLs here at once, or staging stops.
+- **cloudflared:** `ricotdin-staging.mmlabs.online` → `http://ricotdin-staging-web:8080`,
+  `ricotdin-staging-api.mmlabs.online` → `http://ricotdin-staging-api:8000` (one-level names:
+  Cloudflare's free certificate covers `*.mmlabs.online` only). Strip `/media` query strings
+  from the logs.
+- **autoheal:** staging runs its own, limited to the label `autoheal-ricotdin-staging=true`.
+- **Shared with local development:** the database and the Drive folder (`drive_config` lives in
+  that database). A worker the owner runs locally takes jobs from the same queue.
+
 ## How a release deploys
 
 ```

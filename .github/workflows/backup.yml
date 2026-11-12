@@ -1,26 +1,32 @@
-# OPS-03 — daily encrypted Supabase DB backup → dedicated R2 bucket (30-day retention).
+# ARC-15 (was OPS-03) — daily encrypted backup of the v2 Neon database → dedicated R2 bucket
+# (30-day retention).
 #
-# dump (roles, schema, data) → tar.gz → age-encrypt with the PUBLIC key → upload → prune.
-# The workflow never holds a key that can decrypt a backup, and no plaintext dump leaves
-# the runner. Restore runbook + one-time setup: docs/ops/backup-restore.md.
+# pg_dump -Fc (schema + data + grants; roles are recreated by migrations + scripts.provision_db_roles)
+# → age-encrypt with the PUBLIC key → upload → prune. The workflow never holds a key that can
+# decrypt a backup, and no plaintext dump leaves the runner. Restore runbook + one-time setup:
+# docs/ops/backup-restore.md. v1 (Supabase) is no longer backed up here: its final dump is taken by
+# hand at the cutover (docs/ops/v2-cutover.md); Supabase stays untouched until ARC-16.
 #
-# Secrets live in the GitHub Environment `backup` (deployment branches: main only), so a
-# workflow on any other branch cannot read them:
-#   SUPABASE_DB_URL               Session pooler connection string (IPv4; runners have no IPv6)
+# Secrets live in the GitHub Environment `backup` (deployment branches: main + dev — `schedule`
+# runs from the default branch `dev`):
+#   NEON_BACKUP_DATABASE_URL      DIRECT (not -pooler) URL of the Neon `main` branch, sslmode=require;
+#                                 ricotdin_backup_login (BYPASSRLS + pg_read_all_data: pg_dump turns
+#                                 row security off and fails without BYPASSRLS), never the owner or
+#                                 the app/service/worker logins
 #   AGE_RECIPIENT                 age public key (age1…); the private key stays offline
 #   R2_BACKUP_ACCOUNT_ID, R2_BACKUP_ACCESS_KEY_ID, R2_BACKUP_SECRET_ACCESS_KEY, R2_BACKUP_BUCKET
 #                                 token scoped to the backup bucket only (Object Read & Write)
 #
-# Supply-chain ordering: the DB dump + encryption run BEFORE any npm code is installed, and
-# `npm ci --ignore-scripts` runs no install scripts. npm code only ever sees the R2 token.
-# Third-party actions are pinned by commit SHA; the Supabase CLI by exact version.
-# Note: `schedule` only runs from the default branch (main).
+# Two jobs: `dump` holds only the DB URL + the age public key and installs no package; it hands the
+# ENCRYPTED file to `upload` as a 1-day artifact. `upload` holds only the R2 token, so code from
+# the Python packages it installs can never reach the database credential (GitHub-hosted runner
+# steps have sudo: secrets of one job are readable by any code in that job). Actions by commit SHA.
 
 name: db-backup
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # daily 02:00 UTC
+    - cron: '0 2 * * *' # daily 02:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -31,43 +37,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  backup:
+  dump:
     runs-on: ubuntu-latest
     environment: backup
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: 2.121.0
+          persist-credentials: false
 
-      - name: Install age
+      # pg_dump must be at least the server's major version (Neon: Postgres 18).
+      - name: Install pg_dump 18 and age
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq age
-          supabase --version
+          sudo apt-get install -y -qq postgresql-common age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-18
+          /usr/lib/postgresql/18/bin/pg_dump --version
           age --version
 
       - name: Check secrets are set
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
           AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
-          R2_BACKUP_ACCOUNT_ID: ${{ secrets.R2_BACKUP_ACCOUNT_ID }}
-          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
-          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
-          R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
         run: |
           missing=0
-          for v in SUPABASE_DB_URL AGE_RECIPIENT R2_BACKUP_ACCOUNT_ID R2_BACKUP_ACCESS_KEY_ID R2_BACKUP_SECRET_ACCESS_KEY R2_BACKUP_BUCKET; do
+          for v in NEON_BACKUP_DATABASE_URL AGE_RECIPIENT; do
             if [ -z "${!v}" ]; then echo "::error::missing secret $v"; missing=1; fi
           done
           case "$AGE_RECIPIENT" in age1*) ;; *) echo "::error::AGE_RECIPIENT must be an age public key (age1…)"; missing=1 ;; esac
+          case "$NEON_BACKUP_DATABASE_URL" in *-pooler.*) echo "::error::use the direct (not -pooler) Neon URL"; missing=1 ;; esac
           exit $missing
 
       - name: Dump and encrypt
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
           AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
         run: |
           set -euo pipefail
@@ -75,51 +79,73 @@ jobs:
           # GitHub masks the whole URL secret, not the password on its own (or URL-decoded).
           python3 - <<'PY'
           import os, urllib.parse
-          pw = urllib.parse.urlsplit(os.environ["SUPABASE_DB_URL"]).password or ""
+          pw = urllib.parse.urlsplit(os.environ["NEON_BACKUP_DATABASE_URL"]).password or ""
           for v in {pw, urllib.parse.unquote(pw)}:
               if v:
                   print(f"::add-mask::{v}")
           PY
-          dump="$RUNNER_TEMP/dump"
-          mkdir -p "$dump"
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f "$dump/roles.sql" --role-only
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f "$dump/schema.sql"
-          supabase db dump --db-url "$SUPABASE_DB_URL" -f "$dump/data.sql" --use-copy --data-only
-          for f in roles.sql schema.sql data.sql; do
-            test -s "$dump/$f" || { echo "::error::$f is empty"; exit 1; }
-          done
-          tar -C "$dump" -czf "$RUNNER_TEMP/backup.tar.gz" roles.sql schema.sql data.sql
-          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/backup.tar.gz.age" "$RUNNER_TEMP/backup.tar.gz"
-          rm -rf "$dump" "$RUNNER_TEMP/backup.tar.gz"
-          ls -l "$RUNNER_TEMP/backup.tar.gz.age"
+          mkdir -p "$RUNNER_TEMP/out"
+          out="$RUNNER_TEMP/backup.dump"
+          # (libpq takes a URL only as --dbname; the runner is single-use and the secret masked)
+          /usr/lib/postgresql/18/bin/pg_dump --dbname="$NEON_BACKUP_DATABASE_URL" \
+            --format=custom --compress=6 --no-password --file="$out"
+          test -s "$out" || { echo "::error::the dump is empty"; exit 1; }
+          # A readable archive with the data we expect, before it is encrypted and sent. The list
+          # goes to a file first: `grep -q` on a pipe would SIGPIPE pg_restore under pipefail.
+          /usr/lib/postgresql/18/bin/pg_restore --list "$out" > "$RUNNER_TEMP/toc.txt"
+          grep -q 'TABLE DATA public meetings' "$RUNNER_TEMP/toc.txt" \
+            || { echo "::error::the dump has no public.meetings data"; exit 1; }
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/out/backup.dump.age" "$out"
+          rm -f "$out" "$RUNNER_TEMP/toc.txt"
+          ls -l "$RUNNER_TEMP/out/backup.dump.age"
 
-      # npm code is installed only now: the DB URL and the plaintext dump are already gone.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - name: Hand over the encrypted file
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          node-version: 20
-          cache: npm
+          name: backup-encrypted
+          path: ${{ runner.temp }}/out/backup.dump.age
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: Install dependencies (no install scripts)
-        run: npm ci --ignore-scripts
+      - name: Remove local files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup.dump" "$RUNNER_TEMP/toc.txt" "$RUNNER_TEMP/out"
+
+  upload:
+    needs: dump
+    runs-on: ubuntu-latest
+    environment: backup
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: backup-encrypted
+          path: ${{ runner.temp }}/in
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.11.17'
 
       - name: Upload to R2
+        working-directory: app/api
         env:
           R2_BACKUP_ACCOUNT_ID: ${{ secrets.R2_BACKUP_ACCOUNT_ID }}
           R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
           R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
-        run: npx tsx scripts/backup/r2.ts upload "$RUNNER_TEMP/backup.tar.gz.age"
+        run: uv run --frozen --no-dev python -m scripts.backup_r2 upload "$RUNNER_TEMP/in/backup.dump.age"
 
       # Runs only when every step above succeeded (default `if: success()`).
       - name: Prune backups older than 30 days
+        working-directory: app/api
         env:
           R2_BACKUP_ACCOUNT_ID: ${{ secrets.R2_BACKUP_ACCOUNT_ID }}
           R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
           R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
           R2_BACKUP_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
           BACKUP_RETENTION_DAYS: '30'
-        run: npx tsx scripts/backup/r2.ts prune
-
-      - name: Remove local files
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/dump" "$RUNNER_TEMP/backup.tar.gz" "$RUNNER_TEMP/backup.tar.gz.age"
+        run: uv run --frozen --no-dev python -m scripts.backup_r2 prune
