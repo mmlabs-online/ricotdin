@@ -31,11 +31,11 @@ chat.
 | # | Step | Done when |
 |---|---|---|
 | 1 | **Docker Hub:** create the public repos `mingming21400/ricotdin-api` and `mingming21400/ricotdin-web`. The ricotdin secret `DOCKERHUB_TOKEN` must be able to push to both. | both repos listed |
-| 2 | **`DEPLOY_REPO_TOKEN`** (ricotdin secret, already set): a fine-grained PAT on `mmlabs-online/deployment` with **Contents** and **Pull requests** read/write. If it has expired, create a new one. | `gh secret list` shows a recent date |
+| 2 | **`DEPLOY_REPO_TOKEN`** (ricotdin secret, already set): a fine-grained PAT on `mmlabs-online/deployment` with **Contents** and **Pull requests** read/write, plus **Actions: read** (the staging run reads the `pr-scope` result through it). If it has expired, create a new one. | `gh secret list` shows a recent date |
 | 3 | **Deployment repo settings:** *Allow squash merging* must stay on (it is). The release run waits for `pr-scope` itself and merges only a PR that changes `apps/ricotdin-v2-staging/release.env` alone. **Known limit:** on the GitHub Free plan a private repo has no branch protection, so nothing *forces* that check and `DEPLOY_REPO_TOKEN` could push to `main` directly (true before OPS-02 too). The real fix is GitHub Team (or a public deployment repo) with a protected `main` requiring `pr-scope` + CODEOWNERS, and a GitHub App instead of your PAT: debt issue. | squash merging on |
 | 4 | **Copy the drafts** from `docs/ops/deployment-repo/` in a PR on the deployment repo: `apps/ricotdin-v2-staging/compose.yml` and `.github/workflows/deploy-ricotdin-v2-staging.yml`. That PR touches `.github/`, so pr-scope does not apply: review it yourself and merge. | merged |
 | 5 | **Logins:** the dev branch's three logins are in your local `app/api/.env` (`DATABASE_URL_APP` / `_SERVICE` / `_WORKER`). If they are missing, run `cd app/api; uv run --env-file .env python -m scripts.provision_db_roles` once. **Re-running it later rotates them, and staging stops** until step 6 is redone. | three URLs present |
-| 6 | **Server env files** (on the MacBook runner (macbook-runner), owned by the runner user, `chmod 600`): `/Users/mingming/.config/ricotdin-staging/api.env`, `worker.env`, `web.env`. Contents: see "v2 staging" in `docs/ops/deployment-repo/README.md`. The JWT key for staging: run `cd app/api; uv run python -m scripts.gen_jwt_key --env-file <a file outside the repo>`, then move that line to the server file and delete the local file. **No `SMTP_*`.** | files exist, 600 |
+| 6 | **Deployment repo secrets** (the deploy run writes the server env files from them; never create those by hand): `RICOTDIN_DATABASE_URL_APP`, `RICOTDIN_DATABASE_URL_SERVICE`, `RICOTDIN_DATABASE_URL_WORKER`, `RICOTDIN_KEY_ENCRYPTION_SECRET`, `RICOTDIN_JWT_PRIVATE_KEY` (optional `RICOTDIN_SENTRY_DSN`). Set each with `gh secret set <NAME> -R mmlabs-online/deployment` (it prompts for the value). The JWT key for staging: `cd app/api; uv run python -m scripts.gen_jwt_key --env-file <a file outside the repo>`, paste that line's value into `RICOTDIN_JWT_PRIVATE_KEY`, then delete the file. Details: "v2 staging" in `docs/ops/deployment-repo/README.md`. **No `SMTP_*`.** | `gh secret list -R mmlabs-online/deployment` shows the five |
 | 7 | **cloudflared:** add `ricotdin-staging.mmlabs.online` → `http://ricotdin-staging-web:8080` and `ricotdin-staging-api.mmlabs.online` → `http://ricotdin-staging-api:8000`. Drop query strings for `/media` from the logs. | both names resolve |
 | 8 | **Database:** the dev branch is at the newest migration: `cd app/api; uv run --env-file .env alembic upgrade head`. | `alembic current` = head |
 | 9 | **Keys of the dev database:** make sure the `KEY_ENCRYPTION_SECRET` in your local `.env` (and so on staging) is **not** the production / v1 value, and that the dev `drive_config` is not connected with the production Google account + OAuth client. Staging is public and runs any pushed `staging/*` branch: whoever reaches it must not get production keys. If they are the same: set a new secret for dev, re-add the dev provider keys at `/admin/keys` and re-run `connect_gdrive`. | different values confirmed |
@@ -72,6 +72,8 @@ staging image may not run on a newer schema.
 - **Deploy is red with "restored":** the new build was unhealthy; the previous one is running
   again. Read the run log: the containers' logs are on the server
   (`docker compose -p ricotdin-v2-staging logs api`).
-- **`env-missing`:** step 6. Then *Actions → deploy-ricotdin-v2-staging → Run workflow*.
-- **API answers 503 on sign-in:** `JWT_PRIVATE_KEY` is missing in the api env file.
-- **Everything 500s after a local `provision_db_roles`:** the logins rotated (step 5 and step 6).
+- **`env-missing`:** the run log names the missing or malformed `RICOTDIN_*` secret (step 6). Set it,
+  then *Actions → deploy-ricotdin-v2-staging → Run workflow*.
+- **API answers 503 on sign-in:** `RICOTDIN_JWT_PRIVATE_KEY` is wrong (it is required, so it is not missing).
+- **Everything 500s after a local `provision_db_roles`:** the logins rotated: set the three URL
+  secrets again (step 6) and Run workflow.

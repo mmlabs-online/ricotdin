@@ -29,7 +29,7 @@ export function parseModelValue(value: string): { provider: string | null; model
   return { provider: value.slice(0, at), model: value.slice(at + 1) }
 }
 
-export type ProfileForm = 'details' | 'password' | 'model' | 'avatar'
+export type ProfileForm = 'details' | 'password' | 'model' | 'folder' | 'avatar'
 
 export function profileErrorKey(form: ProfileForm, err: unknown): string {
   if (!(err instanceof ApiError)) return 'profile.errors.generic'
@@ -45,6 +45,7 @@ export function profileErrorKey(form: ProfileForm, err: unknown): string {
     if (err.status === 422) return 'profile.errors.passwordRejected'
   }
   if (form === 'model' && err.status === 400) return 'profile.errors.modelNotAllowed'
+  if (form === 'folder' && (err.status === 404 || err.status === 422)) return 'profile.errors.folderUnavailable'
   return 'profile.errors.generic'
 }
 

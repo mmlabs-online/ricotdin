@@ -60,6 +60,7 @@ from app.migration.checksum import RowDigest
 from app.migration.plan import (
     DUPLICATE_ACTIVE_JOBS_SQL,
     column_drift,
+    copied_columns,
     duplicate_active_jobs_problem,
     load_order,
     select_sql,
@@ -230,7 +231,7 @@ def preflight(
         problems += column_drift(
             table,
             dict(zip(src_cat.columns[table], src_cat.types[table], strict=True)),
-            dict(zip(cat.columns[table], cat.types[table], strict=True)),
+            dict(zip(*copied_columns(table, cat.columns[table], cat.types[table]), strict=True)),
         )
     if "jobs" in src_cat.tables:
         dup = src.execute(DUPLICATE_ACTIVE_JOBS_SQL).fetchone()
@@ -243,7 +244,8 @@ def preflight(
             problems.append(f"target table {table} has no primary key")
             continue
         try:
-            queries[table] = upsert_sql(table, cat.columns[table], cat.types[table], cat.pks[table])
+            cols, types = copied_columns(table, cat.columns[table], cat.types[table])
+            queries[table] = upsert_sql(table, cols, types, cat.pks[table])
         except MigrationBlocked as exc:
             problems.append(str(exc))
     return problems, queries
@@ -328,7 +330,7 @@ def migrate_tables(
     for table in load_order(cat.tables, cat.fks):
         if table in NOT_COPIED_TABLES:
             continue  # v2-only, nothing in v1
-        cols = cat.columns[table]
+        cols, _ = copied_columns(table, cat.columns[table], cat.types[table])
         dcols = [c for c in cols if c not in DIGEST_EXCLUDE.get(table, set())]
         try:
             digest, fixed = migrate_table(

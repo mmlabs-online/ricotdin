@@ -205,7 +205,10 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
 .dropzone p { margin: 0; font-size: 11px; }
 .date-row { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; padding: 18px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); font-size: 13px; }
 .date-row p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
-.date-row input, .settings-card input, .inline input, .inline select { color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); min-height: 38px; padding: 0 11px; }
+.record-folder-row { margin: 0 0 18px; gap: 15px; }
+.record-folder-row select { max-width: 260px; }
+.record-folder-row select:disabled { opacity: .55; cursor: not-allowed; }
+.date-row input, .date-row select, .settings-card input, .inline input, .inline select { color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); min-height: 38px; padding: 0 11px; }
 .chat-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 160px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
 .chat-history { border-right: 1px solid var(--border); padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .chat-history .eyebrow { margin: 20px 8px 6px; }
@@ -496,6 +499,7 @@ h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
   .record-card { padding: 38px 18px; }
   .capture-list { flex-direction: column; align-items: center; gap: 8px; }
   .date-row { align-items: flex-start; gap: 15px; flex-direction: column; }
+  .record-folder-row select { width: 100%; max-width: none; }
   .chat-layout { margin: -10px -10px 0; border-radius: var(--radius); }
   .messages { padding: 26px 16px; }.assistant-row { max-width: 100%; }.user-bubble { max-width: 88%; }
   .composer { margin: 12px; }.chat-head { padding: 13px; }.chat-head p { display: none; }
@@ -569,7 +573,7 @@ strong, .eyebrow { font-weight: 600; }
 input, select, textarea {
   border-radius: var(--radius) !important;
 }
-.search, .date-row input, .settings-card input, .inline input, .inline select,
+.search, .date-row input, .date-row select, .settings-card input, .inline input, .inline select,
 .admin-toolbar > select, .admin-toolbar > input, .feature-editor input,
 .feature-editor select, .feature-editor textarea, .config-form input {
   min-height: var(--control-height);
