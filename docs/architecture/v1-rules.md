@@ -1,9 +1,9 @@
-# CLAUDE.md — v1 (legacy)
+# v1 rules and designs (reference)
 
-> Moved from the root `CLAUDE.md` (ARC-19). This is the v1 Next.js + Supabase app. **v1 is frozen:
-> hotfixes only, on `release/1.1`.** Every path below is relative to `legacy/` and every v1 command
-> runs inside `legacy/`. Release process (§9k), traceability (§9l) and the working agreement (§10)
-> apply to all work and stay in the root `CLAUDE.md`.
+> Was `legacy/CLAUDE.md` (ARC-19). The v1 code (`legacy/`) was deleted from `dev` in ARC-16; it
+> lives on in git history and on `release/1.1` (tags ≤ v1.1.1), where every path below is relative
+> to the repo root. The rules marked as binding for v2 in the root `CLAUDE.md` ("Never" list:
+> §5–§7, §9b, §9f, §9m) still apply; the rest is the v1 design record the v2 ports cite.
 
 ## 1. What we are building
 

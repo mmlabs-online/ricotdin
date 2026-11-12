@@ -14,15 +14,14 @@
 ## How it was verified
 
 <!-- Tick only what ran, per area touched (CLAUDE.md §0). -->
-- [ ] v1: `cd legacy && npm run lint && npm run typecheck && npm run test && npm run build`
-- [ ] v2 api: `cd app/api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`
-- [ ] v2 web: `cd app/web && npm run typecheck && npm test && npm run build`
-- [ ] Regression / new tests: <!-- legacy/tests/<file>.test.ts | app/api/tests/test_<topic>.py | app/web/src/**/<name>.test.ts -->
+- [ ] api: `cd app/api && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`
+- [ ] web: `cd app/web && npm run typecheck && npm test && npm run build`
+- [ ] Regression / new tests: <!-- app/api/tests/test_<topic>.py | app/web/src/**/<name>.test.ts -->
 - [ ] Manual check: <!-- the feature's "Done check" or the bug's repro steps -->
 
 ## Deploy notes
 
-- Migrations: <!-- none | legacy/migrations/0NN_x.sql (v1, apply BEFORE starting the new image) | app/api Alembic revision (v2) -->
+- Migrations: <!-- none | app/api Alembic revision (run `alembic upgrade head` BEFORE merging the deployment PR) -->
 - Env vars / dashboard steps: <!-- none | ... -->
 
 ## Tracking updated
