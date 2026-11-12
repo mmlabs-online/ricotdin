@@ -32,7 +32,7 @@ export function RecordPage() {
   const start = prefs.isError ? USE_DEFAULT : initialFolderChoice(prefs.data?.defaultFolderId, folders.data)
   const choice = picked !== undefined && stillThere ? picked : start
   const folderId = folderIdForUpload(choice)
-  const lost = !picked && defaultFolderLost(prefs.data?.defaultFolderId, folders.data)
+  const lost = picked === undefined && defaultFolderLost(prefs.data?.defaultFolderId, folders.data)
   const folderSelect = useId()
   const folderHelp = useId()
 
@@ -92,7 +92,7 @@ export function RecordPage() {
               disabled={folderLocked}
               aria-describedby={folderHelp}
             >
-              {choice === USE_DEFAULT && <option value={USE_DEFAULT}>{t('upload.folder.useDefault')}</option>}
+              {prefs.isError && <option value={USE_DEFAULT}>{t('upload.folder.useDefault')}</option>}
               <option value="">{t('meetings.folders.none')}</option>
               {targets.map((f) => (
                 <option key={f.id} value={f.id}>
