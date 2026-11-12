@@ -171,7 +171,7 @@ As a user, I want to choose my UI language (Vietnamese/English) so the app speak
 ---
 
 ### PRF-07 — Default folder preference
-**Status:** ❌ Not started
+**Status:** ✅ Done (v2, 2026-11-12) — migration `0008_default_folder`; API `app/api/app/routers/profile.py` (preferences), `routers/meetings.py` (`POST /meetings`), pure `app/domain/rules.py::parse_preferences_patch` + `app/domain/uploads.py::choose_meeting_folder`; web `app/web/src/lib/folders/defaultFolder.ts`, `routes/ProfilePage.tsx` (DefaultFolderSection), `routes/RecordPage.tsx` (one folder select for recorder + upload). Owner decisions 2026-11-12: picker at creation on the Record page; editor-shared folders allowed; a default that lost access → no folder, not an error.
 
 **User Story**  
 As a user, I want to set a default folder for new meetings so I don't have to pick one every time.

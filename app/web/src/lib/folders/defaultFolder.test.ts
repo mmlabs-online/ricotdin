@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Folder } from '../../api/meetings'
-import { assignableFolders, folderIdForUpload, initialFolderChoice } from './defaultFolder'
+import { USE_DEFAULT, assignableFolders, defaultFolderLost, folderIdForUpload, initialFolderChoice } from './defaultFolder'
 
 function folder(id: string, myRole: Folder['myRole']): Folder {
   return { id, user_id: 'u', name: id, myRole, ownerUsername: null, memberCount: 0 } as Folder
@@ -38,8 +38,22 @@ describe('folderIdForUpload', () => {
   it('sends nothing when no choice was made (the API applies the default)', () => {
     expect(folderIdForUpload(undefined)).toBeUndefined()
   })
+  it('sends nothing for "your default folder" (preferences could not be loaded)', () => {
+    expect(folderIdForUpload(USE_DEFAULT)).toBeUndefined()
+  })
   it('sends null for "no folder" and the id otherwise', () => {
     expect(folderIdForUpload('')).toBeNull()
     expect(folderIdForUpload('own')).toBe('own')
+  })
+})
+
+describe('defaultFolderLost', () => {
+  it('is true only for a saved default the user can no longer add meetings to', () => {
+    expect(defaultFolderLost('gone', [own])).toBe(true)
+    expect(defaultFolderLost('view', [view])).toBe(true)
+    expect(defaultFolderLost('own', [own])).toBe(false)
+    expect(defaultFolderLost(null, [own])).toBe(false)
+    expect(defaultFolderLost('own', undefined)).toBe(false)
+    expect(defaultFolderLost(undefined, [own])).toBe(false)
   })
 })

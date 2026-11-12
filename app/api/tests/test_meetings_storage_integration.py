@@ -235,9 +235,16 @@ def test_default_folder_preference(client: TestClient, world: dict[str, Any]) ->
     assert r.json() == {"ok": True}
     assert client.get(pref, headers=_as(client, "a")).json()["defaultFolderId"] == f
     # the model preference is left alone by a folder-only patch, and the other way round
-    assert _sql(world["db"], "SELECT default_provider FROM profiles WHERE id = %s", world["a"]) == [
-        (None,)
-    ]
+    allowed = client.get(pref, headers=_as(client, "a")).json()["allowedModels"][0]
+    pick = {"provider": allowed["provider"], "model": allowed["model"]}
+    assert client.patch(pref, headers=_as(client, "a"), json=pick).json() == {"ok": True}
+    assert str(_default_of(world, "a")) == f
+    r = client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": None})
+    assert r.json() == {"ok": True} and _default_of(world, "a") is None
+    model = "SELECT default_provider, default_model FROM profiles WHERE id = %s"
+    assert _sql(world["db"], model, world["a"]) == [(pick["provider"], pick["model"])]
+    client.patch(pref, headers=_as(client, "a"), json={"provider": None, "model": None})
+    client.patch(pref, headers=_as(client, "a"), json={"defaultFolderId": f})
     # viewer of the folder, stranger, unknown id: 404; nothing stored
     for who in "cd":
         r = client.patch(pref, headers=_as(client, who), json={"defaultFolderId": f})

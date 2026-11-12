@@ -289,8 +289,12 @@ async def update_preferences(request: Request, identity: Identity, db: Db) -> di
                 },
             )
         if "default_folder_id" in changes:
-            await conn.execute(
-                text("UPDATE public.profiles SET default_folder_id = :f WHERE id = :me"),
-                {"f": folder, "me": identity.user_id},
-            )
+            try:
+                async with conn.begin_nested():
+                    await conn.execute(
+                        text("UPDATE public.profiles SET default_folder_id = :f WHERE id = :me"),
+                        {"f": folder, "me": identity.user_id},
+                    )
+            except IntegrityError as exc:  # folder deleted after the check above (FK)
+                raise NotFound("Folder not found.") from exc
     return {"ok": True}

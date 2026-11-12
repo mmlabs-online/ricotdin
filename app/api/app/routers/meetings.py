@@ -586,6 +586,7 @@ async def create_meeting(request: Request, identity: Identity, db: Db, platform:
             if not from_default:
                 raise NotFound("Folder not found.")
             folder = None  # access to the default folder was lost: no folder, not an error
+            log.info("default folder no longer assignable; meeting created without a folder")
         await conn.execute(
             text(
                 "INSERT INTO public.meetings (id, user_id, title, status, source, "

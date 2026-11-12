@@ -19,7 +19,7 @@ import { useApiUrl } from '../auth/AuthProvider'
 import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
-import { assignableFolders, initialFolderChoice } from '../lib/folders/defaultFolder'
+import { assignableFolders, defaultFolderLost, initialFolderChoice } from '../lib/folders/defaultFolder'
 import { mediaSrc } from '../lib/meetings/detail'
 import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
@@ -398,7 +398,7 @@ function DefaultFolderSection() {
   return (
     <Section title={t('profile.folder.title')} body={t('profile.folder.body')}>
       {prefs.data && folders.data ? (
-        <DefaultFolderForm saved={prefs.data.defaultFolderId} folders={folders.data} />
+        <DefaultFolderForm saved={prefs.data.defaultFolderId} folders={folders.data} onStale={() => void folders.refetch()} />
       ) : failed ? (
         <div>
           <p className="tab-note">{t('detail.loadError')}</p>
@@ -418,7 +418,15 @@ function DefaultFolderSection() {
   )
 }
 
-function DefaultFolderForm({ saved, folders }: { saved: string | null; folders: Folder[] }) {
+function DefaultFolderForm({
+  saved,
+  folders,
+  onStale,
+}: {
+  saved: string | null
+  folders: Folder[]
+  onStale: () => void
+}) {
   const { t } = useTranslation()
   const save = useUpdatePreferences()
   const targets = assignableFolders(folders)
@@ -426,6 +434,8 @@ function DefaultFolderForm({ saved, folders }: { saved: string | null; folders: 
   const [value, setValue] = useState(initialFolderChoice(saved, folders) ?? '')
   const [note, setNote] = useNote()
   const id = useId()
+  const lostId = useId()
+  const lost = value === '' && defaultFolderLost(saved, folders)
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -434,7 +444,11 @@ function DefaultFolderForm({ saved, folders }: { saved: string | null; folders: 
     save
       .mutateAsync({ defaultFolderId: value || null })
       .then(() => setNote('profile.folder.saved', true))
-      .catch((err: unknown) => setNote(profileErrorKey('folder', err)))
+      .catch((err: unknown) => {
+        const key = profileErrorKey('folder', err)
+        if (key === 'profile.errors.folderUnavailable') onStale() // drop the gone folder from the list
+        setNote(key)
+      })
   }
 
   return (
@@ -444,19 +458,25 @@ function DefaultFolderForm({ saved, folders }: { saved: string | null; folders: 
         <select
           id={id}
           value={value}
+          aria-describedby={lost ? lostId : undefined}
           onChange={(e) => {
             setValue(e.target.value)
             setNote(null)
           }}
         >
-          <option value="">{t('profile.folder.none')}</option>
+          <option value="">{t('meetings.folders.none')}</option>
           {targets.map((f) => (
             <option key={f.id} value={f.id}>
-              {f.myRole === 'owner' ? displayText(f.name) : `${displayText(f.name)} (${t('meetings.folders.shared')})`}
+              {f.myRole === 'owner' ? displayText(f.name) : `${displayText(f.name)} ${t('meetings.folders.sharedSuffix')}`}
             </option>
           ))}
         </select>
       </div>
+      {lost && (
+        <p id={lostId} className="tab-note">
+          {t('profile.folder.lost')}
+        </p>
+      )}
       <FormNote note={note} />
       <Button type="submit" variant="primary" aria-disabled={save.isPending} aria-busy={save.isPending}>
         {t('profile.folder.save')}

@@ -14,9 +14,12 @@ import { Button } from './ui/Button'
 
 export function Recorder({
   onBusyChange,
+  onUploadingChange,
   folderId,
 }: {
   onBusyChange?: (busy: boolean) => void
+  /** true while the recording is being sent (the folder choice is locked then) */
+  onUploadingChange?: (uploading: boolean) => void
   /** PRF-07: chosen folder (null = none, undefined = the API's default) */
   folderId?: string | null | undefined
 }) {
@@ -36,6 +39,8 @@ export function Recorder({
     (rec.state === 'stopped' && status.phase !== 'done')
 
   useEffect(() => onBusyChange?.(busy), [busy, onBusyChange])
+  const uploading = status.phase === 'uploading'
+  useEffect(() => onUploadingChange?.(uploading), [uploading, onUploadingChange])
 
   // The control that was used disappears on every state change: put focus on the next one.
   const startRef = useRef<HTMLButtonElement>(null)

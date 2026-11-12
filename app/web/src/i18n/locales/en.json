@@ -903,7 +903,13 @@
     "progressLabel": "Upload progress",
     "folder": {
       "label": "Save to folder",
-      "help": "Your default folder is picked for you. Change it in your profile."
+      "help": "Starts on your default folder.",
+      "profileLink": "Set the default in your profile",
+      "locked": "You can change the folder when this upload finishes.",
+      "loading": "Loading folders…",
+      "loadError": "Folders could not be loaded. The meeting goes to your default folder.",
+      "useDefault": "Your default folder",
+      "lost": "Your default folder is no longer available, so it starts on No folder."
     }
   },
   "errors": {
@@ -932,7 +938,8 @@
       "none": "No folder",
       "shared": "Shared",
       "manage": "Manage",
-      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown."
+      "loadError": "Folders could not be loaded, so folder names and shared editing are not shown.",
+      "sharedSuffix": "(shared with you)"
     },
     "empty": {
       "first": "No meetings yet",
@@ -1347,10 +1354,10 @@
     "folder": {
       "title": "Default folder",
       "body": "New meetings you record or upload go to this folder. You can still pick another one each time.",
-      "label": "Default folder",
-      "none": "No folder",
+      "label": "Folder for new meetings",
       "save": "Save folder",
-      "saved": "Default folder saved."
+      "saved": "Default folder saved.",
+      "lost": "Your saved default folder is no longer available. Pick another one or No folder."
     },
     "usage": {
       "title": "Balance",
