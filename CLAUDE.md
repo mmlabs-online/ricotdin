@@ -107,8 +107,9 @@ From v1 §5 / §6 (`legacy/CLAUDE.md`; the same rules bind v2 per §0):
 
 ## 9k. Release process
 
-**Branches** (GitHub default branch = `dev`, so fresh clones land on `dev`, a bare
-`gh pr create` targets `dev`, and `schedule` workflows run from `dev` — always pass `--base` explicitly):
+**Branches** (GitHub default branch = `main` since 2026-11-12 (owner decision, ARC-19), so fresh clones
+land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows (e.g. `backup.yml`) run
+from `main` — always pass `--base` explicitly; day-to-day PRs still go into `dev`):
 - `dev` — day-to-day work; every push → Docker image `ricotdin:dev` (`release-dev.yml`).
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
