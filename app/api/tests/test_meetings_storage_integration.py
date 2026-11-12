@@ -271,13 +271,20 @@ def test_create_uses_the_default_folder(client: TestClient, world: dict[str, Any
     assert (
         client.patch(pref, headers=_as(client, "b"), json={"defaultFolderId": f}).status_code == 200
     )
+    made = []
     mid, _ = _create(client, "b", b"x")
+    made.append(mid)
     assert str(_folder_of(world, mid)) == f
     for none in (None, ""):
         mid, _ = _create(client, "b", b"x", folderId=none)
+        made.append(mid)
         assert _folder_of(world, mid) is None
     mid, _ = _create(client, "b", b"x", folderId=str(other))
+    made.append(mid)
     assert _folder_of(world, mid) == other
+    # unfinished uploads count against the pending limit of later tests
+    _sql(world["db"], "DELETE FROM meetings WHERE id = ANY(%s::uuid[])", made)
+    client.patch(pref, headers=_as(client, "b"), json={"defaultFolderId": None})
 
 
 def test_lost_default_folder_means_no_folder(client: TestClient, world: dict[str, Any]) -> None:
@@ -303,6 +310,7 @@ def test_lost_default_folder_means_no_folder(client: TestClient, world: dict[str
     )
     mid, _ = _create(client, "d", b"x")
     assert _folder_of(world, mid) is None
+    _sql(world["db"], "DELETE FROM meetings WHERE id = %s", mid)  # pending: frees the limit
     assert client.get(pref, headers=_as(client, "d")).json()["defaultFolderId"] == str(shared)
     r = client.delete(f"/folders/{shared}", headers=_as(client, "a"))
     assert r.status_code == 200, r.text
