@@ -76,21 +76,34 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
   token can push to `main`. Proper fix (debt): GitHub Team or a public repo, a protected `main`
   requiring `pr-scope`, CODEOWNERS on `/apps/ricotdin*/`, `/proxy/`, `/.github/`, and`pr-scope`
   allowing only `apps/<app>/release.env` on `release/*` branches.
-- **Three server env files** `/Users/mingming/.config/ricotdin-staging/{api,worker,web}.env` (`chmod 600`,
-  owned by the runner user). They use the same names as production, with staging values:
-  - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
-    branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
-    `JWT_PRIVATE_KEY` (a staging key of its own), `KEY_ENCRYPTION_SECRET` (the value the dev
-    branch's stored keys and `drive_config` were encrypted with), `WEB_ORIGIN` =
-    `ALLOWED_ORIGINS` = `https://ricotdin-staging.mmlabs.online`, `FORWARDED_ALLOW_IPS` =
-    cloudflared's fixed address (pin it with `ipv4_address` in `proxy/compose.yml`; never the
-    subnet). **No `SMTP_*`**: nobody can complete a registration on staging.
+- **Runtime secrets = repository secrets of the deployment repo**, one per key, named `RICOTDIN_<KEY>`.
+  Every deploy run (step `envfile`) rewrites `/Users/mingming/.config/ricotdin-staging/{api,worker,web}.env`
+  (`chmod 600`) from them; nobody creates or edits those files by hand. To change a value:
+  `gh secret set RICOTDIN_<KEY> -R mmlabs-online/deployment` (it prompts for the value), then
+  *Actions → deploy-ricotdin-v2-staging → Run workflow*. A missing required secret fails the run by name
+  before anything is replaced. Values must be one line without `'`.
+  - Required: `RICOTDIN_DATABASE_URL_APP`, `RICOTDIN_DATABASE_URL_SERVICE`, `RICOTDIN_DATABASE_URL_WORKER`
+    (the Neon **dev** branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
+    `RICOTDIN_JWT_PRIVATE_KEY` (a staging key of its own, one line with escaped `\n`),
+    `RICOTDIN_KEY_ENCRYPTION_SECRET` (the value the dev branch's stored keys and `drive_config` were
+    encrypted with).
+  - Optional: `RICOTDIN_SENTRY_DSN`, `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` (during a key rotation).
   - `KEY_ENCRYPTION_SECRET` and `JWT_PRIVATE_KEY` must **not** be the production values: staging
-    is public and deploys any pushed `staging/*` branch.
-  - worker: `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET` only.
-  - web: `RICOTDIN_API_URL=https://ricotdin-staging-api.mmlabs.online`.
-  - Re-running `provision_db_roles` against the dev branch **rotates these logins**: copy the
-    new three URLs here at once, or staging stops.
+    is public and deploys any pushed `staging/*` branch. Production does not read `RICOTDIN_*`
+    secrets yet; when it does, it needs names of its own.
+  - Not secrets, committed in the workflow: `WEB_ORIGIN` = `ALLOWED_ORIGINS` =
+    `https://ricotdin-staging.mmlabs.online`, `API_DOCS=1`, web `RICOTDIN_API_URL` =
+    `https://ricotdin-staging-api.mmlabs.online`. **No `SMTP_*`**: nobody can complete a
+    registration on staging.
+  - **`FORWARDED_ALLOW_IPS` is unset** until cloudflared gets a fixed `ipv4_address` in
+    `proxy/compose.yml` (never the subnet). Meanwhile uvicorn ignores `X-Forwarded-For`, so all
+    clients share one address for the login/register rate limits (safe, just stricter).
+  - Each file gets only its service's keys: worker = `DATABASE_URL_WORKER`, `KEY_ENCRYPTION_SECRET`
+    (+ `SENTRY_DSN`); web = `RICOTDIN_API_URL`.
+  - Re-running `provision_db_roles` against the dev branch **rotates these logins**: set the
+    three new URL secrets at once and re-run the workflow, or staging stops.
+  - Repository secrets are readable by **every** workflow in this repo (no Environments on the Free
+    plan for a private repo). `DEPLOY_REPO_TOKEN` must therefore not have the *Workflows* permission.
 - **cloudflared:** `ricotdin-staging.mmlabs.online` → `http://ricotdin-staging-web:8080`,
   `ricotdin-staging-api.mmlabs.online` → `http://ricotdin-staging-api:8000` (one-level names:
   Cloudflare's free certificate covers `*.mmlabs.online` only). Strip `/media` query strings
