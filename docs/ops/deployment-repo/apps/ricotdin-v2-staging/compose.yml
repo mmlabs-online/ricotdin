@@ -1,4 +1,4 @@
-# ricotdin v2 STAGING on the home server (OPS-02). DRAFT, kept in ricotdin/docs/ops/deployment-repo/;
+# ricotdin v2 STAGING on the self-hosted runner macbook-runner (mmlabs-server is retired) (OPS-02). DRAFT, kept in ricotdin/docs/ops/deployment-repo/;
 # the operator copies it to the deployment repository. A copy of apps/ricotdin-v2/compose.yml with its
 # own project, network aliases, env files and autoheal label, so it runs next to production and v1.
 #
@@ -24,7 +24,7 @@ services:
     # JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS,
     # FORWARDED_ALLOW_IPS (ONLY cloudflared's fixed address, never the shared `web` subnet), SENTRY_DSN,
     # optional provider key fallbacks. API_DOCS=1 is acceptable on staging only. No SMTP_* on staging.
-    env_file: [/etc/mmlabs/ricotdin-staging-api.env]
+    env_file: [/Users/mingming/.config/ricotdin-staging/api.env]
     environment:
       RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
     # image HEALTHCHECK: GET /health (no database)
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
     # ONLY DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional provider key fallbacks,
     # LOG_LEVEL, SENTRY_DSN: the worker refuses to start with any other database URL or secret.
-    env_file: [/etc/mmlabs/ricotdin-staging-worker.env]
+    env_file: [/Users/mingming/.config/ricotdin-staging/worker.env]
     environment:
       RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
       TMPDIR: /work # job directories + heartbeat (app.worker.health)
@@ -69,7 +69,7 @@ services:
     restart: unless-stopped
     # RICOTDIN_API_URL=https://ricotdin-staging-api.mmlabs.online (required) and optional RICOTDIN_AUTH_URL:
     # plain origins, not secrets. The container exits on anything else.
-    env_file: [/etc/mmlabs/ricotdin-staging-web.env]
+    env_file: [/Users/mingming/.config/ricotdin-staging/web.env]
     # image HEALTHCHECK: GET /healthz
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']

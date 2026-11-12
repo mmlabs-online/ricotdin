@@ -995,7 +995,9 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
   only that file and squash-merges it. Not GitHub auto-merge: a private repo on the Free plan has no
   branch protection, so nothing enforces the check (debt). Only the branch head deploys (an old
   re-run is skipped); one staging branch at a time. `deploy-ricotdin-v2-staging.yml` deploys it on
-  mmlabs-server with restore on unhealthy.
+  the self-hosted `macbook-runner` (the MacBook; mmlabs-server is retired; env files in
+  `/Users/mingming/.config/ricotdin-staging/`, production v2 `/Users/mingming/.config/ricotdin/`) with
+  restore on unhealthy.
   Hosts `ricotdin-staging.mmlabs.online` (web) + `ricotdin-staging-api.mmlabs.online` (one-level
   names: the free Cloudflare certificate covers `*.mmlabs.online` only). Staging = the Neon **dev**
   branch through the three app logins (owner decision 2026-11-09: shared with local development,

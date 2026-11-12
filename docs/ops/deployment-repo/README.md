@@ -32,13 +32,13 @@ runnable for a rollback until ARC-16.
   the same tag force-pushes the branch), and add gitleaks.
 - **Three server env files**, all `chmod 600` and owned by the runner user, never in a repo.
   Names are listed in `compose.yml`.
-  - `/etc/mmlabs/ricotdin-api.env`: the API.
-  - `/etc/mmlabs/ricotdin-worker.env`: the worker. It must hold **only** the worker values, or
+  - `/Users/mingming/.config/ricotdin/api.env`: the API.
+  - `/Users/mingming/.config/ricotdin/worker.env`: the worker. It must hold **only** the worker values, or
     the worker refuses to start.
-  - `/etc/mmlabs/ricotdin-web.env`: `RICOTDIN_API_URL`, not a secret.
+  - `/Users/mingming/.config/ricotdin/web.env`: `RICOTDIN_API_URL`, not a secret.
   - `KEY_ENCRYPTION_SECRET` is the **same value as v1**.
   - Generate the production `JWT_PRIVATE_KEY` on the server:
-    `uv run python -m scripts.gen_jwt_key --env-file /etc/mmlabs/ricotdin-api.env`, or paste its
+    `uv run python -m scripts.gen_jwt_key --env-file /Users/mingming/.config/ricotdin/api.env`, or paste its
     output there.
   - The logins come from `scripts.provision_db_roles` run against Neon `main`.
 - **cloudflared:** two public hostnames, sibling subdomains of one site:
@@ -76,7 +76,7 @@ Pushing a `staging/X.Y.Z` branch in ricotdin deploys it here, automatically. Pro
   token can push to `main`. Proper fix (debt): GitHub Team or a public repo, a protected `main`
   requiring `pr-scope`, CODEOWNERS on `/apps/ricotdin*/`, `/proxy/`, `/.github/`, and`pr-scope`
   allowing only `apps/<app>/release.env` on `release/*` branches.
-- **Three server env files** `/etc/mmlabs/ricotdin-staging-{api,worker,web}.env` (`chmod 600`,
+- **Three server env files** `/Users/mingming/.config/ricotdin-staging/{api,worker,web}.env` (`chmod 600`,
   owned by the runner user). They use the same names as production, with staging values:
   - api: `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the Neon **dev**
     branch logins from the owner's `app/api/.env`, never the owner `DATABASE_URL`),
