@@ -9,7 +9,7 @@
 - Xoay vòng các khóa cũ trong lịch sử git (Supabase service_role + anon, Gemini key `AQ.A…`).
 - 2 lần diễn tập migrate có chép tệp sang Drive đều PASS; diễn tập staging toàn bộ runbook + thử rollback.
 - Neon `main`: `alembic upgrade head`, `provision_db_roles`, `connect_gdrive --folder ricotdin` + `drive_smoke`.
-- Server: `/etc/mmlabs/ricotdin-api.env`, `ricotdin-worker.env`, `ricotdin-web.env` (biến: xem `apps/ricotdin-v2/compose.yml`); `JWT_PRIVATE_KEY` sinh trên server; `KEY_ENCRYPTION_SECRET` = giá trị v1; SMTP tài khoản riêng; `WEB_ORIGIN`/`ALLOWED_ORIGINS` = `https://app.<domain>`; `FORWARDED_ALLOW_IPS` = đúng IP cố định của cloudflared (không cả subnet); không bật `API_DOCS`.
+- Server (MacBook, runner `macbook-runner`): `/Users/mingming/.config/ricotdin/api.env`, `worker.env`, `web.env` (600) (biến: xem `apps/ricotdin-v2/compose.yml`); `JWT_PRIVATE_KEY` sinh trên server; `KEY_ENCRYPTION_SECRET` = giá trị v1; SMTP tài khoản riêng; `WEB_ORIGIN`/`ALLOWED_ORIGINS` = `https://app.<domain>`; `FORWARDED_ALLOW_IPS` = đúng IP cố định của cloudflared (không cả subnet); không bật `API_DOCS`.
 - Docker Hub: repo `ricotdin-api`, `ricotdin-web`. Repo deployment: thêm `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml`, `pr-scope.yml` nhận `apps/ricotdin-v2/release.env` và bỏ duyệt cũ khi có commit mới.
 - DNS/cloudflared: `app.<domain>` → `ricotdin-web:8080`, `api.<domain>` → `ricotdin-api:8000`; bỏ query string của `/media` khỏi log.
 - Backup: secret `NEON_BACKUP_DATABASE_URL` (login `BYPASSRLS` + `pg_read_all_data`) trong environment `backup`; xóa `SUPABASE_DB_URL`.

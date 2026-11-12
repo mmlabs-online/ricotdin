@@ -58,7 +58,7 @@
   retired; the final v1 dump is taken by hand at the cutover. §9o describes the retired v1 job.
 - **Deployment (drafts in `docs/ops/deployment-repo/`):** `apps/ricotdin-v2/compose.yml` (api +
   worker + web + autoheal, network aliases `ricotdin-api` / `ricotdin-web` on `web`, three server
-  env files `/etc/mmlabs/ricotdin-{api,worker,web}.env`) and `deploy-ricotdin-v2.yml` (both pins
+  env files `/Users/mingming/.config/ricotdin/{api,worker,web}.env` on `macbook-runner`) and `deploy-ricotdin-v2.yml` (both pins
   must be `ricotdin-{api,web}:<RICOTDIN_VERSION>@sha256:…`; restore on unhealthy like v1). v1's
   `apps/ricotdin/` stays for the rollback until ARC-16.
 - **Cutover runbook:** `docs/ops/v2-cutover.md` (prep table incl. the staging rehearsal + rollback

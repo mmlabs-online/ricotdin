@@ -18,13 +18,15 @@ Every day at **02:00 UTC** (and on demand via *Actions → db-backup → Run wor
 The dump and the encryption run before any Python package is installed; package code only sees
 the R2 token. A failed run fails the workflow (GitHub notifies the user who last edited the
 `schedule` line); prune never runs after a failed upload. `schedule` runs only from the default
-branch **`dev`** (CLAUDE.md §9k): the `backup` environment must release its secrets to `dev`.
+branch, **`main`** since 2026-11-12 (CLAUDE.md §9k): the `backup` environment must release its
+secrets to `main` (it allows `main` + `dev`).
 
 **Not in the backup:**
 - Database roles and logins. Recreate them with `alembic upgrade head` (the group roles) and
   `scripts.provision_db_roles` (the logins, new passwords).
 - Audio and avatars, which live in Google Drive.
-- Server env files (`/etc/mmlabs/ricotdin-*.env`) and Neon project settings.
+- Server env files (`/Users/mingming/.config/ricotdin/*.env` on the MacBook runner, staging in
+  `.config/ricotdin-staging/`) and Neon project settings.
 
 **Neon has its own point-in-time restore** (history retention of the plan). Use it first for
 "undo the last hour"; these dumps are for losing the project or the account.
