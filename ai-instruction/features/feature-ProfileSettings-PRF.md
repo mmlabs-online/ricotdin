@@ -148,7 +148,7 @@ As a user, I want to switch between light/dark theme (and accent) so the UI matc
 ---
 
 ### PRF-06 — Language preference
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done (v2, 2026-11-12) — migration `0009_profile_locale`; API `app/api/app/routers/profile.py` (preferences), pure `app/domain/rules.py::parse_preferences_patch`; web `app/web/src/i18n/locale.ts::accountLocaleToApply`, `i18n/useAccountLocale.ts` (AppShell + AdminShell apply, header toggle + Profile "Language" section save).
 
 **User Story**  
 As a user, I want my UI language (Vietnamese/English) saved on my account so that every device I sign in on speaks my language.
