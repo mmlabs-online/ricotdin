@@ -23,7 +23,7 @@ services:
     # JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS,
     # FORWARDED_ALLOW_IPS (ONLY cloudflared's fixed address, never the shared `web` subnet), SENTRY_DSN,
     # optional provider key fallbacks. Never API_DOCS=1 in production.
-    env_file: [/etc/mmlabs/ricotdin-api.env]
+    env_file: [/Users/mingming/.config/ricotdin/api.env]
     environment:
       RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
     # image HEALTHCHECK: GET /health (no database)
@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
     # ONLY DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional provider key fallbacks,
     # LOG_LEVEL, SENTRY_DSN: the worker refuses to start with any other database URL or secret.
-    env_file: [/etc/mmlabs/ricotdin-worker.env]
+    env_file: [/Users/mingming/.config/ricotdin/worker.env]
     environment:
       RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
       TMPDIR: /work # job directories + heartbeat (app.worker.health)
@@ -68,7 +68,7 @@ services:
     restart: unless-stopped
     # RICOTDIN_API_URL (required, e.g. https://api.<domain>) and optional RICOTDIN_AUTH_URL:
     # plain origins, not secrets. The container exits on anything else.
-    env_file: [/etc/mmlabs/ricotdin-web.env]
+    env_file: [/Users/mingming/.config/ricotdin/web.env]
     # image HEALTHCHECK: GET /healthz
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']

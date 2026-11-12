@@ -12,7 +12,7 @@ name: Release staging
 #   5. wait for pr-scope to pass, check the PR still changes only that file, merge it.
 #      Not GitHub auto-merge: on the Free plan a private repo has no branch protection, so
 #      auto-merge would merge at once without waiting for pr-scope (OPS-02 review).
-# The deployment repo's deploy-ricotdin-v2-staging.yml then deploys it on mmlabs-server. Every
+# The deployment repo's deploy-ricotdin-v2-staging.yml then deploys it on the macbook-runner. Every
 # push to the branch redeploys. No migration step: run `alembic upgrade head` on the staging
 # database (the Neon dev branch) before pushing a commit that brings a migration.
 on:
