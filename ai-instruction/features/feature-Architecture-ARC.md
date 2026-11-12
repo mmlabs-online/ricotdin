@@ -1050,6 +1050,49 @@ ARC-03 copies only legacy Supabase Storage objects into R2 and assumes R2 files 
 
 ---
 
+### ARC-19 — Post-cutover restructure
+**Priority:** Medium | **Status:** ⚠️ Partial (slice 1 only)
+
+**User Story**  
+As a developer, I want the v2 code and the agent context organised by feature with one data-access layer so that agents load less context, touch one folder per ticket and cannot skip an access check on a service-role write.
+
+**Context**
+Architecture review 2026-11-12 (owner decisions in `roadmap.md`, same date). Findings: CLAUDE.md was 166 KB and mixed v1 and v2 rules; raw SQL is spread over routers (up to 66 statements in `routers/meetings.py`), worker, services and auth; editor writes run as `ricotdin_service` after a per-handler access check; routers import `app.worker`; one-off tooling (`app/migration`, `app/ops`, v1 replay in `app/db`) ships in the runtime package; the runtime prompt lives in `ai-instruction/ai-gen/`, which forces the API image build context to the repo root; 82 generic agents in `.claude/agents` load into every session. Structural work waits until after ARC-15 so it does not collide with the phase 1 backlog.
+
+**Use Cases**
+1. An agent working on one module reads the root CLAUDE.md plus one `docs/architecture/*.md` file.
+2. A new endpoint that writes meeting content cannot do so without passing the shared access-checked helper.
+
+**Frontend**
+- After cutover: `app/web/src/features/<feature>/{api,components,lib,routes}`; generated `schema.d.ts` checked against the API's OpenAPI in CI.
+
+**Backend**
+- Slice 1 (now, docs only): CLAUDE.md split verbatim into root (≤ 25 KB), `docs/architecture/*.md` (§0.1–§0.11) and `legacy/CLAUDE.md` (v1 sections).
+- After cutover: `app/modules/{meetings,folders,chat,auth,profile,content,admin}/{router,service,repo,rules}.py` + `app/platform/{db,crypto,keys,storage,ai,stt,email,config}`; one access-checked service-write helper; `app/jobs` queue contract shared by API and worker (no router→worker imports); runtime prompt moved into the api package (build context `app/api`); one-off tooling moved out of the runtime package or deleted with ARC-16.
+- Before deleting `legacy/` (ARC-16): freeze `0001_baseline.sql` as static SQL and remove the dependency of `scripts.gen_baseline` and `test_schema_parity_integration` on `legacy/schema.sql` + `legacy/migrations/`.
+- Trim `.claude/agents` to the agents the skills actually call.
+
+**Acceptance Criteria**
+- Slice 1: every non-blank line of the old CLAUDE.md exists in the new files; root CLAUDE.md ≤ 25 KB.
+- After cutover: no SQL in routers; no `from app.worker` import outside the worker; existing API and web tests pass unchanged after each module move.
+
+**Test Plan**
+- Behaviour-preserving moves: the existing pytest and vitest suites are the regression net; one module per PR.
+
+**Structural flags**
+- Large file moves; conflicts with open feature branches — do module by module after ARC-15.
+
+**Done check**
+- CI green; layout as above; root CLAUDE.md ≤ 25 KB.
+
+**Out of scope**
+- Renaming `app/` or the python package `app` (owner 2026-11-12).
+
+**Key files (expected)**
+- `CLAUDE.md`, `docs/architecture/*.md`, `legacy/CLAUDE.md`, `app/api/app/**`, `app/web/src/**`, `.claude/agents/**`
+
+---
+
 ## Build Order
 
 ARC-00 → ARC-01 → ARC-02 → ARC-04 → ARC-03 → ARC-05 → ARC-06 → ARC-17 → ARC-07 → ARC-08 → ARC-09 → ARC-10 →
