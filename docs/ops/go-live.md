@@ -33,8 +33,8 @@ lands in shell history.
 | `RICOTDIN_KEY_ENCRYPTION_SECRET` | a new `openssl rand -hex 32`. Also keep it in a password manager: losing it makes every stored provider key and the Drive grant unreadable |
 | `RICOTDIN_JWT_PRIVATE_KEY` | a new key: in a ricotdin checkout, `cd app/api && uv run python -m scripts.gen_jwt_key --env-file /tmp/jwt.env`, paste the value of its `JWT_PRIVATE_KEY` line, then `rm /tmp/jwt.env` |
 | `RICOTDIN_DATABASE_URL_APP` / `_SERVICE` / `_WORKER` | from `provision_db_roles`, step 4 |
-| `RICOTDIN_SMTP_HOST`, `RICOTDIN_SMTP_USER`, `RICOTDIN_SMTP_PASSWORD`, `RICOTDIN_MAIL_FROM` | the production mail account (registration and password-reset links) |
-| `RICOTDIN_SMTP_PORT` | optional, default 465 (implicit TLS) |
+| *(mail)* | none to set: the deploy reuses org-admin-api's Gmail account, `ORG_ADMIN_SMTP_USERNAME` / `ORG_ADMIN_SMTP_PASSWORD` in the GitHub Environment `org-admin-api` (host `smtp.gmail.com:465` is fixed in the workflow) |
+| `RICOTDIN_MAIL_FROM` | optional sender shown in the mail, e.g. `Ricotdin <that address>`; empty = the Gmail address |
 | `RICOTDIN_SENTRY_DSN` | optional |
 
 Delete `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` if staging left one (`gh secret delete … -R mmlabs-online/deployment`).
