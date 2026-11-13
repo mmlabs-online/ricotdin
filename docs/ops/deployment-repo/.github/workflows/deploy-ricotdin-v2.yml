@@ -8,7 +8,8 @@ name: deploy-ricotdin-v2
 #
 # The release PRs come from ricotdin's release.yml (tag vX.Y.Z on release/X.Y, branch
 # release/ricotdin-v2-vX.Y.Z); the owner reviews and merges them.
-# Runtime secrets are repository secrets of the deployment repo, one per key, named RICOTDIN_<KEY>
+# Runtime secrets are repository secrets of the deployment repo, one per key, named RICOTDIN_<KEY>,
+# except the mail login: ORG_ADMIN_SMTP_USERNAME / _PASSWORD of the environment org-admin-api
 # (step `envfile`). Each run rewrites the three env files below from them (chmod 600), so nobody
 # creates or edits those files by hand: change a secret, then Run workflow. Values are never printed.
 # No migrate step: run the release's `alembic upgrade head` on the Mac BEFORE merging its PR
@@ -38,6 +39,10 @@ env:
 jobs:
   deploy:
     runs-on: [self-hosted, macbook-runner]
+    # Reuses org-admin-api's Gmail account for registration / password-reset mail: its App
+    # Password lives in the GitHub Environment `org-admin-api` (ORG_ADMIN_SMTP_USERNAME /
+    # ORG_ADMIN_SMTP_PASSWORD), which only a job declaring that environment can read.
+    environment: org-admin-api
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -110,12 +115,13 @@ jobs:
           JWT_PREVIOUS_PUBLIC_KEY: ${{ secrets.RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY }}
           KEY_ENCRYPTION_SECRET: ${{ secrets.RICOTDIN_KEY_ENCRYPTION_SECRET }}
           SENTRY_DSN: ${{ secrets.RICOTDIN_SENTRY_DSN }}
-          # Registration + password reset mail. SMTP_PORT optional (default 465, implicit TLS).
-          SMTP_HOST: ${{ secrets.RICOTDIN_SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.RICOTDIN_SMTP_PORT }}
-          SMTP_USER: ${{ secrets.RICOTDIN_SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.RICOTDIN_SMTP_PASSWORD }}
+          # Registration + password reset mail through org-admin-api's Gmail account (environment
+          # org-admin-api). MAIL_FROM optional (e.g. "Ricotdin <x@gmail.com>"); empty = SMTP_USER.
+          SMTP_USER: ${{ secrets.ORG_ADMIN_SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.ORG_ADMIN_SMTP_PASSWORD }}
           MAIL_FROM: ${{ secrets.RICOTDIN_MAIL_FROM }}
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: '465' # implicit TLS
           # Not secrets: reviewed here. No API_DOCS in production.
           WEB_ORIGIN: https://ricotdin.mmlabs.online
           ALLOWED_ORIGINS: https://ricotdin.mmlabs.online
@@ -131,9 +137,19 @@ jobs:
             exit 1
           fi
           # NAME = required, NAME? = optional.
-          api_keys="DATABASE_URL_APP DATABASE_URL_SERVICE DATABASE_URL_WORKER JWT_PRIVATE_KEY JWT_PREVIOUS_PUBLIC_KEY? KEY_ENCRYPTION_SECRET SENTRY_DSN? SMTP_HOST SMTP_PORT? SMTP_USER SMTP_PASSWORD MAIL_FROM WEB_ORIGIN ALLOWED_ORIGINS"
+          api_keys="DATABASE_URL_APP DATABASE_URL_SERVICE DATABASE_URL_WORKER JWT_PRIVATE_KEY JWT_PREVIOUS_PUBLIC_KEY? KEY_ENCRYPTION_SECRET SENTRY_DSN? SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM? WEB_ORIGIN ALLOWED_ORIGINS"
           worker_keys="DATABASE_URL_WORKER KEY_ENCRYPTION_SECRET SENTRY_DSN?"
           web_keys="RICOTDIN_API_URL"
+          # Gmail shows App Passwords in groups of four: drop the spaces, as deploy-org-admin-api does.
+          SMTP_PASSWORD="${SMTP_PASSWORD// /}"
+          # Secret name to report for a key (SMTP comes from the org-admin-api environment).
+          secret_name() {
+            case "$1" in
+              SMTP_USER) echo "ORG_ADMIN_SMTP_USERNAME(env org-admin-api)" ;;
+              SMTP_PASSWORD) echo "ORG_ADMIN_SMTP_PASSWORD(env org-admin-api)" ;;
+              *) echo "RICOTDIN_$1" ;;
+            esac
+          }
           missing=""
           bad=""
           add_once() { case " $1 " in *" $2 "*) echo "$1" ;; *) echo "$1 $2" ;; esac; }
@@ -145,11 +161,11 @@ jobs:
               name="${spec%\?}"
               value="${!name}"
               if [ -z "$value" ]; then
-                if [ "$name" = "$spec" ]; then missing="$(add_once "$missing" "RICOTDIN_$name")"; fi
+                if [ "$name" = "$spec" ]; then missing="$(add_once "$missing" "$(secret_name "$name")")"; fi
                 continue
               fi
               case "$value" in
-                *"'"* | *$'\n'* | *$'\r'*) bad="$(add_once "$bad" "RICOTDIN_$name")"; continue ;;
+                *"'"* | *$'\n'* | *$'\r'*) bad="$(add_once "$bad" "$(secret_name "$name")")"; continue ;;
               esac
               printf "%s='%s'\n" "$name" "$value" >> "$out"
             done
@@ -167,7 +183,7 @@ jobs:
             esac
           done
           if [ -n "$missing" ]; then
-            echo "::error::Missing repository secret(s) in the deployment repo:$missing. Set them (gh secret set <NAME> -R mmlabs-online/deployment), then Run workflow. Nothing was started."
+            echo "::error::Missing secret(s):$missing. Set RICOTDIN_* with gh secret set <NAME> -R mmlabs-online/deployment (ORG_ADMIN_SMTP_* add --env org-admin-api), then Run workflow. Nothing was started."
             exit 1
           fi
           if [ -n "$bad" ]; then
@@ -260,7 +276,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$ENVFILE" = "failure" ]; then
-            msg="env-missing: a RICOTDIN_* repository secret is missing or malformed (names in the run log); nothing was started (main still pins \`$IMAGE\`). Set it, then Actions → deploy-ricotdin-v2 → Run workflow."
+            msg="env-missing: a RICOTDIN_* or ORG_ADMIN_SMTP_* secret is missing or malformed (names in the run log); nothing was started (main still pins \`$IMAGE\`). Set it, then Actions → deploy-ricotdin-v2 → Run workflow."
           else
           case "$DEPLOY:$RESULT" in
             success:)                  msg="deployed: \`$IMAGE\` is running and healthy." ;;

@@ -50,9 +50,13 @@ anything is replaced. Values must be one line without `'`.
 
 - **Required:** `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the `ricotdin`
   logins from `provision_db_roles`, never the owner URL), `JWT_PRIVATE_KEY` (one line, escaped `\n`),
-  `KEY_ENCRYPTION_SECRET`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`.
-- **Optional:** `SMTP_PORT` (default 465), `SENTRY_DSN`, `JWT_PREVIOUS_PUBLIC_KEY` (only during a key
-  rotation).
+  `KEY_ENCRYPTION_SECRET`.
+- **Mail:** reuses org-admin-api's Gmail account. The job declares the GitHub Environment
+  `org-admin-api` and writes `SMTP_USER` / `SMTP_PASSWORD` from `ORG_ADMIN_SMTP_USERNAME` /
+  `ORG_ADMIN_SMTP_PASSWORD` (spaces stripped); `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` are fixed in
+  the workflow. Rotating that App Password therefore needs a re-run of both deploys.
+- **Optional:** `MAIL_FROM` (empty = the Gmail address), `SENTRY_DSN`, `JWT_PREVIOUS_PUBLIC_KEY` (only
+  during a key rotation).
 - **Not secrets** (committed in the workflow): `WEB_ORIGIN` = `ALLOWED_ORIGINS` =
   `https://ricotdin.mmlabs.online`, and web `RICOTDIN_API_URL` = `https://ricotdin-api.mmlabs.online`.
   No `API_DOCS`.
