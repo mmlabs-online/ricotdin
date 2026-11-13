@@ -12,9 +12,14 @@ name: deploy-ricotdin-v2
 # except the mail login: ORG_ADMIN_SMTP_USERNAME / _PASSWORD of the environment org-admin-api
 # (step `envfile`). Each run rewrites the three env files below from them (chmod 600), so nobody
 # creates or edits those files by hand: change a secret, then Run workflow. Values are never printed.
-# No migrate step: run the release's `alembic upgrade head` on the Mac BEFORE merging its PR
-# (ricotdin docs/ops/self-hosted-postgres.md). A restore never touches the database, so every
-# migration must stay compatible with the previous release's image.
+# Step `database` (like deploy-org-admin-api): with the owner password committed in
+# postgres/secrets/apps/ricotdin.password it dumps the databases (pg-backup sidecar), runs
+# `alembic upgrade head` with the release's API image and, the first time only, creates the three
+# runtime logins (ricotdin's scripts.provision_db_roles) into ~/.config/ricotdin/db-logins.env
+# (chmod 600, kept across deploys; delete it and re-run to rotate them). The app never runs as the
+# owner (RLS, ricotdin docs/architecture/db.md R1/R2). If migrating fails nothing is replaced.
+# A restore never touches the database, so every migration must stay compatible with the
+# previous release's image.
 
 on:
   push:
@@ -35,6 +40,8 @@ env:
   PROJECT: ricotdin-v2
   # Must match env_file in apps/ricotdin-v2/compose.yml. Written by step `envfile` (chmod 600).
   RICOTDIN_ENV_DIR: /Users/mingming/.config/ricotdin
+  DB_APP: ricotdin # database + owner role on the shared Postgres (postgres/)
+  PG_COMPOSE: /Users/mingming/srv/postgres/compose.yml
 
 jobs:
   deploy:
@@ -98,6 +105,48 @@ jobs:
             echo "previous=$previous"
           } >> "$GITHUB_OUTPUT"
 
+      # Dump → migrate → (first time) provision the runtime logins. Values are never printed.
+      - name: database
+        id: database
+        if: steps.release.outputs.skip != 'true'
+        run: |
+          umask 077
+          pwfile="postgres/secrets/apps/$DB_APP.password"
+          if ! grep -Eq '^[A-Za-z0-9_-]{16,}$' "$pwfile"; then
+            echo "::error::$pwfile is missing or malformed (README, Postgres). Nothing was started."
+            exit 1
+          fi
+          read -r pw < "$pwfile" || [ -n "$pw" ]
+          api_image="$(sed -n 's/^RICOTDIN_API_IMAGE=//p' "$APP_DIR/release.env")"
+          docker pull -q "$api_image" >/dev/null
+          owner_env="$(mktemp)"
+          trap 'rm -f "$owner_env"' EXIT
+          # Passed with --env-file, never on a command line.
+          printf 'DATABASE_URL=postgresql://%s:%s@postgres:5432/%s?sslmode=disable\n' "$DB_APP" "$pw" "$DB_APP" > "$owner_env"
+          if ! docker compose -p postgres -f "$PG_COMPOSE" exec -T pg-backup /backup.sh >/dev/null; then
+            echo "::error::The pre-migration backup failed. Nothing was migrated or replaced."
+            exit 1
+          fi
+          if ! docker run --rm --network db --env-file "$owner_env" "$api_image" alembic upgrade head; then
+            echo "::error::Migrations failed. Nothing was replaced; the running release (if any) is untouched. If the migration left the database half-applied, restore it from the dump just taken (ops/backup/RESTORE.md)."
+            exit 1
+          fi
+          install -d -m 700 "$RICOTDIN_ENV_DIR"
+          logins="$RICOTDIN_ENV_DIR/db-logins.env"
+          if [ -s "$logins" ] && [ "$(grep -c '^DATABASE_URL_\(APP\|SERVICE\|WORKER\)=' "$logins")" = 3 ]; then
+            echo "Runtime logins kept ($logins)."
+          else
+            touch "$logins" && chmod 600 "$logins"
+            # Creates (or rotates) ricotdin_api_login / _service_login / _worker_login, prints role names only.
+            if ! docker run --rm --network db --user "$(id -u):$(id -g)" --env-file "$owner_env" \
+                 -v "$RICOTDIN_ENV_DIR:/out" "$api_image" \
+                 python -m scripts.provision_db_roles --env-file /out/db-logins.env; then
+              echo "::error::Creating the runtime logins failed. Nothing was replaced."
+              exit 1
+            fi
+            chmod 600 "$logins"
+          fi
+
       # Writes api.env / worker.env / web.env from the repository secrets RICOTDIN_<KEY> plus the
       # non-secret production values below. Each service gets only its own keys (the worker refuses to
       # start with any other secret). Values are never printed: no echo, no argv (printf is a shell
@@ -106,11 +155,8 @@ jobs:
       # container is touched. Optional keys are left out when empty ("" is not the same as unset).
       - name: envfile
         id: envfile
-        if: steps.release.outputs.skip != 'true'
+        if: steps.database.outcome == 'success'
         env:
-          DATABASE_URL_APP: ${{ secrets.RICOTDIN_DATABASE_URL_APP }}
-          DATABASE_URL_SERVICE: ${{ secrets.RICOTDIN_DATABASE_URL_SERVICE }}
-          DATABASE_URL_WORKER: ${{ secrets.RICOTDIN_DATABASE_URL_WORKER }}
           JWT_PRIVATE_KEY: ${{ secrets.RICOTDIN_JWT_PRIVATE_KEY }}
           JWT_PREVIOUS_PUBLIC_KEY: ${{ secrets.RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY }}
           KEY_ENCRYPTION_SECRET: ${{ secrets.RICOTDIN_KEY_ENCRYPTION_SECRET }}
@@ -132,6 +178,11 @@ jobs:
         run: |
           set -f # the `?` markers below are not globs
           umask 077
+          # The runtime logins come from the host file written by step `database`, not from secrets.
+          logins="$RICOTDIN_ENV_DIR/db-logins.env"
+          DATABASE_URL_APP="$(sed -n 's/^DATABASE_URL_APP=//p' "$logins")"
+          DATABASE_URL_SERVICE="$(sed -n 's/^DATABASE_URL_SERVICE=//p' "$logins")"
+          DATABASE_URL_WORKER="$(sed -n 's/^DATABASE_URL_WORKER=//p' "$logins")"
           if [[ "$RICOTDIN_ENV_DIR" != "$HOME/"* ]]; then
             echo "::error::RICOTDIN_ENV_DIR $RICOTDIN_ENV_DIR is not under $HOME. Nothing was started."
             exit 1
@@ -147,6 +198,7 @@ jobs:
             case "$1" in
               SMTP_USER) echo "ORG_ADMIN_SMTP_USERNAME(env org-admin-api)" ;;
               SMTP_PASSWORD) echo "ORG_ADMIN_SMTP_PASSWORD(env org-admin-api)" ;;
+              DATABASE_URL_*) echo "$1(in $RICOTDIN_ENV_DIR/db-logins.env: delete it and re-run)" ;;
               *) echo "RICOTDIN_$1" ;;
             esac
           }
@@ -200,7 +252,7 @@ jobs:
 
       - name: deploy
         id: deploy
-        if: steps.release.outputs.skip != 'true'
+        if: steps.envfile.outcome == 'success'
         run: |
           compose=(docker compose -p "$PROJECT" -f "$APP_DIR/compose.yml" --env-file "$APP_DIR/release.env")
           "${compose[@]}" config --quiet
@@ -268,6 +320,7 @@ jobs:
         if: always() && steps.release.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          DATABASE: ${{ steps.database.outcome }}
           ENVFILE: ${{ steps.envfile.outcome }}
           DEPLOY: ${{ steps.deploy.outcome }}
           RESULT: ${{ steps.rollback.outputs.result }}
@@ -275,7 +328,9 @@ jobs:
           PREVIOUS: ${{ steps.release.outputs.previous }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if [ "$ENVFILE" = "failure" ]; then
+          if [ "$DATABASE" = "failure" ]; then
+            msg="database: the pre-migration dump, \`alembic upgrade head\` or creating the runtime logins failed (see the run log); nothing was replaced (main still pins \`$IMAGE\`)."
+          elif [ "$ENVFILE" = "failure" ]; then
             msg="env-missing: a RICOTDIN_* or ORG_ADMIN_SMTP_* secret is missing or malformed (names in the run log); nothing was started (main still pins \`$IMAGE\`). Set it, then Actions → deploy-ricotdin-v2 → Run workflow."
           else
           case "$DEPLOY:$RESULT" in

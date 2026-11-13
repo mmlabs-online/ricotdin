@@ -32,7 +32,6 @@ lands in shell history.
 |---|---|
 | `RICOTDIN_KEY_ENCRYPTION_SECRET` | a new `openssl rand -hex 32`. Also keep it in a password manager: losing it makes every stored provider key and the Drive grant unreadable |
 | `RICOTDIN_JWT_PRIVATE_KEY` | a new key: in a ricotdin checkout, `cd app/api && uv run python -m scripts.gen_jwt_key --env-file /tmp/jwt.env`, paste the value of its `JWT_PRIVATE_KEY` line, then `rm /tmp/jwt.env` |
-| `RICOTDIN_DATABASE_URL_APP` / `_SERVICE` / `_WORKER` | from `provision_db_roles`, step 4 |
 | *(mail)* | none to set: the deploy reuses org-admin-api's Gmail account, `ORG_ADMIN_SMTP_USERNAME` / `ORG_ADMIN_SMTP_PASSWORD` in the GitHub Environment `org-admin-api` (host `smtp.gmail.com:465` is fixed in the workflow) |
 | `RICOTDIN_MAIL_FROM` | optional sender shown in the mail, e.g. `Ricotdin <that address>`; empty = the Gmail address |
 | `RICOTDIN_SENTRY_DSN` | optional |
@@ -54,10 +53,9 @@ Both version files already say `2.0.0`. On `dev`:
 
 ## 4. Database
 
-Use the API image pinned in that PR (`apps/ricotdin-v2/release.env`), as in
-`docs/ops/self-hosted-postgres.md`:
-1. `alembic upgrade head` (empty database → all migrations).
-2. `provision_db_roles`, then set the three `RICOTDIN_DATABASE_URL_*` secrets.
+Nothing to do: the deploy (step `database` of `deploy-ricotdin-v2.yml`) dumps, runs
+`alembic upgrade head` (empty database → all migrations) and, the first time, creates the three
+runtime logins in `~/.config/ricotdin/db-logins.env` on the Mac (`docs/ops/self-hosted-postgres.md`).
 
 ## 5. Cloudflare hostnames
 
