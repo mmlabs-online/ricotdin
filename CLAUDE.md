@@ -132,7 +132,9 @@ commit is not on `release/X.Y`.
    (features + deploy checklist: new Alembic revisions, new env vars, manual steps + known issues).
 3. Commit `chore(release): vX.Y.0`, PR `dev` → `main` (`gh pr create --base main --head dev`), merge (merge commit, not squash) after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
-5. Tag on it: `git tag -a vX.Y.0 -m "Release vX.Y.0" && git push origin vX.Y.0`
+5. **The push tags it:** `release.yml` runs on every push to `release/X.Y`, reads the version files
+   and, if tag `v<version>` does not exist yet, creates it (no hand tagging; a push without a version
+   bump releases nothing). A hand-pushed tag `vX.Y.Z` on `release/X.Y` still works.
    → `release.yml` runs both CI suites, pushes `mingming21400/ricotdin-api:vX.Y.0` and
    `mingming21400/ricotdin-web:vX.Y.0` (+ `latest` if highest) and opens PR `ricotdin vX.Y.0` on
    `mmlabs-online/deployment` (see Deploy below). A prerelease tag (`vX.Y.0-rc1`) only pushes images.
@@ -140,7 +142,7 @@ commit is not on `release/X.Y`.
 
 **Hotfix `X.Y.(Z+1)`:**
 1. Branch from `release/X.Y` (e.g. `hotfix/BUG-NNN-<topic>`), fix + test, bump both versions, add CHANGELOG entry.
-2. PR into `release/X.Y`; after merge, tag `vX.Y.(Z+1)` on `release/X.Y` and push the tag.
+2. PR into `release/X.Y`; the merge (a push to `release/X.Y` with the bumped version) tags `vX.Y.(Z+1)` and releases it.
 3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release
    (X ≥ 2 only — never `release/1.1`, see above). `latest` only moves when the pushed tag is the
    highest version, so a hotfix on an old line never drags `latest` backwards.
