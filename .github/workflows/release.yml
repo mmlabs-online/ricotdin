@@ -1,6 +1,13 @@
 name: Release
 
-# v2 (ARC-15). Push a tag vX.Y.Z (X >= 2) created on release/X.Y →
+# v2 (ARC-15). Two ways in:
+#   - push to a release branch release/X.Y (cut from main, or a hotfix merged into it): the guard
+#     reads the version from app/api/pyproject.toml + app/web/package.json and, when tag
+#     v<version> does not exist yet, creates and pushes it, then releases it. When the tag exists
+#     already (a push without a version bump) nothing is released;
+#   - push a tag vX.Y.Z by hand on release/X.Y (as before).
+# A tag pushed by this workflow (GITHUB_TOKEN) does not start it again, so a version runs once.
+# Then:
 #   1. guard: tag on release/X.Y, same version in app/api/pyproject.toml and app/web/package.json;
 #   2. the full API and web CI (ci-api.yml, ci-web.yml, reused as-is);
 #   3. build + push mingming21400/ricotdin-api:vX.Y.Z (API and worker share it) and
@@ -12,10 +19,16 @@ name: Release
 # (docs/ops/go-live.md).
 on:
   push:
+    branches: ['release/[0-9]+.[0-9]+'] # release/X.Y only (not release/1.1-style v1 or release/2.0.0)
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
 
 permissions:
   contents: read
+
+# One release run per branch/tag at a time; never cancel one half-way (images + deployment PR).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   APP: ricotdin
@@ -27,46 +40,91 @@ jobs:
   guard:
     name: tag · branch · version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates the tag on a release-branch push
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      skip: ${{ steps.tag.outputs.skip }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the branch check needs the history
 
-      - name: Check the tag
+      # Branch push: the tag comes from the version files (created below if it is new).
+      # Tag push: the tag is the ref itself.
+      - name: Decide the tag
+        id: tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          API_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' app/api/pyproject.toml | head -1)"
+          WEB_VERSION="$(node -p "require('./app/web/package.json').version")"
+          if [ "$API_VERSION" != "$WEB_VERSION" ]; then
+            echo "::error::app/api/pyproject.toml has $API_VERSION but app/web/package.json has $WEB_VERSION"
+            exit 1
+          fi
+          if [ "$REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v$API_VERSION"
+            LINE="${GITHUB_REF_NAME#release/}"
+            case "$API_VERSION" in
+              "$LINE".*) ;;
+              *) echo "::error::Branch $GITHUB_REF_NAME has version $API_VERSION: it must be $LINE.<patch>"; exit 1 ;;
+            esac
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+              echo "::notice::$TAG exists already: nothing to release. Bump both version files to release a new one."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          TAG_VERSION="${TAG#v}"
           MAJOR="${TAG_VERSION%%.*}"
-          if [ "$MAJOR" -lt 2 ]; then
-            echo "::error::$GITHUB_REF_NAME is a v1 tag: v1 is retired (ARC-20), only v2+ is released"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || [ "$MAJOR" -lt 2 ]; then
+            echo "::error::$TAG is not a v2+ version tag: v1 is retired (ARC-20), only v2+ is released"
             exit 1
           fi
           BRANCH="release/$(echo "$TAG_VERSION" | cut -d. -f1,2)"
           if ! git branch -r --contains "$GITHUB_SHA" | grep -qx "  origin/$BRANCH"; then
-            echo "::error::Tag $GITHUB_REF_NAME must be on branch $BRANCH"
+            echo "::error::$TAG must be on branch $BRANCH"
             exit 1
           fi
-          API_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' app/api/pyproject.toml | head -1)"
-          WEB_VERSION="$(node -p "require('./app/web/package.json').version")"
-          for pair in "app/api/pyproject.toml:$API_VERSION" "app/web/package.json:$WEB_VERSION"; do
-            if [ "${pair#*:}" != "$TAG_VERSION" ]; then
-              echo "::error::${pair%%:*} has version ${pair#*:}, tag is $GITHUB_REF_NAME"
-              exit 1
-            fi
-          done
+          if [ "$API_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Both version files say $API_VERSION, tag is $TAG"
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag
+        if: github.ref_type == 'branch' && steps.tag.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "Release $TAG"
+          git push origin "refs/tags/$TAG"
+          echo "::notice::Tagged $GITHUB_SHA as $TAG"
 
   verify-api:
     needs: guard
+    if: needs.guard.outputs.skip != 'true'
     uses: ./.github/workflows/ci-api.yml
 
   verify-web:
     needs: guard
+    if: needs.guard.outputs.skip != 'true'
     uses: ./.github/workflows/ci-web.yml
 
   build:
     name: build & push images · open deployment PR
-    needs: [verify-api, verify-web]
+    needs: [guard, verify-api, verify-web]
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,8 +150,8 @@ jobs:
             image="$API_IMAGE"; [ "$name" = web ] && image="$WEB_IMAGE"
             {
               echo "$name<<EOF"
-              echo "$image:$GITHUB_REF_NAME"
-              if [ "$GITHUB_REF_NAME" = "$HIGHEST" ]; then echo "$image:latest"; fi
+              echo "$image:$TAG"
+              if [ "$TAG" = "$HIGHEST" ]; then echo "$image:latest"; fi
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
           done
@@ -129,13 +187,12 @@ jobs:
       # Contents + Pull requests read/write. The deployment repo must dismiss stale approvals on
       # new commits: a re-run for the same tag force-pushes the release branch.
       - name: Open deployment PR
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(needs.guard.outputs.tag, '-') }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
           API_DIGEST: ${{ steps.api.outputs.digest }}
           WEB_DIGEST: ${{ steps.web.outputs.digest }}
         run: |
-          TAG="$GITHUB_REF_NAME"
           # pr-scope.yml reads the app folder from ^release/([a-z0-9-]+)-v[0-9]: "release/ricotdin-v2.0.0"
           # would read as "ricotdin" and fail the scope check, so the branch names ricotdin-v2 (OPS-02).
           BRANCH="release/$APP-v2-$TAG"

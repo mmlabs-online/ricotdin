@@ -2,7 +2,10 @@
 
 ### 0.11 v2 release, supply chain, backup, cutover (ARC-15)
 
-- **`release.yml` is v2 from `dev` on:** tag `vX.Y.Z` (X ≥ 2) on `release/X.Y`; the guard job
+- **`release.yml` is v2 from `dev` on:** a push to `release/X.Y` (the guard reads both version files
+  and creates tag `v<version>` with `GITHUB_TOKEN` when it does not exist yet; an existing tag = no
+  release; a tag pushed by the workflow does not start it again) or a hand-pushed tag `vX.Y.Z`
+  (X ≥ 2) on `release/X.Y`; the guard job
   requires the same version in `app/api/pyproject.toml` and `app/web/package.json` (bump both),
   then reuses `ci-api.yml` + `ci-web.yml` (`workflow_call`), builds `mingming21400/ricotdin-api`
   (API **and** worker: one image, the worker is `command: python -m app.worker`) and
