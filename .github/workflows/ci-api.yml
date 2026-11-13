@@ -4,11 +4,10 @@ name: CI (api)
 on:
   push:
     branches: [main, dev, 'release/**']
-    # legacy schema/migrations feed the v1↔v2 parity test (ARC-02).
-    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', '.github/workflows/ci-api.yml']
   pull_request:
     branches: [main, dev, 'release/**']
-    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', 'legacy/schema.sql', 'legacy/migrations/**', '.github/workflows/ci-api.yml']
+    paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', '.github/workflows/ci-api.yml']
 
   # release.yml runs the same checks for a v2 tag (ARC-15).
   workflow_call:
@@ -27,7 +26,7 @@ jobs:
     # Disposable Postgres + pgvector for the *_integration tests (no secrets involved).
     services:
       postgres:
-        image: pgvector/pgvector:pg18  # same major as Neon (baseline generated on PG 18)
+        image: pgvector/pgvector:pg17-trixie  # = production: deployment repo postgres/compose.yml (ARC-20)
         env:
           POSTGRES_PASSWORD: ci-only-password
         ports: ['5432:5432']

@@ -15,6 +15,7 @@ from app.domain.uploads import (
     MAX_UPLOAD_BYTES,
     audio_key,
     avatar_key,
+    choose_meeting_folder,
     format_meeting_title,
     parse_avatar_patch,
     parse_avatar_request,
@@ -80,6 +81,28 @@ def test_create_fields() -> None:
     assert c.started_at == datetime(2026, 11, 2, 8, 30, tzinfo=UTC)
     assert str(c.folder_id) == fid
     assert parse_meeting_create({"size": 5, "folderId": None}).folder_id is None
+
+
+# --- default folder (PRF-07) -------------------------------------------------------------------
+
+D = uuid.UUID("33333333-3333-3333-3333-333333333333")
+
+
+def test_create_tells_an_absent_folder_from_an_explicit_none() -> None:
+    assert parse_meeting_create({"size": 5}).folder_given is False
+    assert parse_meeting_create({"size": 5, "folderId": None}).folder_given is True
+    assert parse_meeting_create({"size": 5, "folderId": ""}).folder_given is True
+    assert parse_meeting_create({"size": 5, "folderId": str(M)}).folder_given is True
+
+
+def test_choose_folder_uses_the_default_only_when_none_was_sent() -> None:
+    absent = parse_meeting_create({"size": 5})
+    assert choose_meeting_folder(absent, D) == (D, True)
+    assert choose_meeting_folder(absent, None) == (None, False)
+    explicit_none = parse_meeting_create({"size": 5, "folderId": None})
+    assert choose_meeting_folder(explicit_none, D) == (None, False)
+    explicit = parse_meeting_create({"size": 5, "folderId": str(M)})
+    assert choose_meeting_folder(explicit, D) == (M, False)
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,9 @@
 # v2 data migration: Supabase → Neon + Google Drive (ARC-03, ARC-18)
 
+> **Not used (ARC-20, owner decision 2026-11-12):** v1 is retired and production v2 started with an
+> empty database, so no v1 data is migrated. This runbook and `migrate_from_supabase` are kept only
+> until ARC-16 removes the Supabase tooling. Do not run them against production.
+
 **Owner:** project owner. **Script:** `app/api/scripts/migrate_from_supabase.py`. Pure logic lives in
 `app/api/app/migration/`; tests are `app/api/tests/test_migration_{transform,storage,integration}.py`.
 

@@ -34,7 +34,14 @@ function readDuration(file: File, video: boolean): Promise<number> {
   })
 }
 
-export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
+export function FileUploadPanel({
+  onBusyChange,
+  folderId,
+}: {
+  onBusyChange?: (busy: boolean) => void
+  /** PRF-07: chosen folder (null = none, undefined = the API's default) */
+  folderId?: string | null | undefined
+}) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const dateId = useId()
@@ -87,6 +94,7 @@ export function FileUploadPanel({ onBusyChange }: { onBusyChange?: (busy: boolea
       source: check.source,
       durationSeconds: duration || null,
       startedAt: (Number.isNaN(when.getTime()) ? new Date() : when).toISOString(),
+      folderId,
     })
   }
 

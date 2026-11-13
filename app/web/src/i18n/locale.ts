@@ -15,3 +15,9 @@ export function resolveLocale(stored: string | null | undefined, browser: readon
   }
   return 'en'
 }
+
+/** PRF-06: after sign-in the account language wins. Returns the locale to switch to, or null when
+ * the account has none (keep this device's) or it is already the current one. */
+export function accountLocaleToApply(account: unknown, current: Locale): Locale | null {
+  return isLocale(account) && account !== current ? account : null
+}

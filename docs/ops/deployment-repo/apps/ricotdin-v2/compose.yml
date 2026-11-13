@@ -1,17 +1,18 @@
-# ricotdin v2 on the home server (ARC-15). DRAFT, kept in ricotdin/docs/ops/deployment-repo/; the
-# operator copies it to the deployment repository. See that folder's README before applying.
+# ricotdin v2 on the self-hosted runner macbook-runner: the only ricotdin (v1 and v2 staging are
+# retired, ARC-20). Kept in sync with ricotdin/docs/ops/deployment-repo/.
 #
-# The images come only from release.env, written by ricotdin's release workflow:
+# The images come only from release.env, written by ricotdin's release.yml (tag vX.Y.Z):
 #   RICOTDIN_API_IMAGE=mingming21400/ricotdin-api:vX.Y.Z@sha256:<digest>   (API + worker)
 #   RICOTDIN_WEB_IMAGE=mingming21400/ricotdin-web:vX.Y.Z@sha256:<digest>
 #   RICOTDIN_VERSION=vX.Y.Z
 # Deploy: docker compose -p ricotdin-v2 -f apps/ricotdin-v2/compose.yml --env-file apps/ricotdin-v2/release.env up -d --wait
 #
-# No published ports. cloudflared (on the `web` network) reaches the API as http://ricotdin-api:8000
-# and the SPA as http://ricotdin-web:8080: two public hostnames that are sibling subdomains of one
-# site (refresh cookie SameSite=Lax, ricotdin CLAUDE.md §0.3). Secrets live ONLY in the server
-# env files below, one per container, never in a repository and never the owner DATABASE_URL
-# (migrations are a separate owner step: alembic upgrade head, BEFORE merging a release PR).
+# No published ports. cloudflared (on the `web` network) reaches the API as
+# http://ricotdin-api:8000 (https://ricotdin-api.mmlabs.online) and the SPA as
+# http://ricotdin-web:8080 (https://ricotdin.mmlabs.online). The database is `ricotdin` on the shared
+# Postgres (postgres/, postgres:5432 on the internal `db` network, no TLS), reached through the three
+# app logins only (never the owner DATABASE_URL). Env files are written by deploy-ricotdin-v2.yml
+# from the RICOTDIN_* repository secrets.
 
 name: ricotdin-v2
 
@@ -22,7 +23,7 @@ services:
     # DATABASE_URL_APP, DATABASE_URL_SERVICE, DATABASE_URL_WORKER (the /media lookup),
     # JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS,
     # FORWARDED_ALLOW_IPS (ONLY cloudflared's fixed address, never the shared `web` subnet), SENTRY_DSN,
-    # optional provider key fallbacks. Never API_DOCS=1 in production.
+    # optional provider key fallbacks. Never API_DOCS in production.
     env_file: [/Users/mingming/.config/ricotdin/api.env]
     environment:
       RICOTDIN_VERSION: ${RICOTDIN_VERSION:-}
@@ -31,10 +32,11 @@ services:
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     pids_limit: 256
-    labels: [autoheal=true]
+    labels: [autoheal-ricotdin=true]
     networks:
       tunnel:
         aliases: [ricotdin-api]
+      db: {} # postgres:5432
 
   worker:
     image: ${RICOTDIN_API_IMAGE:?RICOTDIN_API_IMAGE is unset}
@@ -60,32 +62,32 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
-    labels: [autoheal=true]
-    networks: [default] # outbound only: Postgres, Google Drive, AI / speech providers
+    labels: [autoheal-ricotdin=true]
+    networks: [default, db] # default: outbound (Google Drive, AI / speech providers); db: postgres:5432
 
   web:
     image: ${RICOTDIN_WEB_IMAGE:?RICOTDIN_WEB_IMAGE is unset}
     restart: unless-stopped
-    # RICOTDIN_API_URL (required, e.g. https://api.<domain>) and optional RICOTDIN_AUTH_URL:
+    # RICOTDIN_API_URL=https://ricotdin-api.mmlabs.online (required) and optional RICOTDIN_AUTH_URL:
     # plain origins, not secrets. The container exits on anything else.
     env_file: [/Users/mingming/.config/ricotdin/web.env]
     # image HEALTHCHECK: GET /healthz
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     pids_limit: 128
-    labels: [autoheal=true]
+    labels: [autoheal-ricotdin=true]
     networks:
       tunnel:
         aliases: [ricotdin-web]
 
-  # Plain compose never restarts an UNHEALTHY container (only an exited one). autoheal restarts
-  # EVERY container on the host labelled autoheal=true. The Docker socket is host root: pinned by
+  # Plain compose never restarts an UNHEALTHY container (only an exited one). This autoheal
+  # restarts only containers labelled autoheal-ricotdin=true (other apps have their own). The Docker socket is host root: pinned by
   # digest, no network (follow-up: a socket proxy allowing only list + restart).
   autoheal:
     image: willfarrell/autoheal:1.2.0@sha256:31f580ef0279eaced5b38d631b08c474d70d8403c1c2fdd6ddcf2e879d5f3f7c
     restart: unless-stopped
     environment:
-      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_CONTAINER_LABEL: autoheal-ricotdin # only this project
       AUTOHEAL_INTERVAL: '30'
       AUTOHEAL_START_PERIOD: '120'
     volumes:
@@ -100,3 +102,8 @@ networks:
     external: true
     # The network cloudflared is on — `web`, created by proxy/compose.yml.
     name: web
+  db:
+    external: true
+    # The shared Postgres network (internal, no internet), created by deploy-postgres.
+    name: db
+  default: {}

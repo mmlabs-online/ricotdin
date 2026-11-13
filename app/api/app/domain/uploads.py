@@ -59,6 +59,7 @@ class MeetingCreate:
     duration_seconds: int | None
     started_at: datetime | None
     folder_id: uuid.UUID | None
+    folder_given: bool = False  # PRF-07: "folderId" sent (even null / "") → no default folder
 
 
 @dataclass(frozen=True)
@@ -129,7 +130,20 @@ def parse_meeting_create(body: dict[str, Any]) -> MeetingCreate:
         folder = parse_uuid(folder_raw)
         if folder is None:
             raise NotFound("Folder not found.")
-    return MeetingCreate(ext, source, content_type, size, duration, started_at, folder)
+    return MeetingCreate(
+        ext, source, content_type, size, duration, started_at, folder, "folderId" in body
+    )
+
+
+def choose_meeting_folder(
+    spec: MeetingCreate, default_folder: uuid.UUID | None
+) -> tuple[uuid.UUID | None, bool]:
+    """PRF-07: the folder a new meeting goes to, and whether it came from the default. The
+    default applies only when the request sent no ``folderId`` at all; an explicit null or "" means
+    "no folder"."""
+    if spec.folder_given or default_folder is None:
+        return spec.folder_id, False
+    return default_folder, True
 
 
 def upload_content_type(key: str) -> str | None:

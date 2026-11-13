@@ -29,7 +29,7 @@ Do this quietly so your questions and options are specific to this repo:
    - Exists, not done → tell the user the code; offer to brainstorm/refine that spec instead.
    - Partial overlap → keep the related codes; they shape the options and dependencies.
 2. **Scope:** compare with `CLAUDE.md` §1 "Explicitly OUT of MVP scope" and the hard rules
-   in §5–§7 (all in `legacy/CLAUDE.md` since ARC-19; v2 rules in `docs/architecture/*.md`). Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
+   in §5–§7 (all in `docs/architecture/v1-rules.md`; v2 rules in `docs/architecture/*.md`). Out-of-scope parts are not rejected — they become the "parked" option (Step 3)
    or go to the **PRO** module.
 3. **Code reality:** Grep/Glob for what already exists that the idea could build on
    (tables, routes, components, `lib/` helpers). Note reusable pieces — they make an option
@@ -87,9 +87,8 @@ Turn the chosen option into a concrete spec and check it against the
       follow-up (Step 4.1).
 - [ ] **3–6 acceptance criteria**, each testable and phrased "Given … when … then …" or as
       an observable check. No "should be fast/nice".
-- [ ] **Test plan:** the pure function(s) to extract into `/lib` and the test file name
-      (`tests/<topic>.test.ts` for v1 in `legacy/`; v2: `app/api/tests/test_<topic>.py` or
-      `app/web/src/**/<name>.test.ts` — CLAUDE.md §0) — this is what `/ship-feature` Phase 3 writes first.
+- [ ] **Test plan:** the pure function(s) to extract and the test file name
+      (`app/api/tests/test_<topic>.py` or `app/web/src/**/<name>.test.ts` — CLAUDE.md §0) — this is what `/ship-feature` Phase 3 writes first.
 - [ ] **Touch list:** expected files/routes/components, from the Step 1 code scan.
 - [ ] **Structural flags called out:** new migration, env var, provider, auth/RLS change,
       or >~10 files. Allowed, but stated, so `/ship-feature` knows to stop for plan approval.
@@ -156,8 +155,8 @@ rejected options in one line each.>
 - Given ..., when ..., then ...
 
 **Test Plan**
-- Pure logic: `lib/<area>/<file>.ts` → `<fnName>()` ...
-- Tests: `tests/<topic>.test.ts` — <cases>
+- Pure logic: `app/api/app/<area>/<file>.py` → `<fn_name>()` (or `app/web/src/...`) ...
+- Tests: `app/api/tests/test_<topic>.py` / `app/web/src/**/<name>.test.ts` — <cases>
 
 **Structural flags**
 - <migration / env var / provider / RLS — or "none">
@@ -192,14 +191,9 @@ Format rules (the seeder depends on them):
 
 ## Step 8 — Sync the DB registry
 
-```
-cd legacy && npx tsx scripts/seed-features.ts --only <CODE>[,<CODE>]
-```
-
-- **Never run the seeder without `--only`** — a full run overwrites every edit made at
-  `/admin/features`.
-- `No "### <KEY> — <Title>" section found` → the heading format is wrong; fix Step 7.
-- Missing `.env.local` / Supabase credentials → skip, and give the user the command.
+There is no v2 seeder yet (the v1 `seed-features.ts` went with `legacy/`, ARC-16). Tell the
+user to add the new code at `/admin/features` if they want it in the DB registry; the repo
+(`tracking.md` + `features/*.md`) stays the source of truth.
 
 ## Step 9 — Commit
 

@@ -880,7 +880,20 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
 ---
 
 ### ARC-16 — Remove legacy & decommission Supabase
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** 🟡 Part 1 done (repo), part 2 after the cutover
+
+**Progress**
+- Part 1 (owner decision 2026-11-12, before the cutover; the owner kept a backup of `legacy/`):
+  `legacy/`, `ci.yml`, `release-dev.yml` and the root `.dockerignore` deleted; v1 `schema.sql` +
+  migrations 001–038 frozen as `app/api/tests/fixtures/v1/schema/` (replayed by `app/db/replay.py`
+  for the migration and parity tests and `gen_baseline` — this also covers the ARC-19 "freeze
+  before deleting legacy/" item); `legacy/CLAUDE.md` → `docs/architecture/v1-rules.md`; CLAUDE.md
+  (§0, §9k), README, PR template, skills and the status agent rewritten for v2. v1 lives on in
+  history and on `release/1.1`, which must no longer be merged into `main`/`dev`.
+- Part 2 (after ARC-15 and a stable period): delete `scripts/migrate_from_supabase.py`,
+  `app/migration/`, `services/storage/r2.py`, the v1 fixtures and the Supabase/R2 bits of
+  `backup.yml`; final Supabase backup, then shut down Supabase and the v1 R2 buckets; remove
+  `apps/ricotdin/` from the deployment repo. Irreversible steps — the owner confirms each.
 
 **User Story**  
 As a developer, I want all v1 code and Supabase dependencies removed so that the repo only contains `app/api`, `app/web`, `ai-instruction`, `docs` and tooling.
@@ -1091,6 +1104,66 @@ Architecture review 2026-11-12 (owner decisions in `roadmap.md`, same date). Fin
 **Key files (expected)**
 - `CLAUDE.md`, `docs/architecture/*.md`, `legacy/CLAUDE.md`, `app/api/app/**`, `app/web/src/**`, `.claude/agents/**`
 
+---
+
+### ARC-20 — Self-hosted Postgres instead of Neon
+
+**User story:** As the owner, I want v2's database on the shared self-hosted Postgres of the
+deployment repository instead of Neon so that it runs next to the other apps, is backed up by the
+same sidecar, and costs nothing extra.
+
+**Acceptance criteria**
+- Deployment repo: Postgres image `pgvector/pgvector:pg17-trixie` (same Debian/glibc as the running
+  `postgres:17`, guarded in deploy-postgres); optional superuser SQL per app
+  (`postgres/sql/apps/<app>.sql`), for ricotdin `vector` + `pgcrypto` + `CREATEROLE`; ricotdin v2
+  api + worker join the `db` network; `restore-test.sh ricotdin` restores the nightly dump.
+- `alembic upgrade head` succeeds as the non-superuser owner `ricotdin`: migrations only ALTER a
+  role's CREATEDB / CREATEROLE / BYPASSRLS when it has one (same guarantee as before).
+- `provision_db_roles` creates and rotates logins as that owner and grants CONNECT on its database;
+  `drop_login` revokes it.
+- CI runs on `pgvector/pgvector:pg17-trixie`; the committed baseline is what PG 17 generates.
+- Runbook `docs/ops/self-hosted-postgres.md`: migrations and logins from the Mac (API image on the
+  `db` network), the rehearsed Neon → self-hosted data move, local dev container.
+
+**Test plan**
+- `tests/test_db_provision_integration.py`: a CREATEROLE-only owner on a database with no PUBLIC
+  privileges creates + rotates a login that can connect; the old password stops working.
+- Existing parity test (`test_committed_baseline_is_up_to_date`) on PG 17.
+- Manual, done 2026-11-12: deploy-postgres flow locally (fresh init + re-run), migrations + logins
+  as owner, isolation (no CONNECT to other app databases), nightly dump + restore-test for all four
+  apps, PG 18 dump → PG 17 restore with schema/ACL equal to a fresh migration.
+
+**Structural flags**
+- Edits `0001`'s prelude and `0002` (applied on Neon): same effect, privilege-compatible form.
+- Roles are cluster-wide: one ricotdin database per server. `ricotdin` = staging now, production
+  at cutover (owner 2026-11-12). Per-environment role names are a follow-up.
+
+**Done check**
+- Both branches pushed; after merge: deploy-postgres green, staging env files switched to the
+  `ricotdin` logins, `/health` + sign-in on staging.
+
+**Out of scope**
+- Configurable role prefix (two ricotdin databases on one server); deleting Neon and `backup.yml`
+  (owner, after a stable period).
+
+**Key files**
+- deployment: `postgres/compose.yml`, `postgres/sql/apps/ricotdin.sql`, `postgres/scripts/add-app-db.sh`,
+  `postgres/init/10-app-dbs.sh`, `.github/workflows/deploy-postgres.yml`, `ops/backup/restore-test.sh`,
+  `apps/ricotdin-v2-staging/compose.yml`
+- ricotdin: `app/api/app/db/provision.py`, `app/api/migrations/src/v2_prelude.sql`,
+  `app/api/migrations/sql/0002_runtime_roles.sql`, `.github/workflows/ci-api.yml`,
+  `docs/ops/self-hosted-postgres.md`, `docs/architecture/db.md`
+
+
+**Extension (owner, 2026-11-12): production only**
+- No staging environment, no v1, no Neon. Production v2 = `ricotdin.mmlabs.online` +
+  `ricotdin-api.mmlabs.online`, database `ricotdin`, started empty (no data carried over), deployed by
+  tag (`release.yml` → deployment PR → `deploy-ricotdin-v2.yml`).
+- Deployment repo: `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml` built from the running staging
+  ones (secrets → env files, SMTP added, prod hostnames, v2+ tag pins); staging and v1 folders removed.
+- ricotdin: `release-staging.yml`, `staging_release.py`, `backup.yml`, `backup_r2.py`, `backup_plan.py`
+  (+ their tests) removed; go-live runbook `docs/ops/go-live.md`; Supabase migration docs marked unused.
+- Done check: v2.0.0 live and healthy on the production hostnames, first admin signed in, Drive connected.
 ---
 
 ## Build Order

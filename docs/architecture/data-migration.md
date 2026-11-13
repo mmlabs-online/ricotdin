@@ -2,6 +2,9 @@
 
 ### 0.5 v1 → v2 data migration (ARC-03, files ARC-18)
 
+> **Not used (ARC-20, 2026-11-12):** v1 is retired and production started empty; nothing is migrated.
+> The tooling below stays until ARC-16 removes it.
+
 - `app/api/scripts/migrate_from_supabase.py` is an owner-run CLI; the pure logic lives in
   `app/migration/`. Runbook and rehearsal log: `docs/ops/v2-migration-rehearsal.md`.
 - Env lives only in the git-ignored `app/api/.env.migrate`:
@@ -35,6 +38,10 @@
   - **A migration that creates a v2-only table** (no Supabase counterpart) must add it to
     `V2_ONLY_TABLES` in the script, or every run is blocked (BUG-020);
     `test_bug020_every_table_created_after_the_baseline_is_v2_only` enforces it.
+  - **A migration that adds a column to a shared table** (PRF-07: `profiles.default_folder_id`, PRF-06: `profiles.locale`)
+    must list it in `V2_ONLY_COLUMNS` (`app/migration/plan.py`): the copy then never reads,
+    compares or writes it (it keeps its v2 default; a re-run keeps a user's value);
+    `test_every_column_added_after_the_baseline_is_v2_only` enforces it.
 - **Report:**
   - Order-independent digests per table, plus secrets and file results (copied / already in
     Drive / v2 files / missing / rejected / failed, mapped count + `storage_digest`).

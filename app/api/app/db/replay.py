@@ -1,8 +1,10 @@
 """Replay the v1 (Supabase) schema on plain Postgres (ARC-02).
 
-Applies ``tests/fixtures/supabase_shim.sql``, then ``legacy/schema.sql`` and every
-``legacy/migrations/NNN_*.sql`` in numeric order — the same order the owner applied them in the
-Supabase SQL editor (CLAUDE.md §9a).
+Applies ``tests/fixtures/supabase_shim.sql``, then ``tests/fixtures/v1/schema/schema.sql`` and every
+``tests/fixtures/v1/schema/migrations/NNN_*.sql`` in numeric order — the same order the owner
+applied them in the Supabase SQL editor. That SQL is a frozen copy of v1's ``schema.sql`` and
+``migrations/`` (001–038), kept when ``legacy/`` was deleted (ARC-16): the migration integration
+test, the schema parity test and ``scripts.gen_baseline`` still need a v1 database.
 """
 
 import re
@@ -11,18 +13,17 @@ from pathlib import Path
 import psycopg
 
 API_ROOT = Path(__file__).resolve().parents[2]  # app/api
-REPO_ROOT = API_ROOT.parents[1]
-LEGACY = REPO_ROOT / "legacy"
+V1_SCHEMA = API_ROOT / "tests" / "fixtures" / "v1" / "schema"
 SHIM = API_ROOT / "tests" / "fixtures" / "supabase_shim.sql"
 _MIGRATION = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 
 
 def v1_sql_files() -> list[Path]:
     migrations = sorted(
-        (p for p in (LEGACY / "migrations").iterdir() if _MIGRATION.match(p.name)),
+        (p for p in (V1_SCHEMA / "migrations").iterdir() if _MIGRATION.match(p.name)),
         key=lambda p: int(p.name[:3]),
     )
-    return [LEGACY / "schema.sql", *migrations]
+    return [V1_SCHEMA / "schema.sql", *migrations]
 
 
 def replay_v1(url: str) -> list[str]:

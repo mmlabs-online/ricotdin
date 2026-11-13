@@ -1,7 +1,8 @@
 """Disposable databases for the schema generator and integration tests (ARC-02).
 
-``DATABASE_URL`` points at a database the caller may CREATE/DROP databases from (the Neon
-``dev`` branch, or the CI service container). Each scratch database gets a unique
+``DATABASE_URL`` points at a database the caller may CREATE/DROP databases from (a local
+``pgvector/pgvector:pg17-trixie`` container or the CI service container, never the shared
+server). Each scratch database gets a unique
 ``ricotdin_test_*`` name and is dropped afterwards; leftovers from interrupted runs are dropped
 by ``drop_stale``.
 """

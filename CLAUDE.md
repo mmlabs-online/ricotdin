@@ -3,37 +3,38 @@
 Project memory for Claude Code. Read this fully at the start of every session.
 Keep it updated as the project evolves — this file is the source of truth.
 
-## 0. v2 re-platform (module ARC) — read first
+## 0. Layout (v2) — read first
 
-The repo is mid-migration (roadmap 2026-10-25; specs in `ai-instruction/features/feature-Architecture-ARC.md`,
-progress in `ai-instruction/tracking.md` ARC rows). Since **ARC-00**:
+v2 is the only code on `dev`/`main` since **ARC-16** (specs in
+`ai-instruction/features/feature-Architecture-ARC.md`, progress in `ai-instruction/tracking.md` ARC rows):
 
 ```
-legacy/          v1 — the Next.js + Supabase app described in §1–§11 (frozen: hotfixes only, release/1.1)
-app/api/         v2 backend — FastAPI, Python 3.12, uv (ARC-02..ARC-10)
-app/web/         v2 frontend — Vite + React SPA (Figma Make import in ARC-11)
-ai-instruction/  shared: tracking, features, bugs, roadmap, ai-gen/ (runtime pipeline prompt)
-docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md   shared
+app/api/         backend — FastAPI, Python 3.12, uv (API + pipeline worker share one image)
+app/web/         frontend — Vite + React SPA
+ai-instruction/  tracking, features, bugs, roadmap, ai-gen/ (runtime pipeline prompt)
+docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md
 ```
 
-- **Every v1 path in §1–§11 is relative to `legacy/`** (`lib/gemini` = `legacy/lib/gemini`,
-  `migrations/` = `legacy/migrations/`, `tests/` = `legacy/tests/`). v1 rules still apply to v1 code.
-- **v1 commands run inside `legacy/`** (`cd legacy && npm run dev|test|…`, `npx tsx scripts/…`).
-  `legacy/.env.local` holds the v1 env; an optional corporate CA goes in `legacy/certs/`
-  (`legacy/instrumentation-node.ts` reads `<cwd>/certs/`). `ai-instruction/` is resolved from `legacy/` or the image root by
-  `legacy/lib/paths/shared.ts`. v1 image: `docker build -f legacy/Dockerfile .` **from the repo root**
-  (context must include `ai-instruction/ai-gen/`).
-- **v2 commands:**
+- **v1 (Next.js + Supabase) is gone from `dev`/`main`.** It lives in git history and on
+  `release/1.1` (tags ≤ v1.1.1, v1 at the repo root there). **v1 is retired** (owner decision
+  2026-11-12, ARC-20): no hotfixes, no data carried over; v2 is the only ricotdin.
+  Its rules and designs: `docs/architecture/v1-rules.md` (was `legacy/CLAUDE.md`).
+- The frozen v1 schema (`schema.sql` + migrations 001–038) is a test fixture in
+  `app/api/tests/fixtures/v1/schema/`: the migration integration test, the schema parity test and
+  `scripts.gen_baseline` replay it. Never edit it.
+- **Commands:**
   - api: `cd app/api && uv sync && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`
   - web: `cd app/web && npm ci && npm run typecheck && npm test && npm run build`
-- **TDD for v2 (same rule as §10, different place):** pure logic first, tests before implementation.
+- **TDD (same rule as §10):** pure logic first, tests before implementation.
   api → `app/api/tests/test_<topic>.py` (pytest, no network/DB unless it is an explicit integration test
-  named `test_*_integration.py`); web → `app/web/src/**/<name>.test.ts(x)` (vitest). v1 tests stay in
-  `legacy/tests/*.test.ts` + `legacy/package.json` `test` script.
-- **CI is path-filtered:** `ci.yml` (legacy + v1 image build/health), `ci-api.yml`, `ci-web.yml`.
+  named `test_*_integration.py`); web → `app/web/src/**/<name>.test.ts(x)` (vitest).
+- **CI is path-filtered:** `ci-api.yml`, `ci-web.yml`; releases `release.yml` (tags).
+- **One environment: production** (`https://ricotdin.mmlabs.online`, API `https://ricotdin-api.mmlabs.online`)
+  on the Mac, database `ricotdin` on the shared self-hosted Postgres. No staging (retired 2026-11-12,
+  ARC-20). Go-live and release steps: `docs/ops/go-live.md`.
 - v2 security rules are the v1 rules (§5–§7, §9b, §9f, §9m) re-stated per ARC spec; secrets stay server-only.
-- (ARC-19) §1–§9 (v1 commands), §9a–§9j, §9m–§9o and §11 now live in `legacy/CLAUDE.md`;
-  §0.1–§0.11 live in `docs/architecture/` (table below).
+- (ARC-19) §0.1–§0.11 live in `docs/architecture/` (table below); the v1 sections (§1–§9, §9a–§9j,
+  §9m–§9o, §11) in `docs/architecture/v1-rules.md`.
 
 ### 0.x → file (ARC-19)
 
@@ -42,11 +43,11 @@ through this table. **Read the file before working in that area**; its rules are
 
 | § | File | Read before working on |
 |---|---|---|
-| §0.1 | `docs/architecture/db.md` | Neon schema, Alembic, DB roles, RLS request context, grants |
+| §0.1 | `docs/architecture/db.md` | self-hosted Postgres (ARC-20), schema, Alembic, DB roles, RLS request context, grants |
 | §0.2 | `docs/architecture/api-runtime.md` | FastAPI factory, middleware, logins/pools, `Database` session, image |
 | §0.3 | `docs/architecture/auth.md` | register/login/refresh, passwords, JWT, email tokens |
 | §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive / R2 storage |
-| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (Supabase → Neon, R2 → Drive) |
+| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (not used since ARC-20; tooling kept until ARC-16) |
 | §0.6 | `docs/architecture/core-domain-api.md` | meetings, folders/shares, content, profile, quota routes |
 | §0.7 | `docs/architecture/worker.md` | pipeline worker, transcription, AI analyse, embed, schedulers |
 | §0.8 | `docs/architecture/chat-rag.md` | chat sessions, retrieval scope, grounded answers, citations |
@@ -54,8 +55,7 @@ through this table. **Read the file before working in that area**; its rules are
 | §0.10 | `docs/architecture/web.md` | SPA foundation, routing, auth in the browser, i18n, screens |
 | §0.11 | `docs/architecture/release-cutover.md` | v2 release, supply chain, backup, cutover |
 
-v1 sections (§1–§9 commands, §9a–§9j, §9m–§9o, §11) live in `legacy/CLAUDE.md`, loaded when working
-under `legacy/`.
+| v1 | `docs/architecture/v1-rules.md` | v1 rules (§5–§7, §9b, §9f, §9m bind v2) and the v1 designs the v2 ports cite |
 
 ### Never (verbatim excerpts; the full rule is in the cited file)
 
@@ -65,8 +65,10 @@ From §0 (above):
 
 From §0.1 (`docs/architecture/db.md`):
 
-  The old us-east-2 project `lucky-king-55263595` is unused. Local `app/api/.env` holds `DATABASE_URL`
-  (dev branch, **direct** connection, never pooled for migrations/tests); never commit or print it.
+- (ARC-20) Role names are cluster-wide: **one ricotdin database per server** (production). Runbook,
+  migrations + logins from the Mac: `docs/ops/self-hosted-postgres.md`.
+  **Never name CREATEDB / CREATEROLE / BYPASSRLS in an ALTER ROLE unconditionally** (it needs that
+  attribute; only ALTER when the role has it). Local dev + CI: a superuser container, never the shared server.
 - **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN (RLS does not govern them), and INSERT/UPDATE/DELETE only
   where a policy for that command exists. All meeting content is SELECT-only for the app, so
@@ -91,7 +93,7 @@ From §0.7 (`docs/architecture/worker.md`):
 
   `gemini-embedding-001`, 768 dims, pinned: changing it means re-embedding every meeting),
 
-From v1 §5 / §6 (`legacy/CLAUDE.md`; the same rules bind v2 per §0):
+From v1 §5 / §6 (`docs/architecture/v1-rules.md`; the same rules bind v2 per §0):
 
   **The Gemini API key and the Supabase service role key must NEVER reach the browser.**
 - Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
@@ -107,60 +109,52 @@ From v1 §5 / §6 (`legacy/CLAUDE.md`; the same rules bind v2 per §0):
 
 ## 9k. Release process
 
-**Branches** (GitHub default branch = `dev`, so fresh clones land on `dev`, a bare
-`gh pr create` targets `dev`, and `schedule` workflows run from `dev` — always pass `--base` explicitly):
-- `dev` — day-to-day work; every push → Docker image `ricotdin:dev` (`release-dev.yml`).
+Full detail: `docs/architecture/release-cutover.md` (§0.11); owner runbooks in `docs/ops/`.
+
+**Branches** (GitHub default branch = `main` since 2026-11-12 (owner decision, ARC-19), so fresh clones
+land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows run
+from `main` — always pass `--base` explicitly; day-to-day PRs still go into `dev`):
+- `dev` — day-to-day work.
 - `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
-  only**, never new features. All `vX.Y.Z` tags live here (`v1.0.0`, `v1.0.1`… on `release/1.0`).
-- `ci.yml` runs on push/PR to `main`, `dev` and `release/**` (on `dev` informational only — not a required check; OPS-06).
+  only**, never new features. All `vX.Y.Z` tags live here.
+- `release/1.1` — v1, retired (ARC-20): nothing is released from it any more.
+  **Never merge `release/1.1` into `main` or `dev`**: it has v1 at the repo root and would bring
+  the deleted v1 code back.
 
-**Versioning:** SemVer. `package.json` `version` MUST equal the tag without the `v` — since ARC-00 that
-file is **`legacy/package.json`** (run `npm version` inside `legacy/`).
-`release.yml` rejects a tag that does not match `legacy/package.json` or whose commit is not on
-`release/X.Y` (the branch matching the tag's major.minor).
+**Versioning:** SemVer. `app/api/pyproject.toml` and `app/web/package.json` `version` MUST both equal
+the tag without the `v`; `release.yml` rejects a tag that does not match, whose major is < 2, or whose
+commit is not on `release/X.Y`.
 
 **New minor/major release `X.Y.0`:**
-1. On `dev`: `npm run lint && npm run typecheck && npm run test && npm run build`.
-2. `npm version X.Y.0 --no-git-tag-version`; add a `## [X.Y.0]` section to `CHANGELOG.md`
-   (features + deploy checklist: new migrations, new env vars, dashboard steps + known issues).
+1. On `dev`: the api and web commands in §0 are green.
+2. Bump both version files to `X.Y.0`; add a `## [X.Y.0]` section to `CHANGELOG.md`
+   (features + deploy checklist: new Alembic revisions, new env vars, manual steps + known issues).
 3. Commit `chore(release): vX.Y.0`, PR `dev` → `main` (`gh pr create --base main --head dev`), merge (merge commit, not squash) after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
 5. Tag on it: `git tag -a vX.Y.0 -m "Release vX.Y.0" && git push origin vX.Y.0`
-   → `release.yml` pushes `mingming21400/ricotdin:vX.Y.0` (+ `:latest` if highest) and opens
-   PR `ricotdin vX.Y.0` on `mmlabs-online/deployment` (OPS-04, see Deploy below).
+   → `release.yml` runs both CI suites, pushes `mingming21400/ricotdin-api:vX.Y.0` and
+   `mingming21400/ricotdin-web:vX.Y.0` (+ `latest` if highest) and opens PR `ricotdin vX.Y.0` on
+   `mmlabs-online/deployment` (see Deploy below). A prerelease tag (`vX.Y.0-rc1`) only pushes images.
 6. Create the GitHub Release from the `CHANGELOG.md` section.
 
-**Hotfix `X.Y.(Z+1)` for an existing line:**
-1. Branch from `release/X.Y` (e.g. `hotfix/<topic>`), fix + test, bump version, add CHANGELOG entry.
+**Hotfix `X.Y.(Z+1)`:**
+1. Branch from `release/X.Y` (e.g. `hotfix/BUG-NNN-<topic>`), fix + test, bump both versions, add CHANGELOG entry.
 2. PR into `release/X.Y`; after merge, tag `vX.Y.(Z+1)` on `release/X.Y` and push the tag.
-3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release.
-   `ricotdin:latest` only moves when the pushed tag is the highest version, so a hotfix on
-   an old line never drags `latest` backwards.
-   **After ARC-00:** `release/1.1` (and tags ≤ v1.1.1) still has v1 at the repo root, while `dev`/`main`
-   have it in `legacy/`. Merging back relies on git rename detection: edits to moved files follow them,
-   but a file **added** on `release/1.1` (new test, new migration) may land at the root or raise a
-   directory-rename conflict — after the merge, check every new file sits under `legacy/` and that
-   `legacy/package.json` has the hotfix version.
+3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release
+   (X ≥ 2 only — never `release/1.1`, see above). `latest` only moves when the pushed tag is the
+   highest version, so a hotfix on an old line never drags `latest` backwards.
 
-**Step-by-step for the owner:** `docs/ops/release-runbook.md` (OPS-07) — one-time hand deploy +
-per-release order (migrations → deploy → `npm run verify:deploy`).
-
-**Deploy = merge the deployment PR (OPS-04):** image `mingming21400/ricotdin`, tags are
-v-prefixed (`vX.Y.Z`). After `verify` passes, `release.yml` builds + pushes the image, then
-(secret `DEPLOY_REPO_TOKEN` — fine-grained PAT on `mmlabs-online/deployment` only, Contents +
-Pull requests RW) opens PR `ricotdin vX.Y.Z` on `mmlabs-online/deployment` that writes ONLY
-`apps/ricotdin/release.env`:
-`RICOTDIN_IMAGE=mingming21400/ricotdin:vX.Y.Z@<digest>` (pinned by digest) + `RICOTDIN_VERSION=vX.Y.Z`.
-Reviewing + merging that PR deploys to the home server (deployment-repo side = OPS-05: drafts in
-`docs/ops/deployment-repo/` — `apps/ricotdin/compose.yml`, `deploy-ricotdin.yml`, README with the
-verification prompt; runtime secrets ONLY in the server file `/etc/mmlabs/ricotdin.env`, never in a repo).
-The tag is never baked into the image; runtime `RICOTDIN_VERSION` (non-secret) is served by
-public `GET /version.json` (fallback: baked `BUILD_COMMIT`, then `"unknown"` —
-`lib/release/version.ts`). Public `GET /api/health` → `{"status":"ok"}` (no DB/provider calls)
-backs the image `HEALTHCHECK`. Never deploy `dev` or `latest`. Apply that release's new
-migrations BEFORE merging the deployment PR. Rollback = a deployment PR pinning the previous
-release's digest (only safe if no destructive migration ran in between).
+**Deploy = merge the deployment PR (OPS-04):** the PR writes ONLY `apps/ricotdin-v2/release.env`
+(`RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE`, both `:tag@digest`, + `RICOTDIN_VERSION`); runtime
+secrets are `RICOTDIN_*` repository secrets of the deployment repo, written to the server env files by
+each deploy, never committed anywhere. The secret `DEPLOY_REPO_TOKEN` is a
+fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW). The version is
+served by public `GET /version.json`; `GET /health` backs the image `HEALTHCHECK`. Never deploy
+`dev` or `latest`. Run that release's `alembic upgrade head` (on the Mac, `docs/ops/self-hosted-postgres.md`)
+BEFORE merging the deployment PR.
+Rollback = a deployment PR pinning the previous release's digests (only safe if no destructive
+migration ran in between).
 
 ## 9l. Traceability (feature / bug ↔ branch ↔ commit ↔ PR)
 
@@ -191,11 +185,10 @@ git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes
 - After each working increment, **commit to git** with a clear message.
 - **TDD is mandatory for all new logic:**
   - Write unit tests for every new pure function **before** writing the implementation.
-  - Tests go in `tests/` with the `.test.ts` extension and must be added to the
-    `npm test` script in `package.json` (v1: `legacy/tests/`, `legacy/package.json`; v2 locations: §0).
+  - Test locations and commands: §0.
   - When **any existing logic changes**, update the corresponding tests first, then
     change the implementation.
-  - Tests must be pure (no I/O, no mocks) — test pure functions extracted into `/lib`.
+  - Unit tests must be pure (no I/O, no mocks) — test pure functions; DB/network only in `test_*_integration.py`.
 - **Update `ai-instruction/tracking.md`** when a feature is completed: change `[ ]`
   to `[x]` in the "Is Done?" column for every Feature Code that the work covers.
 - Before making large or structural changes, briefly state the plan and wait.
@@ -207,7 +200,7 @@ git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes
   (dedupe/scope/code) → brainstorm Q&A → 2–3 options + recommendation → converge on the
   smallest valuable slice that passes a Definition of Ready (testable criteria, test plan,
   structural flags, done check) → approved spec → write `tracking.md` + `features/*.md`
-  → `seed-features.ts --only <CODE>`. Docs only, no code.
+  (no DB seeder in v2: add the code at `/admin/features` by hand). Docs only, no code.
 - **Feature delivery workflow:** to build a feature from `tracking.md`, use the
   `/ship-feature <CODE>` skill (`.claude/skills/ship-feature/SKILL.md`). It sequences
   spec → plan → TDD → implement → verify → specialist review gates (subagents in
@@ -222,5 +215,5 @@ git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes
   code or `BUG-NNN` (§9l).
 - **Owner copilot:** `/copilot` (status brief), `/copilot <question>`, `/copilot plan`
   (`.claude/skills/copilot/SKILL.md`). Advises and plans only; uses the read-only
-  `Project Status Analyst` agent and `scripts/backlog-snapshot.ts` for facts. Strategy and
+  `Project Status Analyst` agent and `tracking.md` for facts. Strategy and
   decisions persist in `ai-instruction/roadmap.md` (written only with owner approval).

@@ -43,6 +43,8 @@ export interface UploadMeta {
   source: UploadSource
   durationSeconds: number | null
   startedAt: string
+  /** PRF-07: a folder id, null for "no folder", undefined to let the API use the default. */
+  folderId?: string | null | undefined
 }
 
 export interface UploadDeps {
@@ -79,6 +81,7 @@ export async function uploadMeeting(
         source: meta.source,
         durationSeconds: meta.durationSeconds,
         startedAt: meta.startedAt,
+        ...(meta.folderId !== undefined ? { folderId: meta.folderId } : {}),
       }),
     )
   } catch {

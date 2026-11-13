@@ -41,6 +41,7 @@ from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
 from app.domain.uploads import (
     MAX_UPLOAD_BYTES,
     audio_key,
+    choose_meeting_folder,
     format_meeting_title,
     parse_meeting_create,
     parse_uploaded,
@@ -572,10 +573,20 @@ async def create_meeting(request: Request, identity: Identity, db: Db, platform:
                 "Too many unfinished uploads. Finish or delete them first.",
                 detail=f"{pending} pending meetings",
             )
-        if spec.folder_id is not None and not await folder_assignable(
-            conn, spec.folder_id, identity.user_id
-        ):
-            raise NotFound("Folder not found.")
+        default_folder = None
+        if not spec.folder_given:  # PRF-07: no folderId sent → the user's default folder
+            default_folder = (
+                await conn.execute(
+                    text("SELECT default_folder_id FROM public.profiles WHERE id = :u"),
+                    {"u": identity.user_id},
+                )
+            ).scalar_one_or_none()
+        folder, from_default = choose_meeting_folder(spec, default_folder)
+        if folder is not None and not await folder_assignable(conn, folder, identity.user_id):
+            if not from_default:
+                raise NotFound("Folder not found.")
+            folder = None  # access to the default folder was lost: no folder, not an error
+            log.info("default folder no longer assignable; meeting created without a folder")
         await conn.execute(
             text(
                 "INSERT INTO public.meetings (id, user_id, title, status, source, "
@@ -590,7 +601,7 @@ async def create_meeting(request: Request, identity: Identity, db: Db, platform:
                 "key": key,
                 "dur": spec.duration_seconds,
                 "started": started,
-                "folder": spec.folder_id,
+                "folder": folder,
             },
         )
         storage = await platform.storage(conn)

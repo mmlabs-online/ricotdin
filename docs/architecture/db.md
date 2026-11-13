@@ -2,10 +2,18 @@
 
 ### 0.1 v2 database (ARC-02)
 
-- **Neon** project `ricotdin-sg` (`dark-grass-92968821`, aws-ap-southeast-1, Postgres 18), org
-  `org-wandering-night-27161653`. Branches: `main` (future staging/prod) and `dev` (development + tests).
-  The old us-east-2 project `lucky-king-55263595` is unused. Local `app/api/.env` holds `DATABASE_URL`
-  (dev branch, **direct** connection, never pooled for migrations/tests); never commit or print it.
+- **Self-hosted Postgres (ARC-20, replaces Neon):** database `ricotdin` on the shared
+  `pgvector/pgvector:pg17-trixie` server of the deployment repo (`postgres/`), reachable only as
+  `postgres:5432` on the internal Docker network `db` (no published port, no TLS). Owner role
+  `ricotdin` is **not a superuser** (CREATEROLE only); the superuser creates `vector` + `pgcrypto`
+  (`postgres/sql/apps/ricotdin.sql`). PUBLIC has no privilege on any database there, so
+  `provision_db_roles` grants CONNECT to each login. Role names are cluster-wide: **one ricotdin
+  database per server** (production; staging retired 2026-11-12). Runbook, migrations + logins from
+  the Mac: `docs/ops/self-hosted-postgres.md`. **Never name CREATEDB / CREATEROLE / BYPASSRLS in an
+  ALTER ROLE unconditionally** (it needs that attribute; only ALTER when the role has it).
+  Local dev + CI: a superuser `pgvector/pgvector:pg17-trixie` container (`app/api/.env`
+  `DATABASE_URL`, used for scratch databases); never the shared server. Neon (`ricotdin-sg`) is no
+  longer used; production started with an empty database (owner deletes the Neon project).
 - **Schema = Alembic** in `app/api/migrations/` (version table in schema `alembic`).
   `uv run --env-file .env alembic upgrade head`. New schema changes = new Alembic revisions, never
   edits to `0001`.
@@ -38,7 +46,7 @@
   auth/admin; append-only `audit_logs`/`quota_ledger`) is an ARC-04 acceptance criterion.
   R2 never serve requests as the table owner (owner bypasses RLS; no FORCE RLS) — assert at startup.
   R3 set the context per transaction only: `set_config('app.user_id', $1, true)` + `app.role` inside
-  an explicit transaction (Neon pooler = PgBouncer transaction mode; session SET would leak).
+  an explicit transaction (a transaction-mode pooler such as PgBouncer would leak a session SET).
   R4 bind parameters, never string-built `SET`. R5 values only from the verified token (`sub`) and
   `users.role`; whitelist role `user|admin`; set both or neither. R6 reset/roll back connections on
   check-in; test that a reused connection has no context. R7 statement/lock timeouts and connection
