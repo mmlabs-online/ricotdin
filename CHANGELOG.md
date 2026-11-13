@@ -5,7 +5,11 @@
 
 ## [Unreleased]
 
-### Checklist deploy v2.0.0 (đổi tên thành `[2.0.0]` khi phát hành; quy trình: `docs/ops/go-live.md`)
+## [2.0.0] — 2026-11-13
+
+Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: production `https://ricotdin.mmlabs.online` trên Postgres tự host, DB bắt đầu trống. v1 đã dừng (ARC-20).
+
+### Checklist deploy v2.0.0 (quy trình: `docs/ops/go-live.md`)
 - Chỉ còn một môi trường: production `https://ricotdin.mmlabs.online` + API `https://ricotdin-api.mmlabs.online`. v1, staging và Neon đã bỏ; DB bắt đầu trống, không chuyển dữ liệu (ARC-20).
 - Xoay vòng các khóa cũ trong lịch sử git (Supabase service_role + anon, Gemini key `AQ.A…`).
 - Repo deployment: merge PR ARC-20 (image pgvector, `ricotdin.sql`, `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml`, bỏ staging); trên Mac `docker compose -p ricotdin-v2-staging down`; xoá 2 hostname staging trên Cloudflare.
