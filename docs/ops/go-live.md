@@ -44,14 +44,12 @@ Delete `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` if staging left one (`gh secret delete
 Both version files already say `2.0.0`. On `dev`:
 1. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [2.0.0] — <date>`.
 2. Commit `chore(release): v2.0.0`, then PR `dev` → `main` with `--base main`, and merge it (merge commit).
-3. Cut the branch and tag:
+3. Cut the branch. The push tags `v2.0.0` by itself (`release.yml` reads the version files):
    ```bash
    git checkout main && git pull && git checkout -b release/2.0 && git push -u origin release/2.0
    ```
-   ```bash
-   git tag -a v2.0.0 -m "Release v2.0.0" && git push origin v2.0.0
-   ```
-4. `release.yml` builds `mingming21400/ricotdin-api:v2.0.0` and `ricotdin-web:v2.0.0` and opens
+   If `release/2.0` exists already, fast-forward it to `main` instead (`git push origin main:release/2.0`).
+4. `release.yml` tags `v2.0.0`, builds `mingming21400/ricotdin-api:v2.0.0` and `ricotdin-web:v2.0.0` and opens
    PR `ricotdin v2.0.0` on the deployment repo. **Do not merge it yet.**
 
 ## 4. Database
