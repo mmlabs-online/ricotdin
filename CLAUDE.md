@@ -153,8 +153,8 @@ secrets are `RICOTDIN_*` repository secrets of the deployment repo, written to t
 each deploy, never committed anywhere. The secret `DEPLOY_REPO_TOKEN` is a
 fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW). The version is
 served by public `GET /version.json`; `GET /health` backs the image `HEALTHCHECK`. Never deploy
-`dev` or `latest`. Run that release's `alembic upgrade head` (on the Mac, `docs/ops/self-hosted-postgres.md`)
-BEFORE merging the deployment PR.
+`dev` or `latest`. The deploy itself dumps the database and runs that release's `alembic upgrade head`
+before replacing any container (`docs/ops/self-hosted-postgres.md`).
 Rollback = a deployment PR pinning the previous release's digests (only safe if no destructive
 migration ran in between).
 

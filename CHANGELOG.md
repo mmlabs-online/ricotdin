@@ -14,7 +14,7 @@ Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: p
 - Xoay vòng các khóa cũ trong lịch sử git (Supabase service_role + anon, Gemini key `AQ.A…`).
 - Repo deployment: merge PR ARC-20 (image pgvector, `ricotdin.sql`, `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml`, bỏ staging); trên Mac `docker compose -p ricotdin-v2-staging down`; xoá 2 hostname staging trên Cloudflare.
 - Secret `RICOTDIN_*` mới cho production trên repo deployment (`KEY_ENCRYPTION_SECRET`, `JWT_PRIVATE_KEY`, 3 `DATABASE_URL_*`, tuỳ chọn `MAIL_FROM`, `SENTRY_DSN`); không dùng lại giá trị của staging. Mail dùng chung tài khoản Gmail của org-admin-api (`ORG_ADMIN_SMTP_USERNAME`/`_PASSWORD` trong environment `org-admin-api`).
-- Trên Mac, với image `v2.0.0`: `alembic upgrade head` + `provision_db_roles` trong image API trên mạng `db` (`docs/ops/self-hosted-postgres.md`), trước khi merge PR deployment.
+- Migration và 3 login DB do bước `database` của `deploy-ricotdin-v2` tự làm (dump → `alembic upgrade head` → tạo login lần đầu vào `~/.config/ricotdin/db-logins.env` trên Mac); không cần secret `RICOTDIN_DATABASE_URL_*`.
 - Cloudflare: `ricotdin.mmlabs.online` → `http://ricotdin-web:8080`, `ricotdin-api.mmlabs.online` → `http://ricotdin-api:8000`; bỏ query string của `/media` khỏi log.
 - Sau deploy: đăng ký tài khoản, nâng lên admin bằng SQL, `connect_gdrive --folder ricotdin` + `drive_smoke` (qua tunnel tạm, `docs/ops/go-live.md`), thêm key AI ở `/admin/keys`.
 - Backup: sidecar `pg-backup` của repo deployment; cài rclone trên Mac để có bản offsite.

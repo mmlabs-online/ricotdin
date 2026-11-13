@@ -48,9 +48,11 @@ nobody creates or edits those files by hand. To change a value, run
 *Actions → deploy-ricotdin-v2 → Run workflow*. A missing required secret fails the run by name before
 anything is replaced. Values must be one line without `'`.
 
-- **Required:** `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER` (the `ricotdin`
-  logins from `provision_db_roles`, never the owner URL), `JWT_PRIVATE_KEY` (one line, escaped `\n`),
-  `KEY_ENCRYPTION_SECRET`.
+- **Required:** `JWT_PRIVATE_KEY` (one line, escaped `\n`), `KEY_ENCRYPTION_SECRET`.
+- **Database:** no secrets. Step `database` builds the owner URL from the committed
+  `postgres/secrets/apps/ricotdin.password`, dumps, runs `alembic upgrade head` with the release image
+  and, the first time, creates the three runtime logins into `~/.config/ricotdin/db-logins.env`
+  (chmod 600, kept; delete it to rotate). `DATABASE_URL_*` in the env files come from that file.
 - **Mail:** reuses org-admin-api's Gmail account. The job declares the GitHub Environment
   `org-admin-api` and writes `SMTP_USER` / `SMTP_PASSWORD` from `ORG_ADMIN_SMTP_USERNAME` /
   `ORG_ADMIN_SMTP_PASSWORD` (spaces stripped); `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` are fixed in
