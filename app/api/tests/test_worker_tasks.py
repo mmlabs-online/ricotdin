@@ -110,6 +110,13 @@ def test_probe_shapes() -> None:
     )  # fmt: skip
     assert grok.body == {"model": "grok-3-mini", "max_tokens": 1,
                          "messages": [{"role": "user", "content": "ping"}]}  # fmt: skip
+    claude = probe_for("anthropic_api_key", "k")
+    assert claude is not None and (claude.method, claude.url) == (
+        "GET", "https://api.anthropic.com/v1/models",
+    )  # fmt: skip
+    # same auth as the SDK the adapter uses (Bearer, anthropic-version 2026-10-21)
+    assert claude.headers == {"Authorization": "Bearer k", "anthropic-version": "2026-10-21"}
+    assert claude.body is None
 
 
 @pytest.mark.parametrize(

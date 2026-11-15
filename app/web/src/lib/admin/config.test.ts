@@ -19,7 +19,7 @@ import {
 
 describe('provider keys', () => {
   it('config keys map to providers in a fixed order', () => {
-    expect(KEY_PROVIDERS).toEqual(['gemini', 'openai', 'grok', 'speechmatics'])
+    expect(KEY_PROVIDERS).toEqual(['gemini', 'openai', 'grok', 'anthropic', 'speechmatics'])
     expect(providerOfKey('speechmatics_api_key')).toBe('speechmatics')
     expect(providerOfKey('gemini_api_key')).toBe('gemini')
     expect(providerOfKey('other')).toBeNull()
@@ -128,8 +128,8 @@ describe('configErrorKey', () => {
 describe('keyGroups', () => {
   it('known providers first (always shown), then any provider the API returns', () => {
     const rows = [{ config_key: 'deepseek_api_key' }, { config_key: 'gemini_api_key' }, { config_key: 'bad' }]
-    expect(keyGroups(rows)).toEqual(['gemini', 'openai', 'grok', 'speechmatics', 'deepseek'])
-    expect(keyGroups([])).toEqual(['gemini', 'openai', 'grok', 'speechmatics'])
+    expect(keyGroups(rows)).toEqual(['gemini', 'openai', 'grok', 'anthropic', 'speechmatics', 'deepseek'])
+    expect(keyGroups([])).toEqual(['gemini', 'openai', 'grok', 'anthropic', 'speechmatics'])
   })
 })
 

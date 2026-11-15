@@ -28,6 +28,7 @@ from app.core.errors import AppError, ServiceUnavailable
 from app.core.logging import get_logger
 from app.db.session import Database
 from app.services.ai import catalog
+from app.services.ai.adapters.anthropic import AnthropicAdapter
 from app.services.ai.adapters.gemini import GeminiAdapter
 from app.services.ai.adapters.openai_compat import OpenAICompatAdapter
 from app.services.ai.types import (
@@ -44,7 +45,11 @@ from app.services.keys.source import KeySource
 log = get_logger("ai")
 
 # provider kind → adapter. A provider with its own API (e.g. Anthropic) adds one entry here.
-ADAPTERS: dict[str, Adapter] = {"gemini": GeminiAdapter(), "openai_compat": OpenAICompatAdapter()}
+ADAPTERS: dict[str, Adapter] = {
+    "gemini": GeminiAdapter(),
+    "openai_compat": OpenAICompatAdapter(),
+    "anthropic": AnthropicAdapter(),
+}
 EMBED_BATCH = 100
 EMBED_MAX_ABS = 1e3  # Gemini batchEmbedContents limit (v1)
 # v1 defaults (GEMINI_* / OPENAI_* env knobs were never set in production).

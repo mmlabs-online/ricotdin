@@ -18,7 +18,7 @@ import { useDocumentTitle } from '../../lib/useDocumentTitle'
 const keyErrorKey = (err: unknown) => (err instanceof ApiError && err.status === 422 ? 'admin.keys.errors.lastActive' : configErrorKey(err))
 const providerOf = (configKey: string) => configKey.replace(/_api_key$/, '')
 
-const KNOWN_NAMES = new Set(['gemini', 'openai', 'grok', 'speechmatics'])
+const KNOWN_NAMES = new Set(['gemini', 'openai', 'grok', 'anthropic', 'speechmatics'])
 function useProviderName() {
   const { t } = useTranslation()
   // a provider added to the API catalog later shows under its own name until it gets a label

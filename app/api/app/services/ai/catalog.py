@@ -48,6 +48,7 @@ PROVIDERS: dict[str, ProviderInfo] = {
         ),
         ProviderInfo("openai", "openai_compat", "https://api.openai.com/v1", "OpenAI"),
         ProviderInfo("grok", "openai_compat", "https://api.x.ai/v1", "Grok", "grok-3-mini"),
+        ProviderInfo("anthropic", "anthropic", "https://api.anthropic.com", "Anthropic"),
     )
 }
 
@@ -57,6 +58,9 @@ MODELS: tuple[ModelInfo, ...] = (
     ModelInfo("openai", "gpt-4o-mini", "OpenAI — GPT-4o mini"),
     ModelInfo("grok", "grok-4", "Grok — grok-4"),
     ModelInfo("grok", "grok-3-mini", "Grok — grok-3-mini"),
+    ModelInfo("anthropic", "claude-opus-5-5", "Anthropic — Claude Opus 5.5"),
+    ModelInfo("anthropic", "claude-sonnet-5-5", "Anthropic — Claude Sonnet 5.5"),
+    ModelInfo("anthropic", "claude-haiku-5-5", "Anthropic — Claude Haiku 5.5"),
 )
 
 

@@ -32,57 +32,36 @@ database on the same server would share them. A test copy belongs in a throwaway
 - Integration test: `tests/test_db_provision_integration.py`, which uses a CREATEROLE-only owner on
   a database with no PUBLIC privileges.
 
-## Running migrations and provisioning logins
+## Migrations and runtime logins: done by the deploy
 
-Postgres has no published port, so run these **on the Mac**, in a container on the `db` network,
-with the API image of the release you are about to deploy (its tag + digest are in the release's
-deployment PR, `apps/ricotdin-v2/release.env`):
+Nothing to run by hand. The deployment repo's `deploy-ricotdin-v2.yml` (step `database`), on every
+deploy and before any container is replaced, runs on the Mac:
+1. builds the owner URL from `postgres/secrets/apps/ricotdin.password`;
+2. dumps the databases with the `pg-backup` sidecar;
+3. runs `alembic upgrade head` with the release's API image on the `db` network;
+4. **the first time only**, runs `python -m scripts.provision_db_roles`, which creates
+   `ricotdin_api_login` / `_service_login` / `_worker_login` and writes their URLs
+   (`postgres:5432`) to `~/.config/ricotdin/db-logins.env` (chmod 600, kept across deploys).
+
+The `envfile` step then copies those URLs into `api.env` / `worker.env`. There are no
+`DATABASE_URL` secrets. The owner URL never reaches an app env file: the app never runs as the
+owner (RLS, `docs/architecture/db.md`). If a migration fails, nothing is replaced; restore from the
+dump just taken if it left the schema half-applied.
+
+**Rotate the runtime logins:** delete `~/.config/ricotdin/db-logins.env` on the Mac, then run
+*Actions → deploy-ricotdin-v2 → Run workflow*. The deploy creates new passwords, and old sessions
+are cut off.
+
+**By hand** (for debugging), with the image from `apps/ricotdin-v2/release.env`:
 
 ```bash
 IMG=mingming21400/ricotdin-api:<tag>@sha256:<digest>
 OWNER="postgresql://ricotdin:$(cat ~/srv/postgres/secrets/apps/ricotdin.password)@postgres:5432/ricotdin?sslmode=disable"
 ```
 
-Migrations, before every deployment PR is merged:
-
 ```bash
-docker run --rm --network db -e DATABASE_URL="$OWNER" "$IMG" alembic upgrade head
+docker run --rm --network db -e DATABASE_URL="$OWNER" "$IMG" alembic current
 ```
-
-The first time, and to rotate the passwords, write the three runtime logins to a 0600 file:
-
-```bash
-install -d -m 700 ~/.config/ricotdin && touch ~/.config/ricotdin/db.env && chmod 600 ~/.config/ricotdin/db.env
-```
-
-```bash
-docker run --rm --network db --user "$(id -u)" -e DATABASE_URL="$OWNER" \
-  -v ~/.config/ricotdin:/out "$IMG" python -m scripts.provision_db_roles --env-file /out/db.env
-```
-
-The env files are written by the deploy from deployment-repo secrets, never by hand. Set the
-three URLs from `db.env` as secrets, then delete `db.env`:
-
-```bash
-gh secret set RICOTDIN_DATABASE_URL_APP -R mmlabs-online/deployment
-```
-
-```bash
-gh secret set RICOTDIN_DATABASE_URL_SERVICE -R mmlabs-online/deployment
-```
-
-```bash
-gh secret set RICOTDIN_DATABASE_URL_WORKER -R mmlabs-online/deployment
-```
-
-```bash
-rm ~/.config/ricotdin/db.env
-```
-
-The URLs point at `postgres:5432`, which works because api and worker join the `db` network
-(deployment repo `apps/ricotdin-v2/compose.yml`). The owner URL never goes into a secret or an app
-env file. Re-running `provision_db_roles` rotates all three: set the three secrets again at once
-and re-run *Actions → deploy-ricotdin-v2 → Run workflow*, or the app loses its database.
 
 Shell access: `docker compose -p postgres -f ~/srv/postgres/compose.yml exec postgres psql -U postgres -d ricotdin`,
 or pgAdmin (`pgadmin.mmlabs.online`).

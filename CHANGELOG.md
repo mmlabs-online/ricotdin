@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-15
+
+Thêm Claude (Anthropic) làm nhà cung cấp AI cho tóm tắt và chat.
+
+### Tính năng
+- Thêm nhà cung cấp AI Anthropic (Claude Opus 5.5, Sonnet 5.5, Haiku 5.5) cho tóm tắt cuộc họp và chat: admin thêm key Anthropic ở `/admin/keys`, bật model ở cấu hình và có thể chọn làm mặc định. Gọi qua SDK chính thức `anthropic` với structured outputs; key bị từ chối hoặc hết credit bị tắt như các nhà cung cấp khác (AIP-07).
+
+### Checklist deploy v2.1.0
+- Không có migration, không có biến môi trường mới. Sau deploy: thêm key Anthropic ở `/admin/keys`, bật các model Claude ở cấu hình model (AIP-07).
+
 ## [2.0.0] — 2026-11-13
 
 Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: production `https://ricotdin.mmlabs.online` trên Postgres tự host, DB bắt đầu trống. v1 đã dừng (ARC-20).
@@ -14,7 +24,7 @@ Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: p
 - Xoay vòng các khóa cũ trong lịch sử git (Supabase service_role + anon, Gemini key `AQ.A…`).
 - Repo deployment: merge PR ARC-20 (image pgvector, `ricotdin.sql`, `apps/ricotdin-v2/` + `deploy-ricotdin-v2.yml`, bỏ staging); trên Mac `docker compose -p ricotdin-v2-staging down`; xoá 2 hostname staging trên Cloudflare.
 - Secret `RICOTDIN_*` mới cho production trên repo deployment (`KEY_ENCRYPTION_SECRET`, `JWT_PRIVATE_KEY`, 3 `DATABASE_URL_*`, tuỳ chọn `MAIL_FROM`, `SENTRY_DSN`); không dùng lại giá trị của staging. Mail dùng chung tài khoản Gmail của org-admin-api (`ORG_ADMIN_SMTP_USERNAME`/`_PASSWORD` trong environment `org-admin-api`).
-- Trên Mac, với image `v2.0.0`: `alembic upgrade head` + `provision_db_roles` trong image API trên mạng `db` (`docs/ops/self-hosted-postgres.md`), trước khi merge PR deployment.
+- Migration và 3 login DB do bước `database` của `deploy-ricotdin-v2` tự làm (dump → `alembic upgrade head` → tạo login lần đầu vào `~/.config/ricotdin/db-logins.env` trên Mac); không cần secret `RICOTDIN_DATABASE_URL_*`.
 - Cloudflare: `ricotdin.mmlabs.online` → `http://ricotdin-web:8080`, `ricotdin-api.mmlabs.online` → `http://ricotdin-api:8000`; bỏ query string của `/media` khỏi log.
 - Sau deploy: đăng ký tài khoản, nâng lên admin bằng SQL, `connect_gdrive --folder ricotdin` + `drive_smoke` (qua tunnel tạm, `docs/ops/go-live.md`), thêm key AI ở `/admin/keys`.
 - Backup: sidecar `pg-backup` của repo deployment; cài rclone trên Mac để có bản offsite.
@@ -105,7 +115,7 @@ Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: p
 - Hộp thoại xoá folder hiển thị đúng số cuộc họp: tính cả cuộc họp đã ghim, và chỉ đếm cuộc họp của chính chủ folder là "sẽ bị xoá"; cuộc họp của thành viên được chia sẻ được báo là chuyển về Uncategorized của họ (BUG-015)
 - Sau khi xoá folder (giữ cuộc họp), cuộc họp của thành viên được chia sẻ không còn hiện "ma" trong Uncategorized của chủ folder cho đến khi tải lại trang (BUG-016)
 
-### Checklist deploy
+### Checklist deploy v2.1.0
 - **Migration mới `migrations/037_revoke_ciphertext_tables.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-006).
 - **Migration mới `migrations/038_meetings_revoke_client_delete.sql`** — không phụ thuộc code, chạy được ngay; xác nhận bằng câu kiểm tra trong file (BUG-008).
 - **OPS-05:** tạo `/etc/mmlabs/ricotdin.env` (600, user của runner) với secret production; copy 2 bản nháp vào repo deployment; thêm hostname cloudflared → `http://ricotdin:3000`; cập nhật Supabase Site URL/redirect; dừng container ricotdin chạy tay; rồi merge PR `ricotdin v1.1.0` (đã mở) để deploy qua pipeline. Trước đó nên rotate token Cloudflare Tunnel đang bị commit trong `proxy/compose.yml` của repo deployment.
@@ -132,7 +142,7 @@ Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: p
 ### Thay đổi
 - Dockerfile viết lại theo mẫu CaleChip: stage deps/build/runner, cache npm, `NODE_VERSION` arg; giá trị `NEXT_PUBLIC_*` lấy từ BuildKit secret (`--secret id=env,src=.env.local`, chỉ đọc các dòng `NEXT_PUBLIC_*`) hoặc `--build-arg`, build báo lỗi nếu thiếu URL/anon key Supabase; container chạy user non-root `node` trên **cổng 3000** (trước là 80), `HEALTHCHECK` `:3000/api/health`. Compose: `3333:3000`, ghim `PORT=3000`, không cần `--env-file` nữa. Xoá `start.sh` + `nginx.conf` không còn dùng (OPS-04, BUG-001)
 
-### Checklist deploy
+### Checklist deploy v2.1.0
 **Thứ tự:** chạy migration 032 → 036 (và câu kiểm tra trong từng file) TRƯỚC khi khởi động image `v1.1.0`. v1.1.0 deploy theo cách hiện tại (OPS-05 chưa xong): dùng image `mingming21400/ricotdin:v1.1.0`, map cổng host → **3000**.
 - **Tag `v1.1.0` → `release.yml`:** image được build + push; bước "Open deployment PR" cần secret `DEPLOY_REPO_TOKEN` — chưa có thì bước đó fail (image vẫn dùng được). Thêm token trước khi tag nếu muốn PR `ricotdin v1.1.0` trên `mmlabs-online/deployment`.
 - **Backup DB (OPS-03):** tạo cặp khoá `age` (giữ khoá riêng offline), bucket R2 `ricotdin-db-backups` + token chỉ cho bucket đó, GitHub Environment `backup` (chỉ nhánh `main`) với 6 environment secret (`SUPABASE_DB_URL` = Session pooler, `AGE_RECIPIENT`, `R2_BACKUP_*`); workflow chỉ chạy sau khi lên `main` — chạy `db-backup` một lần và khôi phục thử — xem `docs/ops/backup-restore.md`.

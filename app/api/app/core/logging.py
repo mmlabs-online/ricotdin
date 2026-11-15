@@ -86,7 +86,10 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("asyncpg").setLevel(logging.WARNING)
     # debug/info logs carry signed headers, Drive upload session URIs and bearer tokens
-    for name in ("botocore", "boto3", "s3transfer", "urllib3", "httpx2", "httpcore2"):
+    # (anthropic at DEBUG logs whole request bodies: prompts and transcripts)
+    for name in (
+        "botocore", "boto3", "s3transfer", "urllib3", "httpx2", "httpcore2", "anthropic",
+    ):  # fmt: skip
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
