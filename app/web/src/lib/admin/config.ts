@@ -16,7 +16,7 @@ export function configErrorKey(err: unknown): string {
 // --- provider keys -------------------------------------------------------------------------------
 
 /** catalog providers + Speechmatics, in display order (config key = `<provider>_api_key`) */
-export const KEY_PROVIDERS = ['gemini', 'openai', 'grok', 'speechmatics'] as const
+export const KEY_PROVIDERS = ['gemini', 'openai', 'grok', 'anthropic', 'speechmatics'] as const
 export type KeyProvider = (typeof KEY_PROVIDERS)[number]
 
 export function providerOfKey(configKey: string): KeyProvider | null {

@@ -11,7 +11,7 @@ import { adminErrorKey } from '../../lib/admin/users'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 
-const PROVIDERS = new Set(['gemini', 'openai', 'grok', 'speechmatics', 'gemini-embedding'])
+const PROVIDERS = new Set(['gemini', 'openai', 'grok', 'anthropic', 'speechmatics', 'gemini-embedding'])
 function useProviderName() {
   const { t } = useTranslation()
   return (p: string) => (PROVIDERS.has(p) ? t(`admin.usage.provider.${p}`) : displayText(p))

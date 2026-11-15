@@ -65,6 +65,9 @@ def probe_for(config_key: str, key: str) -> Probe | None:
                  "messages": [{"role": "user", "content": "ping"}]},
             )  # fmt: skip
         return Probe("GET", f"{info.base_url}/models", bearer)
+    if info.kind == "anthropic":
+        headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        return Probe("GET", f"{info.base_url}/v1/models", headers)
     return None  # a provider kind without a probe yet: left unchecked
 
 

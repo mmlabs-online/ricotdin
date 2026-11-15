@@ -125,7 +125,7 @@ export function calendarParts(
   }
 }
 
-const PROVIDER_NAMES: Record<string, string> = { gemini: 'Gemini', openai: 'OpenAI', grok: 'Grok' }
+const PROVIDER_NAMES: Record<string, string> = { gemini: 'Gemini', openai: 'OpenAI', grok: 'Grok', anthropic: 'Anthropic' }
 
 /** The model a meeting was analysed with (AIP-03). */
 export function modelLabel(provider: string | null, model: string | null): string | null {

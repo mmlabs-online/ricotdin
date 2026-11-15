@@ -110,6 +110,12 @@ def test_probe_shapes() -> None:
     )  # fmt: skip
     assert grok.body == {"model": "grok-3-mini", "max_tokens": 1,
                          "messages": [{"role": "user", "content": "ping"}]}  # fmt: skip
+    claude = probe_for("anthropic_api_key", "k")
+    assert claude is not None and (claude.method, claude.url) == (
+        "GET", "https://api.anthropic.com/v1/models",
+    )  # fmt: skip
+    assert claude.headers == {"x-api-key": "k", "anthropic-version": "2023-06-01"}
+    assert claude.body is None
 
 
 @pytest.mark.parametrize(
