@@ -194,7 +194,7 @@ As an admin, I want to configure a provider/model allow-list and a system defaul
 ---
 
 ### AIP-07 — Anthropic Claude provider
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
 As an admin, I want to add Anthropic API keys and enable Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5) so that meeting analysis and chat can run on Claude, and I can make one of them the system default.
@@ -238,8 +238,8 @@ v2 runs generation on Gemini, OpenAI and Grok only; the AI layer (ARC-08c) was d
 **Out of scope**
 - Prompt caching, per-task effort setting, server-side refusal fallbacks (option B); Claude for transcription or embeddings; prompt retuning for Claude.
 
-**Key files (expected)**
-- `app/api/app/services/ai/adapters/anthropic.py`, `app/api/app/services/ai/catalog.py`, `app/api/app/services/ai/service.py`, `app/api/app/services/keys/source.py`, `app/api/pyproject.toml`, `app/api/tests/test_ai_anthropic_adapter.py`, `app/web/src/lib/admin/config.ts`, `app/web/src/routes/admin/AdminKeysPage.tsx`, `app/web/src/routes/admin/AdminUsagePage.tsx`, `app/web/src/lib/admin/ops.ts`, `app/web/src/i18n/locales/*`
+**Key files**
+- `app/api/app/services/ai/adapters/anthropic.py`, `app/api/app/services/ai/catalog.py`, `app/api/app/services/ai/service.py`, `app/api/app/worker/tasks/keyhealth.py` (probe `GET /v1/models`; `keys/source.py` needed no change: `anthropic_api_key` / `ANTHROPIC_API_KEY` by convention), `app/api/pyproject.toml`, `app/api/tests/test_ai_anthropic_adapter.py`, `app/web/src/lib/admin/config.ts`, `app/web/src/routes/admin/AdminKeysPage.tsx`, `app/web/src/routes/admin/AdminUsagePage.tsx`, `app/web/src/lib/admin/ops.ts`, `app/web/src/i18n/locales/*`
 
 ---
 

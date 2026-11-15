@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Tính năng
+- Thêm nhà cung cấp AI Anthropic (Claude Opus 5.5, Sonnet 5.5, Haiku 5.5) cho tóm tắt cuộc họp và chat: admin thêm key Anthropic ở `/admin/keys`, bật model ở cấu hình và có thể chọn làm mặc định. Gọi qua SDK chính thức `anthropic` với structured outputs; key bị từ chối hoặc hết credit bị tắt như các nhà cung cấp khác (AIP-07).
+
+### Checklist deploy
+- Không có migration, không có biến môi trường mới. Sau deploy: thêm key Anthropic ở `/admin/keys`, bật các model Claude ở cấu hình model (AIP-07).
+
 ## [2.0.0] — 2026-11-13
 
 Bản đầu tiên của v2 (FastAPI + SPA), phiên bản ricotdin duy nhất: production `https://ricotdin.mmlabs.online` trên Postgres tự host, DB bắt đầu trống. v1 đã dừng (ARC-20).
