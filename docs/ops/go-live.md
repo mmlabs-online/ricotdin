@@ -40,7 +40,7 @@ Delete `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` if staging left one (`gh secret delete
 
 ## 3. Release v2.0.0 (ricotdin repo, `CLAUDE.md` §9k)
 
-Both version files already say `2.0.0`. On `dev`:
+Both version files already say `2.0.0`. (Written for the old `dev` → `main` flow; since 2026-11-15 there is only `main`, see `CLAUDE.md` §9k.)
 1. Rename `## [Unreleased]` in `CHANGELOG.md` to `## [2.0.0] — <date>`.
 2. Commit `chore(release): v2.0.0`, then PR `dev` → `main` with `--base main`, and merge it (merge commit).
 3. Cut the branch. The push tags `v2.0.0` by itself (`release.yml` reads the version files):

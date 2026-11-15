@@ -5,7 +5,7 @@ Keep it updated as the project evolves — this file is the source of truth.
 
 ## 0. Layout (v2) — read first
 
-v2 is the only code on `dev`/`main` since **ARC-16** (specs in
+v2 is the only code on `main` since **ARC-16** (specs in
 `ai-instruction/features/feature-Architecture-ARC.md`, progress in `ai-instruction/tracking.md` ARC rows):
 
 ```
@@ -15,7 +15,7 @@ ai-instruction/  tracking, features, bugs, roadmap, ai-gen/ (runtime pipeline pr
 docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md
 ```
 
-- **v1 (Next.js + Supabase) is gone from `dev`/`main`.** It lives in git history and on
+- **v1 (Next.js + Supabase) is gone from `main`.** It lives in git history and on
   `release/1.1` (tags ≤ v1.1.1, v1 at the repo root there). **v1 is retired** (owner decision
   2026-11-12, ARC-20): no hotfixes, no data carried over; v2 is the only ricotdin.
   Its rules and designs: `docs/architecture/v1-rules.md` (was `legacy/CLAUDE.md`).
@@ -113,13 +113,13 @@ Full detail: `docs/architecture/release-cutover.md` (§0.11); owner runbooks in 
 
 **Branches** (GitHub default branch = `main` since 2026-11-12 (owner decision, ARC-19), so fresh clones
 land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows run
-from `main` — always pass `--base` explicitly; day-to-day PRs still go into `dev`):
-- `dev` — day-to-day work.
-- `main` — stable integration branch; only receives PRs from `dev` (and hotfix merge-backs).
+from `main`; still pass `--base` explicitly). One trunk since 2026-11-15 (owner decision, `dev` deleted):
+- `main` — the only working branch: every feature / bugfix PR goes into it (and hotfix merge-backs).
+  It may hold unreleased work; what is released is `release/X.Y` and its tags.
 - `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
   only**, never new features. All `vX.Y.Z` tags live here.
 - `release/1.1` — v1, retired (ARC-20): nothing is released from it any more.
-  **Never merge `release/1.1` into `main` or `dev`**: it has v1 at the repo root and would bring
+  **Never merge `release/1.1` into `main`**: it has v1 at the repo root and would bring
   the deleted v1 code back.
 
 **Versioning:** SemVer. `app/api/pyproject.toml` and `app/web/package.json` `version` MUST both equal
@@ -127,10 +127,10 @@ the tag without the `v`; `release.yml` rejects a tag that does not match, whose 
 commit is not on `release/X.Y`.
 
 **New minor/major release `X.Y.0`:**
-1. On `dev`: the api and web commands in §0 are green.
+1. On `main`: the api and web commands in §0 are green.
 2. Bump both version files to `X.Y.0`; add a `## [X.Y.0]` section to `CHANGELOG.md`
    (features + deploy checklist: new Alembic revisions, new env vars, manual steps + known issues).
-3. Commit `chore(release): vX.Y.0`, PR `dev` → `main` (`gh pr create --base main --head dev`), merge (merge commit, not squash) after CI is green.
+3. Commit `chore(release): vX.Y.0` on a branch, PR into `main` (`gh pr create --base main`), merge after CI is green.
 4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
 5. **The push tags it:** `release.yml` runs on every push to `release/X.Y`, reads the version files
    and, if tag `v<version>` does not exist yet, creates it (no hand tagging; a push without a version
@@ -145,7 +145,7 @@ commit is not on `release/X.Y`.
 **Hotfix `X.Y.(Z+1)`:**
 1. Branch from `release/X.Y` (e.g. `hotfix/BUG-NNN-<topic>`), fix + test, bump both versions, add CHANGELOG entry.
 2. PR into `release/X.Y`; the merge (a push to `release/X.Y` with the bumped version) tags `vX.Y.(Z+1)` and releases it.
-3. Merge `release/X.Y` back into `main` and `dev` so the fix is not lost in the next release
+3. Merge `release/X.Y` back into `main` so the fix is not lost in the next release
    (X ≥ 2 only — never `release/1.1`, see above). `latest` only moves when the pushed tag is the
    highest version, so a hotfix on an old line never drags `latest` backwards.
 
@@ -155,7 +155,7 @@ secrets are `RICOTDIN_*` repository secrets of the deployment repo, written to t
 each deploy, never committed anywhere. The secret `DEPLOY_REPO_TOKEN` is a
 fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW). The version is
 served by public `GET /version.json`; `GET /health` backs the image `HEALTHCHECK`. Never deploy
-`dev` or `latest`. The deploy itself dumps the database and runs that release's `alembic upgrade head`
+`main` or `latest`. The deploy itself dumps the database and runs that release's `alembic upgrade head`
 before replacing any container (`docs/ops/self-hosted-postgres.md`).
 Rollback = a deployment PR pinning the previous release's digests (only safe if no destructive
 migration ran in between).
@@ -168,7 +168,7 @@ the `/add-feature`, `/ship-feature` and `/fix-bug` skills apply it automatically
 
 | Artifact | Convention |
 |---|---|
-| Branch | `feat/<CODE>-<slug>` · `fix/BUG-NNN-<slug>` (from `dev`) · `hotfix/BUG-NNN-<slug>` (from `release/X.Y`) · `docs/<CODE>-<slug>` |
+| Branch | `feat/<CODE>-<slug>` · `fix/BUG-NNN-<slug>` (from `main`) · `hotfix/BUG-NNN-<slug>` (from `release/X.Y`) · `docs/<CODE>-<slug>` |
 | Commit | Conventional Commits with the code at the end: `feat(rag): folder export (RAG-05)`, `fix(quota): no double charge (BUG-004)` |
 | PR title | `[<CODE>] <summary>`; body from `.github/pull_request_template.md` |
 | Release PR | `chore(release): vX.Y.Z`; body lists every code included (command below) |
@@ -179,7 +179,7 @@ Look-ups:
 ```
 git log --oneline --grep 'PRO-09'                         # commits for a code
 gh pr list --state all --search 'PRO-09 in:title'          # PRs for a code
-git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes in the next release
+git log $(git describe --tags --abbrev=0 origin/main)..origin/main --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes in the next release
 ```
 
 ## 10. Working agreement (how to collaborate with me)
@@ -208,11 +208,11 @@ git log main..dev --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes
 - **Feature delivery workflow:** to build a feature from `tracking.md`, use the
   `/ship-feature <CODE>` skill (`.claude/skills/ship-feature/SKILL.md`). It sequences
   spec → plan → TDD → implement → verify → specialist review gates (subagents in
-  `.claude/agents/`) → close-out → pushes `feat/<CODE>-<slug>` and opens a PR into `dev`
+  `.claude/agents/`) → close-out → pushes `feat/<CODE>-<slug>` and opens a PR into `main`
   automatically (draft if checks are open; never merges). Applies the rules in this section.
 - **Bug workflow:** for any bug, regression or production incident, use the
   `/fix-bug "<description>"` skill (`.claude/skills/fix-bug/SKILL.md`). It logs `BUG-NNN` in
-  `ai-instruction/bugs.md`, decides bugfix (`dev`) vs hotfix (`release/X.Y`, per §9k) with
+  `ai-instruction/bugs.md`, decides bugfix (`main`) vs hotfix (`release/X.Y`, per §9k) with
   your confirmation, writes a failing regression test first, then fixes, verifies, reviews
   and walks through the §9k hotfix steps.
 - **Traceability:** every branch, commit, PR title and CHANGELOG bullet carries its feature

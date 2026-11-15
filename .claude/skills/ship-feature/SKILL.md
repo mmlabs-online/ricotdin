@@ -1,10 +1,10 @@
 ---
 name: ship-feature
-description: Deliver one feature from ai-instruction/tracking.md end to end — spec → plan → TDD → implement → verify → specialist review gates → close-out (tracking, docs, commit) → push the feat/ branch and open a PR into dev. Use when asked to build, implement, or "ship" a feature code like REC-06 or ADM-08, or to pick the next unfinished feature.
+description: Deliver one feature from ai-instruction/tracking.md end to end — spec → plan → TDD → implement → verify → specialist review gates → close-out (tracking, docs, commit) → push the feat/ branch and open a PR into main. Use when asked to build, implement, or "ship" a feature code like REC-06 or ADM-08, or to pick the next unfinished feature.
 argument-hint: <FEATURE-CODE> | next
 ---
 
-# Ship a feature (tracking.md → dev)
+# Ship a feature (tracking.md → main)
 
 Standard delivery workflow for this repo. It wires the subagents in `.claude/agents/`
 into the working agreement in `CLAUDE.md` §10. `CLAUDE.md` always wins on conflict.
@@ -20,9 +20,9 @@ the main session fixes.
 
 ## Phase 0 — Select & preflight
 
-1. Branch: work always happens on `feat/<CODE>-<slug>` cut from an up-to-date `dev`
-   (`git checkout dev && git pull && git checkout -b feat/<CODE>-<slug>`) — the PR opened in
-   Phase 7 needs a branch other than `dev`. If already on that feature branch, keep it.
+1. Branch: work always happens on `feat/<CODE>-<slug>` cut from an up-to-date `main`
+   (`git checkout main && git pull && git checkout -b feat/<CODE>-<slug>`) — the PR opened in
+   Phase 7 needs a branch other than `main`. If already on that feature branch, keep it.
    Never work on `main` or `release/*`; if on any other branch, stop and ask.
 2. Working tree must be clean, or the user confirms the existing changes belong to this work.
 3. If `$ARGUMENTS` is `next`: list `[ ]` rows from `ai-instruction/tracking.md` whose
@@ -118,7 +118,7 @@ the running app (`/run` skill) and note what you saw.
 ## Phase 6 — Review gates (parallel, read-only)
 
 Launch the applicable reviewers **in one message** so they run concurrently. Give each the
-diff (`git diff dev...HEAD` or the uncommitted diff) and the acceptance criteria.
+diff (`git diff main...HEAD` or the uncommitted diff) and the acceptance criteria.
 
 | Gate | Agent | When |
 |---|---|---|
@@ -151,14 +151,14 @@ Handling findings:
 6. Commit on the work branch (Conventional Commits with the code, e.g.
    `feat(rag): folder-scoped export (RAG-05)`), one commit per working increment.
 7. **Open the PR automatically (final step, no extra confirmation)** — invoking
-   `/ship-feature` authorizes pushing the `feat/` branch and opening a PR into `dev`.
-   It never authorizes merging, pushing to `dev`/`main`/`release/*`, or force-pushing.
+   `/ship-feature` authorizes pushing the `feat/` branch and opening a PR into `main`.
+   It never authorizes merging, pushing to `main`/`release/*`, or force-pushing.
    1. `git push -u origin feat/<CODE>-<slug>`.
    2. Write the body from `.github/pull_request_template.md` to a scratchpad file: feature
       code(s), Type `feature`, what changed, the real Phase 5 results (tick only what actually
       passed; name anything not run and why), deploy notes (migrations, env vars, dashboard
       steps), the Phase 6 open findings + Reality Checker verdict, then the attribution line.
-   3. `gh pr create --base dev --head feat/<CODE>-<slug> --title "[<CODE>] <summary>" --body-file <file>`.
+   3. `gh pr create --base main --head feat/<CODE>-<slug> --title "[<CODE>] <summary>" --body-file <file>`.
       Add `--draft` when the Reality Checker said NEEDS WORK (user accepted the open items) or
       any Phase 5 command could not be run; say so in the body.
    4. Add `PR #N` to the Note cell of the feature's `tracking.md` row, commit
@@ -174,5 +174,5 @@ Handling findings:
 - Manual steps the user must do: migrations to apply, env vars, dashboard actions,
   `/admin/features` status update.
 - The PR link (and whether it is a draft, and why).
-- Next step: review + merge the PR into `dev` → PR `dev` → `main` → release per `CLAUDE.md` §9k
+- Next step: review + merge the PR into `main` → release per `CLAUDE.md` §9k
   (not part of this skill).
