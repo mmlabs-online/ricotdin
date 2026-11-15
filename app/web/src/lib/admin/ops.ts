@@ -100,7 +100,7 @@ export function usageSummary(rows: readonly unknown[]) {
 }
 
 /** Fixed colour slots: a provider keeps its colour whatever else is on screen. */
-export const PROVIDER_ORDER = ['gemini', 'openai', 'grok', 'speechmatics', 'gemini-embedding'] as const
+export const PROVIDER_ORDER = ['gemini', 'openai', 'grok', 'anthropic', 'speechmatics', 'gemini-embedding'] as const
 
 const rank = (p: string) => {
   const i = (PROVIDER_ORDER as readonly string[]).indexOf(p)

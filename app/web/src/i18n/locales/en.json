@@ -383,6 +383,7 @@
         "speechmatics": "Speechmatics",
         "openai": "OpenAI",
         "grok": "Grok",
+        "anthropic": "Anthropic",
         "other": "Other check"
       },
       "status": {
@@ -524,6 +525,7 @@
         "gemini": "Gemini",
         "openai": "OpenAI",
         "grok": "Grok",
+        "anthropic": "Anthropic",
         "speechmatics": "Speechmatics",
         "gemini-embedding": "Gemini embeddings"
       },

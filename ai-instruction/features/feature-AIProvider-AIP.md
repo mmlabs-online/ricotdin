@@ -193,6 +193,56 @@ As an admin, I want to configure a provider/model allow-list and a system defaul
 
 ---
 
+### AIP-07 — Anthropic Claude provider
+**Priority:** Medium | **Status:** ✅ Done
+
+**User Story**  
+As an admin, I want to add Anthropic API keys and enable Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5) so that meeting analysis and chat can run on Claude, and I can make one of them the system default.
+
+**Context**
+v2 runs generation on Gemini, OpenAI and Grok only; the AI layer (ARC-08c) was designed for this: one adapter per API kind (`complete_json`, used by both analysis and chat), a catalog of providers/models, key pools per provider, allow-list + system default in admin settings (AIP-06). Owner decision 2026-11-15: option A, the provider only, for analysis + chat, all three current Claude models; prompt caching, effort tuning and refusal fallbacks are deferred (option B, not chosen). Embeddings stay on Gemini (768-dim, CLAUDE.md §0.7; Anthropic has no embeddings API).
+
+**Use Cases**
+1. Admin adds an Anthropic key at /admin/keys; the key check passes.
+2. Admin allows Claude Sonnet 5.5 at /admin/config and sets it as the system default; new meetings are analysed by it.
+3. A user picks Claude Opus 5.5 for one meeting or as their personal default; chat on that meeting answers through Claude.
+
+**Frontend**
+- `anthropic` (label "Anthropic") in the key provider lists (`lib/admin/config.ts` KEY_PROVIDERS, `AdminKeysPage` known names) and the usage provider list (`AdminUsagePage`, `lib/admin/ops.ts`); EN/VI strings.
+- Model pickers need no change (they list the catalog / allowed models).
+
+**Backend**
+- `app/services/ai/adapters/anthropic.py`: `AnthropicAdapter.complete_json` via the official `anthropic` Python SDK (`AsyncAnthropic(api_key=key, max_retries=0)`: retries/rotation stay in the key pool), JSON through structured outputs (`output_config.format` with a JSON schema converted from the neutral schema), `max_tokens` sized for the analysis output, refusal (`stop_reason == "refusal"`) → `ModelRefused`, SDK status errors → `ProviderHTTPError(status, code, retry_after)`, connection/timeouts → `ProviderTransportError`, usage tokens → `Completion`.
+- `catalog.py`: `ProviderInfo("anthropic", "anthropic", "https://api.anthropic.com", "Anthropic")` + `ModelInfo` for `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`; `ADAPTERS["anthropic"]`.
+- `keys/source.py`: `"anthropic": "anthropic_api_key"` (+ `ANTHROPIC_API_KEY` env fallback, same rule as other providers); key health check for Anthropic via the Models API.
+- `pyproject.toml` / `uv.lock`: add `anthropic`.
+
+**Acceptance Criteria**
+- Given a neutral `JsonRequest`, when the adapter builds the Anthropic request, then model, system, user message and a strict JSON schema (`additionalProperties: false`, all `required`) are set, and no prefill/sampling params are sent.
+- Given a response with a text block of valid JSON and usage, when parsed, then `Completion.text` is that JSON and input/output/total tokens are filled.
+- Given `stop_reason == "refusal"`, when parsed, then `ModelRefused` is raised (no retry on another key); given 429 with `retry-after`, then `ProviderHTTPError(429, retry_after=…)`; given 401, then `ProviderHTTPError(401)` (key disabled by the pool).
+- Given an admin adds an `anthropic` key at /admin/keys, then it is stored encrypted, shown with its last 4, and the key check reports healthy for a valid key.
+- Given Claude Sonnet 5.5 is allowed and set as system default, when a meeting is analysed, then `meetings.generation_provider = 'anthropic'`, the summary is produced and a `usage_log` row with provider `anthropic` is written.
+- Embeddings for that meeting are still produced by Gemini.
+
+**Test Plan**
+- Pure logic: `app/api/app/services/ai/adapters/anthropic.py` → `request_params(req) -> dict` (schema via the existing `to_openai_strict_schema`: closed objects, all fields required, nullable as `anyOf`), `parse_message(message) -> Completion` (raises `ModelRefused`), error mapping `provider_error(exc)` (`billing_error`, "credit balance", `organization_on_hold` → 401 so the key is disabled).
+- Tests: `app/api/tests/test_ai_anthropic_adapter.py` (request shape, schema conversion, parsing, refusal, 401/429/5xx/transport mapping); `test_ai_catalog_schema.py` / `test_catalog_diff.py` updated for the new provider + models; web `lib/admin/config` test if the provider list is tested.
+
+**Structural flags**
+- New provider + new dependency `anthropic` (official SDK). No migration; optional env `ANTHROPIC_API_KEY`.
+
+**Done check**
+- `cd app/api && uv run pytest -q` green; then in production: add an Anthropic key at /admin/keys (healthy), allow + pick Claude Haiku 5.5 for a short test meeting, and see the summary and a chat answer.
+
+**Out of scope**
+- Prompt caching, per-task effort setting, server-side refusal fallbacks (option B); Claude for transcription or embeddings; prompt retuning for Claude.
+
+**Key files**
+- `app/api/app/services/ai/adapters/anthropic.py`, `app/api/app/services/ai/catalog.py`, `app/api/app/services/ai/service.py`, `app/api/app/worker/tasks/keyhealth.py` (probe `GET /v1/models`; `keys/source.py` needed no change: `anthropic_api_key` / `ANTHROPIC_API_KEY` by convention), `app/api/pyproject.toml`, `app/api/tests/test_ai_anthropic_adapter.py`, `app/web/src/lib/admin/config.ts`, `app/web/src/routes/admin/AdminKeysPage.tsx`, `app/web/src/routes/admin/AdminUsagePage.tsx`, `app/web/src/lib/admin/ops.ts`, `app/web/src/i18n/locales/*`
+
+---
+
 ## Key Constraints & Design Decisions
 
 - **Scope of the abstraction:** multi-provider applies to GENERATION only (meeting analysis + RAG answer synthesis). Not embeddings, not speech-to-text.

@@ -18,6 +18,8 @@ def test_registered_models_come_from_the_catalog() -> None:
     assert set(REGISTERED) >= {
         ("gemini", "gemini-2.5-flash"), ("openai", "gpt-4o"), ("openai", "gpt-4o-mini"),
         ("grok", "grok-4"), ("grok", "grok-3-mini"),
+        ("anthropic", "claude-opus-5-5"), ("anthropic", "claude-sonnet-5-5"),
+        ("anthropic", "claude-haiku-5-5"),
     }  # fmt: skip
     assert SYSTEM_DEFAULT in REGISTERED
 
@@ -26,7 +28,7 @@ def test_every_model_has_a_known_provider_and_kind() -> None:
     for m in MODELS:
         assert m.provider in PROVIDERS
     for p in PROVIDERS.values():
-        assert p.kind in {"gemini", "openai_compat"}
+        assert p.kind in {"gemini", "openai_compat", "anthropic"}
         assert p.base_url.startswith("https://") and not p.base_url.endswith("/")
     assert PROVIDERS["grok"].base_url == "https://api.x.ai/v1"
     assert PROVIDERS["openai"].base_url == "https://api.openai.com/v1"
