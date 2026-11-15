@@ -15,6 +15,7 @@ name: Release
 #   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest in
 #      apps/ricotdin-v2/release.env (the only ricotdin deployment: v1 and staging are retired,
 #      ARC-20). A prerelease tag (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
+#   5. the GitHub Release with the version's CHANGELOG.md section (github-release.yml).
 # Deploy = run the release's `alembic upgrade head` on the Mac, then review + merge that PR
 # (docs/ops/go-live.md).
 on:
@@ -234,3 +235,11 @@ jobs:
             gh pr create --title "$APP $TAG" --head "$BRANCH" \
               --body "Deploy \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
           fi
+
+  github-release:
+    needs: [guard, build]
+    permissions:
+      contents: write # creates the Release
+    uses: ./.github/workflows/github-release.yml
+    with:
+      tag: ${{ needs.guard.outputs.tag }}
