@@ -114,7 +114,8 @@ def test_probe_shapes() -> None:
     assert claude is not None and (claude.method, claude.url) == (
         "GET", "https://api.anthropic.com/v1/models",
     )  # fmt: skip
-    assert claude.headers == {"x-api-key": "k", "anthropic-version": "2023-06-01"}
+    # same auth as the SDK the adapter uses (Bearer, anthropic-version 2026-10-21)
+    assert claude.headers == {"Authorization": "Bearer k", "anthropic-version": "2026-10-21"}
     assert claude.body is None
 
 

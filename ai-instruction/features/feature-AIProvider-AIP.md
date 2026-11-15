@@ -226,7 +226,7 @@ v2 runs generation on Gemini, OpenAI and Grok only; the AI layer (ARC-08c) was d
 - Embeddings for that meeting are still produced by Gemini.
 
 **Test Plan**
-- Pure logic: `app/api/app/services/ai/adapters/anthropic.py` → `build_request(req) -> dict`, `parse_message(message) -> Completion` (raises `ModelRefused`), `to_anthropic_schema(neutral) -> dict`, error mapping `provider_error(exc)`.
+- Pure logic: `app/api/app/services/ai/adapters/anthropic.py` → `request_params(req) -> dict` (schema via the existing `to_openai_strict_schema`: closed objects, all fields required, nullable as `anyOf`), `parse_message(message) -> Completion` (raises `ModelRefused`), error mapping `provider_error(exc)` (`billing_error`, "credit balance", `organization_on_hold` → 401 so the key is disabled).
 - Tests: `app/api/tests/test_ai_anthropic_adapter.py` (request shape, schema conversion, parsing, refusal, 401/429/5xx/transport mapping); `test_ai_catalog_schema.py` / `test_catalog_diff.py` updated for the new provider + models; web `lib/admin/config` test if the provider list is tested.
 
 **Structural flags**

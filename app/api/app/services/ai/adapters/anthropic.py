@@ -2,8 +2,9 @@
 
 The SDK shares the service's ``httpx2.AsyncClient`` and never retries itself (``max_retries=0``):
 rotation, cooldowns and retries stay in ``KeyPool`` / ``AIService``. The JSON comes back in the
-first text block; ``stop_reason == "refusal"`` is a ``ModelRefused``. "Credit balance is too low"
-(a 400) is reported as a 401 so the pool disables that key, as for OpenAI's ``insufficient_quota``.
+first text block; ``stop_reason == "refusal"`` is a ``ModelRefused``. A key that cannot pay
+(``billing_error`` / "credit balance is too low") or whose organization is on hold is reported as
+a 401 so the pool disables that key, as for OpenAI's ``insufficient_quota``.
 """
 
 from typing import Any
@@ -26,7 +27,6 @@ from app.services.ai.types import (
 
 PROVIDER = "anthropic"
 MAX_TOKENS = 16000  # an analysis JSON is far below this; a cut-off answer fails the JSON parse
-TIMEOUT_S = 300.0  # matches the service client's read timeout
 
 
 def request_params(req: JsonRequest) -> dict[str, Any]:
@@ -45,19 +45,29 @@ def request_params(req: JsonRequest) -> dict[str, Any]:
 def parse_message(msg: Message) -> Completion:
     if msg.stop_reason == "refusal":
         raise ModelRefused("the model refused")
-    text = next((b.text for b in msg.content if b.type == "text"), None)
+    try:
+        text = next((b.text for b in msg.content if b.type == "text"), None)
+        inp, out = int(msg.usage.input_tokens), int(msg.usage.output_tokens)
+    except (TypeError, AttributeError, ValueError):  # a 2xx body that is not a Message
+        raise ProviderHTTPError(PROVIDER, 502, "bad_response") from None
     if text is None:
         raise ModelRefused("no text in the response")
-    inp, out = msg.usage.input_tokens, msg.usage.output_tokens
     return Completion(text=text, input_tokens=inp, output_tokens=out, total_tokens=inp + out)
 
 
-def _error_fields(body: Any) -> tuple[str | None, str]:
+def _error_fields(body: Any) -> tuple[str | None, str | None, str]:
+    """(type, details.error_code, message) of an error body; the message is only matched."""
     err = body.get("error") if isinstance(body, dict) else None
     if not isinstance(err, dict):
-        return None, ""
+        return None, None, ""
+    details = err.get("details")
     kind, msg = err.get("type"), err.get("message")
-    return (kind if isinstance(kind, str) else None), (msg if isinstance(msg, str) else "")
+    code = details.get("error_code") if isinstance(details, dict) else None
+    return (
+        kind if isinstance(kind, str) else None,
+        code if isinstance(code, str) else None,
+        msg if isinstance(msg, str) else "",
+    )
 
 
 def provider_error(exc: anthropic.APIError) -> Exception:
@@ -65,10 +75,12 @@ def provider_error(exc: anthropic.APIError) -> Exception:
     if isinstance(exc, anthropic.APIConnectionError):  # includes APITimeoutError
         return ProviderTransportError(f"{PROVIDER} {type(exc).__name__}")
     if isinstance(exc, anthropic.APIStatusError):
-        kind, msg = _error_fields(exc.body)
-        if exc.status_code == 400 and "credit balance" in msg.lower():
+        kind, code, msg = _error_fields(exc.body)
+        if kind == "billing_error" or (exc.status_code == 400 and "credit balance" in msg.lower()):
             # no "quota" in the code: the pool classifier would read it as a rate limit
             return ProviderHTTPError(PROVIDER, 401, "key_out_of_credits")
+        if code == "organization_on_hold":  # this key's org is disabled; other keys may work
+            return ProviderHTTPError(PROVIDER, 401, code)
         return ProviderHTTPError(
             PROVIDER, exc.status_code, safe_code(kind), retry_after(exc.response.headers)
         )
@@ -81,7 +93,7 @@ class AnthropicAdapter:
     ) -> Completion:
         client = anthropic.AsyncAnthropic(
             api_key=key, base_url=provider.base_url, http_client=http,
-            max_retries=0, timeout=TIMEOUT_S,
+            max_retries=0, timeout=http.timeout,  # the shared client's connect/read timeouts
         )  # fmt: skip
         try:
             msg = await client.messages.create(**request_params(req))

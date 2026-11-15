@@ -142,6 +142,36 @@ def test_out_of_credits_disables_the_key_like_openai() -> None:
     assert (e.status_code, e.code) == (401, "key_out_of_credits")
 
 
+def test_a_402_billing_error_disables_the_key() -> None:
+    e = provider_error(status_error(anthropic.APIStatusError, 402, err_body("billing_error")))
+    assert isinstance(e, ProviderHTTPError)
+    assert (e.status_code, e.code) == (401, "key_out_of_credits")
+
+
+def test_an_organization_on_hold_disables_the_key_instead_of_failing_the_meeting() -> None:
+    body = {"type": "error", "error": {"type": "invalid_request_error", "message": "x",
+                                       "details": {"error_code": "organization_on_hold"}}}  # fmt: skip
+    e = provider_error(status_error(anthropic.BadRequestError, 400, body))
+    assert isinstance(e, ProviderHTTPError)
+    assert (e.status_code, e.code) == (401, "organization_on_hold")
+
+
+def test_a_malformed_success_body_is_a_provider_error() -> None:
+    broken = Message.model_construct(content=None, stop_reason="end_turn")
+    with pytest.raises(ProviderHTTPError) as e:
+        parse_message(broken)
+    assert (e.value.status_code, e.value.code) == (502, "bad_response")
+
+
+def test_the_sdk_logger_is_held_at_warning() -> None:
+    import logging
+
+    from app.core.logging import setup_logging
+
+    setup_logging("DEBUG")
+    assert logging.getLogger("anthropic").level == logging.WARNING
+
+
 def test_other_bad_requests_stay_400() -> None:
     e = provider_error(
         status_error(
@@ -206,6 +236,9 @@ def test_full_call_sends_the_key_and_parses_json() -> None:
     assert body["model"] == "claude-haiku-5-5"
     assert body["output_config"]["format"]["type"] == "json_schema"
     assert svc.usage[0]["provider"] == "anthropic"
+    # the shared client's timeouts apply (connect 30 s), not one flat SDK timeout
+    assert req.headers["x-stainless-read-timeout"] == "300.0"
+    assert req.extensions["timeout"]["connect"] == 30.0
     assert len(server.requests) == 1  # the SDK does not retry on its own (max_retries=0)
 
 

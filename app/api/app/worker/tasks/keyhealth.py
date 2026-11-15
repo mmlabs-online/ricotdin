@@ -66,7 +66,8 @@ def probe_for(config_key: str, key: str) -> Probe | None:
             )  # fmt: skip
         return Probe("GET", f"{info.base_url}/models", bearer)
     if info.kind == "anthropic":
-        headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        # the same auth the SDK sends from the adapter (anthropic 2.x)
+        headers = {"Authorization": f"Bearer {key}", "anthropic-version": "2026-10-21"}
         return Probe("GET", f"{info.base_url}/v1/models", headers)
     return None  # a provider kind without a probe yet: left unchecked
 
