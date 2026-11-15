@@ -1,0 +1,75 @@
+name: GitHub Release
+
+# The GitHub Release for a version tag, with the notes taken from that version's `## [X.Y.Z]`
+# section of CHANGELOG.md (CLAUDE.md §9k step 6).
+#   - called by release.yml once the images are pushed;
+#   - or by hand (Actions → GitHub Release → Run workflow, tag vX.Y.Z), e.g. for a tag released
+#     before this workflow existed.
+# Idempotent: an existing Release is left as it is. "Latest" only for the highest plain vX.Y.Z,
+# so a hotfix on an older line never takes it; a prerelease tag (vX.Y.Z-rc1) is a prerelease.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag, e.g. v2.1.0
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates the Release
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check the tag
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'$TAG' is not a vX.Y.Z tag"
+            exit 1
+          fi
+
+      - name: Checkout the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0 # the tag list decides "latest"
+
+      - name: Create the Release
+        run: |
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists already — nothing to do."
+            exit 0
+          fi
+          VERSION="${TAG#v}"
+          # The lines after "## [X.Y.Z]" up to the next "## [" heading (index() avoids regex
+          # meta-characters in the version).
+          awk -v h="## [$VERSION]" 'index($0, h) == 1 {f = 1; next} /^## \[/ {f = 0} f' \
+            CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            case "$TAG" in
+              *-*) echo "Prerelease $TAG." > notes.md ;;
+              *) echo "::error::CHANGELOG.md has no '## [$VERSION]' section"; exit 1 ;;
+            esac
+          fi
+          FLAGS=(--latest=false)
+          case "$TAG" in
+            *-*) FLAGS+=(--prerelease) ;;
+            *)
+              HIGHEST="$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+              [ "$TAG" = "$HIGHEST" ] && FLAGS=(--latest)
+              ;;
+          esac
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
+            --notes-file notes.md "${FLAGS[@]}"
