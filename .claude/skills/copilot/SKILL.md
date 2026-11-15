@@ -31,7 +31,7 @@ risks and say "I don't know — here's how to find out" when the repo can't tell
 | Owner's goals, roadmap, past decisions | `ai-instruction/roadmap.md` — **read it first in every mode** |
 | Product intent, users, roadmap groups A–D, limits | `docs/product-brief.md`, `docs/product-features.md` |
 | Scope, architecture, conventions, process | `CLAUDE.md` (§0 v2 layout, §9k release, §9l traceability, §10 working agreement); `docs/architecture/*.md` (v2 §0.x designs); `docs/architecture/v1-rules.md` (§1 scope, §3 architecture, §9x designs, §9a deploy steps) |
-| Releases, known issues | `CHANGELOG.md`, `git tag`, `git log origin/main..origin/dev` |
+| Releases, known issues | `CHANGELOG.md`, `git tag`, `git log $(git describe --tags --abbrev=0 origin/main)..origin/main` |
 | PRs / CI | `gh pr list`, `gh pr checks`, `gh run list` |
 | How something works in code | Grep/Read; for a broad area delegate to **Codebase Onboarding Engineer** (facts only) |
 | Security posture | `docs/security/SEC-03-rls-review.md`, §9b/§9f (`docs/architecture/v1-rules.md`), `docs/architecture/db.md` + `auth.md` + `platform-services.md` |
@@ -116,7 +116,7 @@ Items with no code yet are listed as "needs `/add-feature`". Show the diff; **wr
 after an explicit yes.**
 
 ### P6 — Hand-off
-1. After writing: offer to commit on `dev` — `docs(roadmap): <goal> (<YYYY-MM-DD>)` — and
+1. After writing: offer to commit on a `docs/` branch from `main` — `docs(roadmap): <goal> (<YYYY-MM-DD>)` — and
    ask before pushing.
 2. List the queue: the first `/add-feature "<idea>"` for uncoded items, then
    `/ship-feature <CODE>` in Now order. Offer to start the first one.

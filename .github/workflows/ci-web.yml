@@ -3,10 +3,10 @@ name: CI (web)
 # v2 frontend (Vite + React SPA) in app/web — ARC-00 onward.
 on:
   push:
-    branches: [main, dev, 'release/**']
+    branches: [main, 'release/**']
     paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
   pull_request:
-    branches: [main, dev, 'release/**']
+    branches: [main, 'release/**']
     paths: ['app/web/**', 'app/api/app/**', 'app/api/migrations/**', 'app/api/pyproject.toml', 'app/api/uv.lock', 'app/api/tests/conftest.py', 'app/api/tests/e2e_server.py', '.github/workflows/ci-web.yml']
 
   # release.yml runs the same checks for a v2 tag (ARC-15).

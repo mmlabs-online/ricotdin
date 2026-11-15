@@ -1,6 +1,6 @@
 ---
 name: fix-bug
-description: Fix a bug end to end — intake and log it in ai-instruction/bugs.md (BUG-NNN), decide bugfix (on dev) vs hotfix (on release/X.Y for a shipped version), reproduce with a failing regression test first, minimal fix, verify, review gates, then close-out (bug log, CHANGELOG, version bump for hotfixes) and the release steps from CLAUDE.md §9k. Use when the user reports a bug, error, regression, or production incident, or asks for a hotfix.
+description: Fix a bug end to end — intake and log it in ai-instruction/bugs.md (BUG-NNN), decide bugfix (on main) vs hotfix (on release/X.Y for a shipped version), reproduce with a failing regression test first, minimal fix, verify, review gates, then close-out (bug log, CHANGELOG, version bump for hotfixes) and the release steps from CLAUDE.md §9k. Use when the user reports a bug, error, regression, or production incident, or asks for a hotfix.
 argument-hint: "<bug description, error message, or BUG-NNN>"
 ---
 
@@ -23,7 +23,7 @@ Reviewers are read-only; the main session fixes.
    resume at the step matching its status.
 2. Otherwise collect, in **one** AskUserQuestion round at most (skip what you already have):
    steps to reproduce, expected vs actual (exact error text), **where** it happens
-   (production `vX.Y.Z` / `dev` / local), and how bad it is.
+   (production `vX.Y.Z` / `main` / local), and how bad it is.
 3. Gather evidence yourself before asking more: grep the error text in the code, check
    `meetings.error_message` / logs the user pasted, `git log -S` for recent changes nearby.
 4. Duplicate check: search `bugs.md` for the same symptom → if found, resume that bug instead.
@@ -49,7 +49,7 @@ git log origin/release/X.Y --oneline -- <file>   # is the faulty code on that li
 
 - **Hotfix** — the bug is in a version running in production (`vX.Y.Z` on `release/X.Y`)
   **and** severity is S1/S2 (or the user explicitly wants it shipped now).
-- **Bugfix** — everything else: bug only on `dev`, or S3/S4 that can wait for the next release.
+- **Bugfix** — everything else: bug only on `main` (not released yet), or S3/S4 that can wait for the next release.
 
 State the decision with the reason and the target line (`release/X.Y`), and **wait for the
 user to confirm**. Record `Fix type` in `bugs.md`; set status `in_progress`.
@@ -58,7 +58,7 @@ user to confirm**. Record `Fix type` in `bugs.md`; set status `in_progress`.
 
 Working tree must be clean (or the user confirms the changes belong here).
 
-- Bugfix: `git checkout dev && git pull && git checkout -b fix/BUG-NNN-<slug>`
+- Bugfix: `git checkout main && git pull && git checkout -b fix/BUG-NNN-<slug>`
 - Hotfix: `git checkout release/X.Y && git pull && git checkout -b hotfix/BUG-NNN-<slug>`
 
 Never commit directly to `main` or `release/*`.
@@ -114,7 +114,7 @@ Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still ope
 
 ## Step 9 — Close-out & commit
 
-1. `bugs.md`: status `fixed`, `Fixed in` = `dev` (bugfix) or the new `X.Y.Z` (hotfix),
+1. `bugs.md`: status `fixed`, `Fixed in` = `main` (bugfix) or the new `X.Y.Z` (hotfix),
    `Link` = branch name; fill **Fix** in the details (incl. the regression test name).
 2. Hotfix only:
    - `npm version X.Y.(Z+1) --no-git-tag-version`
@@ -127,22 +127,22 @@ Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still ope
 ## Step 10 — Ship ✋ (every outward step needs the user's go-ahead)
 
 **Bugfix**
-1. Push `fix/BUG-NNN-<slug>` and open a PR into `dev`, or merge into `dev` locally if the
-   user prefers. PR title: `[BUG-NNN] <summary>`; fill `.github/pull_request_template.md`.
+1. Push `fix/BUG-NNN-<slug>` and open a PR into `main`. PR title: `[BUG-NNN] <summary>`; fill `.github/pull_request_template.md`.
    Always pass the base explicitly — never rely on the repo default branch (`main` since 2026-11-12, see
    CLAUDE.md §9k), so a bare `gh pr create` can never target the wrong branch:
-   `gh pr create --base dev --head fix/BUG-NNN-<slug> --title "[BUG-NNN] <summary>" --body-file <file>`.
+   `gh pr create --base main --head fix/BUG-NNN-<slug> --title "[BUG-NNN] <summary>" --body-file <file>`.
 2. Record `PR #N` in the `Link` cell of `bugs.md`. It ships with the next normal release.
 
 **Hotfix** (`CLAUDE.md` §9k "Hotfix")
 1. Push `hotfix/BUG-NNN-<slug>`; PR into `release/X.Y`, title `[BUG-NNN] <summary>`
    (`gh pr create --base release/X.Y --head hotfix/BUG-NNN-<slug> …`).
    Record `PR #N` in `bugs.md`.
-2. After it's merged: `git checkout release/X.Y && git pull && git tag -a vX.Y.(Z+1) -m "Release vX.Y.(Z+1)" && git push origin vX.Y.(Z+1)`
-   → `release.yml` builds `ricotdin:X.Y.(Z+1)`.
-3. Merge `release/X.Y` back into `main` **and** `dev` so the fix isn't lost. Resolve any
-   conflict in favour of keeping both the fix and newer dev work; re-run Step 7 on `dev`.
-4. Deploy is manual: pin `ricotdin:X.Y.(Z+1)`; apply any migration first.
+2. The merge is a push to `release/X.Y` with the bumped version: `release.yml` tags
+   `vX.Y.(Z+1)`, builds both images, creates the GitHub Release and opens PR
+   `ricotdin vX.Y.(Z+1)` on `mmlabs-online/deployment`. No hand tagging.
+3. Merge `release/X.Y` back into `main` so the fix isn't lost (a PR `release/X.Y` → `main`).
+   Resolve any conflict in favour of keeping both the fix and newer `main` work; re-run Step 7 on `main`.
+4. Deploy = the owner merges the deployment PR (it runs the release's migrations itself).
 
 ## Final report
 

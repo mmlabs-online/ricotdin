@@ -197,7 +197,7 @@ user to add the new code at `/admin/features` if they want it in the DB registry
 
 ## Step 9 — Commit
 
-On `dev` (or a `docs/<code>-<slug>` branch from `dev`; never `main` / `release/*`), commit
+On a `docs/<code>-<slug>` branch from `main` (never commit on `main` / `release/*` directly), commit
 only the `ai-instruction/` changes:
 
 ```

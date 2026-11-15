@@ -3,10 +3,10 @@ name: CI (api)
 # v2 backend (FastAPI) in app/api — ARC-00 onward.
 on:
   push:
-    branches: [main, dev, 'release/**']
+    branches: [main, 'release/**']
     paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', '.github/workflows/ci-api.yml']
   pull_request:
-    branches: [main, dev, 'release/**']
+    branches: [main, 'release/**']
     paths: ['app/api/**', 'app/web/src/api/schema.d.ts', 'ai-instruction/ai-gen/**', '.github/workflows/ci-api.yml']
 
   # release.yml runs the same checks for a v2 tag (ARC-15).

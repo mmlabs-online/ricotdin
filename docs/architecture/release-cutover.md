@@ -2,7 +2,7 @@
 
 ### 0.11 v2 release, supply chain, backup, cutover (ARC-15)
 
-- **`release.yml` is v2 from `dev` on:** a push to `release/X.Y` (the guard reads both version files
+- **`release.yml` is v2 since ARC-15:** a push to `release/X.Y` (the guard reads both version files
   and creates tag `v<version>` with `GITHUB_TOKEN` when it does not exist yet; an existing tag = no
   release; a tag pushed by the workflow does not start it again) or a hand-pushed tag `vX.Y.Z`
   (X ≥ 2) on `release/X.Y`; the guard job
