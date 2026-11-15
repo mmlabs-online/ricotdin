@@ -138,7 +138,9 @@ commit is not on `release/X.Y`.
    → `release.yml` runs both CI suites, pushes `mingming21400/ricotdin-api:vX.Y.0` and
    `mingming21400/ricotdin-web:vX.Y.0` (+ `latest` if highest) and opens PR `ricotdin vX.Y.0` on
    `mmlabs-online/deployment` (see Deploy below). A prerelease tag (`vX.Y.0-rc1`) only pushes images.
-6. Create the GitHub Release from the `CHANGELOG.md` section.
+6. The GitHub Release is created by the same run (`github-release.yml`, notes = the `## [X.Y.Z]`
+   section of `CHANGELOG.md`). For a tag released before that, or to redo it: *Actions → GitHub
+   Release → Run workflow* with the tag.
 
 **Hotfix `X.Y.(Z+1)`:**
 1. Branch from `release/X.Y` (e.g. `hotfix/BUG-NNN-<topic>`), fix + test, bump both versions, add CHANGELOG entry.
