@@ -121,6 +121,117 @@ As a user, I want to access only my own data to ensure privacy.
 
 ---
 
+### AUT-05 — Sign in with mmlabs account
+**Priority:** High | **Status:** ❌ Not started
+
+**User Story**  
+As a user, I want to sign in to ricotdin with my mmlabs account (the one shared by every mmlabs app) so that I use one account everywhere.
+
+**Context**
+ricotdin has its own accounts (argon2 passwords, EdDSA JWT, refresh cookie, its own mail). org-admin-api
+(`api.mmlabs.online`) now runs the mmlabs identity for every app (email + password, device session
+cookie `__Host-mm_device`, per-app ES256 access tokens, JWKS), and already registered app `ricotdin`
+(origin `https://ricotdin.mmlabs.online`, join_policy open, role `ricotdin:member`; org-admin USR-07).
+Owner decisions 2026-11-16: replace ricotdin's own sign-in entirely; link an existing ricotdin account
+by email on first sign-in; ricotdin's admin role comes from the mmlabs role `ricotdin:admin`.
+Chosen: the API accepts the mmlabs token directly on every request (one identity source, role and
+disable changes apply within 15 min). Rejected: exchanging the mmlabs token once for a ricotdin
+session (two session systems, roles stale up to 90 days); waiting for the client libraries
+(org-admin USR-08, no date). Contract: org-admin `docs/consumers.md`.
+
+**Use Cases**
+1. A new person signs up on ricotdin's page (Turnstile), verifies the email, clicks "Continue as <email>", and lands in ricotdin with an empty account.
+2. The owner signs in with an mmlabs account whose email equals their ricotdin account: they see their meetings and the admin area.
+3. Someone already signed in to another mmlabs app on this browser sees "Continue as <email>" and enters without typing a password.
+4. Staff remove `ricotdin:admin` (or disable the person) in org-admin: within 15 min the admin area (or the whole app) is refused.
+
+**Frontend**
+- `/sign-in`: email + password posted to `{authUrl}/api/v1/auth/login` with `X-MM-App: ricotdin`, `credentials: "include"`; Turnstile widget when the API asks for it (after 3 failures). Lists accounts already signed in on this browser (`GET /auth/accounts`) as "Continue as <email>".
+- `/register`: `POST /auth/signup` (Turnstile always); then "check your email".
+- `/verify-email`, `/reset-password`, `/forgot-password`: same paths as today (the mmlabs links point to them), now calling the mmlabs endpoints (fragment token removed at once, `Referrer-Policy: no-referrer`).
+- Session: chosen `account_id` in `localStorage.mm_account_id`; access token from `POST /auth/token {audience: "ricotdin", account_id}` kept in memory only, renewed ~60 s before `exp` and once on a 401; `not_member` + `join_available` → "Continue as <email>" screen → `POST /auth/apps/ricotdin/join` → `/token` again; `email_unverified` → resend screen; sign-out = `POST /auth/logout {account_id}`. The multi-tab broadcast keeps working.
+- Profile: change-password section replaced by a link to the forgot-password flow. Admin users page: role control read-only ("managed in mmlabs"); disable/enable stays.
+- Config: `authUrl` = `https://api.mmlabs.online` (`RICOTDIN_AUTH_URL`); new `RICOTDIN_TURNSTILE_SITE_KEY`; CSP adds `https://challenges.cloudflare.com` to `script-src` and `frame-src`.
+
+**Backend**
+- `app/auth/mmlabs.py`: verify per consumers.md — `ES256` only, keys only from `{issuer}/.well-known/jwks.json` (cache ≤ 1 h, refetch on unknown `kid` at most 1/min, `User-Agent` set), `iss == "https://api.mmlabs.online"`, `aud == "ricotdin"` as a string, required `exp iat sub jti iss aud`, leeway 30 s, header `typ == "at+jwt"`, `email_verified is True`. Uses `PyJWT[crypto]>=2.10.1`. Never logs tokens.
+- `current_identity`: verified claims → `resolve_user(sub, email)` → `RequestIdentity(user_id, role)`. `role = "admin"` iff `"ricotdin:admin" in roles`, else `"user"` (whitelist kept, §0.1 R5). Mapping `sub → user_id` cached in-process (immutable once set). `users.role` is written when it differs from the token (DB functions that read it stay right). A ricotdin-disabled user (`disabled_at`) → 403 `account_disabled`.
+- `resolve_user`: by `users.mmlabs_sub`; else first sign-in, one transaction as `ricotdin_service`, user row locked: an existing user with the same email (case-insensitive) and no `mmlabs_sub` gets it (and `email_verified_at` if empty); else a new `users` + `profiles` row (`password_hash` NULL) with a username from the email local part (lowercased, only `a-z0-9_-`, padded to 3, cut to 30, `-2`, `-3`… on collision). A user already linked to another `sub` is never relinked (409 `account_link_conflict`).
+- Migration: `users.mmlabs_sub text UNIQUE NULL`; `users.password_hash` nullable. Grants per §0.1.
+- Admin: `PATCH /admin/users/{id}/role` → 409 `role_managed_externally`. ricotdin's old `/auth/register|login|refresh|…` stop being used by the SPA (removed in AUT-06).
+- Settings: `MMLABS_ISSUER` (default `https://api.mmlabs.online`), `MMLABS_AUDIENCE` (default `ricotdin`).
+
+**Acceptance Criteria**
+- Given a valid mmlabs token for `aud=ricotdin` with a verified email, when the SPA calls any API route, then it is served as the mapped ricotdin user; a token with another `aud`, `alg`, `typ`, issuer, an expired one, an unknown `kid` or `email_verified=false` gets 401.
+- Given a ricotdin account `a@x.com` and an mmlabs account `A@x.com` signing in for the first time, then both share one ricotdin user id (meetings and folders unchanged) and `users.mmlabs_sub` is set; a second, different mmlabs `sub` with that email does not take it over.
+- Given an mmlabs account with no ricotdin account, when it first calls the API, then a user + profile with a valid unique username is created.
+- Given a token whose `roles` include `ricotdin:admin`, then `/admin/*` is allowed and `users.role = 'admin'`; when the role is removed, the next token (≤ 15 min) is refused on `/admin/*` and `users.role` returns to `user`.
+- Given the browser, when a person signs up, verifies, joins and signs in through ricotdin's pages, then they reach `/meetings`; ricotdin's own register/login/refresh endpoints are no longer called (network log).
+
+**Test Plan**
+- Pure logic: `app/api/app/auth/mmlabs.py` → `check_header(header)`, `check_claims(claims, now, issuer, audience)`, `role_from_roles(roles)`; `app/api/app/auth/linking.py` → `username_from_email(email, taken)`, `link_decision(by_sub, by_email, sub)`.
+- Tests: `app/api/tests/test_mmlabs_token.py` (good token from a test ES256 key + JWKS; each rejection: alg, typ, iss, aud list/other, exp, missing claim, unverified email), `test_mmlabs_linking.py` (username rules + collisions, link/create/conflict decisions), `test_mmlabs_identity_integration.py` (first sign-in links by email, creates, conflict, role mirror, disabled user); web: `app/web/src/auth/mmlabsSession.test.ts` (token renew timing, error-code → screen mapping, account choice).
+
+**Structural flags**
+- Auth change: CLAUDE.md §0.1 R5 and §0.3 rewritten (sub → mapped user id; role from token `roles`) → security review.
+- Migration (`users.mmlabs_sub`, `password_hash` nullable).
+- New provider: api.mmlabs.online (JWKS fetch from the `api` container: check its network reaches the internet; else add the compose `default` network).
+- New config: `RICOTDIN_AUTH_URL=https://api.mmlabs.online` and `RICOTDIN_TURNSTILE_SITE_KEY` (web), `MMLABS_ISSUER` / `MMLABS_AUDIENCE` (api, defaults); CSP change. More than 10 files.
+
+**Done check**
+- api + web commands of §0 green; then in production (after AUT-06, same release): the owner signs in with the mmlabs account of their email and sees their existing meetings and `/admin`; a fresh mmlabs account signs up, verifies, joins and lands on an empty `/meetings`.
+
+**Out of scope**
+- Removing the old auth code, tables and secrets (AUT-06).
+- Organizations (org-admin USR-06), join approval (USR-03g), the client libraries (USR-08): switch to them later.
+- Account switcher beyond "Continue as"; per-permission checks beyond `ricotdin:admin`.
+
+**Key files (expected)**
+- `app/api/app/auth/{mmlabs,linking,deps}.py`, `app/api/app/core/settings.py`, `app/api/app/routers/admin/users.py`, `app/api/migrations/` (new revision), `app/api/pyproject.toml` (PyJWT)
+- `app/web/src/auth/*` (session, token, AuthProvider), `app/web/src/routes/SignInPage.tsx`, `app/web/src/routes/auth/*`, `app/web/src/routes/ProfilePage.tsx`, admin users page, `app/web/deploy/*` (config, CSP), `app/web/src/i18n/locales/*`
+- `docs/architecture/auth.md`, `docs/architecture/db.md`, deployment `apps/ricotdin-v2/` + workflow (web env)
+
+---
+
+### AUT-06 — Remove ricotdin's own auth
+**Priority:** High | **Status:** ❌ Not started
+
+**User Story**  
+As the owner, I want ricotdin's own password, JWT, refresh-token and email code removed once mmlabs sign-in works so that there is one identity system and fewer secrets to guard.
+
+**Context**
+Follow-up split from AUT-05 (owner 2026-11-16, option B in two codes): after AUT-05 nothing calls ricotdin's own auth. Keeping it would leave a second way in and two secrets (JWT key, SMTP password) to guard. Released together with AUT-05.
+
+**Backend**
+- Delete `/auth/register|login|refresh|logout|verify-email|resend-verification|forgot-password|reset-password`, `/auth/me` (moved to a profile route if the SPA needs it), `/profile/change-password`, `/.well-known/jwks.json`, admin `reset-password`; `app/auth/{jwt,passwords,tokens,cookies,identifier,runtime}.py` parts that only served them; `app/email/*`; rate limiters for them.
+- Settings removed: `JWT_PRIVATE_KEY`, `JWT_PREVIOUS_PUBLIC_KEY`, `REFRESH_TTL_DAYS`, `SMTP_*`, `MAIL_FROM`; `scripts/gen_jwt_key.py`.
+- Migration (destructive): drop `refresh_tokens`, `email_tokens`, `users.password_hash`.
+
+**Frontend**
+- Remove the old auth client code paths and their tests.
+
+**Acceptance Criteria**
+- Given the API, then the removed routes answer 404 and the app starts without `JWT_PRIVATE_KEY` and SMTP settings.
+- Given the deployment repo, then `deploy-ricotdin-v2.yml` no longer requires `RICOTDIN_JWT_PRIVATE_KEY` nor the `org-admin-api` SMTP environment.
+- Given the database after `alembic upgrade head`, then `refresh_tokens`, `email_tokens` and `users.password_hash` no longer exist.
+
+**Test Plan**
+- Delete the tests of removed code; `app/api/tests/test_removed_auth_routes.py` asserts 404 for each removed route; existing suites stay green.
+
+**Structural flags**
+- Destructive migration (no rollback to a release before AUT-05 after it runs); env vars and deployment secrets removed; deployment repo PR.
+
+**Done check**
+- api + web commands of §0 green; deploy succeeds without the JWT and SMTP secrets; `curl -i https://ricotdin-api.mmlabs.online/auth/login` → 404.
+
+**Out of scope**
+- Anything in AUT-05.
+
+**Key files (expected)**
+- `app/api/app/auth/*`, `app/api/app/routers/{auth,profile}.py`, `app/api/app/email/*`, `app/api/app/core/settings.py`, `app/api/migrations/`, `app/api/scripts/gen_jwt_key.py`, `docs/ops/deployment-repo/*`, `docs/architecture/auth.md`
+
+---
+
 ## Auth Architecture Summary
 
 ```
@@ -151,4 +262,5 @@ Browser sends session cookie
 ## Dependencies
 
 - **Depends on:** Supabase Auth + custom access token hook (dashboard config required)
+- **Depends on (AUT-05, AUT-06):** mmlabs Identity on org-admin-api (`api.mmlabs.online`: USR-03, USR-03b, USR-03c, USR-04, USR-04b, USR-07, all done); role `ricotdin:admin` and a Turnstile site key (owner).
 - **Blocks:** all other modules (auth is the foundation for data access)
