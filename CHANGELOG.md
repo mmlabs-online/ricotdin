@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+### Tính năng
+- Đăng nhập Ricotdin bằng tài khoản mmlabs (tài khoản chung cho mọi app mmlabs, ở `api.mmlabs.online`): đăng nhập, đăng ký, xác minh email, quên/đặt lại mật khẩu đều qua mmlabs, có Cloudflare Turnstile; "Tiếp tục với <email>" khi trình duyệt đã đăng nhập mmlabs ở app khác. Lần đầu đăng nhập, tài khoản Ricotdin cùng email được nối tự động (giữ nguyên cuộc họp); quyền admin lấy từ role mmlabs `ricotdin:admin` (cập nhật trong ≤ 15 phút), không đổi role trong Ricotdin nữa. Đổi mật khẩu trong hồ sơ chuyển sang link quên mật khẩu (AUT-05).
+
+### Checklist deploy (AUT-05; release cùng AUT-06)
+- Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
+- Web env: `RICOTDIN_AUTH_URL=https://api.mmlabs.online` và secret mới `RICOTDIN_TURNSTILE_SITE_KEY` (site key của widget Turnstile mà org-admin-api dùng, widget phải có hostname `ricotdin.mmlabs.online`). Cập nhật `deploy-ricotdin-v2.yml` trên repo deployment.
+- Container `api` cần gọi ra `https://api.mmlabs.online/.well-known/jwks.json` (mạng `web` không internal: được).
+- Bên org-admin: app `ricotdin` đã đăng ký (`register-app`), role `ricotdin:admin` gán cho tài khoản admin (owner đã làm 2026-11-16).
+
 ## [2.1.0] — 2026-11-15
 
 Thêm Claude (Anthropic) làm nhà cung cấp AI cho tóm tắt và chat.

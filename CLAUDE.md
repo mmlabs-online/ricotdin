@@ -45,7 +45,7 @@ through this table. **Read the file before working in that area**; its rules are
 |---|---|---|
 | §0.1 | `docs/architecture/db.md` | self-hosted Postgres (ARC-20), schema, Alembic, DB roles, RLS request context, grants |
 | §0.2 | `docs/architecture/api-runtime.md` | FastAPI factory, middleware, logins/pools, `Database` session, image |
-| §0.3 | `docs/architecture/auth.md` | register/login/refresh, passwords, JWT, email tokens |
+| §0.3 | `docs/architecture/auth.md` | sign-in with the mmlabs account (§0.3a, AUT-05); legacy register/login/refresh, passwords, JWT, email tokens |
 | §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive / R2 storage |
 | §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (not used since ARC-20; tooling kept until ARC-16) |
 | §0.6 | `docs/architecture/core-domain-api.md` | meetings, folders/shares, content, profile, quota routes |
