@@ -35,6 +35,7 @@ USER_COLUMNS = [
     "last_sign_in_at",
     "created_at",
     "updated_at",
+    "mmlabs_sub",  # AUT-05: v1 had no mmlabs link
 ]
 
 
@@ -79,6 +80,7 @@ def map_auth_user(row: Mapping[str, Any], *, now: str) -> dict[str, str | None]:
         "last_sign_in_at": row.get("last_sign_in_at"),
         "created_at": created,
         "updated_at": row.get("updated_at") or created,
+        "mmlabs_sub": None,
     }
 
 

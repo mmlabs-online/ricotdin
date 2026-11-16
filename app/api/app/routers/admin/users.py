@@ -19,21 +19,18 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.auth import service as auth_service
 from app.auth.deps import auth_runtime
 from app.auth.runtime import RESET_TTL, AuthRuntime
-from app.core.errors import NotFound
+from app.core.errors import Conflict, NotFound
 from app.core.logging import get_logger
 from app.db.session import Database, get_database
 from app.domain.admin import (
     exclude_self,
     guard_delete,
     guard_disable,
-    guard_promotion,
-    guard_role_change,
     like_pattern,
     month_range,
     parse_bulk,
     parse_list_params,
     parse_quota_grant,
-    parse_role,
     parse_status,
     user_status,
 )
@@ -175,23 +172,16 @@ async def get_user(user_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
 # --- role / status / reset ------------------------------------------------------------------------
 
 
+class RoleManagedExternally(Conflict):
+    code = "role_managed_externally"
+    message = "Roles are managed in mmlabs (role ricotdin:admin), not in ricotdin."
+
+
 @router.patch("/users/{user_id}/role")
-async def change_role(user_id: str, request: Request, admin: CurrentAdmin, db: Db) -> Any:
-    uid = path_id(user_id, _NOT_FOUND)
-    new_role = parse_role(await json_object(request))
-    async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, admin, uid)
-        target = await _target(conn, uid)
-        guard_role_change(admin.user_id, uid, target.role, new_role, count)
-        guard_promotion(new_role, _status(target))
-        await conn.execute(
-            text("UPDATE public.users SET role = :r, updated_at = now() WHERE id = :id"),
-            {"r": new_role, "id": uid},
-        )
-        await write_audit(conn, admin, "user.role_change", "user", str(uid),
-                          {"from": target.role, "to": new_role})  # fmt: skip
-    # Takes effect at the target's next token refresh (≤ 15 min); the admin API re-checks now.
-    return {"ok": True, "role": new_role}
+async def change_role(user_id: str, admin: CurrentAdmin) -> Any:
+    """AUT-05: the role follows the mmlabs token (``ricotdin:admin``) on every request, so a
+    change here would be overwritten; staff change it in mmlabs (org-admin)."""
+    raise RoleManagedExternally()
 
 
 @router.patch("/users/{user_id}/status")
@@ -313,7 +303,9 @@ async def bulk_action(request: Request, admin: CurrentAdmin, db: Db) -> dict[str
     """``{ids ≤ 50, action: disable|enable|set_role, role?}``; the caller is always skipped
     (v1). All or nothing: one transaction (ids locked in sorted order) and one audit row for the
     batch; unknown ids are reported. Promotion needs an active, verified account."""
-    ids, action, role = parse_bulk(await json_object(request))
+    ids, action, _ = parse_bulk(await json_object(request))
+    if action == "set_role":
+        raise RoleManagedExternally()  # AUT-05: roles come from mmlabs
     safe, self_skipped = exclude_self(admin.user_id, ids)
     processed: list[uuid.UUID] = []
     errors: list[dict[str, Any]] = []
@@ -333,23 +325,13 @@ async def bulk_action(request: Request, admin: CurrentAdmin, db: Db) -> dict[str
                 if row is None:
                     errors.append({"id": uid, "message": _NOT_FOUND})
                     continue
-                if action == "set_role" and role is not None:
-                    guard_role_change(admin.user_id, uid, row.role, role, count)
-                    guard_promotion(role, _status(row))
-                    await conn.execute(
-                        text(
-                            "UPDATE public.users SET role = :r, updated_at = now() WHERE id = :id"
-                        ),
-                        {"r": role, "id": uid},
-                    )
-                else:
-                    if action == "disable":
-                        guard_disable(admin.user_id, uid, row.role, count)
-                    await _set_disabled(conn, uid, action == "disable")
+                if action == "disable":
+                    guard_disable(admin.user_id, uid, row.role, count)
+                await _set_disabled(conn, uid, action == "disable")
                 processed.append(uid)
             await write_audit(conn, admin, f"user.bulk_{action}", "user",
                               str(processed[0]) if processed else "bulk",
-                              {"action": action, "role": role, "processed": len(processed),
+                              {"action": action, "processed": len(processed),
                                "ids": [str(i) for i in processed],
                                "errors": len(errors)})  # fmt: skip
     out: dict[str, Any] = {"processed": len(processed)}
