@@ -63,7 +63,8 @@
       "account_link_conflict": "This email belongs to a ricotdin account linked to another mmlabs account. Contact an administrator.",
       "turnstile_required": "Please complete the security check first.",
       "turnstile_failed": "The security check failed. Please try it again.",
-      "weak_password": "That password is too short or too common. Choose another one."
+      "weak_password": "That password is too short or too common. Choose another one.",
+      "email_unverified": "Your email is not verified yet. Open the link in the email we sent, then try again."
     },
     "signOutFailed": "We could not end your session on the server. On a shared computer, sign in and sign out again, or close the browser.",
     "resendLink": "Send a new verification email",
@@ -135,7 +136,8 @@
       "verifyBody": "Open the link we sent to {{email}} to verify your email, then continue.",
       "resent": "We sent a new verification email. Check your inbox (and spam folder).",
       "verified": "I have verified my email",
-      "other": "Use another account"
+      "other": "Use another account",
+      "thisAccount": "this account"
     },
     "turnstile": {
       "label": "Security check",

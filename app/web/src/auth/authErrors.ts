@@ -10,6 +10,6 @@ export function publicAuthErrorKey(err: unknown, context: 'register' | 'verify' 
   if (err.code === 'turnstile_failed') return 'auth.errors.turnstile_failed'
   if (err.code === 'weak_password') return 'auth.errors.weak_password'
   if (context === 'register' && err.status === 409) return 'auth.register.taken'
-  if (err.status === 422) return context === 'register' ? 'auth.register.invalid' : 'auth.validation.passwordShort'
+  if (err.status === 422) return context === 'verify' ? 'auth.errors.invalidLink' : 'auth.register.invalid'
   return 'auth.errors.generic'
 }

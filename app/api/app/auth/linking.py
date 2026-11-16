@@ -9,8 +9,10 @@ the admin API that read it agree). All SQL runs as ``ricotdin_service`` (CLAUDE.
 """
 
 import re
+import time
 import uuid
-from collections.abc import Iterator
+from collections import OrderedDict
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Literal
 
@@ -87,6 +89,50 @@ def _constraint(exc: IntegrityError) -> str | None:
         if isinstance(name, str):
             return name
     return None
+
+
+class IdentityCache:
+    """``sub → user_id`` for verified mmlabs tokens whose role was just mirrored (in-process,
+    bounded, short TTL): spares the ricotdin_service pool a transaction per request. A hit needs the
+    same role (a change goes to the DB, which writes the mirror). Admin disable / delete calls
+    ``forget_user`` so a ricotdin disable still applies at once in this process."""
+
+    def __init__(
+        self,
+        ttl: float = 30.0,
+        clock: Callable[[], float] = time.monotonic,
+        max_entries: int = 10_000,
+    ) -> None:
+        self._ttl = ttl
+        self._clock = clock
+        self._max = max_entries
+        self._items: OrderedDict[str, tuple[uuid.UUID, str, float]] = OrderedDict()
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def get(self, sub: str, role: str) -> uuid.UUID | None:
+        item = self._items.get(sub)
+        if item is None:
+            return None
+        user_id, cached_role, until = item
+        if cached_role != role or self._clock() >= until:
+            self._items.pop(sub, None)
+            return None
+        return user_id
+
+    def put(self, sub: str, user_id: uuid.UUID, role: str) -> None:
+        self._items[sub] = (user_id, role, self._clock() + self._ttl)
+        self._items.move_to_end(sub)
+        while len(self._items) > self._max:
+            self._items.popitem(last=False)
+
+    def forget_user(self, user_id: uuid.UUID) -> None:
+        for sub in [s for s, (uid, _, _) in self._items.items() if uid == user_id]:
+            del self._items[sub]
+
+    def clear(self) -> None:
+        self._items.clear()
 
 
 @dataclass(frozen=True)

@@ -63,7 +63,8 @@
       "account_link_conflict": "Email này thuộc một tài khoản ricotdin đã liên kết với tài khoản mmlabs khác. Liên hệ quản trị viên.",
       "turnstile_required": "Vui lòng hoàn tất bước kiểm tra bảo mật trước.",
       "turnstile_failed": "Kiểm tra bảo mật không thành công. Vui lòng thử lại.",
-      "weak_password": "Mật khẩu quá ngắn hoặc quá phổ biến. Hãy chọn mật khẩu khác."
+      "weak_password": "Mật khẩu quá ngắn hoặc quá phổ biến. Hãy chọn mật khẩu khác.",
+      "email_unverified": "Email của bạn chưa được xác minh. Mở link trong email chúng tôi đã gửi rồi thử lại."
     },
     "signOutFailed": "Không kết thúc được phiên đăng nhập trên máy chủ. Nếu dùng máy chung, hãy đăng nhập rồi đăng xuất lại, hoặc đóng trình duyệt.",
     "resendLink": "Gửi lại email xác minh",
@@ -135,7 +136,8 @@
       "verifyBody": "Mở link chúng tôi đã gửi tới {{email}} để xác minh email, rồi tiếp tục.",
       "resent": "Đã gửi email xác minh mới. Kiểm tra hộp thư (cả thư rác).",
       "verified": "Tôi đã xác minh email",
-      "other": "Dùng tài khoản khác"
+      "other": "Dùng tài khoản khác",
+      "thisAccount": "tài khoản này"
     },
     "turnstile": {
       "label": "Kiểm tra bảo mật",

@@ -5,12 +5,13 @@ import { AuthSession, type SessionDeps } from './session'
 // receives the per-app access token and answers /auth/me with the ricotdin user.
 const AUTH = 'https://auth.example.com'
 const API = 'https://api.example.com'
+const ACC1 = '11111111-1111-4111-8111-111111111111'
 const user = { id: 'u1', email: 'a@b.c', username: 'alex', role: 'user' as const }
 const tokenBody = (t: string) => ({ access_token: t, token_type: 'Bearer', expires_in: 900, audience: 'ricotdin' })
 
 type Call = { url: string; init: RequestInit | undefined }
 
-function fakeDeps(answers: Array<() => Response>, clock = { t: 1_000_000 }, account: string | null = 'acc1') {
+function fakeDeps(answers: Array<() => Response>, clock = { t: 1_000_000 }, account: string | null = ACC1) {
   const calls: Call[] = []
   const posted: unknown[] = []
   const store = { value: account }
@@ -46,7 +47,7 @@ describe('AuthSession (mmlabs)', () => {
     expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/token`)
     expect(f.calls[0]?.init?.credentials).toBe('include')
     expect(header(f.calls[0], 'X-MM-App')).toBe('ricotdin')
-    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: 'acc1' })
+    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: ACC1 })
     expect(f.calls[1]?.url).toBe(`${API}/auth/me`)
     expect(f.calls[1]?.init?.credentials).toBe('omit')
     expect(header(f.calls[1], 'Authorization')).toBe('Bearer t1')
@@ -70,16 +71,16 @@ describe('AuthSession (mmlabs)', () => {
   })
 
   it('asks to join when the account is not a member yet', async () => {
-    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: true, display_name: null }] }
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: true, display_name: null }] }
     const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts)])
     const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
-    expect(s.getState()).toEqual({ status: 'actionRequired', action: 'join', accountId: 'acc1', email: 'a@b.c' })
+    expect(s.getState()).toEqual({ status: 'actionRequired', action: 'join', accountId: ACC1, email: 'a@b.c' })
     expect(s.accessToken).toBeNull()
   })
 
   it('asks to verify the email first', async () => {
-    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: false, display_name: null }] }
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: false, display_name: null }] }
     const f = fakeDeps([err(403, 'email_unverified'), json(200, accounts)])
     const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
@@ -87,24 +88,24 @@ describe('AuthSession (mmlabs)', () => {
   })
 
   it('joins on the user’s click, then signs in', async () => {
-    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: true, display_name: null }] }
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: true, display_name: null }] }
     const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts), json(200, { status: 'member' }), ...signedIn()])
     const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     await s.join()
     expect(f.calls[2]?.url).toBe(`${AUTH}/api/v1/auth/apps/ricotdin/join`)
-    expect(body(f.calls[2])).toEqual({ account_id: 'acc1' })
+    expect(body(f.calls[2])).toEqual({ account_id: ACC1 })
     expect(s.getState()).toEqual({ status: 'signedIn', user })
   })
 
   it('signs in with email + password and remembers the account', async () => {
-    const f = fakeDeps([json(200, { account_id: 'acc9', user: { id: 'm1', email: 'a@b.c', email_verified: true } }), ...signedIn()], undefined, null)
+    const f = fakeDeps([json(200, { account_id: '99999999-9999-4999-8999-999999999999', user: { id: 'm1', email: 'a@b.c', email_verified: true } }), ...signedIn()], undefined, null)
     const s = new AuthSession(AUTH, API, f.deps)
     await s.signIn('a@b.c', 'pw', 'ts-token')
     expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/login`)
     expect(body(f.calls[0])).toEqual({ email: 'a@b.c', password: 'pw', turnstile_token: 'ts-token' })
-    expect(f.store.value).toBe('acc9')
-    expect(body(f.calls[1])).toEqual({ audience: 'ricotdin', account_id: 'acc9' })
+    expect(f.store.value).toBe('99999999-9999-4999-8999-999999999999')
+    expect(body(f.calls[1])).toEqual({ audience: 'ricotdin', account_id: '99999999-9999-4999-8999-999999999999' })
     expect(s.getState()).toEqual({ status: 'signedIn', user })
   })
 
@@ -126,9 +127,9 @@ describe('AuthSession (mmlabs)', () => {
   it('continues as another account signed in on this browser', async () => {
     const f = fakeDeps(signedIn(), undefined, null)
     const s = new AuthSession(AUTH, API, f.deps)
-    await s.continueAs('acc2')
-    expect(f.store.value).toBe('acc2')
-    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: 'acc2' })
+    await s.continueAs('22222222-2222-4222-8222-222222222222')
+    expect(f.store.value).toBe('22222222-2222-4222-8222-222222222222')
+    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: '22222222-2222-4222-8222-222222222222' })
   })
 
   it('lists the accounts signed in on this browser', async () => {
@@ -174,7 +175,7 @@ describe('AuthSession (mmlabs)', () => {
     await s.start()
     expect(await s.signOut()).toBe(true)
     expect(f.calls[2]?.url).toBe(`${AUTH}/api/v1/auth/logout`)
-    expect(body(f.calls[2])).toEqual({ account_id: 'acc1' })
+    expect(body(f.calls[2])).toEqual({ account_id: ACC1 })
     expect(s.getState()).toEqual({ status: 'signedOut' })
     expect(f.store.value).toBeNull()
     expect(f.posted.at(-1)).toEqual({ type: 'signedOut' })
@@ -221,7 +222,7 @@ describe('AuthSession (mmlabs)', () => {
       const s = new AuthSession(AUTH, API, f.deps)
       await s.start()
       expect(s.getState()).toEqual({ status: 'unavailable' })
-      expect(f.store.value).toBe('acc1') // a transient failure keeps the chosen account
+      expect(f.store.value).toBe(ACC1) // a transient failure keeps the chosen account
     }
   })
 
@@ -248,6 +249,50 @@ describe('AuthSession (mmlabs)', () => {
     const s = new AuthSession(AUTH, API, f.deps)
     await s.resendVerification()
     expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/verify-email/resend`)
-    expect(body(f.calls[0])).toEqual({ account_id: 'acc1' })
+    expect(body(f.calls[0])).toEqual({ account_id: ACC1 })
+  })
+
+  it('joins the account shown on screen, even if another tab switched accounts meanwhile', async () => {
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: true, display_name: null }] }
+    const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts), json(200, { status: 'member' }), ...signedIn()])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    f.store.value = '33333333-3333-4333-8333-333333333333' // another tab chose another account
+    await s.join()
+    expect(body(f.calls[2])).toEqual({ account_id: ACC1 })
+    expect(f.store.value).toBe(ACC1)
+  })
+
+  it('a resend for an already verified email just continues', async () => {
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: false, display_name: null }] }
+    const f = fakeDeps([err(403, 'email_unverified'), json(200, accounts), err(409, 'email_already_verified'), ...signedIn()])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    await s.resendVerification()
+    expect(s.getState()).toEqual({ status: 'signedIn', user })
+  })
+
+  it('a sign-out in another tab while this tab waits on an action cannot be undone by its refresh', async () => {
+    const accounts = { items: [{ account_id: ACC1, email: 'a@b.c', email_verified: true, display_name: null }] }
+    let release: (r: Response) => void = () => {}
+    const pending = new Promise<Response>((resolve) => (release = resolve))
+    const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts), json(200, { status: 'member' }), () => pending as unknown as Response])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    const joining = s.join()
+    await new Promise((r) => setTimeout(r, 0))
+    f.channel.onmessage?.({ data: { type: 'signedOut' } } as MessageEvent)
+    release(new Response(JSON.stringify(tokenBody('late')), { status: 200 }))
+    await joining.catch(() => undefined)
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(s.accessToken).toBeNull()
+  })
+
+  it('ignores a corrupted account id instead of failing every start', async () => {
+    const f = fakeDeps([], undefined, 'not a uuid at all <script>')
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(f.calls).toHaveLength(0)
   })
 })

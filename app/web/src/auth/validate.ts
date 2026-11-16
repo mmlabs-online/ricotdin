@@ -4,7 +4,7 @@
 const USERNAME = /^[a-z0-9_-]+$/
 const EMAIL = /^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/
 export const MIN_PASSWORD = 8
-export const MAX_PASSWORD = 256
+export const MAX_PASSWORD = 128 // mmlabs PASSWORD_MAX_LENGTH (AUT-05)
 
 export function normalizeUsername(raw: string): string {
   return raw.toLowerCase().trim()

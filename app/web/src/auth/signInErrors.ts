@@ -7,6 +7,7 @@ const KNOWN = new Set([
   'account_link_conflict',
   'turnstile_required',
   'turnstile_failed',
+  'email_unverified',
 ])
 
 /** i18n key for a failed sign-in. Server text is never shown as-is. */

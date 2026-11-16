@@ -18,7 +18,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.auth.jwt import InvalidAccessToken, JwtKeys, verify_access_token
-from app.auth.linking import resolve_user
+from app.auth.linking import IdentityCache, resolve_user
 from app.auth.mmlabs import (
     InvalidMmlabsToken,
     MmlabsUnavailable,
@@ -64,8 +64,13 @@ async def current_identity(
         except MmlabsUnavailable:
             raise ServiceUnavailable(detail="mmlabs signing keys unavailable") from None
         role = role_from_roles(claims.roles)
+        cache: IdentityCache = request.app.state.mmlabs_identities
+        cached = cache.get(claims.sub, role)
+        if cached is not None:
+            return RequestIdentity(cached, role)
         async with db.role_transaction(SERVICE) as conn:
             user_id = await resolve_user(conn, claims, role)
+        cache.put(claims.sub, user_id, role)
         return RequestIdentity(user_id, role)
     # Legacy ricotdin token (removed in AUT-06).
     keys: JwtKeys | None = request.app.state.auth.keys

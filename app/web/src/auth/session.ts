@@ -24,6 +24,7 @@ import {
   type MmAccount,
   type PendingAction,
   actionFor,
+  validAccountId,
   browserAccountStore,
   parseAccounts,
   parseTokenBody,
@@ -144,17 +145,36 @@ export class AuthSession {
 
   /** Join ricotdin with the chosen account. Only after the user clicked "Continue as" (consent). */
   async join(): Promise<AuthState> {
-    const accountId = this.deps.account.get()
-    if (!accountId) throw new ApiError(401, 'session_invalid', '')
+    const accountId = this.pendingAccount()
     await this.mmJson('POST', `/apps/${MM_APP}/join`, { account_id: accountId })
+    this.deps.account.set(accountId) // another tab may have switched meanwhile: we joined this one
     await this.refresh()
     return this.state
   }
 
-  async resendVerification(): Promise<void> {
-    const accountId = this.deps.account.get()
-    if (!accountId) throw new ApiError(401, 'session_invalid', '')
-    await this.mmJson('POST', '/verify-email/resend', { account_id: accountId })
+  /** New verification email for the account on screen. Already verified (409) → just continue. */
+  async resendVerification(): Promise<AuthState> {
+    const accountId = this.pendingAccount()
+    try {
+      await this.mmJson('POST', '/verify-email/resend', { account_id: accountId })
+    } catch (err) {
+      if (!(err instanceof ApiError && err.code === 'email_already_verified')) throw err
+      this.deps.account.set(accountId)
+      await this.refresh()
+    }
+    return this.state
+  }
+
+  /** The account the action screen shows (the click is the consent for exactly that account). */
+  private pendingAccount(): string {
+    if (this.state.status === 'actionRequired') return this.state.accountId
+    const stored = this.currentAccount()
+    if (!stored) throw new ApiError(401, 'session_invalid', '')
+    return stored
+  }
+
+  private currentAccount(): string | null {
+    return validAccountId(this.deps.account.get())
   }
 
   /** Accounts signed in on this browser (shared by every mmlabs app). Errors → empty list. */
@@ -169,9 +189,9 @@ export class AuthSession {
   /** Always forgets the session in this browser. false = mmlabs did not confirm the logout, so the
    * account may still be signed in at mmlabs (shared computer: the caller must tell the user). */
   async signOut(): Promise<boolean> {
-    const accountId = this.deps.account.get()
+    const accountId = this.currentAccount()
     // Forget the session at once, so a renewal still running in this tab cannot bring it back.
-    this.clear()
+    this.clear(true)
     this.deps.account.clear()
     this.broadcast({ type: 'signedOut' })
     await this.inflight?.catch(() => false)
@@ -210,7 +230,7 @@ export class AuthSession {
       this.adopt(this.lastShared)
       return true
     }
-    const accountId = this.deps.account.get()
+    const accountId = this.currentAccount()
     if (!accountId) {
       this.clear()
       return false
@@ -309,8 +329,10 @@ export class AuthSession {
     this.lastShared = null
   }
 
-  private clear(): void {
-    if (this.state.status === 'signedIn' || this.token !== null) {
+  /** `signOut` = an explicit sign-out (here or in another tab): every renewal still running, in any
+   * state, is discarded. Otherwise only a session that existed bumps the epoch. */
+  private clear(signOut = false): void {
+    if (signOut || this.state.status === 'signedIn' || this.token !== null) {
       this.epoch += 1
       this.signedOutAt = this.deps.now()
     }
@@ -321,7 +343,7 @@ export class AuthSession {
   private onMessage(msg: AuthMessage | null): void {
     if (!msg) return
     if (msg.type === 'signedOut') {
-      this.clear()
+      this.clear(true)
       return
     }
     if (msg.at <= this.signedOutAt) return // minted before our sign-out

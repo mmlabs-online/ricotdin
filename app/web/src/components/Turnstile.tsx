@@ -24,7 +24,12 @@ function loadTurnstile(): Promise<TurnstileApi> {
     const script = document.createElement('script')
     script.src = SRC
     script.async = true
-    script.onload = () => (window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile')))
+    script.onload = () => {
+      if (window.turnstile) return resolve(window.turnstile)
+      loading = null // let a later render try again
+      script.remove()
+      reject(new Error('turnstile'))
+    }
     script.onerror = () => {
       loading = null
       script.remove()

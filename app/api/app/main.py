@@ -13,6 +13,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 import httpx2
 from fastapi import APIRouter, FastAPI
 
+from app.auth.linking import IdentityCache
 from app.auth.mmlabs import MmlabsVerifier, http_jwks_fetcher
 from app.auth.runtime import AuthRuntime
 from app.core.http import install_error_handlers, install_middleware
@@ -113,6 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
     # mmlabs access tokens (AUT-05): JWKS from the issuer, cached in the verifier
     app.state.mmlabs_http = httpx2.AsyncClient(timeout=10.0, follow_redirects=False)
+    app.state.mmlabs_identities = IdentityCache()
     app.state.mmlabs = MmlabsVerifier(
         s.mmlabs_issuer,
         s.mmlabs_audience,

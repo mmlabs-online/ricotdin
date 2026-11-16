@@ -8,6 +8,9 @@ describe('publicAuthErrorKey (mmlabs, AUT-05)', () => {
     expect(publicAuthErrorKey(new ApiError(422, 'weak_password', 'x'), 'register')).toBe('auth.errors.weak_password')
     expect(publicAuthErrorKey(new ApiError(422, 'weak_password', 'x'), 'reset')).toBe('auth.errors.weak_password')
     expect(publicAuthErrorKey(new ApiError(422, 'validation_error', 'x'), 'register')).toBe('auth.register.invalid')
+    // a truncated link or a bad address is not a password problem
+    expect(publicAuthErrorKey(new ApiError(422, 'validation_error', 'x'), 'verify')).toBe('auth.errors.invalidLink')
+    expect(publicAuthErrorKey(new ApiError(422, 'validation_error', 'x'), 'reset')).toBe('auth.register.invalid')
     expect(publicAuthErrorKey(new ApiError(422, 'token_invalid', 'x'), 'verify')).toBe('auth.errors.invalidLink')
     expect(publicAuthErrorKey(new ApiError(422, 'token_invalid', 'x'), 'reset')).toBe('auth.errors.invalidLink')
     expect(publicAuthErrorKey(new ApiError(403, 'turnstile_failed', 'x'), 'register')).toBe('auth.errors.turnstile_failed')

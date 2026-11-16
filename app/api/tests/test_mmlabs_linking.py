@@ -5,7 +5,13 @@ import uuid
 
 import pytest
 
-from app.auth.linking import LinkDecision, base_username, link_decision, username_candidates
+from app.auth.linking import (
+    IdentityCache,
+    LinkDecision,
+    base_username,
+    link_decision,
+    username_candidates,
+)
 
 VALID = re.compile(r"^[a-z0-9_-]{3,30}$")  # profiles_username_charset + _length
 SUB = "0b8f2c1e-1111-4222-8333-444455556666"
@@ -60,3 +66,30 @@ def test_a_user_linked_to_another_sub_is_never_taken_over() -> None:
 def test_a_user_already_linked_to_this_sub_by_email_is_used() -> None:
     # race: another request linked it between our two reads
     assert link_decision(None, (U2, SUB), SUB) == LinkDecision("use", U2)
+
+
+# --- IdentityCache ------------------------------------------------------------------------------
+
+
+def test_identity_cache_hits_only_for_the_same_role_within_the_ttl() -> None:
+    clock = [100.0]
+    cache = IdentityCache(ttl=30.0, clock=lambda: clock[0])
+    assert cache.get(SUB, "user") is None
+    cache.put(SUB, U1, "user")
+    assert cache.get(SUB, "user") == U1
+    assert cache.get(SUB, "admin") is None  # the role changed: the DB mirror must be written
+    clock[0] += 31
+    assert cache.get(SUB, "user") is None
+
+
+def test_identity_cache_forgets_a_user_and_stays_bounded() -> None:
+    cache = IdentityCache(ttl=30.0, clock=lambda: 0.0, max_entries=2)
+    cache.put("s1", U1, "user")
+    cache.put("s2", U2, "user")
+    cache.forget_user(U1)
+    assert cache.get("s1", "user") is None and cache.get("s2", "user") == U2
+    cache.put("s3", uuid.uuid4(), "user")
+    cache.put("s4", uuid.uuid4(), "user")  # over the bound: the oldest entries go
+    assert len(cache) <= 2
+    cache.clear()
+    assert len(cache) == 0

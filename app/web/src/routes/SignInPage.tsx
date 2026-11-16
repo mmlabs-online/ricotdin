@@ -4,6 +4,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import { ApiError } from '../api/errors'
 import { useAuth, useTurnstileSiteKey } from '../auth/AuthProvider'
 import { safeReturnTo } from '../auth/guards'
 import type { MmAccount } from '../auth/mmlabs'
@@ -200,6 +201,13 @@ function PendingAction({ state, onDone }: { state: Extract<AuthState, { status: 
     }
   }
   const other = () => void session.signOut()
+  const stillUnverified = async () => {
+    await session.refresh()
+    const now = session.getState()
+    if (now.status === 'actionRequired' && now.action === 'verify') throw new ApiError(403, 'email_unverified', '')
+    return now
+  }
+  const who = state.email || t('auth.pending.thisAccount')
 
   const titleKey = state.action === 'verify' ? 'auth.pending.verifyTitle' : 'auth.pending.joinTitle'
   const bodyKey = { join: 'auth.pending.joinBody', joinClosed: 'auth.pending.joinClosed', verify: 'auth.pending.verifyBody' }[state.action]
@@ -209,10 +217,10 @@ function PendingAction({ state, onDone }: { state: Extract<AuthState, { status: 
         <h1 tabIndex={-1} ref={(el) => el?.focus()}>
           {t(titleKey)}
         </h1>
-        <p>{t(bodyKey, { email: state.email })}</p>
+        <p>{t(bodyKey, { email: who })}</p>
         {state.action === 'join' && (
           <Button variant="primary" className="full" disabled={busy} aria-busy={busy} onClick={() => void run(() => session.join())}>
-            {t('auth.accounts.continueAs', { email: state.email })}
+            {t('auth.accounts.continueAs', { email: who })}
           </Button>
         )}
         {state.action === 'verify' && (
@@ -220,7 +228,7 @@ function PendingAction({ state, onDone }: { state: Extract<AuthState, { status: 
             <Button variant="primary" className="full" disabled={busy} aria-busy={busy} onClick={() => void run(() => session.resendVerification(), 'auth.pending.resent')}>
               {t('auth.verify.resend')}
             </Button>
-            <Button className="full" disabled={busy} onClick={() => void run(() => session.refresh().then(() => session.getState()))}>
+            <Button className="full" disabled={busy} onClick={() => void run(stillUnverified)}>
               {t('auth.pending.verified')}
             </Button>
           </>

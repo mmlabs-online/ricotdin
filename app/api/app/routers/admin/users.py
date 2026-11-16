@@ -196,6 +196,7 @@ async def change_status(user_id: str, request: Request, admin: CurrentAdmin, db:
         await _set_disabled(conn, uid, disable)
         await write_audit(conn, admin, "user.disable" if disable else "user.enable", "user",
                           str(uid))  # fmt: skip
+    request.app.state.mmlabs_identities.forget_user(uid)  # AUT-05: applies at once (this process)
     return {"ok": True, "disabled": disable}
 
 
@@ -236,7 +237,9 @@ async def send_password_reset(
 
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str, admin: CurrentAdmin, db: Db, platform: Plat) -> Any:
+async def delete_user(
+    user_id: str, request: Request, admin: CurrentAdmin, db: Db, platform: Plat
+) -> Any:
     """Files first (CLAUDE.md §9c): the account is disabled and signed out, then every owned
     meeting audio and the avatar are deleted from Drive, each in its own step; a failure becomes
     ``storageWarnings`` and the user is still deleted. Rows cascade (meetings, folders, chat,
@@ -272,6 +275,7 @@ async def delete_user(user_id: str, admin: CurrentAdmin, db: Db, platform: Plat)
     out: dict[str, Any] = {"ok": True, "deleted": uid}
     if failed:
         out["storageWarnings"] = [f"Storage cleanup failed for {len(failed)} file(s)."]
+    request.app.state.mmlabs_identities.forget_user(uid)  # AUT-05
     return out
 
 
@@ -339,6 +343,7 @@ async def bulk_action(request: Request, admin: CurrentAdmin, db: Db) -> dict[str
         out["errors"] = errors
     if self_skipped:
         out["skippedSelf"] = [admin.user_id]
+    request.app.state.mmlabs_identities.clear()  # AUT-05: a bulk disable applies at once
     return out
 
 

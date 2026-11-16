@@ -9,6 +9,7 @@ describe('signInErrorKey', () => {
     expect(signInErrorKey(new ApiError(409, 'account_link_conflict', ''))).toBe('auth.errors.account_link_conflict')
     expect(signInErrorKey(new ApiError(403, 'turnstile_required', ''))).toBe('auth.errors.turnstile_required')
     expect(signInErrorKey(new ApiError(403, 'turnstile_failed', ''))).toBe('auth.errors.turnstile_failed')
+    expect(signInErrorKey(new ApiError(403, 'email_unverified', ''))).toBe('auth.errors.email_unverified')
     expect(signInErrorKey(new ApiError(429, 'rate_limited', ''))).toBe('auth.errors.rate_limited')
     expect(signInErrorKey(new ApiError(0, 'network', ''))).toBe('auth.errors.network')
   })

@@ -41,6 +41,7 @@ async def _jwks() -> dict[str, Any]:
 def mm(client: TestClient) -> TestClient:
     app: Any = client.app
     app.state.mmlabs = MmlabsVerifier(ISS, "ricotdin", _jwks)
+    app.state.mmlabs_identities.clear()
     return client
 
 
@@ -196,3 +197,16 @@ def test_a_non_ascii_email_is_never_linked_to_an_ascii_lookalike(
     r = mm.get("/auth/me", headers=_bearer(str(uuid.uuid4()), lookalike))
     assert r.status_code == 409 or r.json().get("id") != str(uid)
     assert _sql(world["db"], "SELECT mmlabs_sub FROM users WHERE id = %s", uid) == [(None,)]
+
+
+def test_an_admin_disable_applies_at_once_despite_the_identity_cache(
+    mm: TestClient, world: dict[str, Any]
+) -> None:
+    uid = _user(world["db"], f"cch{secrets.token_hex(3)}")
+    admin_uid = _user(world["db"], f"cad{secrets.token_hex(3)}")
+    user = _bearer(str(uuid.uuid4()), _email_of(world, uid))
+    admin = _bearer(str(uuid.uuid4()), _email_of(world, admin_uid), ["ricotdin:admin"])
+    assert mm.get("/auth/me", headers=user).status_code == 200  # now cached
+    r = mm.patch(f"/admin/users/{uid}/status", headers=admin, json={"disabled": True})
+    assert r.status_code == 200, r.text
+    assert mm.get("/auth/me", headers=user).status_code == 403

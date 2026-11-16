@@ -41,6 +41,13 @@ export function parseAccounts(body: unknown): MmAccount[] {
 
 export type AccountStore = { get(): string | null; set(id: string): void; clear(): void }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** mmlabs account ids are UUIDs; anything else in storage is ignored (never sent). */
+export function validAccountId(raw: string | null): string | null {
+  return raw !== null && UUID.test(raw) ? raw : null
+}
+
 /** localStorage can throw (private mode, blocked storage): then the choice lives for the tab only. */
 export function browserAccountStore(): AccountStore {
   let memory: string | null = null
