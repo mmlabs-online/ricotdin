@@ -1,7 +1,8 @@
 """ARC-03 / ARC-18 end to end: a v1 replay seeded like Supabase (GoTrue auth.users columns,
 storage.objects) → a v2 database at head. Checks counts/digests, idempotent re-run, secret
 decrypt, the file copy into Google Drive (a fake Drive behind the real ``DriveStorage``; v1
-sources are read-only fakes), (the old bcrypt hashes are carried over; since AUT-06 nothing signs in with them).
+sources are read-only fakes). The old bcrypt hashes are carried over; since AUT-06 nothing signs in
+with them.
 """
 
 import hashlib

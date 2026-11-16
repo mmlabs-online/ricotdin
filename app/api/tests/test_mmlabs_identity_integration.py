@@ -147,6 +147,21 @@ def test_bad_mmlabs_tokens_get_401(mm: TestClient, over: dict[str, Any]) -> None
     )
 
 
+def test_a_non_mmlabs_bearer_gets_401(mm: TestClient, world: dict[str, Any]) -> None:
+    # garbage, or a ricotdin EdDSA token from before AUT-06 still in a browser
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    uid = _user(world["db"], f"old{secrets.token_hex(3)}")
+    now = datetime.now(UTC)
+    legacy = pyjwt.encode({"sub": str(uid), "role": "admin", "iat": now,
+                           "exp": now + timedelta(minutes=15)},
+                          Ed25519PrivateKey.generate(), algorithm="EdDSA")  # fmt: skip
+    for tok in ("nope", legacy):
+        for url in ("/auth/me", "/admin/users"):
+            r = mm.get(url, headers={"Authorization": f"Bearer {tok}"})
+            assert r.status_code == 401, (url, r.text)
+
+
 def test_concurrent_first_sign_ins_create_one_user(mm: TestClient, world: dict[str, Any]) -> None:
     sub, email = str(uuid.uuid4()), f"race{secrets.token_hex(3)}@example.test"
 

@@ -8,8 +8,8 @@
 # The worker container gets ONLY worker.env (DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional
 # provider key fallbacks, LOG_LEVEL, SENTRY_DSN): it refuses to start with any other credential.
 # Its health check is `python -m app.worker.health` (no HTTP port); see app/api/deploy/.
-# runtime.env holds ONLY runtime values (DATABASE_URL_APP/_SERVICE/_WORKER, JWT_PRIVATE_KEY,
-# KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN, optional
+# runtime.env holds ONLY runtime values (DATABASE_URL_APP/_SERVICE/_WORKER,
+# KEY_ENCRYPTION_SECRET, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN, optional
 # provider key fallbacks GEMINI_API_KEYS / GEMINI_API_KEY_1..20 / GEMINI_API_KEY,
 # SPEECHMATICS_API_KEY, OPENAI_API_KEY, XAI_API_KEY / GROK_API_KEY) — never the owner
 # DATABASE_URL, so never app/api/.env. Secrets are injected at runtime only, never at build time.

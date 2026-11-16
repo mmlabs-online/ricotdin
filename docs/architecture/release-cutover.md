@@ -43,7 +43,7 @@
   `ricotdin-web` on `web`; api + worker on `db` for `postgres:5432`) and `deploy-ricotdin-v2.yml`
   (both pins must be `ricotdin-{api,web}:<RICOTDIN_VERSION>@sha256:…`, v2+; env files
   `/Users/mingming/.config/ricotdin/{api,worker,web}.env` written from the `RICOTDIN_*` repository
-  secrets, incl. `SMTP_*` + `MAIL_FROM`; restore + revert on unhealthy).
+  secrets (no JWT or SMTP secrets since AUT-06); restore + revert on unhealthy).
 - **Go-live runbook:** `docs/ops/go-live.md` (retire staging, production secrets, tag `v2.0.0`,
   migrations + logins, Cloudflare hostnames, deploy, first admin, Google Drive, provider keys).
 - **Known history finding (2026-11-05):** commits of 2026-06-09/10/13 (`README.md`, on `main` and

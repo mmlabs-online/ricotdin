@@ -3,6 +3,8 @@
 > **Not used (ARC-20, owner decision 2026-11-12):** v1 is retired and production v2 started with an
 > empty database, so no v1 data is migrated. This runbook and `migrate_from_supabase` are kept only
 > until ARC-16 removes the Supabase tooling. Do not run them against production.
+> **Obsolete since AUT-06:** `scripts.gen_jwt_key`, `POST /auth/login` and the password rehash below
+> no longer exist; sign-in is the mmlabs account only.
 
 **Owner:** project owner. **Script:** `app/api/scripts/migrate_from_supabase.py`. Pure logic lives in
 `app/api/app/migration/`; tests are `app/api/tests/test_migration_{transform,storage,integration}.py`.

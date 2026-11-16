@@ -21,7 +21,7 @@ services:
     image: ${RICOTDIN_API_IMAGE:?RICOTDIN_API_IMAGE is unset - pass --env-file apps/ricotdin-v2/release.env}
     restart: unless-stopped
     # DATABASE_URL_APP, DATABASE_URL_SERVICE, DATABASE_URL_WORKER (the /media lookup),
-    # JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET, SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS,
+    # KEY_ENCRYPTION_SECRET, WEB_ORIGIN, ALLOWED_ORIGINS,
     # FORWARDED_ALLOW_IPS (ONLY cloudflared's fixed address, never the shared `web` subnet), SENTRY_DSN,
     # optional provider key fallbacks. Never API_DOCS in production.
     env_file: [/Users/mingming/.config/ricotdin/api.env]

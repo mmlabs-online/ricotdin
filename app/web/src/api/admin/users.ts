@@ -109,10 +109,6 @@ export function useUserMutations() {
   const fetchApi = useFetchApi()
   const qc = useQueryClient()
   return {
-    role: useUserMutation(
-      ({ id, role }: { id: string; role: 'user' | 'admin' }) => apiJson(fetchApi, `/admin/users/${enc(id)}/role`, { method: 'PATCH', body: { role } }),
-      ({ id, role }) => ({ id, change: () => ({ role }) }),
-    ),
     status: useUserMutation(
       ({ id, disabled }: { id: string; disabled: boolean }) => apiJson(fetchApi, `/admin/users/${enc(id)}/status`, { method: 'PATCH', body: { disabled } }),
       ({ id, disabled }) => ({
@@ -131,7 +127,7 @@ export function useUserMutations() {
         void qc.invalidateQueries({ queryKey: adminKeys.users, refetchType: 'active' })
       },
     }),
-    bulk: useUserMutation((v: { ids: string[]; action: 'disable' | 'enable' | 'set_role'; role?: 'user' | 'admin' }) =>
+    bulk: useUserMutation((v: { ids: string[]; action: 'disable' | 'enable' }) =>
       apiJson<unknown>(fetchApi, '/admin/users/bulk', { method: 'POST', body: v }),
     ),
     grant: useUserMutation(({ id, ...body }: { id: string; audio_minutes?: number; agent_queries?: number; note?: string }) =>

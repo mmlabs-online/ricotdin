@@ -58,6 +58,11 @@ def test_non_admins_get_403(
         client.request(method, url, headers=_token(client, disabled, "admin"), **kw).status_code
         == 403
     )
+    # a stale admin role in ricotdin: the token decides (no ricotdin:admin → 403, AUT-05)
+    stale = _new_user(world, "admin")
+    assert (
+        client.request(method, url, headers=_token(client, stale, "user"), **kw).status_code == 403
+    )
 
 
 # --- keys -----------------------------------------------------------------------------------------

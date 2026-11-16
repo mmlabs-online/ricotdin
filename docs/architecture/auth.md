@@ -8,7 +8,7 @@ ricotdin's own auth (ARC-05: register / login / refresh / logout / verify / forg
 cookies, argon2 passwords, SMTP mail, `JWT_PRIVATE_KEY` / `SMTP_*` / `MAIL_FROM` / `REFRESH_TTL_DAYS`)
 is **removed**. Migration `0011_wipe_legacy_auth` cleared `users.password_hash`, `refresh_tokens`
 and `email_tokens`; the empty tables and the column stay until ARC-16 part 2 removes the v1 migration
-tooling that still reads them. The design of the removed code is in git history (before PR for AUT-06).
+tooling that still reads them. The design of the removed code is in git history (before commit `6e8e70a`, AUT-06).
 
 - **Endpoints left:** `GET /auth/me` (`app/routers/auth.py`) — the ricotdin user (id, email,
   username, role) behind the caller's mmlabs token. All other routes use `current_identity` /

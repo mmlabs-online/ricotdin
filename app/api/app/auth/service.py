@@ -113,6 +113,7 @@ async def create_user(
 
 
 # --- refresh tokens ------------------------------------------------------------------------------
+# TODO(ARC-16): a no-op since migration 0011 (nothing writes refresh_tokens); remove with the table.
 
 
 async def revoke_user_tokens(conn: AsyncConnection, user_id: uuid.UUID) -> None:
@@ -122,6 +123,3 @@ async def revoke_user_tokens(conn: AsyncConnection, user_id: uuid.UUID) -> None:
         ),
         {"u": user_id},
     )
-
-
-# --- email tokens --------------------------------------------------------------------------------

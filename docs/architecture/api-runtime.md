@@ -42,5 +42,5 @@
   it and uploads `openapi.json` as an artifact (`python -m scripts.dump_openapi`). Behind a proxy set
   `FORWARDED_ALLOW_IPS` to the proxy subnet and keep port 8000 internal. Local:
   `uv run --env-file .env uvicorn app.main:create_app --factory --reload`. A container gets a
-  runtime-only env file (`DATABASE_URL_*`, `JWT_PRIVATE_KEY`, `SMTP_*`, `MAIL_FROM`, `WEB_ORIGIN`,
+  runtime-only env file (`DATABASE_URL_*`, `KEY_ENCRYPTION_SECRET`, `WEB_ORIGIN`,
   `ALLOWED_ORIGINS`, `SENTRY_DSN` - never the owner `DATABASE_URL`, so never `app/api/.env`).

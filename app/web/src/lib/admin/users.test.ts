@@ -28,19 +28,13 @@ const u = (over: Partial<AdminUser> = {}): AdminUser => ({
 
 describe('userActions', () => {
   it('nothing that touches yourself (API 400 anyway)', () => {
-    expect(userActions(u({ id: 'me', role: 'admin' }), 'me')).toEqual({
-      changeRole: false, disable: false, enable: false, delete: false, promote: false,
-    })
+    expect(userActions(u({ id: 'me', role: 'admin' }), 'me')).toEqual({ disable: false, enable: false, delete: false })
   })
-  it('an active user can be promoted, disabled, deleted', () => {
-    expect(userActions(u(), 'me')).toMatchObject({ changeRole: true, disable: true, enable: false, delete: true, promote: true })
+  it('an active user can be disabled and deleted', () => {
+    expect(userActions(u(), 'me')).toEqual({ disable: true, enable: false, delete: true })
   })
-  it('only an active, verified account can become admin (§0.9)', () => {
-    expect(userActions(u({ status: 'unverified', email_confirmed: false }), 'me').promote).toBe(false)
-    expect(userActions(u({ status: 'disabled', disabled: true }), 'me')).toMatchObject({ promote: false, disable: false, enable: true })
-  })
-  it('an admin can be demoted (promote is about making admins)', () => {
-    expect(userActions(u({ role: 'admin' }), 'me')).toMatchObject({ changeRole: true, promote: false })
+  it('a disabled user can be enabled', () => {
+    expect(userActions(u({ status: 'disabled', disabled: true }), 'me')).toEqual({ disable: false, enable: true, delete: true })
   })
 })
 

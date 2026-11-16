@@ -1,6 +1,8 @@
 """AUT-06: ricotdin's own password / JWT / refresh / email auth is gone; mmlabs is the only way in.
 Pure: builds the app without starting it (no database, no network)."""
 
+from fastapi.testclient import TestClient
+
 from app.core.settings import Settings
 from app.main import create_app
 
@@ -29,6 +31,15 @@ def _routes() -> set[tuple[str, str]]:
 def test_the_legacy_auth_routes_are_gone() -> None:
     routes = _routes()
     assert [r for r in REMOVED if r in routes] == []
+
+
+def test_the_legacy_auth_routes_answer_404() -> None:
+    # not only undocumented: nothing answers them (no lifespan, so nothing touches a database)
+    app = create_app(Settings.model_validate({"WEB_ORIGIN": "https://app.ricotdin.test"}))
+    client = TestClient(app)
+    for method, path in REMOVED:
+        url = path.format(user_id="00000000-0000-0000-0000-000000000001")
+        assert client.request(method, url, json={}).status_code in (404, 405), (method, path)
 
 
 def test_the_ricotdin_user_lookup_stays() -> None:

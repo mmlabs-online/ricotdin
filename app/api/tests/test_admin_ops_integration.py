@@ -63,6 +63,9 @@ def test_non_admins_get_403(
     disabled = _new_user(world, "admin")
     _sql(world["db"], "UPDATE users SET disabled_at = now() WHERE id = %s", disabled)
     assert client.request(method, url, headers=_token(client, disabled, "admin")).status_code == 403
+    # a stale admin role in ricotdin: the token decides (no ricotdin:admin → 403, AUT-05)
+    stale = _new_user(world, "admin")
+    assert client.request(method, url, headers=_token(client, stale, "user")).status_code == 403
     assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(0,)]
 
 
