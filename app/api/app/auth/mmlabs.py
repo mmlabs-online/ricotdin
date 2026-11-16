@@ -7,7 +7,8 @@ only from ``{issuer}/.well-known/jwks.json`` (never from token headers), chosen 
 ``typ == at+jwt``; ``email_verified is True``. Tokens are never logged.
 
 The JWKS is cached for at most an hour; an unknown ``kid`` (key rotation) refetches it at most once
-a minute. A failed refresh keeps the cached keys; with no keys at all the API answers 503.
+a minute. A failed refresh keeps the cached keys for at most a day after the last success (then
+503); an empty JWKS answered by the issuer removes them.
 """
 
 import asyncio
@@ -27,6 +28,7 @@ ADMIN_ROLE = "ricotdin:admin"
 LEEWAY_S = 30
 JWKS_MAX_AGE_S = 3600.0
 JWKS_MIN_INTERVAL_S = 60.0
+JWKS_HARD_MAX_AGE_S = 24 * 3600.0  # keys never outlive a day of failed refreshes
 JWKS_MAX_BYTES = 64 * 1024
 _REQUIRED = ["exp", "iat", "sub", "jti", "iss", "aud"]
 _KEY_HINTS = ("jku", "x5u", "jwk", "x5c")
@@ -46,7 +48,7 @@ class MmlabsUnavailable(Exception):
 @dataclass(frozen=True)
 class MmlabsClaims:
     sub: str
-    email: str  # lower-cased
+    email: str  # lower-cased when ASCII
     roles: tuple[str, ...]
 
 
@@ -85,7 +87,9 @@ def check_claims(payload: Mapping[str, Any], *, issuer: str, audience: str) -> M
         raise InvalidMmlabsToken("email")
     if not isinstance(roles, list) or not all(isinstance(r, str) for r in roles):
         raise InvalidMmlabsToken("roles")
-    return MmlabsClaims(sub, email.strip().lower(), tuple(roles))
+    # Only ASCII is case-folded: Unicode folding can turn one address into another (U+212A → "k"),
+    # and a non-ASCII address is never linked by email (linking.py).
+    return MmlabsClaims(sub, email.lower() if email.isascii() else email, tuple(roles))
 
 
 def role_from_roles(roles: tuple[str, ...]) -> str:
@@ -167,8 +171,8 @@ class MmlabsVerifier:
         if stale or kid not in self._keys:
             async with self._lock:
                 await self._refresh()
-        if not self._keys and self._fetched_at is None:
-            raise MmlabsUnavailable("no mmlabs signing keys")
+        if self._fetched_at is None or self._clock() - self._fetched_at >= JWKS_HARD_MAX_AGE_S:
+            raise MmlabsUnavailable("no current mmlabs signing keys")
         key = self._keys.get(kid)
         if key is None:
             raise InvalidMmlabsToken("unknown kid")
@@ -180,12 +184,13 @@ class MmlabsVerifier:
             return  # at most one attempt a minute (unknown kids cannot force a fetch storm)
         self._tried_at = now
         try:
-            keys = keys_from_jwks(await self._fetch())
-        except Exception:  # noqa: BLE001 - network or JSON trouble: keep what we have
+            doc = await self._fetch()
+        except Exception:  # noqa: BLE001 - network or JSON trouble: keep what we have (for a while)
             return
-        if keys:
-            self._keys = keys
-            self._fetched_at = now
+        if not isinstance(doc, dict) or not isinstance(doc.get("keys"), list):
+            return  # not a JWKS: treat like a failed fetch
+        self._keys = keys_from_jwks(doc)  # an empty set means the issuer withdrew every key
+        self._fetched_at = now
 
 
 def http_jwks_fetcher(issuer: str, client: httpx2.AsyncClient) -> JwksFetcher:

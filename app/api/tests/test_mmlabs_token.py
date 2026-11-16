@@ -277,3 +277,21 @@ def test_a_failed_refresh_keeps_the_cached_keys() -> None:
     verify(v, token())
     clock.t += 3601  # stale: refresh fails, the cached key still verifies
     assert verify(v, token()).sub == SUB
+
+
+def test_cached_keys_expire_after_a_day_without_a_successful_refresh() -> None:
+    fetch, clock = Fetcher(JWKS, OSError("down")), Clock()
+    v = verifier(fetch, clock)
+    verify(v, token())
+    clock.t += 24 * 3600 + 1  # every refresh failed for a day: do not trust the old keys any more
+    with pytest.raises(MmlabsUnavailable):
+        verify(v, token())
+
+
+def test_an_empty_jwks_removes_the_keys() -> None:
+    fetch, clock = Fetcher(JWKS, {"keys": []}), Clock()
+    v = verifier(fetch, clock)
+    verify(v, token())
+    clock.t += 3601  # the issuer withdrew every key
+    with pytest.raises(InvalidMmlabsToken):
+        verify(v, token())

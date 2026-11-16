@@ -149,3 +149,50 @@ def test_concurrent_first_sign_ins_create_one_user(mm: TestClient, world: dict[s
 
     assert asyncio.run(both()) == [200, 200]
     assert _sql(world["db"], "SELECT count(*) FROM users WHERE mmlabs_sub = %s", sub) == [(1,)]
+
+
+def test_linking_drops_the_legacy_password_and_sessions(
+    mm: TestClient, world: dict[str, Any]
+) -> None:
+    # account pre-hijacking: someone registered the victim's address on ricotdin before the victim
+    # signed in with mmlabs; after linking, that password and any old session must be dead
+    uid = _user(world["db"], f"pre{secrets.token_hex(3)}")
+    _sql(world["db"], "UPDATE users SET email_verified_at = NULL WHERE id = %s", uid)
+    _sql(
+        world["db"],
+        "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
+        "VALUES (%s, gen_random_uuid(), %s, now() + interval '1 day')",
+        uid,
+        secrets.token_hex(16),
+    )
+    _sql(
+        world["db"],
+        "INSERT INTO email_tokens (user_id, purpose, token_hash, expires_at) "
+        "VALUES (%s, 'verify_email', %s, now() + interval '1 day')",
+        uid,
+        secrets.token_hex(16),
+    )
+    assert (
+        mm.get("/auth/me", headers=_bearer(str(uuid.uuid4()), _email_of(world, uid))).status_code
+        == 200
+    )
+    assert _sql(world["db"], "SELECT password_hash FROM users WHERE id = %s", uid) == [(None,)]
+    assert _sql(
+        world["db"],
+        "SELECT count(*) FROM refresh_tokens WHERE user_id = %s AND revoked_at IS NULL",
+        uid,
+    ) == [(0,)]
+    assert _sql(
+        world["db"], "SELECT count(*) FROM email_tokens WHERE user_id = %s AND used_at IS NULL", uid
+    ) == [(0,)]
+
+
+def test_a_non_ascii_email_is_never_linked_to_an_ascii_lookalike(
+    mm: TestClient, world: dict[str, Any]
+) -> None:
+    tag = secrets.token_hex(3)
+    uid = _user(world["db"], f"kate{tag}")
+    lookalike = "\u212aate" + tag + "@example.test"  # KELVIN SIGN lower-cases to "k"
+    r = mm.get("/auth/me", headers=_bearer(str(uuid.uuid4()), lookalike))
+    assert r.status_code == 409 or r.json().get("id") != str(uid)
+    assert _sql(world["db"], "SELECT mmlabs_sub FROM users WHERE id = %s", uid) == [(None,)]

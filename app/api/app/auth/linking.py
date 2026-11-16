@@ -108,24 +108,34 @@ async def _by_sub(conn: AsyncConnection, sub: str) -> _Row | None:
 
 
 async def _link_or_create(conn: AsyncConnection, claims: MmlabsClaims) -> uuid.UUID:
-    r = await conn.execute(
-        text("SELECT id, mmlabs_sub FROM users WHERE lower(email) = :e FOR UPDATE"),
-        {"e": claims.email},
-    )
-    row = r.first()
+    row = None
+    if claims.email.isascii():  # never link through Unicode case folding (U+212A → "k")
+        r = await conn.execute(
+            text("SELECT id, mmlabs_sub FROM users WHERE lower(email) = :e FOR UPDATE"),
+            {"e": claims.email},
+        )
+        row = r.first()
     decision = link_decision(None, None if row is None else (row.id, row.mmlabs_sub), claims.sub)
     if decision.kind == "conflict":
         raise AccountLinkConflict()
     if decision.kind == "use" and decision.user_id is not None:
         return decision.user_id
     if decision.kind == "link" and decision.user_id is not None:
+        # From now on only mmlabs signs this account in: the ricotdin password (which may have
+        # been chosen by whoever registered the address first, before the owner) and every
+        # legacy session and email link die here (account pre-hijacking, review of AUT-05).
         await conn.execute(
             text(
-                "UPDATE users SET mmlabs_sub = :s, "
+                "UPDATE users SET mmlabs_sub = :s, password_hash = NULL, "
                 "email_verified_at = coalesce(email_verified_at, now()) "
                 "WHERE id = :id AND mmlabs_sub IS NULL"
             ),
             {"s": claims.sub, "id": decision.user_id},
+        )
+        await service.revoke_user_tokens(conn, decision.user_id)
+        await conn.execute(
+            text("UPDATE email_tokens SET used_at = now() WHERE user_id = :u AND used_at IS NULL"),
+            {"u": decision.user_id},
         )
         return decision.user_id
     for username in username_candidates(claims.email, MAX_USERNAME_TRIES):
