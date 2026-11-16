@@ -122,7 +122,7 @@ As a user, I want to access only my own data to ensure privacy.
 ---
 
 ### AUT-05 — Sign in with mmlabs account
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (code; prod Done check after the release with AUT-06)
 
 **User Story**  
 As a user, I want to sign in to ricotdin with my mmlabs account (the one shared by every mmlabs app) so that I use one account everywhere.
@@ -186,8 +186,9 @@ session (two session systems, roles stale up to 90 days); waiting for the client
 - Organizations (org-admin USR-06), join approval (USR-03g), the client libraries (USR-08): switch to them later.
 - Account switcher beyond "Continue as"; per-permission checks beyond `ricotdin:admin`.
 
-**Key files (expected)**
-- `app/api/app/auth/{mmlabs,linking,deps}.py`, `app/api/app/core/settings.py`, `app/api/app/routers/admin/users.py`, `app/api/migrations/` (new revision), `app/api/pyproject.toml` (PyJWT)
+**Key files**
+- `app/api/app/auth/{mmlabs,linking,deps}.py`, `app/api/app/core/settings.py`, `app/api/app/routers/admin/users.py`, migration `0010_mmlabs_identity`, `app/api/tests/e2e_server.py` (fake mmlabs)
+- Tests: `test_mmlabs_token.py`, `test_mmlabs_linking.py`, `test_mmlabs_identity_integration.py`, web `auth/session.test.ts`, `auth/mmlabs.test.ts`
 - `app/web/src/auth/*` (session, token, AuthProvider), `app/web/src/routes/SignInPage.tsx`, `app/web/src/routes/auth/*`, `app/web/src/routes/ProfilePage.tsx`, admin users page, `app/web/deploy/*` (config, CSP), `app/web/src/i18n/locales/*`
 - `docs/architecture/auth.md`, `docs/architecture/db.md`, deployment `apps/ricotdin-v2/` + workflow (web env)
 

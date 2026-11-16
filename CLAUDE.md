@@ -79,8 +79,10 @@ From §0.1 (`docs/architecture/db.md`):
   R2 never serve requests as the table owner (owner bypasses RLS; no FORCE RLS) — assert at startup.
   R3 set the context per transaction only: `set_config('app.user_id', $1, true)` + `app.role` inside
   an explicit transaction (Neon pooler = PgBouncer transaction mode; session SET would leak).
-  R4 bind parameters, never string-built `SET`. R5 values only from the verified token (`sub`) and
-  `users.role`; whitelist role `user|admin`; set both or neither. R6 reset/roll back connections on
+  R4 bind parameters, never string-built `SET`. R5 values only from the verified token and
+  `users.role`; whitelist role `user|admin`; set both or neither. Since AUT-05 the token is the
+  mmlabs one: `user_id` = the ricotdin user mapped from its `sub` (`users.mmlabs_sub`), role =
+  `admin` iff its `roles` contain `ricotdin:admin` (mirrored into `users.role`; §0.3a). R6 reset/roll back connections on
   check-in; test that a reused connection has no context. R7 statement/lock timeouts and connection
   limits per role. R8 no CREATE/TEMP for the app role (done in the schema).
 

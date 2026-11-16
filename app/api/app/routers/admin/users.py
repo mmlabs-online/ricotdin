@@ -1,10 +1,11 @@
 """Admin user management (ARC-10a; port of v1 ``app/api/admin/users/**``, CLAUDE.md §9c).
 
-All SQL runs as ``ricotdin_service``. Role source of truth is ``users.role`` (a trigger mirrors
-``profiles.role``); disabled = ``users.disabled_at`` (v1 ``banned_until``). Self / last-admin
-guards keep v1's messages (400); the admin rows are locked while counting. Every mutation writes
-one ``audit_logs`` row in the same transaction. Disabling revokes every refresh token, so the
-user is signed out within the access-token lifetime (≤ 15 min).
+All SQL runs as ``ricotdin_service``. Roles come from mmlabs (``ricotdin:admin``, AUT-05): the
+token role is mirrored into ``users.role`` (a trigger mirrors ``profiles.role``) and role changes
+here answer 409. Disabled = ``users.disabled_at`` (v1 ``banned_until``): refused on the next
+request (identity cache dropped in this process, ≤ 30 s in others). Self / last-admin guards keep
+v1's messages (400); the admin rows are locked while counting. Every mutation writes one
+``audit_logs`` row in the same transaction.
 """
 
 import json
