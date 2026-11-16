@@ -214,9 +214,13 @@ git log $(git describe --tags --abbrev=0 origin/main)..origin/main --format=%s |
   automatically (draft if checks are open; never merges). Applies the rules in this section.
 - **Bug workflow:** for any bug, regression or production incident, use the
   `/fix-bug "<description>"` skill (`.claude/skills/fix-bug/SKILL.md`). It logs `BUG-NNN` in
-  `ai-instruction/bugs.md`, decides bugfix (`main`) vs hotfix (`release/X.Y`, per §9k) with
-  your confirmation, writes a failing regression test first, then fixes, verifies, reviews
-  and walks through the §9k hotfix steps.
+  `ai-instruction/bugs.md` (read-only investigation, root cause confirmed/suspected with
+  `file:line`), then asks: **A** open a record-only PR (`docs/BUG-NNN-<slug>` → `main`) and stop,
+  fixed later with `/fix-bug BUG-NNN`; **B** log another bug in the same batch and ask again;
+  **C** fix the whole batch now. Fixing decides bugfix (`main`) vs hotfix (`release/X.Y`, per §9k)
+  with your confirmation, writes a failing regression test first, then fixes, verifies, reviews
+  and walks through the §9k hotfix steps; a batch ships as one PR into `main`, plus one per
+  release line for hotfixes. Agents never merge.
 - **Traceability:** every branch, commit, PR title and CHANGELOG bullet carries its feature
   code or `BUG-NNN` (§9l).
 - **Owner copilot:** `/copilot` (status brief), `/copilot <question>`, `/copilot plan`
