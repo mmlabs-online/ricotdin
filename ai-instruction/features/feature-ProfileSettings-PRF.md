@@ -277,7 +277,7 @@ Re-specced 2026-11-16 (owner Q&A). Since AUT-05 sign-in happens at mmlabs, so ri
 
 **Frontend**
 - `ActivitySection` in `ProfilePage`: type filter, timeline list (badge, meeting or folder name, time, device · IP), "Show more" (infinite query).
-- Pure `lib/profile/activity.ts`: `deviceLabel(userAgent)` ("Chrome · macOS"), `activityEventKey(type)`; admin `EVENTS` learns `folder_shared` / `folder_unshared`. EN + VI strings.
+- Pure `lib/profile/activity.ts`: `deviceLabel(userAgent)` ("Chrome · macOS"), `activityKey(type, direction, left)`, `uniqueById(rows)`; admin `EVENTS` learns `folder_shared` / `folder_unshared`. EN + VI strings.
 
 **Backend**
 - New events (best effort, like `meeting_created`): `folder_shared` on `POST /folders/{id}/shares` (user_id = owner, target_user_id = grantee, metadata `{folder_id, folder_name, role}`), `folder_unshared` on `DELETE /folders/{id}/shares/{grantee}` (user_id = actor; target = grantee when the owner removes, = owner when a grantee leaves; metadata `{folder_id, folder_name, left}`). `meeting_deleted` metadata also keeps the title.
@@ -294,7 +294,7 @@ Re-specced 2026-11-16 (owner Q&A). Since AUT-05 sign-in happens at mmlabs, so ri
 **Test Plan**
 - Pure: `app/api/app/domain/activity.py` → `parse_own_activity_filters()`, `own_activity_row()` → `app/api/tests/test_profile_activity.py`.
 - Integration: `app/api/tests/test_profile_activity_integration.py` — isolation, both sides of share/unshare/leave, no foreign IP, lost-access title, filters + paging, 401.
-- Web: `app/web/src/lib/profile/activity.test.ts` — `deviceLabel`, `activityEventKey`.
+- Web: `app/web/src/lib/profile/activity.test.ts` — `deviceLabel`, `activityKey`, `uniqueById`.
 
 **Structural flags**
 - Migration 0012 (index only, non-destructive); new route `GET /profile/activity`; ~12 files.
