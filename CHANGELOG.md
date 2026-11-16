@@ -13,7 +13,7 @@
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
 - Web env: `RICOTDIN_AUTH_URL=https://api.mmlabs.online` và secret mới `RICOTDIN_TURNSTILE_SITE_KEY` (site key của widget Turnstile mà org-admin-api dùng, widget phải có hostname `ricotdin.mmlabs.online`). Cập nhật `deploy-ricotdin-v2.yml` trên repo deployment.
 - Container `api` cần gọi ra `https://api.mmlabs.online/.well-known/jwks.json` (mạng `web` không internal: được).
-- Migration `0011_wipe_legacy_auth`: xoá mọi `password_hash`, `refresh_tokens`, `email_tokens` (giữ bảng; bỏ hẳn ở ARC-16 phần 2). Sau đó không quay lại được bản trước AUT-05 (AUT-06).
+- Migration `0011_wipe_legacy_auth`: xoá mọi `password_hash`, `refresh_tokens`, `email_tokens` (giữ bảng; bỏ hẳn ở ARC-16 phần 2). Sau đó không quay lại được bản trước AUT-05; rollback về bản AUT-05 thì không được dùng `api.env` cũ còn `JWT_PRIVATE_KEY`/SMTP (AUT-06).
 - `deploy-ricotdin-v2.yml` trên repo deployment: bỏ `RICOTDIN_JWT_PRIVATE_KEY`, `RICOTDIN_MAIL_FROM`, SMTP và `environment: org-admin-api` (bản mới ở `docs/ops/deployment-repo/`); sau deploy thành công xoá các secret `RICOTDIN_JWT_*` / `RICOTDIN_MAIL_FROM` (AUT-06).
 - Bên org-admin: app `ricotdin` đã đăng ký (`register-app`), role `ricotdin:admin` gán cho tài khoản admin (owner đã làm 2026-11-16).
 

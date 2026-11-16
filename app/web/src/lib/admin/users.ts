@@ -21,7 +21,6 @@ export interface UserActions {
   disable: boolean
   enable: boolean
   delete: boolean
-  resetPassword: boolean
 }
 
 /** Controls for a user row. Never on yourself (the API refuses: 400); the last-admin guard is
@@ -34,7 +33,6 @@ export function userActions(user: AdminUser, me: string): UserActions {
     disable: !self && user.status !== 'disabled',
     enable: !self && user.status === 'disabled',
     delete: !self,
-    resetPassword: true,
   }
 }
 

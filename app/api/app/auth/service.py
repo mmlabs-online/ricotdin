@@ -18,7 +18,7 @@ SIGNUP_AUDIO_SECONDS = 60 * 60  # v1 parity (register route)
 SIGNUP_AGENT_QUERIES = 50
 
 _USER_COLUMNS = """
-    u.id, u.email, u.password_hash, u.role, u.email_verified_at, u.disabled_at, p.username
+    u.id, u.email, u.role, u.email_verified_at, u.disabled_at, p.username
 """
 
 
@@ -26,14 +26,10 @@ _USER_COLUMNS = """
 class UserRow:
     id: uuid.UUID
     email: str
-    password_hash: str | None  # NULL for accounts that only sign in with mmlabs (AUT-05)
     role: str
     email_verified_at: datetime | None
     disabled_at: datetime | None
     username: str | None
-
-    def __repr__(self) -> str:  # never print the hash
-        return f"UserRow(id={self.id!s}, role={self.role!r})"
 
     def public(self) -> dict[str, Any]:
         return {
@@ -73,21 +69,20 @@ async def create_user(
     conn: AsyncConnection,
     email: str,
     username: str,
-    password_hash: str | None,
     *,
     mmlabs_sub: str | None = None,
 ) -> uuid.UUID:
     """users + profiles (role forced to 'user'), then the signup quota grant (non-fatal).
-    An mmlabs account (AUT-05) has no password here and a verified email (mmlabs checked it)."""
+    No password: only mmlabs signs users in (AUT-06); its email is verified (mmlabs checked it)."""
     user_id: uuid.UUID = (
         await conn.execute(
             text(
-                "INSERT INTO users (email, password_hash, role, mmlabs_sub, email_verified_at) "
-                "VALUES (:e, :h, 'user', CAST(:s AS text), "
+                "INSERT INTO users (email, role, mmlabs_sub, email_verified_at) "
+                "VALUES (:e, 'user', CAST(:s AS text), "
                 "CASE WHEN CAST(:s AS text) IS NULL THEN NULL ELSE now() END) "
                 "RETURNING id"
             ),
-            {"e": email, "h": password_hash, "s": mmlabs_sub},
+            {"e": email, "s": mmlabs_sub},
         )
     ).scalar_one()
     await conn.execute(

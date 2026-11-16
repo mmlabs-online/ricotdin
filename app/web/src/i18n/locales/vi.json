@@ -301,9 +301,7 @@
         "promote": "Người dùng đã là quản trị viên. Áp dụng ở lần làm mới phiên kế tiếp (trong 15 phút).",
         "demote": "Người dùng không còn là quản trị viên. Các trang quản trị ngừng hoạt động với họ ngay.",
         "disable": "Đã khóa và đăng xuất người dùng khỏi mọi thiết bị.",
-        "enable": "Người dùng đăng nhập lại được.",
-        "reset": "Đã gửi email link đặt lại mật khẩu.",
-        "resetNoMail": "Không gửi được email: máy chủ chưa cấu hình gửi mail."
+        "enable": "Người dùng đăng nhập lại được."
       },
       "confirm": {
         "promote": {
@@ -325,11 +323,6 @@
           "title": "Mở khóa tài khoản?",
           "body": "{{name}} đăng nhập lại được.",
           "action": "Mở khóa"
-        },
-        "reset": {
-          "title": "Gửi link đặt lại mật khẩu?",
-          "body": "{{name}} nhận email có link để đặt mật khẩu mới. Mật khẩu hiện tại vẫn dùng được cho đến lúc đó.",
-          "action": "Gửi email"
         },
         "delete": {
           "title": "Xóa vĩnh viễn người dùng này?",

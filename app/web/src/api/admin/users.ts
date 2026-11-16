@@ -120,9 +120,6 @@ export function useUserMutations() {
         change: (old) => ({ disabled, status: disabled ? 'disabled' : old.email_confirmed ? 'active' : 'unverified' }),
       }),
     ),
-    reset: useUserMutation((id: string) =>
-      apiJson<{ ok: boolean; email_sent?: boolean }>(fetchApi, `/admin/users/${enc(id)}/reset-password`, { method: 'POST' }),
-    ),
     // the user is gone: drop their detail, quota and activity instead of refetching them (404)
     remove: useMutation({
       mutationFn: (id: string) => apiJson<{ ok: boolean; storageWarnings?: string[] }>(fetchApi, `/admin/users/${enc(id)}`, { method: 'DELETE' }),

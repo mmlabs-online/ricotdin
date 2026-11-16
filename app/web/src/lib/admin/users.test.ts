@@ -29,7 +29,7 @@ const u = (over: Partial<AdminUser> = {}): AdminUser => ({
 describe('userActions', () => {
   it('nothing that touches yourself (API 400 anyway)', () => {
     expect(userActions(u({ id: 'me', role: 'admin' }), 'me')).toEqual({
-      changeRole: false, disable: false, enable: false, delete: false, resetPassword: true, promote: false,
+      changeRole: false, disable: false, enable: false, delete: false, promote: false,
     })
   })
   it('an active user can be promoted, disabled, deleted', () => {

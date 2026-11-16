@@ -301,9 +301,7 @@
         "promote": "The user is now an admin. It applies at their next sign-in refresh (within 15 minutes).",
         "demote": "The user is no longer an admin. Admin pages stop working for them at once.",
         "disable": "The user is disabled and signed out everywhere.",
-        "enable": "The user can sign in again.",
-        "reset": "A password reset link was emailed.",
-        "resetNoMail": "The reset link could not be emailed: mail is not set up on the server."
+        "enable": "The user can sign in again."
       },
       "confirm": {
         "promote": {
@@ -325,11 +323,6 @@
           "title": "Enable this account?",
           "body": "{{name}} can sign in again.",
           "action": "Enable"
-        },
-        "reset": {
-          "title": "Send a password reset?",
-          "body": "{{name}} receives an email with a link to choose a new password. Their current password keeps working until then.",
-          "action": "Send email"
         },
         "delete": {
           "title": "Delete this user permanently?",
