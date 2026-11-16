@@ -1036,6 +1036,26 @@ export interface paths {
         patch: operations["update_profile_profile_patch"];
         trace?: never;
     };
+    "/profile/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Own Activity
+         * @description ``?eventType&page&perPage`` (20 by default, at most 50), newest first.
+         */
+        get: operations["own_activity_profile_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profile/avatar": {
         parameters: {
             query?: never;
@@ -3069,6 +3089,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: boolean;
+                    };
+                };
+            };
+        };
+    };
+    own_activity_profile_activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
                     };
                 };
             };

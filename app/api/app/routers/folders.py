@@ -23,6 +23,7 @@ from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
+from app.domain.activity import share_metadata
 from app.domain.rules import (
     is_email_identifier,
     normalize_lookup_username,
@@ -256,18 +257,18 @@ async def reorder_folders(request: Request, identity: Identity, db: Db) -> dict[
 # --- shares -----------------------------------------------------------------------------------
 
 
-async def _owned_folder(conn: AsyncConnection, folder_id: uuid.UUID, me: uuid.UUID) -> uuid.UUID:
-    """The folder's owner id; 404 if it does not exist, 403 if the caller does not own it."""
-    owner = (
+async def _owned_folder(conn: AsyncConnection, folder_id: uuid.UUID, me: uuid.UUID) -> str:
+    """The folder's name; 404 if it does not exist, 403 if the caller does not own it."""
+    row = (
         await conn.execute(
-            text("SELECT user_id FROM public.folders WHERE id = :id"), {"id": folder_id}
+            text("SELECT user_id, name FROM public.folders WHERE id = :id"), {"id": folder_id}
         )
-    ).scalar_one_or_none()
-    if owner is None:
+    ).first()
+    if row is None:
         raise NotFound(_FOLDER_NOT_FOUND)
-    if owner != me:
+    if row.user_id != me:
         raise Forbidden("Forbidden.")
-    return me
+    return str(row.name)
 
 
 @router.get("/folders/{folder_id}/shares")
@@ -327,7 +328,7 @@ async def add_share(folder_id: str, request: Request, identity: Identity, db: Db
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
     try:
         async with db.role_transaction(SERVICE) as conn:
-            await _owned_folder(conn, fid, identity.user_id)
+            folder_name = await _owned_folder(conn, fid, identity.user_id)
             enforce_limit(request.app.state.lookup_limiter, identity.user_id)
             grantee, username = await _resolve_user(conn, identifier)
             if grantee == identity.user_id:
@@ -343,6 +344,10 @@ async def add_share(folder_id: str, request: Request, identity: Identity, db: Db
         if is_unique_violation(exc):
             raise Conflict("That user is already a member of this folder.") from None
         raise
+    await meeting_activity(  # PRF-09: the owner and the grantee both see it
+        db, request, identity.user_id, "folder_shared", None,
+        share_metadata(fid, folder_name, role=role), target=grantee,
+    )  # fmt: skip
     member = {"userId": str(grantee), "username": username or str(grantee), "role": role}
     return JSONResponse(status_code=201, content={"member": member})
 
@@ -369,26 +374,36 @@ async def change_share(
 
 @router.delete("/folders/{folder_id}/shares/{grantee_id}")
 async def remove_share(
-    folder_id: str, grantee_id: str, identity: Identity, db: Db
+    folder_id: str, grantee_id: str, request: Request, identity: Identity, db: Db
 ) -> dict[str, bool]:
     """The folder owner removes anyone; a grantee may remove themselves (leave)."""
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
     grantee = parse_uuid(grantee_id)
     async with db.role_transaction(SERVICE) as conn:
-        owner = (
+        folder = (
             await conn.execute(
-                text("SELECT user_id FROM public.folders WHERE id = :id"), {"id": fid}
+                text("SELECT user_id, name FROM public.folders WHERE id = :id"), {"id": fid}
             )
-        ).scalar_one_or_none()
-        if owner is None:
+        ).first()
+        if folder is None:
             raise NotFound(_FOLDER_NOT_FOUND)
+        owner = folder.user_id
         if owner != identity.user_id and grantee != identity.user_id:
             raise Forbidden("Forbidden.")
+        removed = 0
         if grantee is not None:
-            await conn.execute(
-                text("DELETE FROM public.folder_shares WHERE folder_id = :f AND user_id = :u"),
-                {"f": fid, "u": grantee},
-            )
+            removed = (
+                await conn.execute(
+                    text("DELETE FROM public.folder_shares WHERE folder_id = :f AND user_id = :u"),
+                    {"f": fid, "u": grantee},
+                )
+            ).rowcount
+    if removed and grantee is not None:  # PRF-09: a leave targets the owner, a removal the grantee
+        left = grantee == identity.user_id and owner != identity.user_id
+        await meeting_activity(
+            db, request, identity.user_id, "folder_unshared", None,
+            share_metadata(fid, str(folder.name), left=left), target=owner if left else grantee,
+        )  # fmt: skip
     return {"ok": True}
 
 
