@@ -6,7 +6,7 @@
 > **Status**: `open` · `in_progress` · `fixed` · `wontfix` · `duplicate`.
 > **Fix type**: `bugfix` (unreleased code, fixed on `dev`) · `hotfix` (affects a released `vX.Y.Z`, fixed on `release/X.Y`).
 > **Found in**: version tag (e.g. `v1.0.0`) or `dev`. **Fixed in**: version that ships the fix, or `dev` until released.
-> **Feature**: related feature code from `tracking.md`, or `—`. **Link**: branch, then `PR #N` once opened.
+> **Feature**: related feature code from `tracking.md`, or `—`. **Link**: branch, then `PR #N` once opened (`record PR #N` for a record-only PR, then the fix branch + PR).
 > Keep cells free of `|`. Details (repro, root cause) go in the matching `## BUG-NNN` section below the table.
 
 | Bug ID | Title | Severity | Status | Found in | Feature | Fix type | Fixed in | Link |
@@ -52,8 +52,8 @@
 **Actual**
 ... (exact error / log line)
 
-**Root cause**
-...
+**Root cause** (confirmed | suspected)
+<file:line and why; "confirmed" = reproduced, "suspected" = from reading the code; "unknown" if not found yet>
 
 **Fix**
 <what changed, regression test name: tests/<file>.test.ts — "<test name>">
