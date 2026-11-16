@@ -39,9 +39,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from app.auth.jwt import generate_private_pem
 from app.auth.mmlabs import MmlabsVerifier
-from app.auth.passwords import hash_password
 from app.core.settings import Settings
 from app.db.provision import drop_login, ensure_login
 from app.db.scratch import admin_url, scratch_database
@@ -205,9 +203,9 @@ def seed(url: str) -> None:
         owner = None
         for email, username, role in USERS:
             uid = conn.execute(
-                "INSERT INTO users (email, password_hash, role, email_verified_at) "
-                "VALUES (%s, %s, %s, now()) RETURNING id",
-                (email, hash_password(PASSWORD), role),
+                "INSERT INTO users (email, role, email_verified_at) "
+                "VALUES (%s, %s, now()) RETURNING id",
+                (email, role),
             ).fetchone()
             assert uid is not None  # noqa: S101 - test-only script
             conn.execute(
@@ -317,7 +315,7 @@ def main() -> None:
             seed(url)
             settings = Settings.model_validate({
                 "DATABASE_URL_APP": api.url(url), "DATABASE_URL_SERVICE": svc.url(url),
-                "JWT_PRIVATE_KEY": generate_private_pem(), "WEB_ORIGIN": web,
+                "WEB_ORIGIN": web,
                 "ALLOWED_ORIGINS": web, "KEY_ENCRYPTION_SECRET": secrets.token_hex(32),
             })  # fmt: skip
             app = create_app(settings)

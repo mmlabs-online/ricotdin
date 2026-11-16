@@ -14,7 +14,6 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth.jwt import generate_private_pem, issue_access_token
 from app.core.settings import Settings
 from app.db.provision import drop_login, ensure_login
 from app.db.scratch import admin_url, scratch_database
@@ -23,6 +22,7 @@ from app.services.crypto import encrypt_with_key
 from app.services.storage.media_token import MediaTokenSigner, derive_media_key
 from tests.conftest import alembic_upgrade, requires_db
 from tests.fake_drive import CONFIG, ROOT, FakeDrive, FakeFile
+from tests.mmlabs_auth import bearer, install, sub_for
 
 pytestmark = requires_db
 
@@ -50,10 +50,11 @@ def _user(url: str, name: str) -> uuid.UUID:
     uid = uuid.uuid4()
     _sql(
         url,
-        "INSERT INTO users (id, email, password_hash, role, email_verified_at) "
-        "VALUES (%s, %s, 'x', 'user', now())",
+        "INSERT INTO users (id, email, role, email_verified_at, mmlabs_sub) "
+        "VALUES (%s, %s, 'user', now(), %s)",
         uid,
         f"{name}@example.test",
+        sub_for(uid),
     )
     _sql(url, "INSERT INTO profiles (id, username, role) VALUES (%s, %s, 'user')", uid, name)
     return uid
@@ -121,7 +122,6 @@ def client(world: dict[str, Any], drive: FakeDrive) -> Iterator[TestClient]:
             "DATABASE_URL_APP": world["ricotdin_app"],
             "DATABASE_URL_SERVICE": world["ricotdin_service"],
             "DATABASE_URL_WORKER": world["ricotdin_worker"],
-            "JWT_PRIVATE_KEY": generate_private_pem(),
             "WEB_ORIGIN": WEB,
             "KEY_ENCRYPTION_SECRET": MASTER.hex(),
         }
@@ -132,11 +132,8 @@ def client(world: dict[str, Any], drive: FakeDrive) -> Iterator[TestClient]:
     app = create_app(settings)
     app.state.platform.drive_transport = drive.transport()
     with TestClient(app, base_url="https://api.ricotdin.test") as c:
-        keys = app.state.auth.keys
-        c.headers_for = {  # type: ignore[attr-defined]
-            k: {"Authorization": f"Bearer {issue_access_token(keys, world[k], 'user')}"}
-            for k in "abcd"
-        }
+        install(app)
+        c.headers_for = {k: bearer(world[k]) for k in "abcd"}  # type: ignore[attr-defined]
         yield c
 
 

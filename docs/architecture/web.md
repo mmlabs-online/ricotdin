@@ -10,9 +10,10 @@
 - **Boot** (`src/main.tsx`): i18n → `GET /config.json` (`parseRuntimeConfig`: `apiUrl` / `authUrl` are
   plain origins, https or http on localhost, no path) → providers (error boundary, theme, TanStack
   Query, auth, router). A bad config shows a localized error screen.
-- **Auth** (`src/auth/session.ts`, contract §0.3): access token only in memory; `/auth/refresh`
-  (`credentials: 'include'`) at start, before a request when the token expires within 60 s, and
-  after a 401 (one retry, `src/api/client.ts`). Refreshes are single-flight per tab and serialised
+- **Auth** (`src/auth/session.ts`, contract §0.3a; AUT-05 replaced ricotdin's own `/auth/refresh`,
+  removed in AUT-06): access token only in memory, refreshed from **mmlabs** (`authUrl`,
+  `credentials: 'include'` for the mmlabs device cookie) at start, before a request when the token
+  expires within 60 s, and after a 401 (one retry, `src/api/client.ts`). Refreshes are single-flight per tab and serialised
   across tabs by a Web Lock (`ricotdin-auth-refresh`); the refreshing tab posts the new token on the
   `ricotdin-auth` BroadcastChannel (same origin only), sign-out is broadcast too. A refresh 401 adopts
   a token another tab got within the last 10 s instead of signing out. Only a 401/403 means signed
@@ -47,7 +48,7 @@
   `style-src 'self'`, `connect-src`/`img-src`/`media-src` = self + API). HTML/routes/config `no-store`,
   `/assets/*` immutable. **ARC-12/13:** the Drive resumable upload PUTs to `https://www.googleapis.com`
   — add it to `connect-src` then; never allow inline scripts/styles. The API must list the web origin
-  in `WEB_ORIGIN` + `ALLOWED_ORIGINS`; web and API stay sibling subdomains (refresh cookie SameSite=Lax).
+  in `WEB_ORIGIN` + `ALLOWED_ORIGINS`; the ricotdin API sets no cookie since AUT-06 (bearer token only).
 - **Browser logic (ARC-12):** `/record` = `RecordPage` (`components/Recorder.tsx`, `FileUploadPanel.tsx`).
   Recording = v1 (`lib/audio/{support,capture,useRecorder}.ts`: mic + tab/system audio mixed, video
   dropped, missing tab audio → warning, unsupported browser → card; errors → i18n keys). COM-01 =
@@ -160,12 +161,8 @@
   tab keeps that session id in sessionStorage `ricotdin-chat-all` (uuid + user checked); "New chat" = no
   session (the next POST creates one). Messages render through the shared
   `components/chat/ChatMessages.tsx` (also the meeting chat). `/profile` = `ProfilePage`
-  (`src/api/profile.ts`). **Change password** replaces the refresh cookie (the API revokes every
-  session and sets a new one), so it goes through `AuthSession.postWithCookie`: cookie jar
-  (`credentials: 'include'`), token fetched before the cross-tab refresh lock, the request under
-  it (never refresh inside it: the lock is not re-entrant), no retry, 60 s timeout. It takes a
-  PATH and posts to the **auth origin** (the host-only cookie lives there; that host serves the
-  same API app). The "all meetings" chat session is stored as `{u: userId, s: sessionId}` and
+  (`src/api/profile.ts`). **Password:** a link to the mmlabs forgot-password flow (AUT-05; ricotdin's
+  change-password route was removed in AUT-06). The "all meetings" chat session is stored as `{u: userId, s: sessionId}` and
   ignored for another account. Theme stays per device (`theme_preference` is v1's
   unused theme names). **E2E:** `app/web/playwright.config.ts` + `e2e/core-flow.spec.ts` (EN + VI)
   run `vite preview` on :4173 against `app/api/tests/e2e_server.py` on :8000 — the real app on a

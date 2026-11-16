@@ -1,12 +1,12 @@
 """ARC-03 / ARC-18 end to end: a v1 replay seeded like Supabase (GoTrue auth.users columns,
 storage.objects) → a v2 database at head. Checks counts/digests, idempotent re-run, secret
 decrypt, the file copy into Google Drive (a fake Drive behind the real ``DriveStorage``; v1
-sources are read-only fakes), and a real v2 login with the old password (bcrypt → argon2).
+sources are read-only fakes). The old bcrypt hashes are carried over; since AUT-06 nothing signs in
+with them.
 """
 
 import hashlib
 import json
-import secrets
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -15,14 +15,9 @@ from typing import Any
 import bcrypt
 import psycopg
 import pytest
-from fastapi.testclient import TestClient
 
-from app.auth.jwt import generate_private_pem
-from app.core.settings import Settings
-from app.db.provision import drop_login, ensure_login
 from app.db.replay import replay_v1
-from app.db.scratch import admin_url, scratch_database
-from app.main import create_app
+from app.db.scratch import scratch_database
 from app.migration.report import StorageResult
 from app.migration.transform import MigrationBlocked
 from app.services.crypto import encrypt_with_key
@@ -415,48 +410,6 @@ def test_wrong_master_key_fails_the_secret_check(dbs: tuple[str, str]) -> None:
         alembic_upgrade(tgt)
         report = run(src, tgt, bytes(32), source_store=None, skip_storage=True)
         assert not report.passed and len(report.secrets_failed) == 2
-
-
-def test_migrated_user_logs_in_with_the_old_password_and_is_rehashed(
-    dbs: tuple[str, str],
-) -> None:
-    src, tgt = dbs
-    run(src, tgt, MASTER, source_store=None, skip_storage=True)
-    suffix = secrets.token_hex(3)
-    owner = admin_url()
-    app_login = ensure_login(
-        owner, "ricotdin_app", f"ricotdin_test_api_{suffix}", connection_limit=3
-    )
-    svc_login = ensure_login(
-        owner, "ricotdin_service", f"ricotdin_test_svc_{suffix}", connection_limit=3
-    )
-    try:
-        settings = Settings.model_validate(
-            {
-                "DATABASE_URL_APP": app_login.url(tgt),
-                "DATABASE_URL_SERVICE": svc_login.url(tgt),
-                "JWT_PRIVATE_KEY": generate_private_pem(),
-                "WEB_ORIGIN": WEB,
-            }
-        )
-        settings.db_pool_app = (2, 0)
-        settings.db_pool_service = (2, 0)
-        with TestClient(create_app(settings), base_url="https://api.ricotdin.test") as client:
-            r = client.post(
-                "/auth/login",
-                headers={"Origin": WEB},
-                json={"identifier": "admin@example.test", "password": PASSWORD},
-            )
-            assert r.status_code == 200, r.text
-            me = client.get(
-                "/auth/me", headers={"Authorization": f"Bearer {r.json()['access_token']}"}
-            )
-            assert me.json()["role"] == "admin"
-    finally:
-        drop_login(owner, app_login.name)
-        drop_login(owner, svc_login.name)
-    stored = _q(tgt, "SELECT password_hash FROM users WHERE id = %s", ADMIN)[0][0]
-    assert stored.startswith("$argon2id$")
 
 
 def test_storage_recovery_ownership_size_and_missing_config(dbs: tuple[str, str]) -> None:

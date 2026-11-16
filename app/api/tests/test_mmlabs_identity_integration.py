@@ -20,11 +20,19 @@ from tests.conftest import requires_db
 from tests.fake_drive import FakeDrive  # noqa: F401
 from tests.test_meetings_storage_integration import (  # noqa: F401 - fixtures
     _sql,
-    _user,
     client,
     drive,
     world,
 )
+from tests.test_meetings_storage_integration import _user as _linked_user
+
+
+def _user(url: str, name: str) -> uuid.UUID:
+    """A ricotdin account that has never signed in with mmlabs (no ``mmlabs_sub`` yet)."""
+    uid = _linked_user(url, name)
+    _sql(url, "UPDATE users SET mmlabs_sub = NULL WHERE id = %s", uid)
+    return uid
+
 
 pytestmark = requires_db
 
@@ -137,6 +145,21 @@ def test_bad_mmlabs_tokens_get_401(mm: TestClient, over: dict[str, Any]) -> None
         mm.get("/auth/me", headers=_bearer(str(uuid.uuid4()), "x@y.test", **over)).status_code
         == 401
     )
+
+
+def test_a_non_mmlabs_bearer_gets_401(mm: TestClient, world: dict[str, Any]) -> None:
+    # garbage, or a ricotdin EdDSA token from before AUT-06 still in a browser
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    uid = _user(world["db"], f"old{secrets.token_hex(3)}")
+    now = datetime.now(UTC)
+    legacy = pyjwt.encode({"sub": str(uid), "role": "admin", "iat": now,
+                           "exp": now + timedelta(minutes=15)},
+                          Ed25519PrivateKey.generate(), algorithm="EdDSA")  # fmt: skip
+    for tok in ("nope", legacy):
+        for url in ("/auth/me", "/admin/users"):
+            r = mm.get(url, headers={"Authorization": f"Bearer {tok}"})
+            assert r.status_code == 401, (url, r.text)
 
 
 def test_concurrent_first_sign_ins_create_one_user(mm: TestClient, world: dict[str, Any]) -> None:

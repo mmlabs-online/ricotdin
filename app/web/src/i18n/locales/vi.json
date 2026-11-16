@@ -53,7 +53,6 @@
     "errors": {
       "missing": "Nhập email và mật khẩu.",
       "invalid_credentials": "Email hoặc mật khẩu không đúng.",
-      "email_not_verified": "Vui lòng xác minh email trước. Hãy kiểm tra hộp thư để lấy liên kết.",
       "account_disabled": "Tài khoản này đã bị vô hiệu hóa. Hãy liên hệ quản trị viên.",
       "rate_limited": "Bạn thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
@@ -107,7 +106,6 @@
       "resend": "Gửi email xác minh",
       "confirmHelp": "Chọn mật khẩu cho tài khoản. Bước này xác minh email và kích hoạt tài khoản.",
       "confirm": "Xác minh và đặt mật khẩu",
-      "password": "Mật khẩu",
       "clickHelp": "Xác nhận đây là địa chỉ email của bạn.",
       "button": "Xác minh email",
       "doneMmlabs": "Email của bạn đã được xác minh.",
@@ -261,11 +259,8 @@
         "disabled": "Đã khóa"
       },
       "actions": {
-        "makeAdmin": "Cấp quyền quản trị",
-        "makeUser": "Bỏ quyền quản trị",
         "disable": "Khóa",
         "enable": "Mở khóa",
-        "reset": "Gửi link đặt lại mật khẩu",
         "delete": "Xóa người dùng"
       },
       "bulk": {
@@ -278,9 +273,7 @@
         "confirmTitle_other": "Thay đổi {{count}} người dùng?",
         "confirm": {
           "disable": "Họ không đăng nhập lại được cho tới khi được kích hoạt, và bị chặn khỏi trang quản trị ngay. Phiên đang mở vẫn dùng được tối đa 15 phút. Không bao giờ gồm chính bạn.",
-          "enable": "Họ đăng nhập lại được.",
-          "role_admin": "Họ có toàn quyền quản trị. Chỉ tài khoản đang hoạt động, đã xác minh mới được cấp; nếu có người không đủ điều kiện thì không có gì thay đổi.",
-          "role_user": "Họ mất trang quản trị ngay; quyền quản trị còn lại hết trong vòng 15 phút. Không thể hạ quyền admin cuối cùng; nếu vậy sẽ không có gì thay đổi."
+          "enable": "Họ đăng nhập lại được."
         },
         "done": "Xong: đã thay đổi {{processed}}.",
         "partial": "Đã thay đổi {{processed}}, {{failed}} không tìm thấy."
@@ -295,27 +288,12 @@
       "actions": "Thao tác tài khoản",
       "activity": "Hoạt động gần đây",
       "noActivity": "Chưa có hoạt động nào.",
-      "promoteHint": "Chỉ tài khoản đang hoạt động, đã xác minh mới được làm quản trị viên.",
       "selfHint": "Bạn không thể đổi quyền, trạng thái hay xóa chính mình.",
       "done": {
-        "promote": "Người dùng đã là quản trị viên. Áp dụng ở lần làm mới phiên kế tiếp (trong 15 phút).",
-        "demote": "Người dùng không còn là quản trị viên. Các trang quản trị ngừng hoạt động với họ ngay.",
         "disable": "Đã khóa và đăng xuất người dùng khỏi mọi thiết bị.",
-        "enable": "Người dùng đăng nhập lại được.",
-        "reset": "Đã gửi email link đặt lại mật khẩu.",
-        "resetNoMail": "Không gửi được email: máy chủ chưa cấu hình gửi mail."
+        "enable": "Người dùng đăng nhập lại được."
       },
       "confirm": {
-        "promote": {
-          "title": "Cấp quyền quản trị?",
-          "body": "{{name}} sẽ có toàn quyền quản trị, gồm mọi cuộc họp và mọi cài đặt.",
-          "action": "Cấp quyền"
-        },
-        "demote": {
-          "title": "Bỏ quyền quản trị?",
-          "body": "{{name}} sẽ thành người dùng thường. Trang quản trị chặn ngay; quyền quản trị còn lại hết trong vòng 15 phút.",
-          "action": "Bỏ quyền"
-        },
         "disable": {
           "title": "Khóa tài khoản này?",
           "body": "{{name}} không đăng nhập lại được cho tới khi bạn kích hoạt lại tài khoản. Phiên đang mở vẫn dùng được tối đa 15 phút.",
@@ -325,11 +303,6 @@
           "title": "Mở khóa tài khoản?",
           "body": "{{name}} đăng nhập lại được.",
           "action": "Mở khóa"
-        },
-        "reset": {
-          "title": "Gửi link đặt lại mật khẩu?",
-          "body": "{{name}} nhận email có link để đặt mật khẩu mới. Mật khẩu hiện tại vẫn dùng được cho đến lúc đó.",
-          "action": "Gửi email"
         },
         "delete": {
           "title": "Xóa vĩnh viễn người dùng này?",
@@ -1359,15 +1332,6 @@
     },
     "password": {
       "title": "Mật khẩu",
-      "body": "Đổi mật khẩu sẽ đăng xuất bạn trên mọi thiết bị khác.",
-      "current": "Mật khẩu hiện tại",
-      "new": "Mật khẩu mới",
-      "confirm": "Nhập lại mật khẩu mới",
-      "submit": "Đổi mật khẩu",
-      "changed": "Đã đổi mật khẩu. Các thiết bị khác đã bị đăng xuất.",
-      "currentRequired": "Hãy nhập mật khẩu hiện tại.",
-      "mismatch": "Hai mật khẩu mới không khớp.",
-      "same": "Mật khẩu mới phải khác mật khẩu hiện tại.",
       "mmlabsBody": "Mật khẩu thuộc tài khoản mmlabs của bạn và dùng chung cho mọi app mmlabs. Đổi mật khẩu sẽ đăng xuất bạn ở mọi nơi.",
       "reset": "Đổi mật khẩu qua email"
     },
@@ -1415,9 +1379,6 @@
     "errors": {
       "usernameTaken": "Tên người dùng đã có người dùng. Hãy chọn tên khác.",
       "invalid": "Hãy kiểm tra lại các ô rồi thử lại.",
-      "wrongPassword": "Mật khẩu hiện tại không đúng.",
-      "passwordChanged": "Mật khẩu vừa được đổi ở nơi khác. Hãy thử lại.",
-      "passwordRejected": "Mật khẩu mới không được chấp nhận. Hãy chọn mật khẩu dài hơn.",
       "modelNotAllowed": "Mô hình này không còn dùng được. Hãy chọn mô hình khác.",
       "rateLimited": "Thử quá nhiều lần. Hãy chờ vài phút rồi thử lại.",
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",

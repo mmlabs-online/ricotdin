@@ -53,7 +53,6 @@
     "errors": {
       "missing": "Enter your email and your password.",
       "invalid_credentials": "That email or password is not right.",
-      "email_not_verified": "Please verify your email first. Check your inbox for the link.",
       "account_disabled": "This account has been disabled. Contact an administrator.",
       "rate_limited": "Too many attempts. Wait a few minutes and try again.",
       "network": "Cannot reach the server. Check your connection and try again.",
@@ -107,7 +106,6 @@
       "resend": "Send verification email",
       "confirmHelp": "Choose the password for your account. This confirms your email address and activates the account.",
       "confirm": "Verify and set password",
-      "password": "Password",
       "clickHelp": "Confirm that this is your email address.",
       "button": "Verify my email",
       "doneMmlabs": "Your email is verified.",
@@ -261,11 +259,8 @@
         "disabled": "Disabled"
       },
       "actions": {
-        "makeAdmin": "Make admin",
-        "makeUser": "Make user",
         "disable": "Disable",
         "enable": "Enable",
-        "reset": "Send password reset",
         "delete": "Delete user"
       },
       "bulk": {
@@ -278,9 +273,7 @@
         "confirmTitle_other": "Change {{count}} users?",
         "confirm": {
           "disable": "They cannot sign in again until enabled, and the admin pages refuse them at once. A session already open keeps working for up to 15 minutes. You are never included.",
-          "enable": "They can sign in again.",
-          "role_admin": "They get full admin access. Only active, verified accounts can be promoted; if one cannot, nothing changes.",
-          "role_user": "They lose the admin pages at once; other admin-level access ends within 15 minutes. The last remaining admin cannot be demoted; if that would happen, nothing changes."
+          "enable": "They can sign in again."
         },
         "done": "Done: {{processed}} changed.",
         "partial": "{{processed}} changed, {{failed}} not found."
@@ -295,27 +288,12 @@
       "actions": "Account actions",
       "activity": "Recent activity",
       "noActivity": "No activity recorded yet.",
-      "promoteHint": "Only an active, verified account can become an admin.",
       "selfHint": "You cannot change your own role or status, or delete yourself.",
       "done": {
-        "promote": "The user is now an admin. It applies at their next sign-in refresh (within 15 minutes).",
-        "demote": "The user is no longer an admin. Admin pages stop working for them at once.",
         "disable": "The user is disabled and signed out everywhere.",
-        "enable": "The user can sign in again.",
-        "reset": "A password reset link was emailed.",
-        "resetNoMail": "The reset link could not be emailed: mail is not set up on the server."
+        "enable": "The user can sign in again."
       },
       "confirm": {
-        "promote": {
-          "title": "Make this user an admin?",
-          "body": "{{name}} will get full admin access, including every meeting and every setting.",
-          "action": "Make admin"
-        },
-        "demote": {
-          "title": "Remove admin access?",
-          "body": "{{name}} will become a normal user. The admin pages refuse them at once; other admin-level access ends within 15 minutes.",
-          "action": "Remove access"
-        },
         "disable": {
           "title": "Disable this account?",
           "body": "{{name}} cannot sign in again until you enable the account. A session already open keeps working for up to 15 minutes.",
@@ -325,11 +303,6 @@
           "title": "Enable this account?",
           "body": "{{name}} can sign in again.",
           "action": "Enable"
-        },
-        "reset": {
-          "title": "Send a password reset?",
-          "body": "{{name}} receives an email with a link to choose a new password. Their current password keeps working until then.",
-          "action": "Send email"
         },
         "delete": {
           "title": "Delete this user permanently?",
@@ -1359,15 +1332,6 @@
     },
     "password": {
       "title": "Password",
-      "body": "Changing it signs you out on every other device.",
-      "current": "Current password",
-      "new": "New password",
-      "confirm": "Confirm new password",
-      "submit": "Change password",
-      "changed": "Password changed. Other devices were signed out.",
-      "currentRequired": "Enter your current password.",
-      "mismatch": "The new passwords do not match.",
-      "same": "The new password must be different from the current one.",
       "mmlabsBody": "Your password belongs to your mmlabs account and is the same in every mmlabs app. Changing it signs you out everywhere.",
       "reset": "Change password by email"
     },
@@ -1415,9 +1379,6 @@
     "errors": {
       "usernameTaken": "That username is taken. Choose another.",
       "invalid": "Check the fields and try again.",
-      "wrongPassword": "Your current password is incorrect.",
-      "passwordChanged": "Your password was just changed elsewhere. Try again.",
-      "passwordRejected": "That new password is not accepted. Choose a longer one.",
       "modelNotAllowed": "That model is no longer available. Choose another.",
       "rateLimited": "Too many attempts. Wait a few minutes and try again.",
       "network": "No connection to the server. Check your network and try again.",

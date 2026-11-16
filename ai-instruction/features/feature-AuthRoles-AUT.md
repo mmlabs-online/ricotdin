@@ -195,7 +195,7 @@ session (two session systems, roles stale up to 90 days); waiting for the client
 ---
 
 ### AUT-06 — Remove ricotdin's own auth
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (code; release together with AUT-05)
 
 **User Story**  
 As the owner, I want ricotdin's own password, JWT, refresh-token and email code removed once mmlabs sign-in works so that there is one identity system and fewer secrets to guard.
@@ -206,7 +206,7 @@ Follow-up split from AUT-05 (owner 2026-11-16, option B in two codes): after AUT
 **Backend**
 - Delete `/auth/register|login|refresh|logout|verify-email|resend-verification|forgot-password|reset-password`, `/auth/me` (moved to a profile route if the SPA needs it), `/profile/change-password`, `/.well-known/jwks.json`, admin `reset-password`; `app/auth/{jwt,passwords,tokens,cookies,identifier,runtime}.py` parts that only served them; `app/email/*`; rate limiters for them.
 - Settings removed: `JWT_PRIVATE_KEY`, `JWT_PREVIOUS_PUBLIC_KEY`, `REFRESH_TTL_DAYS`, `SMTP_*`, `MAIL_FROM`; `scripts/gen_jwt_key.py`.
-- Migration (destructive): drop `refresh_tokens`, `email_tokens`, `users.password_hash`.
+- Migration: ~~drop `refresh_tokens`, `email_tokens`, `users.password_hash`~~ → owner decision 2026-11-16: `0011_wipe_legacy_auth` NULLs every `password_hash` and deletes all refresh / email tokens; the tables and column stay (the v1 migration tooling still reads them) and are dropped with ARC-16 part 2.
 
 **Frontend**
 - Remove the old auth client code paths and their tests.
@@ -214,13 +214,13 @@ Follow-up split from AUT-05 (owner 2026-11-16, option B in two codes): after AUT
 **Acceptance Criteria**
 - Given the API, then the removed routes answer 404 and the app starts without `JWT_PRIVATE_KEY` and SMTP settings.
 - Given the deployment repo, then `deploy-ricotdin-v2.yml` no longer requires `RICOTDIN_JWT_PRIVATE_KEY` nor the `org-admin-api` SMTP environment.
-- Given the database after `alembic upgrade head`, then `refresh_tokens`, `email_tokens` and `users.password_hash` no longer exist.
+- Given the database after `alembic upgrade head`, then no user has a `password_hash` and `refresh_tokens` / `email_tokens` are empty (owner decision 2026-11-16; dropping them moves to ARC-16 part 2).
 
 **Test Plan**
-- Delete the tests of removed code; `app/api/tests/test_removed_auth_routes.py` asserts 404 for each removed route; existing suites stay green.
+- Delete the tests of removed code; `app/api/tests/test_removed_auth_routes.py` asserts each removed route is gone; `test_legacy_auth_wipe_integration.py` checks migration 0011; integration suites sign in with test mmlabs tokens (`tests/mmlabs_auth.py`).
 
 **Structural flags**
-- Destructive migration (no rollback to a release before AUT-05 after it runs); env vars and deployment secrets removed; deployment repo PR.
+- Data-wiping migration (legacy passwords and sessions cannot come back; no rollback to a release before AUT-05 after it runs); env vars and deployment secrets removed; deployment repo PR.
 
 **Done check**
 - api + web commands of §0 green; deploy succeeds without the JWT and SMTP secrets; `curl -i https://ricotdin-api.mmlabs.online/auth/login` → 404.

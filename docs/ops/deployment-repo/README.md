@@ -48,17 +48,14 @@ nobody creates or edits those files by hand. To change a value, run
 *Actions → deploy-ricotdin-v2 → Run workflow*. A missing required secret fails the run by name before
 anything is replaced. Values must be one line without `'`.
 
-- **Required:** `JWT_PRIVATE_KEY` (one line, escaped `\n`), `KEY_ENCRYPTION_SECRET`.
+- **Required:** `KEY_ENCRYPTION_SECRET` (api + worker), `TURNSTILE_SITE_KEY` (web, see below).
 - **Database:** no secrets. Step `database` builds the owner URL from the committed
   `postgres/secrets/apps/ricotdin.password`, dumps, runs `alembic upgrade head` with the release image
   and, the first time, creates the three runtime logins into `~/.config/ricotdin/db-logins.env`
   (chmod 600, kept; delete it to rotate). `DATABASE_URL_*` in the env files come from that file.
-- **Mail:** reuses org-admin-api's Gmail account. The job declares the GitHub Environment
-  `org-admin-api` and writes `SMTP_USER` / `SMTP_PASSWORD` from `ORG_ADMIN_SMTP_USERNAME` /
-  `ORG_ADMIN_SMTP_PASSWORD` (spaces stripped); `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` are fixed in
-  the workflow. Rotating that App Password therefore needs a re-run of both deploys.
-- **Optional:** `MAIL_FROM` (empty = the Gmail address), `SENTRY_DSN`, `JWT_PREVIOUS_PUBLIC_KEY` (only
-  during a key rotation).
+- **No JWT key and no mail** since AUT-06: sign-in, verification and password reset are the mmlabs
+  account (api.mmlabs.online). The job no longer uses the `org-admin-api` environment.
+- **Optional:** `SENTRY_DSN`.
 - **Sign-in (AUT-05):** `RICOTDIN_TURNSTILE_SITE_KEY` (required, web): the public site key of the
   Turnstile widget org-admin-api verifies; its hostnames must include `ricotdin.mmlabs.online`.
 - **Not secrets** (committed in the workflow): `WEB_ORIGIN` = `ALLOWED_ORIGINS` =

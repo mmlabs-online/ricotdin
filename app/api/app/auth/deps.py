@@ -7,8 +7,7 @@
   to the ricotdin user (``users.mmlabs_sub``, linked or created on first use) and the role comes
   from its ``roles`` (``ricotdin:admin`` → ``admin``). Role and disable changes made in mmlabs apply
   within the token lifetime (15 min); a ricotdin-disabled user is refused at once.
-- A **legacy ricotdin** token (EdDSA, ARC-05) is still accepted until AUT-06 removes it (the two
-  ship in one release, so production only sees mmlabs tokens).
+- Anything else is refused: ricotdin's own EdDSA tokens were removed in AUT-06.
 """
 
 import ipaddress
@@ -17,7 +16,6 @@ from typing import Annotated
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.auth.jwt import InvalidAccessToken, JwtKeys, verify_access_token
 from app.auth.linking import IdentityCache, resolve_user
 from app.auth.mmlabs import (
     InvalidMmlabsToken,
@@ -26,7 +24,6 @@ from app.auth.mmlabs import (
     is_mmlabs_token,
     role_from_roles,
 )
-from app.auth.runtime import AuthRuntime
 from app.core.errors import Forbidden, ServiceUnavailable, Unauthorized
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
@@ -34,17 +31,6 @@ from app.db.session import Database, get_database
 SERVICE = "ricotdin_service"
 
 _bearer = HTTPBearer(auto_error=False, description="mmlabs access token (POST /api/v1/auth/token)")
-
-
-def auth_runtime(request: Request) -> AuthRuntime:
-    runtime: AuthRuntime = request.app.state.auth
-    return runtime
-
-
-def signing_keys(runtime: Annotated[AuthRuntime, Depends(auth_runtime)]) -> JwtKeys:
-    if runtime.keys is None:
-        raise ServiceUnavailable(detail="JWT_PRIVATE_KEY is not configured")
-    return runtime.keys
 
 
 async def current_identity(
@@ -72,15 +58,7 @@ async def current_identity(
             user_id = await resolve_user(conn, claims, role)
         cache.put(claims.sub, user_id, role)
         return RequestIdentity(user_id, role)
-    # Legacy ricotdin token (removed in AUT-06).
-    keys: JwtKeys | None = request.app.state.auth.keys
-    if keys is None:
-        raise Unauthorized()
-    try:
-        legacy = verify_access_token(keys, token)
-    except InvalidAccessToken as exc:
-        raise Unauthorized(detail=f"access token rejected: {exc}") from None
-    return RequestIdentity(legacy.user_id, legacy.role)
+    raise Unauthorized(detail="not an mmlabs access token")
 
 
 def require_admin(

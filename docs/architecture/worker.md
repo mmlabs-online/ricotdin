@@ -5,7 +5,8 @@
 - **Process:** `python -m app.worker` (`app/worker/`), same image as the API, **its own container
   with only `DATABASE_URL_WORKER`** (+ `KEY_ENCRYPTION_SECRET`, `LOG_LEVEL`, `SENTRY_DSN`). It refuses
   to start (exit 2) if `DATABASE_URL`, `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `JWT_PRIVATE_KEY`,
-  `SMTP_PASSWORD` or a Supabase / migration credential is set (`policy.worker_env_problems`), and
+  `SMTP_PASSWORD` (kept on the deny-list on purpose after AUT-06) or a Supabase / migration credential
+  is set (`policy.worker_env_problems`), and
   while a pipeline step is missing (all four are registered since 08d: start → transcribe_poll →
   analyse → embed). **Deploy target (08d):** the same image with `command: python -m app.worker`,
   reference `app/api/deploy/compose.example.yml` (own env file with only the worker values, no ports,

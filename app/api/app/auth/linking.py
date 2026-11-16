@@ -170,6 +170,7 @@ async def _link_or_create(conn: AsyncConnection, claims: MmlabsClaims) -> uuid.U
         # From now on only mmlabs signs this account in: the ricotdin password (which may have
         # been chosen by whoever registered the address first, before the owner) and every
         # legacy session and email link die here (account pre-hijacking, review of AUT-05).
+        # TODO(ARC-16): after 0011 these are no-ops; drop them with the legacy tables / column.
         await conn.execute(
             text(
                 "UPDATE users SET mmlabs_sub = :s, password_hash = NULL, "
@@ -190,7 +191,7 @@ async def _link_or_create(conn: AsyncConnection, claims: MmlabsClaims) -> uuid.U
         try:
             async with conn.begin_nested():
                 return await service.create_user(
-                    conn, claims.email, username, None, mmlabs_sub=claims.sub
+                    conn, claims.email, username, mmlabs_sub=claims.sub
                 )
         except IntegrityError as exc:
             if _constraint(exc) == "profiles_username_key":

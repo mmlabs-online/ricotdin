@@ -1,4 +1,4 @@
-// Admin › Users (ARC-14a, Make UsersAdmin): search, usage month, bulk disable / enable / role.
+// Admin › Users (ARC-14a, Make UsersAdmin): search, usage month, bulk disable / enable (roles live in mmlabs, AUT-05).
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Search } from 'lucide-react'
@@ -14,7 +14,7 @@ import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 
 const PER_PAGE = 20
-type Bulk = { action: 'disable' | 'enable' | 'set_role'; role?: 'user' | 'admin' }
+type Bulk = { action: 'disable' | 'enable' }
 
 export function AdminUsersPage() {
   const { t } = useTranslation()
@@ -272,7 +272,7 @@ export function AdminUsersPage() {
       {bulk && (
         <Modal title={t('admin.users.bulk.confirmTitle', { count: selected.size })} onClose={() => setBulk(null)} describedBy={ids.bulkBody}>
           <p className="modal-copy" id={ids.bulkBody}>
-            {t(`admin.users.bulk.confirm.${bulk.action === 'set_role' ? `role_${bulk.role}` : bulk.action}`, { count: selected.size })}
+            {t(`admin.users.bulk.confirm.${bulk.action}`, { count: selected.size })}
           </p>
           <ul className="bulk-names">
             {[...selected.values()].map((email) => (

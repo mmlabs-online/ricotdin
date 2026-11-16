@@ -1,4 +1,4 @@
-// Admin › User detail (ARC-14a): role, disable / enable, password reset mail, delete, quota grant
+// Admin › User detail (ARC-14a): disable / enable, delete, quota grant
 // and history, recent activity. Every action asks first; the API enforces every guard (§0.9).
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -17,7 +17,7 @@ import { quotaParts } from '../../lib/profile/profile'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 
-type Confirm = 'promote' | 'demote' | 'disable' | 'enable' | 'reset' | 'delete'
+type Confirm = 'disable' | 'enable' | 'delete' // roles live in mmlabs (AUT-05)
 
 export function AdminUserDetailPage() {
   const { t } = useTranslation()
@@ -57,14 +57,14 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
   const m = useUserMutations()
   const f = useFormatters()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
-  const ids = { promoteHint: useId(), confirmBody: useId() }
+  const ids = { confirmBody: useId() }
   const [notice, setNotice] = useNotice()
   const actions = userActions(user, me)
   const name = displayText(user.email)
-  const busy = m.role.isPending || m.status.isPending || m.reset.isPending || m.remove.isPending
+  const busy = m.status.isPending || m.remove.isPending
   const fail = (err: unknown) => setNotice(adminErrorKey(err), 'error')
   const ask = (what: Confirm) => {
-    if (busy || (what === 'promote' && !actions.promote)) return
+    if (busy) return
     setConfirm(what)
   }
 
@@ -72,15 +72,8 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
     setConfirm(null)
     if (busy) return
     const id = user.id
-    if (what === 'promote' || what === 'demote') {
-      m.role.mutateAsync({ id, role: what === 'promote' ? 'admin' : 'user' }).then(() => setNotice(`admin.userDetail.done.${what}`)).catch(fail)
-    } else if (what === 'disable' || what === 'enable') {
+    if (what === 'disable' || what === 'enable') {
       m.status.mutateAsync({ id, disabled: what === 'disable' }).then(() => setNotice(`admin.userDetail.done.${what}`)).catch(fail)
-    } else if (what === 'reset') {
-      m.reset
-        .mutateAsync(id)
-        .then((r) => setNotice(r.email_sent === false ? 'admin.userDetail.done.resetNoMail' : 'admin.userDetail.done.reset', r.email_sent === false ? 'warning' : 'success'))
-        .catch(fail)
     } else {
       m.remove
         .mutateAsync(id)

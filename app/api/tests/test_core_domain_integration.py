@@ -15,7 +15,6 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth.jwt import generate_private_pem, issue_access_token
 from app.core.ratelimit import RateLimiter
 from app.core.settings import Settings
 from app.db.provision import drop_login, ensure_login
@@ -23,6 +22,7 @@ from app.db.scratch import admin_url, scratch_database
 from app.domain.content import content_hash
 from app.main import create_app
 from tests.conftest import alembic_upgrade, requires_db
+from tests.mmlabs_auth import bearer, install, sub_for
 
 pytestmark = requires_db
 
@@ -51,11 +51,12 @@ def _user(url: str, name: str, role: str = "user") -> uuid.UUID:
     uid = uuid.uuid4()
     _sql(
         url,
-        "INSERT INTO users (id, email, password_hash, role, email_verified_at) "
-        "VALUES (%s, %s, 'x', %s, now())",
+        "INSERT INTO users (id, email, role, email_verified_at, mmlabs_sub) "
+        "VALUES (%s, %s, %s, now(), %s)",
         uid,
         f"{name}@example.test",
         role,
+        sub_for(uid),
     )
     _sql(url, "INSERT INTO profiles (id, username, role) VALUES (%s, %s, %s)", uid, name, role)
     return uid
@@ -147,7 +148,6 @@ def client(world: dict[str, Any]) -> Iterator[TestClient]:
         {
             "DATABASE_URL_APP": world["app"],
             "DATABASE_URL_SERVICE": world["svc"],
-            "JWT_PRIVATE_KEY": generate_private_pem(),
             "WEB_ORIGIN": WEB,
         }
     )
@@ -155,11 +155,10 @@ def client(world: dict[str, Any]) -> Iterator[TestClient]:
     settings.db_pool_service = (2, 0)
     app = create_app(settings)
     with TestClient(app, base_url="https://api.ricotdin.test") as c:
-        keys = app.state.auth.keys
+        install(app)
         roles = {key: "admin" if key == "e" else "user" for key in "abcde"}
         c.headers_for = {  # type: ignore[attr-defined]
-            key: {"Authorization": f"Bearer {issue_access_token(keys, world[key], roles[key])}"}
-            for key in "abcde"
+            key: bearer(world[key], roles[key]) for key in "abcde"
         }
         yield c
 

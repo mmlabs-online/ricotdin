@@ -4,26 +4,17 @@
 short-lived ``/media`` link."""
 
 import time
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.auth import service
-from app.auth.deps import auth_runtime, client_ip, current_identity
-from app.auth.passwords import hash_password, verify_password
-from app.auth.runtime import AuthRuntime
-from app.auth.validate import validate_password
+from app.auth.deps import current_identity
 from app.core.errors import (
     BadRequest,
     Conflict,
-    Forbidden,
     NotFound,
-    Unauthorized,
-    UnprocessableEntity,
 )
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
@@ -37,7 +28,6 @@ from app.domain.uploads import (
     parse_avatar_request,
 )
 from app.routers._common import SERVICE, enforce_limit, is_unique_violation, json_object, jsonb
-from app.routers.auth import enforce, set_refresh_cookie
 from app.routers.meetings import delete_files
 from app.services.access import folder_assignable
 from app.services.platform import Platform, get_platform
@@ -45,61 +35,6 @@ from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_avatar_key
 
 router = APIRouter(prefix="/profile", tags=["profile"])
-
-
-class WrongPassword(Forbidden):
-    code = "wrong_password"
-    message = "Current password is incorrect."
-
-
-class ChangePasswordIn(BaseModel):
-    current_password: str = Field(max_length=1024)
-    new_password: str = Field(max_length=1024)
-
-
-@router.post("/change-password")
-async def change_password(
-    body: ChangePasswordIn,
-    request: Request,
-    response: Response,
-    identity: Annotated[RequestIdentity, Depends(current_identity)],
-    runtime: Annotated[AuthRuntime, Depends(auth_runtime)],
-    db: Annotated[Database, Depends(get_database)],
-) -> dict[str, bool]:
-    """Re-authenticates with the current password; ends every other session and starts a new one
-    for this browser (new refresh cookie)."""
-    enforce(runtime.limiters.password_user, str(identity.user_id))
-    error = validate_password(body.new_password)
-    if error:
-        raise UnprocessableEntity(error)
-    if body.new_password == body.current_password:
-        raise UnprocessableEntity("New password must be different from the current password.")
-    async with db.role_transaction(SERVICE) as conn:
-        user = await service.find_user_by_id(conn, identity.user_id)
-    if user is None or user.disabled_at is not None:
-        raise Unauthorized()
-    result = await runtime.run_hash(verify_password, body.current_password, user.password_hash)
-    if not result.ok:
-        raise WrongPassword()
-    new_hash = await runtime.run_hash(hash_password, body.new_password)
-    async with db.role_transaction(SERVICE) as conn:
-        locked = await service.lock_credentials(conn, user.id)
-        if locked is None or locked[1] is not None:
-            raise Unauthorized()
-        if locked[0] != user.password_hash:  # changed or reset meanwhile: re-check needed
-            raise Conflict("Your password was just changed. Please try again.")
-        await service.set_password_hash(conn, user.id, new_hash)
-        await service.revoke_user_tokens(conn, user.id)
-        token, _ = await service.issue_refresh(
-            conn,
-            user.id,
-            ttl=runtime.refresh_ttl,
-            now=datetime.now(UTC),
-            ip=client_ip(request),
-            user_agent=request.headers.get("user-agent"),
-        )
-    set_refresh_cookie(response, runtime, token)
-    return {"changed": True}
 
 
 Identity = Annotated[RequestIdentity, Depends(current_identity)]

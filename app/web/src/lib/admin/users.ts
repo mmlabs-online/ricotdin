@@ -16,25 +16,19 @@ export interface AdminUser {
 }
 
 export interface UserActions {
-  changeRole: boolean
-  promote: boolean
   disable: boolean
   enable: boolean
   delete: boolean
-  resetPassword: boolean
 }
 
 /** Controls for a user row. Never on yourself (the API refuses: 400); the last-admin guard is
- * left to the API, whose refusal is shown as a message. */
+ * left to the API, whose refusal is shown as a message. Roles are managed in mmlabs (AUT-05). */
 export function userActions(user: AdminUser, me: string): UserActions {
   const self = user.id === me
   return {
-    changeRole: !self,
-    promote: !self && user.role === 'user' && user.status === 'active',
     disable: !self && user.status !== 'disabled',
     enable: !self && user.status === 'disabled',
     delete: !self,
-    resetPassword: true,
   }
 }
 

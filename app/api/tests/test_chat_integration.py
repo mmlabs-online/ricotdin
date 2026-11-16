@@ -411,13 +411,11 @@ def test_a_revoked_share_ends_the_old_session(
 def test_an_admin_gets_no_extra_meetings(
     client: TestClient, world: dict[str, Any], ai: Provider
 ) -> None:
-    from app.auth.jwt import issue_access_token
+    from tests.mmlabs_auth import bearer
 
     _queries(world, "d")
     _meeting(world, "a", text="ADMIN-MUST-NOT-SEE")
-    app: Any = client.app
-    token = issue_access_token(app.state.auth.keys, world["d"], "admin")
-    resp = client.post("/chat", headers={"Authorization": f"Bearer {token}"},
+    resp = client.post("/chat", headers=bearer(world["d"], "admin"),
                        json={"message": "anything"})  # fmt: skip
     assert resp.status_code == 200 and "ADMIN-MUST-NOT-SEE" not in _excerpt_texts(ai)
 

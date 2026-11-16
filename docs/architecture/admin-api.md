@@ -12,9 +12,9 @@
   ids, counts, field names, the admin's grant note — never meeting content, keys or secrets.
 - **Users (10a):** `GET /admin/users?page&perPage(≤100)&search&month` (search = email or
   username, LIKE wildcards literal; month usage keeps tokens and audio seconds apart),
-  `GET /admin/users/{id}`, `PATCH …/role {role}`, `PATCH …/status {disabled}` (disable →
-  `disabled_at` + every refresh token revoked), `POST …/reset-password` (mails a reset link,
-  `email_sent`; never returns the token), `DELETE /admin/users/{id}` (owned meeting audio +
+  `GET /admin/users/{id}`, `PATCH …/role {role}` (409 `role_managed_externally` since AUT-05: roles
+  live in mmlabs), `PATCH …/status {disabled}` (disable → `disabled_at`, the identity cache entry
+  is dropped so it applies at once; no reset-password since AUT-06), `DELETE /admin/users/{id}` (owned meeting audio +
   avatar deleted from Drive first, each in its own step, failures → `storageWarnings`; then the
   user row, everything cascades), `POST /admin/users/bulk {ids ≤ 50, action
   disable|enable|set_role, role?}` (caller skipped, unknown ids in `errors`, one transaction and
