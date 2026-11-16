@@ -3,8 +3,8 @@
 #
 # Secrets live only in server files outside any repository, one per container:
 #   ~/.config/ricotdin/api.env       DATABASE_URL_APP, DATABASE_URL_SERVICE, DATABASE_URL_WORKER
-#                                    (the API's /media lookup), JWT_PRIVATE_KEY, KEY_ENCRYPTION_SECRET,
-#                                    SMTP_*, MAIL_FROM, WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN,
+#                                    (the API's /media lookup), KEY_ENCRYPTION_SECRET,
+#                                    WEB_ORIGIN, ALLOWED_ORIGINS, SENTRY_DSN,
 #                                    optional provider key fallbacks (GEMINI_API_KEY, …)
 #   ~/.config/ricotdin/worker.env    ONLY DATABASE_URL_WORKER, KEY_ENCRYPTION_SECRET, optional
 #                                    provider key fallbacks, LOG_LEVEL, SENTRY_DSN — the worker

@@ -11,8 +11,9 @@ npm run typecheck && npm run lint && npm test && npm run build
 scripts/gen-api.sh          # after an API change: regenerate src/api/schema.d.ts (needs uv)
 ```
 
-For a local sign-in, the API needs `WEB_ORIGIN=http://localhost:5173` and
-`ALLOWED_ORIGINS=http://localhost:5173` (the refresh cookie is host-only on `localhost`).
+Sign-in uses the mmlabs account (AUT-05): set `authUrl` in `public/config.json` to an mmlabs
+identity API that registered your local origin (a local org-admin-api, see its `docs/consumers.md`),
+and give the ricotdin API `WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173` plus `MMLABS_ISSUER`.
 
 ## Layout
 
@@ -20,7 +21,7 @@ For a local sign-in, the API needs `WEB_ORIGIN=http://localhost:5173` and
 |---|---|
 | `src/main.tsx` | loads `/config.json`, then mounts i18n → error boundary → theme → query → auth → router |
 | `src/app/` | router, `AppShell` (sidebar, top bar, account menu, mobile nav), `AdminShell` |
-| `src/auth/` | `AuthSession` (in-memory token, refresh), `AuthProvider`, `RequireRole`, pure guards |
+| `src/auth/` | `AuthSession` (mmlabs sign-in, in-memory token), `mmlabs.ts`, `AuthProvider`, `RequireRole`, pure guards |
 | `src/api/` | `openapi-fetch` client (`client.ts`), generated `schema.d.ts`, error envelope |
 | `src/i18n/` | `locales/en.json` + `vi.json` (same keys, tested), `resolveLocale` |
 | `src/theme/` | four palettes × light/dark as classes on `<html>` |
@@ -31,9 +32,10 @@ For a local sign-in, the API needs `WEB_ORIGIN=http://localhost:5173` and
 - **No hard-coded user-facing text**: JSX text goes through `t()` (oxlint `react/jsx-no-literals`),
   and `scripts/check-i18n.mjs` rejects literal `placeholder` / `title` / `aria-label` / `alt` /
   `label`. Add a key to both locale files.
-- **Auth** (CLAUDE.md §0.3): the access token lives only in memory; `/auth/refresh` runs at start
-  and on a 401 (one retry), one refresh at a time across tabs (Web Lock + BroadcastChannel). Never
-  store tokens in `localStorage` / `sessionStorage`.
+- **Auth** (CLAUDE.md §0.3a): the mmlabs access token lives only in memory; a new one comes from
+  mmlabs `/api/v1/auth/token` at start, before expiry and on a 401 (one retry), one request at a
+  time across tabs (Web Lock + BroadcastChannel). Only the chosen account id is in `localStorage`;
+  never store tokens there.
 - Use `useApi()` + TanStack Query for data; errors are `ApiError {status, code}` — map codes to
   i18n keys, never show server text as-is.
 - TypeScript 7 has no compiler API yet, so ESLint/typescript-eslint and openapi-typescript cannot

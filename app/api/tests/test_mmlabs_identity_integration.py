@@ -20,11 +20,19 @@ from tests.conftest import requires_db
 from tests.fake_drive import FakeDrive  # noqa: F401
 from tests.test_meetings_storage_integration import (  # noqa: F401 - fixtures
     _sql,
-    _user,
     client,
     drive,
     world,
 )
+from tests.test_meetings_storage_integration import _user as _linked_user
+
+
+def _user(url: str, name: str) -> uuid.UUID:
+    """A ricotdin account that has never signed in with mmlabs (no ``mmlabs_sub`` yet)."""
+    uid = _linked_user(url, name)
+    _sql(url, "UPDATE users SET mmlabs_sub = NULL WHERE id = %s", uid)
+    return uid
+
 
 pytestmark = requires_db
 

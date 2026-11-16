@@ -17,9 +17,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.auth import service as auth_service
-from app.auth.deps import auth_runtime
-from app.auth.runtime import RESET_TTL, AuthRuntime
 from app.core.errors import Conflict, NotFound
 from app.core.logging import get_logger
 from app.db.session import Database, get_database
@@ -35,10 +32,8 @@ from app.domain.admin import (
     parse_status,
     user_status,
 )
-from app.email.templates import reset_password_email
 from app.routers._common import SERVICE, json_object, jsonb, path_id
 from app.routers.admin._common import CurrentAdmin, lock_admin_count, write_audit
-from app.routers.auth import enforce, link, send_mail
 from app.routers.meetings import delete_files
 from app.services.platform import Platform, get_platform
 from app.services.storage.ownership import is_owned_audio_key, is_owned_avatar_key
@@ -48,7 +43,6 @@ log = get_logger("admin.users")
 
 Db = Annotated[Database, Depends(get_database)]
 Plat = Annotated[Platform, Depends(get_platform)]
-Runtime = Annotated[AuthRuntime, Depends(auth_runtime)]
 
 _NOT_FOUND = "User not found."
 _USER_COLUMNS = (
@@ -170,7 +164,7 @@ async def get_user(user_id: str, admin: CurrentAdmin, db: Db) -> dict[str, Any]:
     return {**_user_out(row), "meeting_count": row.meetings}
 
 
-# --- role / status / reset ------------------------------------------------------------------------
+# --- role / status ------------------------------------------------------------------------
 
 
 class RoleManagedExternally(Conflict):
@@ -209,29 +203,6 @@ async def _set_disabled(conn: AsyncConnection, uid: uuid.UUID, disable: bool) ->
         ),
         {"d": disable, "id": uid},
     )
-    if disable:
-        await auth_service.revoke_user_tokens(conn, uid)  # every session ends
-
-
-@router.post("/users/{user_id}/reset-password")
-async def send_password_reset(
-    user_id: str, admin: CurrentAdmin, db: Db, runtime: Runtime
-) -> dict[str, Any]:
-    """Mails the user a reset link (v1 ``generateLink('recovery')``); never sets a password.
-    ``email_sent: false`` when mail is not configured or sending failed."""
-    uid = path_id(user_id, _NOT_FOUND)
-    async with db.role_transaction(SERVICE) as conn:
-        target = await _target(conn, uid)
-        # The same per-address limit as /auth/forgot-password (3/h): no mail-bombing a user.
-        enforce(runtime.limiters.email_address, f"reset_password:{target.email.lower()}")
-        token = await auth_service.issue_email_token(
-            conn, uid, "reset_password", ttl=RESET_TTL, now=datetime.now(UTC)
-        )
-        await write_audit(conn, admin, "user.password_reset", "user", str(uid))
-    sent = await send_mail(
-        runtime, target.email, reset_password_email(link(runtime, "reset-password", token))
-    )
-    return {"ok": True, "email_sent": sent}
 
 
 # --- delete ---------------------------------------------------------------------------------------

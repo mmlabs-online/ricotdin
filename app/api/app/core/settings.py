@@ -56,13 +56,7 @@ class Settings(BaseSettings):
     db_pool_service: tuple[int, int] = (5, 3)
     db_pool_worker: tuple[int, int] = (2, 2)
 
-    # Auth (ARC-05). Without JWT_PRIVATE_KEY the auth routes answer 503; without SMTP_HOST no
-    # email is sent (register reports email_sent=false).
-    jwt_private_key: SecretStr | None = Field(default=None, alias="JWT_PRIVATE_KEY")
-    # Public key of the key replaced by `gen_jwt_key --rotate`; keep >= 16 min, then remove.
-    jwt_previous_public_key: str | None = Field(default=None, alias="JWT_PREVIOUS_PUBLIC_KEY")
-    web_origin_raw: str = Field(default="", alias="WEB_ORIGIN")  # SPA origin: links + CORS
-    refresh_ttl_days: int = Field(default=30, ge=1, le=365, alias="REFRESH_TTL_DAYS")
+    web_origin_raw: str = Field(default="", alias="WEB_ORIGIN")  # SPA origin (CORS)
     # mmlabs identity (AUT-05): issuer of the per-app access tokens and our audience (app key).
     mmlabs_issuer: str = Field(
         default="https://api.mmlabs.online", pattern=r"^https://[a-z0-9.-]+$", alias="MMLABS_ISSUER"
@@ -70,11 +64,6 @@ class Settings(BaseSettings):
     mmlabs_audience: str = Field(
         default="ricotdin", pattern=r"^[a-z][a-z0-9-]{1,31}$", alias="MMLABS_AUDIENCE"
     )
-    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
-    smtp_port: int = Field(default=465, alias="SMTP_PORT")
-    smtp_user: str | None = Field(default=None, alias="SMTP_USER")
-    smtp_password: SecretStr | None = Field(default=None, alias="SMTP_PASSWORD")
-    mail_from: str | None = Field(default=None, alias="MAIL_FROM")
     # Platform services (ARC-06): AES-256-GCM master key for admin_config / storage_config secrets.
     # MUST be the v1 value, otherwise every stored provider key and the R2 secret are lost.
     key_encryption_secret: SecretStr | None = Field(default=None, alias="KEY_ENCRYPTION_SECRET")
@@ -88,7 +77,7 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        """CORS + the Origin check of cookie endpoints: ALLOWED_ORIGINS plus WEB_ORIGIN."""
+        """CORS: ALLOWED_ORIGINS plus WEB_ORIGIN."""
         origins = parse_origins(self.allowed_origins_raw)
         web = self.web_origin
         return origins + [web] if web and web not in origins else origins

@@ -1,5 +1,5 @@
 // Messages shared between tabs of this origin (ARC-11): a tab that refreshed hands its new access
-// token to the others, so only one tab rotates the refresh cookie at a time (CLAUDE.md §0.3).
+// token to the others, so only one tab asks mmlabs for a new token at a time (CLAUDE.md §0.3a).
 
 import { REFRESH_SKEW_MS } from './token'
 

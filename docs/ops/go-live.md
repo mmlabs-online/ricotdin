@@ -31,12 +31,11 @@ lands in shell history.
 | Secret | Value |
 |---|---|
 | `RICOTDIN_KEY_ENCRYPTION_SECRET` | a new `openssl rand -hex 32`. Also keep it in a password manager: losing it makes every stored provider key and the Drive grant unreadable |
-| `RICOTDIN_JWT_PRIVATE_KEY` | a new key: in a ricotdin checkout, `cd app/api && uv run python -m scripts.gen_jwt_key --env-file /tmp/jwt.env`, paste the value of its `JWT_PRIVATE_KEY` line, then `rm /tmp/jwt.env` |
-| *(mail)* | none to set: the deploy reuses org-admin-api's Gmail account, `ORG_ADMIN_SMTP_USERNAME` / `ORG_ADMIN_SMTP_PASSWORD` in the GitHub Environment `org-admin-api` (host `smtp.gmail.com:465` is fixed in the workflow) |
-| `RICOTDIN_MAIL_FROM` | optional sender shown in the mail, e.g. `Ricotdin <that address>`; empty = the Gmail address |
+| `RICOTDIN_TURNSTILE_SITE_KEY` | the public site key of the Cloudflare Turnstile widget org-admin-api verifies; its hostnames must include `ricotdin.mmlabs.online` (AUT-05) |
 | `RICOTDIN_SENTRY_DSN` | optional |
 
-Delete `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` if staging left one (`gh secret delete … -R mmlabs-online/deployment`).
+Since AUT-06 (sign-in with the mmlabs account) there is no JWT key and no mail: delete any old
+`RICOTDIN_JWT_PRIVATE_KEY`, `RICOTDIN_JWT_PREVIOUS_PUBLIC_KEY` and `RICOTDIN_MAIL_FROM` secrets.
 
 ## 3. Release v2.0.0 (ricotdin repo, `CLAUDE.md` §9k)
 

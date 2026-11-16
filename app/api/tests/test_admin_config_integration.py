@@ -51,9 +51,13 @@ def test_non_admins_get_403(
     url = path.format(id=uuid.uuid4())
     kw: dict[str, Any] = {"json": {}} if method in ("POST", "PATCH") else {}
     assert client.request(method, url, headers=_as(client, "b"), **kw).status_code == 403
-    demoted = _new_user(world)
-    assert client.request(method, url, headers=_token(client, demoted, "admin"),
-                          **kw).status_code == 403  # fmt: skip
+    # an admin token of an account disabled in ricotdin (the role itself follows mmlabs, AUT-05)
+    disabled = _new_user(world, "admin")
+    _sql(world["db"], "UPDATE users SET disabled_at = now() WHERE id = %s", disabled)
+    assert (
+        client.request(method, url, headers=_token(client, disabled, "admin"), **kw).status_code
+        == 403
+    )
 
 
 # --- keys -----------------------------------------------------------------------------------------

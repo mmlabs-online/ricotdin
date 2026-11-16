@@ -59,8 +59,10 @@ def test_non_admins_get_403(
     mid = _meeting(world, "failed")
     url = path.format(id=mid)
     assert client.request(method, url, headers=_as(client, "b")).status_code == 403
-    demoted = _new_user(world)
-    assert client.request(method, url, headers=_token(client, demoted, "admin")).status_code == 403
+    # an admin token of an account disabled in ricotdin (the role itself follows mmlabs, AUT-05)
+    disabled = _new_user(world, "admin")
+    _sql(world["db"], "UPDATE users SET disabled_at = now() WHERE id = %s", disabled)
+    assert client.request(method, url, headers=_token(client, disabled, "admin")).status_code == 403
     assert _sql(world["db"], "SELECT count(*) FROM jobs WHERE meeting_id = %s", mid) == [(0,)]
 
 

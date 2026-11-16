@@ -26,7 +26,7 @@ describe('parseRuntimeConfig', () => {
       '',
       'api.example.com',
       'ftp://api.example.com',
-      'https://api.example.com/v1', // the API is served at / (refresh cookie Path=/auth)
+      'https://api.example.com/v1', // the API is served at /
       'https://api.example.com?x=1',
       'https://api.example.com#x',
       'https://user:pw@api.example.com',

@@ -5,15 +5,14 @@ the Drive files first; every mutation writes exactly one audit row without conte
 
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth.jwt import issue_access_token
 from tests.conftest import requires_db
 from tests.fake_drive import FakeDrive
+from tests.mmlabs_auth import bearer
 from tests.test_meetings_storage_integration import (  # noqa: F401 - fixtures
     _as,
     _msg,
@@ -29,8 +28,7 @@ pytestmark = requires_db
 
 
 def _token(client: TestClient, uid: uuid.UUID, role: str) -> dict[str, str]:
-    app: Any = client.app
-    return {"Authorization": f"Bearer {issue_access_token(app.state.auth.keys, uid, role)}"}
+    return bearer(uid, role)
 
 
 @pytest.fixture
@@ -55,7 +53,7 @@ def _audits(world: dict[str, Any], target: uuid.UUID) -> list[tuple[Any, ...]]:
 
 ROUTES = [
     ("GET", "/admin/users"), ("GET", "/admin/users/{id}"), ("PATCH", "/admin/users/{id}/role"),
-    ("PATCH", "/admin/users/{id}/status"), ("POST", "/admin/users/{id}/reset-password"),
+    ("PATCH", "/admin/users/{id}/status"),
     ("DELETE", "/admin/users/{id}"), ("POST", "/admin/users/bulk"),
     ("GET", "/admin/users/{id}/quota"), ("POST", "/admin/users/{id}/quota"),
 ]  # fmt: skip
@@ -72,10 +70,8 @@ def test_non_admins_and_stale_admin_tokens_get_403(
     kw: dict[str, Any] = {"json": body} if method in ("PATCH", "POST") else {}
     assert client.request(method, url, headers=_as(client, "b"), **kw).status_code == 403
     assert client.request(method, url, **kw).status_code == 401
-    # an admin token whose account was demoted or disabled since it was issued
-    demoted = _new_user(world)
-    assert client.request(method, url, headers=_token(client, demoted, "admin"),
-                          **kw).status_code == 403  # fmt: skip
+    # an admin token whose account was disabled in ricotdin since it was issued (the role itself
+    # follows the mmlabs token, AUT-05)
     disabled = _new_user(world, "admin")
     _sql(world["db"], "UPDATE users SET disabled_at = now() WHERE id = %s", disabled)
     assert client.request(method, url, headers=_token(client, disabled, "admin"),
@@ -162,17 +158,15 @@ def test_the_last_admin_cannot_be_removed(
 # --- status ---------------------------------------------------------------------------------------
 
 
-def test_disable_revokes_sessions_and_enable_restores(
+def test_disable_signs_out_at_once_and_enable_restores(
     client: TestClient, world: dict[str, Any], admin: dict[str, str]
 ) -> None:
     uid = _new_user(world)
-    _sql(world["db"], "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
-         "VALUES (%s, gen_random_uuid(), %s, %s)", uid, secrets.token_hex(16),
-         datetime.now(UTC) + timedelta(days=1))  # fmt: skip
+    assert client.get("/auth/me", headers=_token(client, uid, "user")).status_code == 200
     r = client.patch(f"/admin/users/{uid}/status", headers=admin, json={"disabled": True})
     assert r.json() == {"ok": True, "disabled": True}
-    assert _sql(world["db"], "SELECT count(*) FROM refresh_tokens WHERE user_id = %s AND "
-                "revoked_at IS NULL", uid) == [(0,)]  # fmt: skip
+    # the user's still-valid mmlabs token is refused on the next request (AUT-05/06)
+    assert client.get("/auth/me", headers=_token(client, uid, "user")).status_code == 403
     assert client.get(f"/admin/users/{uid}", headers=admin).json()["status"] == "disabled"
     assert client.patch(f"/admin/users/{uid}/status", headers=admin,
                         json={"disabled": False}).status_code == 200  # fmt: skip
@@ -182,26 +176,6 @@ def test_disable_revokes_sessions_and_enable_restores(
     assert _msg(me) == "You cannot disable your own account."
     assert client.patch(f"/admin/users/{uid}/status", headers=admin,
                         json={"disabled": "yes"}).status_code == 422  # fmt: skip
-
-
-# --- reset password ------------------------------------------------------------------------------
-
-
-def test_reset_password_issues_a_token_and_audits(
-    client: TestClient, world: dict[str, Any], admin: dict[str, str]
-) -> None:
-    uid = _new_user(world)
-    r = client.post(f"/admin/users/{uid}/reset-password", headers=admin)
-    assert r.status_code == 200 and r.json() == {"ok": True, "email_sent": False}  # no SMTP here
-    assert _sql(world["db"], "SELECT purpose FROM email_tokens WHERE user_id = %s", uid) == [
-        ("reset_password",)
-    ]
-    assert [a[0] for a in _audits(world, uid)] == ["user.password_reset"]
-    assert client.post(f"/admin/users/{uuid.uuid4()}/reset-password",
-                       headers=admin).status_code == 404  # fmt: skip
-
-
-# --- delete ---------------------------------------------------------------------------------------
 
 
 def test_delete_removes_drive_files_first_then_the_user(
@@ -300,15 +274,6 @@ def test_quota_grant_and_history(
 # --- review follow-ups ------------------------------------------------------------------------------
 
 
-def test_reset_password_is_rate_limited_per_address(
-    client: TestClient, world: dict[str, Any], admin: dict[str, str]
-) -> None:
-    uid = _new_user(world)
-    codes = [client.post(f"/admin/users/{uid}/reset-password", headers=admin).status_code
-             for _ in range(4)]  # fmt: skip
-    assert codes == [200, 200, 200, 429]
-
-
 def test_delete_never_touches_a_forged_key(
     client: TestClient, world: dict[str, Any], admin: dict[str, str], drive: FakeDrive
 ) -> None:
@@ -325,45 +290,6 @@ def test_delete_never_touches_a_forged_key(
     assert victim_file not in drive.deleted
     assert _sql(world["db"], "SELECT count(*) FROM storage_objects WHERE key = %s",
                 victim_key) == [(1,)]  # fmt: skip
-
-
-def test_disable_does_not_deadlock_with_a_concurrent_refresh(
-    client: TestClient, world: dict[str, Any], admin: dict[str, str]
-) -> None:
-    """A refresh holds its token row and then inserts the new token (FK key-share on users)
-    while the admin disable waits on that token row: with FOR UPDATE on users this deadlocked."""
-    import threading
-
-    import psycopg
-
-    uid = _new_user(world)
-    _sql(world["db"], "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
-         "VALUES (%s, gen_random_uuid(), %s, now() + interval '1 day')", uid,
-         secrets.token_hex(16))  # fmt: skip
-    result: dict[str, Any] = {}
-    with psycopg.connect(world["db"]) as refresh:
-        refresh.execute("SELECT id FROM refresh_tokens WHERE user_id = %s FOR UPDATE", (uid,))
-
-        def disable() -> None:
-            result["r"] = client.patch(f"/admin/users/{uid}/status", headers=admin,
-                                       json={"disabled": True})  # fmt: skip
-
-        worker = threading.Thread(target=disable)
-        worker.start()
-        worker.join(1.5)  # the admin request is now waiting on the token row
-        refresh.execute(
-            "INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) "
-            "VALUES (%s, gen_random_uuid(), %s, now() + interval '1 day')",
-            (uid, secrets.token_hex(16)),
-        )
-        refresh.commit()
-    worker.join(30)
-    assert result["r"].status_code == 200, result["r"].text
-    # The token the racing refresh committed is not revoked by this statement, but it is
-    # useless: /auth/refresh refuses a disabled user and then revokes everything (§0.3).
-    assert _sql(world["db"], "SELECT disabled_at IS NOT NULL FROM users WHERE id = %s", uid) == [
-        (True,)
-    ]
 
 
 def test_a_delete_stopped_half_way_is_still_audited(
