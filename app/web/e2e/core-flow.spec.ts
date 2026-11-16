@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 import en from '../src/i18n/locales/en.json' with { type: 'json' }
 import vi from '../src/i18n/locales/vi.json' with { type: 'json' }
 
-const USER = 'e2e_user'
+const USER = 'e2e@example.com' // mmlabs signs in with the email (AUT-05)
 const PASSWORD = 'correct horse battery'
 
 /** The browser's resumable PUT to Google Drive, answered like Drive does. */
@@ -26,7 +26,7 @@ for (const [lang, t, locale] of [
       // sign in
       await page.goto('/meetings')
       await expect(page).toHaveURL(/\/sign-in/)
-      await page.locator('input[name=identifier]').fill(USER)
+      await page.locator('input[name=email]').fill(USER)
       await page.locator('input[name=password]').fill(PASSWORD)
       await page.locator('button[type=submit]').click()
       await expect(page.getByRole('heading', { level: 1, name: t.page.meetings.title })).toBeVisible()

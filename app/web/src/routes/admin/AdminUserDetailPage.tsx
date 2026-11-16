@@ -127,32 +127,19 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
         </dl>
         <div className="action-row" role="group" aria-label={t('admin.userDetail.actions')}>
           {/* one button per pair whose label flips, so focus stays on it after the change */}
-          {actions.changeRole && (
-            <Button onClick={() => ask(user.role === 'user' ? 'promote' : 'demote')} aria-disabled={(user.role === 'user' && !actions.promote) || busy}
-              aria-describedby={user.role === 'user' && !actions.promote ? ids.promoteHint : undefined}
-            >
-              {t(user.role === 'user' ? 'admin.users.actions.makeAdmin' : 'admin.users.actions.makeUser')}
-            </Button>
-          )}
           {(actions.disable || actions.enable) && (
             <Button onClick={() => ask(actions.disable ? 'disable' : 'enable')} aria-disabled={busy}>
               {t(actions.disable ? 'admin.users.actions.disable' : 'admin.users.actions.enable')}
             </Button>
           )}
-          <Button onClick={() => ask('reset')} aria-disabled={busy}>
-            {t('admin.users.actions.reset')}
-          </Button>
           {actions.delete && (
             <Button variant="danger" onClick={() => ask('delete')} aria-disabled={busy}>
               {t('admin.users.actions.delete')}
             </Button>
           )}
         </div>
-        {user.role === 'user' && actions.changeRole && !actions.promote && (
-          <p className="tab-note" id={ids.promoteHint}>
-            {t('admin.userDetail.promoteHint')}
-          </p>
-        )}
+        {/* AUT-05: roles and passwords belong to the mmlabs account */}
+        <p className="tab-note">{t('admin.userDetail.mmlabsHint')}</p>
         {user.id === me && <p className="tab-note">{t('admin.userDetail.selfHint')}</p>}
       </section>
 

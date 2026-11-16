@@ -42,7 +42,7 @@ async function boot(): Promise<void> {
     )
     return
   }
-  const session = new AuthSession(config.authUrl)
+  const session = new AuthSession(config.authUrl, config.apiUrl)
   const api = createApiClient(config.apiUrl, session)
   const fetchApi = createFetchApi(config.apiUrl, session)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: retryable, staleTime: 30_000 } } })
@@ -53,7 +53,7 @@ async function boot(): Promise<void> {
         <ErrorBoundary>
           <ThemeProvider>
             <QueryClientProvider client={queryClient}>
-              <AuthProvider session={session} api={api} fetchApi={fetchApi} apiUrl={config.apiUrl}>
+              <AuthProvider session={session} api={api} fetchApi={fetchApi} apiUrl={config.apiUrl} turnstileSiteKey={config.turnstileSiteKey}>
                 <RouterProvider router={router} />
               </AuthProvider>
             </QueryClientProvider>

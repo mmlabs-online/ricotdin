@@ -3,8 +3,8 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import {
-  useChangePassword,
   usePreferences,
   useProfile,
   useUpdatePreferences,
@@ -21,7 +21,7 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { assignableFolders, defaultFolderLost, initialFolderChoice } from '../lib/folders/defaultFolder'
 import { mediaSrc } from '../lib/meetings/detail'
-import { modelValue, parseModelValue, passwordField, passwordProblem, profileErrorKey, quotaParts } from '../lib/profile/profile'
+import { modelValue, parseModelValue, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
 import { AVATAR_TYPES, uploadErrorKey } from '../lib/upload/upload'
 import { useChooseLocale } from '../i18n/useAccountLocale'
@@ -229,61 +229,14 @@ function DetailsSection({ profile }: { profile: Profile }) {
   )
 }
 
+/** AUT-05: the password belongs to the mmlabs account (shared by every mmlabs app). */
 function PasswordSection() {
   const { t } = useTranslation()
-  const change = useChangePassword()
-  const [current, setCurrent] = useState('')
-  const [next, setNext] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [note, setNote] = useNote()
-  const ids = { current: useId(), next: useId(), confirm: useId(), err: useId() }
-  const field = note && !note.ok ? passwordField(note.key) : null
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (change.isPending) return
-    const problem = passwordProblem(current, next, confirm)
-    if (problem) return setNote(problem)
-    setNote(null)
-    change
-      .mutateAsync({ current, next })
-      .then(() => {
-        setCurrent('')
-        setNext('')
-        setConfirm('')
-        setNote('profile.password.changed', true)
-      })
-      .catch((err: unknown) => setNote(profileErrorKey('password', err)))
-  }
-
-  const mark = (f: 'current' | 'next' | 'confirm') => ({
-    'aria-invalid': field === f,
-    'aria-describedby': field === f ? ids.err : undefined,
-  })
-  const edit = (set: (v: string) => void) => (e: { target: { value: string } }) => {
-    set(e.target.value)
-    if (note?.ok) setNote(null)
-  }
   return (
-    <Section title={t('profile.password.title')} body={t('profile.password.body')}>
-      <form onSubmit={submit} noValidate>
-        <div className="field-row">
-          <label htmlFor={ids.current}>{t('profile.password.current')}</label>
-          <input id={ids.current} type="password" value={current} onChange={edit(setCurrent)} autoComplete="current-password" {...mark('current')} />
-        </div>
-        <div className="field-row">
-          <label htmlFor={ids.next}>{t('profile.password.new')}</label>
-          <input id={ids.next} type="password" value={next} onChange={edit(setNext)} autoComplete="new-password" {...mark('next')} />
-        </div>
-        <div className="field-row">
-          <label htmlFor={ids.confirm}>{t('profile.password.confirm')}</label>
-          <input id={ids.confirm} type="password" value={confirm} onChange={edit(setConfirm)} autoComplete="new-password" {...mark('confirm')} />
-        </div>
-        <FormNote note={note} id={ids.err} />
-        <Button type="submit" variant="primary" aria-disabled={change.isPending} aria-busy={change.isPending}>
-          {t('profile.password.submit')}
-        </Button>
-      </form>
+    <Section title={t('profile.password.title')} body={t('profile.password.mmlabsBody')}>
+      <Link className="button" to="/forgot-password">
+        {t('profile.password.reset')}
+      </Link>
     </Section>
   )
 }

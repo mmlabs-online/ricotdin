@@ -4,7 +4,8 @@ import { AuthLayout } from '../../components/AuthLayout'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { EmailLinkForm } from './ResendForm'
 
-/** AUT-02: request a reset link (always "check your inbox": no account enumeration). */
+/** Request a reset link for the mmlabs account (AUT-05; always "check your inbox": no account
+ * enumeration). */
 export function ForgotPasswordPage() {
   const { t } = useTranslation()
   useDocumentTitle('auth.forgotTitle')
@@ -13,7 +14,7 @@ export function ForgotPasswordPage() {
       <div className="auth-card">
         <h1>{t('auth.forgotTitle')}</h1>
         <p>{t('auth.forgotHelp')}</p>
-        <EmailLinkForm path="/forgot-password" submitKey="auth.forgotSubmit" />
+        <EmailLinkForm submitKey="auth.forgotSubmit" />
         <small>
           <Link to="/sign-in">{t('auth.backToSignIn')}</Link>
         </small>

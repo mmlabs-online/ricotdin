@@ -1,8 +1,7 @@
 // Profile data (ARC-13c: PRF-01..04, AIP-06 default model, quota display).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAuth, useFetchApi } from '../auth/AuthProvider'
+import { useFetchApi } from '../auth/AuthProvider'
 import { putToDrive, uploadAvatar } from '../lib/upload/upload'
-import { ApiError, apiErrorFrom } from './errors'
 import { apiJson } from './json'
 
 export interface Profile {
@@ -69,22 +68,5 @@ export function useUploadAvatar() {
     mutationFn: ({ file, onProgress }: { file: File; onProgress?: (f: number) => void }) =>
       uploadAvatar({ fetchApi, putFile: (url, b, type, p) => putToDrive(url, b, type, p) }, file, onProgress),
     onSettled: () => qc.invalidateQueries({ queryKey: profileKeys.profile, exact: true }),
-  })
-}
-
-/** `POST /profile/change-password`: the answer replaces the refresh cookie, so it goes through
- * the session to the auth origin (cookie jar + cross-tab refresh lock). Throws ApiError. */
-export function useChangePassword() {
-  const { session } = useAuth()
-  return useMutation({
-    mutationFn: async ({ current, next }: { current: string; next: string }) => {
-      let res: Response
-      try {
-        res = await session.postWithCookie('/profile/change-password', { current_password: current, new_password: next })
-      } catch {
-        throw new ApiError(0, 'network', '')
-      }
-      if (!res.ok) throw apiErrorFrom(res.status, await res.json().catch(() => null))
-    },
   })
 }

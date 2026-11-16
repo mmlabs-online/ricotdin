@@ -21,7 +21,7 @@ server {
     include /etc/nginx/conf.d/security-headers.inc;
     add_header Cache-Control "no-store" always;
     default_type application/json;
-    return 200 '{"apiUrl":"${RICOTDIN_API_URL}","authUrl":"${RICOTDIN_AUTH_URL}"}';
+    return 200 '{"apiUrl":"${RICOTDIN_API_URL}","authUrl":"${RICOTDIN_AUTH_URL}","turnstileSiteKey":"${RICOTDIN_TURNSTILE_SITE_KEY}"}';
   }
 
   # Hashed build output: cache forever.

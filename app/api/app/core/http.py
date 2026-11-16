@@ -111,7 +111,7 @@ def install_middleware(app: FastAPI, origins: list[str]) -> None:
         allow_origins=origins,
         allow_credentials=True,  # refresh cookie (ARC-05)
         allow_methods=["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-MM-App"],
         expose_headers=["Retry-After"],
         max_age=600,
     )

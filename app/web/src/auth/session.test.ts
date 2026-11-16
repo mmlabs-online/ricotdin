@@ -1,105 +1,200 @@
 import { describe, expect, it } from 'vitest'
 import { AuthSession, type SessionDeps } from './session'
 
+// AUT-05: the session lives at mmlabs (device cookie on api.mmlabs.online); ricotdin's API only
+// receives the per-app access token and answers /auth/me with the ricotdin user.
+const AUTH = 'https://auth.example.com'
+const API = 'https://api.example.com'
 const user = { id: 'u1', email: 'a@b.c', username: 'alex', role: 'user' as const }
-const tokenBody = (t: string) => ({ access_token: t, token_type: 'bearer', expires_in: 900, user })
+const tokenBody = (t: string) => ({ access_token: t, token_type: 'Bearer', expires_in: 900, audience: 'ricotdin' })
 
 type Call = { url: string; init: RequestInit | undefined }
 
-function fakeDeps(answers: Array<() => Response>, clock = { t: 1_000_000 }) {
+function fakeDeps(answers: Array<() => Response>, clock = { t: 1_000_000 }, account: string | null = 'acc1') {
   const calls: Call[] = []
   const posted: unknown[] = []
+  const store = { value: account }
   const channel = { onmessage: null as ((e: MessageEvent) => void) | null, postMessage: (m: unknown) => posted.push(m), close: () => {} }
   const deps: SessionDeps = {
     fetch: async (url, init) => {
       calls.push({ url: String(url), init })
       const next = answers.shift()
-      if (!next) throw new Error('unexpected fetch')
+      if (!next) throw new Error(`unexpected fetch ${String(url)}`)
       return next()
     },
     now: () => clock.t,
     channel,
     locks: { request: (_name, cb) => cb() },
+    account: { get: () => store.value, set: (v) => (store.value = v), clear: () => (store.value = null) },
   }
-  return { deps, calls, posted, channel, clock }
+  return { deps, calls, posted, channel, clock, store }
 }
 
 const json = (status: number, body: unknown) => () => new Response(JSON.stringify(body), { status })
+const err = (status: number, code: string, details: unknown = null) => json(status, { error: { code, message: '', details } })
+const signedIn = (t = 't1') => [json(200, tokenBody(t)), json(200, user)]
+const body = (c: Call | undefined) => JSON.parse(String(c?.init?.body)) as unknown
+const header = (c: Call | undefined, name: string) => new Headers(c?.init?.headers).get(name)
 
-describe('AuthSession', () => {
-  it('restores the session from the refresh cookie and shares the token', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1'))])
-    const s = new AuthSession('https://api.example.com', f.deps)
+describe('AuthSession (mmlabs)', () => {
+  it('gets a ricotdin token from mmlabs, then the ricotdin user, and shares it', async () => {
+    const f = fakeDeps(signedIn())
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     expect(s.getState()).toEqual({ status: 'signedIn', user })
     expect(s.accessToken).toBe('t1')
-    expect(f.calls[0]?.url).toBe('https://api.example.com/auth/refresh')
+    expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/token`)
     expect(f.calls[0]?.init?.credentials).toBe('include')
+    expect(header(f.calls[0], 'X-MM-App')).toBe('ricotdin')
+    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: 'acc1' })
+    expect(f.calls[1]?.url).toBe(`${API}/auth/me`)
+    expect(f.calls[1]?.init?.credentials).toBe('omit')
+    expect(header(f.calls[1], 'Authorization')).toBe('Bearer t1')
     expect(f.posted).toHaveLength(1)
   })
 
-  it('is signed out when there is no session', async () => {
-    const f = fakeDeps([json(401, { error: { code: 'unauthorized', message: '' } })])
-    const s = new AuthSession('https://api.example.com', f.deps)
+  it('is signed out without a chosen account (no call at all)', async () => {
+    const f = fakeDeps([], undefined, null)
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(f.calls).toHaveLength(0)
+  })
+
+  it('forgets the account when mmlabs says the session is gone', async () => {
+    const f = fakeDeps([err(401, 'session_invalid')])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(f.store.value).toBeNull()
+  })
+
+  it('asks to join when the account is not a member yet', async () => {
+    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: true, display_name: null }] }
+    const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts)])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'actionRequired', action: 'join', accountId: 'acc1', email: 'a@b.c' })
+    expect(s.accessToken).toBeNull()
+  })
+
+  it('asks to verify the email first', async () => {
+    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: false, display_name: null }] }
+    const f = fakeDeps([err(403, 'email_unverified'), json(200, accounts)])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    expect(s.getState()).toMatchObject({ status: 'actionRequired', action: 'verify', email: 'a@b.c' })
+  })
+
+  it('joins on the user’s click, then signs in', async () => {
+    const accounts = { items: [{ account_id: 'acc1', email: 'a@b.c', email_verified: true, display_name: null }] }
+    const f = fakeDeps([err(403, 'not_member', { join_available: true }), json(200, accounts), json(200, { status: 'member' }), ...signedIn()])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.start()
+    await s.join()
+    expect(f.calls[2]?.url).toBe(`${AUTH}/api/v1/auth/apps/ricotdin/join`)
+    expect(body(f.calls[2])).toEqual({ account_id: 'acc1' })
+    expect(s.getState()).toEqual({ status: 'signedIn', user })
+  })
+
+  it('signs in with email + password and remembers the account', async () => {
+    const f = fakeDeps([json(200, { account_id: 'acc9', user: { id: 'm1', email: 'a@b.c', email_verified: true } }), ...signedIn()], undefined, null)
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.signIn('a@b.c', 'pw', 'ts-token')
+    expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/login`)
+    expect(body(f.calls[0])).toEqual({ email: 'a@b.c', password: 'pw', turnstile_token: 'ts-token' })
+    expect(f.store.value).toBe('acc9')
+    expect(body(f.calls[1])).toEqual({ audience: 'ricotdin', account_id: 'acc9' })
+    expect(s.getState()).toEqual({ status: 'signedIn', user })
+  })
+
+  it('surfaces sign-in errors with the mmlabs code', async () => {
+    const f = fakeDeps([err(403, 'turnstile_required')], undefined, null)
+    const s = new AuthSession(AUTH, API, f.deps)
+    await expect(s.signIn('a@b.c', 'pw')).rejects.toMatchObject({ code: 'turnstile_required', status: 403 })
+    expect(body(f.calls[0])).toEqual({ email: 'a@b.c', password: 'pw' })
+  })
+
+  it('a ricotdin refusal (disabled account) signs out and is reported', async () => {
+    const f = fakeDeps([json(200, tokenBody('t1')), err(403, 'account_disabled')])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await expect(s.refresh()).rejects.toMatchObject({ code: 'account_disabled' })
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+    expect(s.accessToken).toBeNull()
+  })
+
+  it('continues as another account signed in on this browser', async () => {
+    const f = fakeDeps(signedIn(), undefined, null)
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.continueAs('acc2')
+    expect(f.store.value).toBe('acc2')
+    expect(body(f.calls[0])).toEqual({ audience: 'ricotdin', account_id: 'acc2' })
+  })
+
+  it('lists the accounts signed in on this browser', async () => {
+    const f = fakeDeps([json(200, { items: [{ account_id: 'a1', email: 'x@y.z', email_verified: true, display_name: null }] })])
+    const s = new AuthSession(AUTH, API, f.deps)
+    expect(await s.accounts()).toEqual([{ accountId: 'a1', email: 'x@y.z', emailVerified: true }])
+    expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/accounts`)
+    expect(f.calls[0]?.init?.method).toBe('GET')
+  })
+
+  it('a failed account listing is just an empty list', async () => {
+    const f = fakeDeps([err(401, 'session_invalid')])
+    expect(await new AuthSession(AUTH, API, f.deps).accounts()).toEqual([])
   })
 
   it('runs one refresh for concurrent callers', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1'))])
-    const s = new AuthSession('https://api.example.com', f.deps)
+    const f = fakeDeps(signedIn())
+    const s = new AuthSession(AUTH, API, f.deps)
     await Promise.all([s.refresh(), s.refresh(), s.refresh()])
-    expect(f.calls).toHaveLength(1)
+    expect(f.calls).toHaveLength(2)
   })
 
-  it('adopts a token another tab refreshed instead of calling the API', async () => {
+  it('adopts a token another tab got instead of calling mmlabs', async () => {
     const f = fakeDeps([])
-    const s = new AuthSession('https://api.example.com', f.deps)
+    const s = new AuthSession(AUTH, API, f.deps)
     f.channel.onmessage?.({ data: { type: 'token', accessToken: 'other', expiresAt: f.clock.t + 900_000, user, at: f.clock.t } } as MessageEvent)
     expect(await s.refresh()).toBe(true)
     expect(s.accessToken).toBe('other')
     expect(f.calls).toHaveLength(0)
   })
 
-  it('keeps the session when a 401 follows another tab rotating the cookie', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), json(401, {})])
-    const s = new AuthSession('https://api.example.com', f.deps)
+  it('renews the token shortly before it expires', async () => {
+    const f = fakeDeps([...signedIn('t1'), ...signedIn('t2')])
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
-    f.clock.t += 900_000 // our token expired
-    f.channel.onmessage?.({ data: { type: 'token', accessToken: 't2', expiresAt: f.clock.t + 900_000, user, at: f.clock.t - 5_000 } } as MessageEvent)
-    f.clock.t += 1
-    // the shared token predates our refresh, so we still call the API; its 401 is the race
-    expect(await s.refresh()).toBe(true)
-    expect(s.accessToken).toBe('t2')
-    expect(s.getState().status).toBe('signedIn')
+    f.clock.t += 841_000 // 59 s left: within the renewal margin
+    expect(await s.getToken()).toBe('t2')
   })
 
-  it('signs out every tab on sign-out', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), () => new Response(null, { status: 204 })])
-    const s = new AuthSession('https://api.example.com', f.deps)
+  it('signs out this account at mmlabs and in every tab', async () => {
+    const f = fakeDeps([...signedIn(), () => new Response(null, { status: 204 })])
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     expect(await s.signOut()).toBe(true)
+    expect(f.calls[2]?.url).toBe(`${AUTH}/api/v1/auth/logout`)
+    expect(body(f.calls[2])).toEqual({ account_id: 'acc1' })
     expect(s.getState()).toEqual({ status: 'signedOut' })
-    expect(s.accessToken).toBeNull()
+    expect(f.store.value).toBeNull()
     expect(f.posted.at(-1)).toEqual({ type: 'signedOut' })
   })
 
-  it('reports a sign-out the server did not confirm (the cookie may still be valid)', async () => {
-    for (const answer of [json(500, {}), json(403, {}), () => { throw new TypeError('offline') }]) {
-      const f = fakeDeps([json(200, tokenBody('t1')), answer])
-      const s = new AuthSession('https://api.example.com', f.deps)
+  it('reports a sign-out mmlabs did not confirm', async () => {
+    for (const answer of [json(500, {}), () => { throw new TypeError('offline') }]) {
+      const f = fakeDeps([...signedIn(), answer])
+      const s = new AuthSession(AUTH, API, f.deps)
       await s.start()
       expect(await s.signOut()).toBe(false)
-      expect(s.getState()).toEqual({ status: 'signedOut' }) // this browser forgets it anyway
+      expect(s.getState()).toEqual({ status: 'signedOut' })
     }
   })
 
-  it('a refresh that was running when the user signed out cannot sign them back in', async () => {
+  it('a refresh running when the user signed out cannot sign them back in', async () => {
     let release: (r: Response) => void = () => {}
     const pending = new Promise<Response>((resolve) => (release = resolve))
-    const f = fakeDeps([json(200, tokenBody('t1')), () => pending as unknown as Response, () => new Response(null, { status: 204 })])
-    // fakeDeps returns the thunk's value; make the second answer resolve later
-    const s = new AuthSession('https://api.example.com', f.deps)
+    const f = fakeDeps([...signedIn(), () => pending as unknown as Response, () => new Response(null, { status: 204 })])
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     const refreshing = s.refresh()
     const out = s.signOut()
@@ -111,8 +206,8 @@ describe('AuthSession', () => {
   })
 
   it('ignores a token another tab broadcast before we signed out', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), () => new Response(null, { status: 204 })])
-    const s = new AuthSession('https://api.example.com', f.deps)
+    const f = fakeDeps([...signedIn(), () => new Response(null, { status: 204 })])
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     const old = { type: 'token', accessToken: 'late', expiresAt: f.clock.t + 900_000, user, at: f.clock.t - 1 }
     await s.signOut()
@@ -120,73 +215,39 @@ describe('AuthSession', () => {
     expect(s.getState()).toEqual({ status: 'signedOut' })
   })
 
-  it('is "unavailable", not signed out, when the API cannot answer at start', async () => {
-    for (const answer of [json(503, {}), json(429, {}), json(200, { nope: 1 }), () => { throw new TypeError('offline') }]) {
-      const f = fakeDeps([answer])
-      const s = new AuthSession('https://api.example.com', f.deps)
+  it('is "unavailable", not signed out, when mmlabs or the API cannot answer at start', async () => {
+    for (const answers of [[json(503, {})], [json(429, {})], [json(200, { nope: 1 })], [() => { throw new TypeError('offline') }], [json(200, tokenBody('t')), json(502, {})]]) {
+      const f = fakeDeps(answers)
+      const s = new AuthSession(AUTH, API, f.deps)
       await s.start()
       expect(s.getState()).toEqual({ status: 'unavailable' })
+      expect(f.store.value).toBe('acc1') // a transient failure keeps the chosen account
     }
   })
 
-  it('a later transient refresh failure keeps the session', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), json(502, {})])
-    const s = new AuthSession('https://api.example.com', f.deps)
+  it('a later transient failure keeps the session', async () => {
+    const f = fakeDeps([...signedIn(), json(502, {})])
+    const s = new AuthSession(AUTH, API, f.deps)
     await s.start()
     await expect(s.refresh()).rejects.toBeTruthy()
     expect(s.getState().status).toBe('signedIn')
   })
 
-  it('posts signed-out auth calls to the auth origin without cookies', async () => {
-    const f = fakeDeps([json(201, { verify_email: true, email_sent: true }), json(400, { error: { code: 'invalid_token', message: '' } })])
-    const s = new AuthSession('https://api.example.com', f.deps)
-    expect(await s.publicAuth('/register', { email: 'a@b.co' })).toEqual({ verify_email: true, email_sent: true })
-    expect(f.calls[0]?.url).toBe('https://api.example.com/auth/register')
-    expect(f.calls[0]?.init?.credentials).toBe('omit')
-    await expect(s.publicAuth('/verify-email', { token: 'x' })).rejects.toMatchObject({ code: 'invalid_token', status: 400 })
+  it('posts signed-out calls (sign-up, verify, reset) to mmlabs with the app header', async () => {
+    const f = fakeDeps([json(201, { id: 'm1', email: 'a@b.co', email_verified: false }), err(422, 'token_invalid')])
+    const s = new AuthSession(AUTH, API, f.deps)
+    expect(await s.publicAuth('/signup', { email: 'a@b.co' })).toMatchObject({ id: 'm1' })
+    expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/signup`)
+    expect(f.calls[0]?.init?.credentials).toBe('include')
+    expect(header(f.calls[0], 'X-MM-App')).toBe('ricotdin')
+    await expect(s.publicAuth('/verify-email', { token: 'x' })).rejects.toMatchObject({ code: 'token_invalid', status: 422 })
   })
 
-  it('surfaces sign-in errors with the API code', async () => {
-    const f = fakeDeps([json(403, { error: { code: 'email_not_verified', message: 'Verify.' } })])
-    const s = new AuthSession('https://api.example.com', f.deps)
-    await expect(s.signIn('a@b.c', 'pw')).rejects.toMatchObject({ code: 'email_not_verified', status: 403 })
-    expect(JSON.parse(String(f.calls[0]?.init?.body))).toEqual({ identifier: 'a@b.c', password: 'pw' })
-  })
-
-  it('sends a cookie-changing API call with the cookie, the token and under the refresh lock', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), json(200, { changed: true })])
-    const order: string[] = []
-    f.deps.locks = { request: async (name, cb) => { order.push(`lock:${name}`); return cb() } }
-    const s = new AuthSession('https://api.example.com', f.deps)
-    await s.start()
-    order.length = 0
-    const res = await s.postWithCookie('/profile/change-password', { a: 1 })
-    expect(res.status).toBe(200)
-    expect(order).toEqual(['lock:ricotdin-auth-refresh'])
-    const call = f.calls[1]
-    expect(call?.url).toBe('https://api.example.com/profile/change-password')
-    expect(call?.init?.credentials).toBe('include')
-    expect(new Headers(call?.init?.headers).get('Authorization')).toBe('Bearer t1')
-    expect(call?.init?.body).toBe(JSON.stringify({ a: 1 }))
-  })
-
-  it('refreshes an expiring token before taking the lock (no refresh inside it)', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1')), json(200, tokenBody('t2')), json(200, { changed: true })])
-    const s = new AuthSession('https://api.example.com', f.deps)
-    await s.start()
-    f.clock.t += 899_000
-    await s.postWithCookie('/profile/change-password', {})
-    expect(f.calls.map((c) => c.url.replace('https://api.example.com', ''))).toEqual(['/auth/refresh', '/auth/refresh', '/profile/change-password'])
-    expect(new Headers(f.calls[2]?.init?.headers).get('Authorization')).toBe('Bearer t2')
-  })
-
-  it('posts only to a path on the auth origin (where the refresh cookie lives)', async () => {
-    const f = fakeDeps([json(200, tokenBody('t1'))])
-    const s = new AuthSession('https://auth.example.com', f.deps)
-    await s.start()
-    for (const bad of ['https://evil.example/x', '//evil.example/x', 'profile/x', '/\\evil.example']) {
-      await expect(s.postWithCookie(bad, {})).rejects.toThrow()
-    }
-    expect(f.calls).toHaveLength(1)
+  it('resends the verification email for the chosen account', async () => {
+    const f = fakeDeps([() => new Response(null, { status: 202 })])
+    const s = new AuthSession(AUTH, API, f.deps)
+    await s.resendVerification()
+    expect(f.calls[0]?.url).toBe(`${AUTH}/api/v1/auth/verify-email/resend`)
+    expect(body(f.calls[0])).toEqual({ account_id: 'acc1' })
   })
 })

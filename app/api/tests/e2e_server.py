@@ -7,7 +7,9 @@ server, dropped on exit) with three stand-ins, so the core flow runs without Goo
 - storage: uploads are accepted in memory (the browser's PUT to Drive is intercepted by
   Playwright) and `/media` serves a generated silent WAV;
 - AI: embeddings and answers are canned; chat answers cite the retrieved chunks;
-- worker: a queued job turns its meeting `done` with a fixed transcript, notes, to-do and event.
+- worker: a queued job turns its meeting `done` with a fixed transcript, notes, to-do and event;
+- mmlabs identity (AUT-05): `/api/v1/auth/{login,token,accounts,logout}` on this server mint
+  ES256 tokens with a test key (``e2e-admin`` gets ``ricotdin:admin``), verified in-process.
 
 Run from app/api: `uv run python -m tests.e2e_server` (env: DATABASE_URL, optional
 E2E_WEB_ORIGIN = the web origin, default http://localhost:4173, and E2E_PORT, default 8000).
@@ -22,19 +24,23 @@ import os
 import re
 import secrets
 import signal
+import time
 import uuid
 import wave
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import jwt as pyjwt
 import psycopg
 import uvicorn
+from cryptography.hazmat.primitives.asymmetric import ec
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from app.auth.jwt import generate_private_pem
+from app.auth.mmlabs import MmlabsVerifier
 from app.auth.passwords import hash_password
 from app.core.settings import Settings
 from app.db.provision import drop_login, ensure_login
@@ -235,6 +241,62 @@ def seed(url: str) -> None:
         )
 
 
+MM_ISSUER = "https://mmlabs.e2e.test"
+
+
+class FakeMmlabs:
+    """Stand-in for api.mmlabs.online (AUT-05): email + PASSWORD signs in, tokens are ES256."""
+
+    def __init__(self) -> None:
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.accounts: dict[str, str] = {}  # account_id -> email
+
+    def jwks(self) -> dict[str, Any]:
+        pub = json.loads(pyjwt.algorithms.ECAlgorithm.to_jwk(self.key.public_key()))
+        return {"keys": [{**pub, "kid": "e2e", "alg": "ES256", "use": "sig"}]}
+
+    def routes(self) -> list[Route]:
+        async def login(request: Request) -> Response:
+            body = await request.json()
+            email = str(body.get("email", "")).lower()
+            if email not in {u[0] for u in USERS} or body.get("password") != PASSWORD:
+                return JSONResponse({"error": {"code": "invalid_credentials", "message": "",
+                                               "details": None}}, status_code=401)  # fmt: skip
+            account = str(uuid.uuid4())
+            self.accounts[account] = email
+            return JSONResponse({"account_id": account, "user": {"id": str(uuid.uuid4()),
+                                 "email": email, "email_verified": True}})  # fmt: skip
+
+        async def token(request: Request) -> Response:
+            body = await request.json()
+            email = self.accounts.get(str(body.get("account_id")))
+            if email is None:
+                return JSONResponse({"error": {"code": "session_invalid", "message": "",
+                                               "details": None}}, status_code=401)  # fmt: skip
+            now = int(time.time())
+            roles = ["ricotdin:member"] + (["ricotdin:admin"] if "admin" in email else [])
+            claims = {"iss": MM_ISSUER, "aud": "ricotdin", "sub": str(uuid.uuid5(uuid.NAMESPACE_URL, email)),
+                      "email": email, "email_verified": True, "roles": roles, "iat": now,
+                      "exp": now + 900, "jti": secrets.token_hex(8)}  # fmt: skip
+            tok = pyjwt.encode(claims, self.key, algorithm="ES256",
+                               headers={"typ": "at+jwt", "kid": "e2e"})  # fmt: skip
+            return JSONResponse({"access_token": tok, "token_type": "Bearer", "expires_in": 900,
+                                 "audience": "ricotdin"})  # fmt: skip
+
+        async def accounts(request: Request) -> Response:
+            return JSONResponse({"items": []})
+
+        async def logout(request: Request) -> Response:
+            return Response(status_code=204)
+
+        return [
+            Route("/api/v1/auth/login", login, methods=["POST"]),
+            Route("/api/v1/auth/token", token, methods=["POST"]),
+            Route("/api/v1/auth/accounts", accounts, methods=["GET"]),
+            Route("/api/v1/auth/logout", logout, methods=["POST"]),
+        ]
+
+
 def _exit_on_term(signum: int, frame: object) -> None:
     raise SystemExit(0)
 
@@ -271,6 +333,14 @@ def main() -> None:
                 return Response(audio, media_type="audio/wav")
 
             app.router.routes.insert(0, Route("/media", media))
+            mm = FakeMmlabs()
+
+            async def mm_jwks() -> dict[str, Any]:
+                return mm.jwks()
+
+            app.state.mmlabs = MmlabsVerifier(MM_ISSUER, "ricotdin", mm_jwks)
+            for route in mm.routes():
+                app.router.routes.insert(0, route)
 
             async def serve() -> None:
                 config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")

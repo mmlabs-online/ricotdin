@@ -3,10 +3,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { ApiClient, FetchApi } from '../api/client'
 import type { AuthSession, AuthState } from './session'
 
-type AuthValue = { session: AuthSession; api: ApiClient; fetchApi: FetchApi; apiUrl: string }
+type AuthValue = { session: AuthSession; api: ApiClient; fetchApi: FetchApi; apiUrl: string; turnstileSiteKey?: string }
 const AuthContext = createContext<AuthValue | null>(null)
 
-export function AuthProvider({ session, api, fetchApi, apiUrl, children }: AuthValue & { children: ReactNode }) {
+export function AuthProvider({ session, api, fetchApi, apiUrl, turnstileSiteKey = '', children }: AuthValue & { children: ReactNode }) {
   const queryClient = useQueryClient()
   useEffect(() => {
     void session.start()
@@ -25,7 +25,7 @@ export function AuthProvider({ session, api, fetchApi, apiUrl, children }: AuthV
       lastUser = user
     })
   }, [session, queryClient])
-  return <AuthContext.Provider value={{ session, api, fetchApi, apiUrl }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, api, fetchApi, apiUrl, turnstileSiteKey }}>{children}</AuthContext.Provider>
 }
 
 function useAuthContext(): AuthValue {
@@ -51,4 +51,9 @@ export function useFetchApi(): FetchApi {
 /** The API origin, for URLs the browser loads itself (the `/media` playback link). */
 export function useApiUrl(): string {
   return useAuthContext().apiUrl
+}
+
+/** Public Cloudflare Turnstile site key ('' = not configured). */
+export function useTurnstileSiteKey(): string {
+  return useAuthContext().turnstileSiteKey ?? ''
 }
