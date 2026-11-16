@@ -39,7 +39,7 @@ _USER_COLUMNS = """
 class UserRow:
     id: uuid.UUID
     email: str
-    password_hash: str
+    password_hash: str | None  # NULL for accounts that only sign in with mmlabs (AUT-05)
     role: str
     email_verified_at: datetime | None
     disabled_at: datetime | None
@@ -105,16 +105,24 @@ async def username_owner(conn: AsyncConnection, username: str) -> uuid.UUID | No
 
 
 async def create_user(
-    conn: AsyncConnection, email: str, username: str, password_hash: str
+    conn: AsyncConnection,
+    email: str,
+    username: str,
+    password_hash: str | None,
+    *,
+    mmlabs_sub: str | None = None,
 ) -> uuid.UUID:
-    """users + profiles (role forced to 'user'), then the signup quota grant (non-fatal)."""
+    """users + profiles (role forced to 'user'), then the signup quota grant (non-fatal).
+    An mmlabs account (AUT-05) has no password here and a verified email (mmlabs checked it)."""
     user_id: uuid.UUID = (
         await conn.execute(
             text(
-                "INSERT INTO users (email, password_hash, role) "
-                "VALUES (:e, :h, 'user') RETURNING id"
+                "INSERT INTO users (email, password_hash, role, mmlabs_sub, email_verified_at) "
+                "VALUES (:e, :h, 'user', CAST(:s AS text), "
+                "CASE WHEN CAST(:s AS text) IS NULL THEN NULL ELSE now() END) "
+                "RETURNING id"
             ),
-            {"e": email, "h": password_hash},
+            {"e": email, "h": password_hash, "s": mmlabs_sub},
         )
     ).scalar_one()
     await conn.execute(
@@ -153,7 +161,7 @@ async def set_password_hash(conn: AsyncConnection, user_id: uuid.UUID, password_
 
 async def lock_credentials(
     conn: AsyncConnection, user_id: uuid.UUID
-) -> tuple[str, datetime | None] | None:
+) -> tuple[str | None, datetime | None] | None:
     """(password_hash, disabled_at) with the user row locked until commit: a password change,
     reset or disable that commits first is seen here (no lost update, no stale session)."""
     row = (

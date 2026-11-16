@@ -518,7 +518,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change Role */
+        /**
+         * Change Role
+         * @description AUT-05: the role follows the mmlabs token (``ricotdin:admin``) on every request, so a
+         *     change here would be overwritten; staff change it in mmlabs (org-admin).
+         */
         patch: operations["change_role_admin_users__user_id__role_patch"];
         trace?: never;
     };

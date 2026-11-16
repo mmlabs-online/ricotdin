@@ -1,4 +1,5 @@
-// AUT-02: set a new password from the emailed link (#token=…). Every session is signed out.
+// Set a new mmlabs password from the emailed link (#token=…, AUT-05). mmlabs signs the account
+// out on every device; the link works once, for 30 minutes.
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
@@ -41,7 +42,7 @@ export function ResetPasswordPage() {
     setBusy(true)
     setErrorKey(null)
     try {
-      await session.publicAuth('/reset-password', { token, password })
+      await session.publicAuth('/password/reset', { token, new_password: password })
       setDone(true)
     } catch (err) {
       setErrorKey(publicAuthErrorKey(err, 'reset'))

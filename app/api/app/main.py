@@ -10,8 +10,11 @@ import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 
+import httpx2
 from fastapi import APIRouter, FastAPI
 
+from app.auth.linking import IdentityCache
+from app.auth.mmlabs import MmlabsVerifier, http_jwks_fetcher
 from app.auth.runtime import AuthRuntime
 from app.core.http import install_error_handlers, install_middleware
 from app.core.logging import get_logger, setup_logging
@@ -74,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         async with AsyncExitStack() as stack:
             stack.push_async_callback(app.state.platform.aclose)  # Drive HTTP client
             stack.push_async_callback(app.state.ai.aclose)  # AI provider HTTP client
+            stack.push_async_callback(app.state.mmlabs_http.aclose)  # mmlabs JWKS client
             app.state.db = await Database.start(s)
             stack.push_async_callback(app.state.db.close)
             for hook in BACKGROUND_HOOKS:  # each started hook is stopped even if a later one fails
@@ -108,6 +112,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.key_check_limiter = admin_config_router.key_check_limiter()
     app.state.regenerating = set()  # meeting ids with a regenerate in flight (this process)
     app.state.ai = AIService(app.state.platform.keys)  # one key pool per provider (ARC-08c)
+    # mmlabs access tokens (AUT-05): JWKS from the issuer, cached in the verifier
+    app.state.mmlabs_http = httpx2.AsyncClient(timeout=10.0, follow_redirects=False)
+    app.state.mmlabs_identities = IdentityCache()
+    app.state.mmlabs = MmlabsVerifier(
+        s.mmlabs_issuer,
+        s.mmlabs_audience,
+        http_jwks_fetcher(s.mmlabs_issuer, app.state.mmlabs_http),
+    )
     for module in (
         meetings_router, note_versions_router, content_router, folders_router, activity_router,
         chat_router,

@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     jwt_previous_public_key: str | None = Field(default=None, alias="JWT_PREVIOUS_PUBLIC_KEY")
     web_origin_raw: str = Field(default="", alias="WEB_ORIGIN")  # SPA origin: links + CORS
     refresh_ttl_days: int = Field(default=30, ge=1, le=365, alias="REFRESH_TTL_DAYS")
+    # mmlabs identity (AUT-05): issuer of the per-app access tokens and our audience (app key).
+    mmlabs_issuer: str = Field(
+        default="https://api.mmlabs.online", pattern=r"^https://[a-z0-9.-]+$", alias="MMLABS_ISSUER"
+    )
+    mmlabs_audience: str = Field(
+        default="ricotdin", pattern=r"^[a-z][a-z0-9-]{1,31}$", alias="MMLABS_AUDIENCE"
+    )
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=465, alias="SMTP_PORT")
     smtp_user: str | None = Field(default=None, alias="SMTP_USER")

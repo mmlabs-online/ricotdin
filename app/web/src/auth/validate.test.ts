@@ -18,9 +18,9 @@ describe('auth validation (i18n keys)', () => {
     }
     expect(validateEmail('alex.morgan+x@acme.com')).toBeNull()
   })
-  it('password: 8–256 characters', () => {
+  it('password: 8–128 characters (the mmlabs maximum)', () => {
     expect(validatePassword('1234567')).toBe('auth.validation.passwordShort')
-    expect(validatePassword('x'.repeat(257))).toBe('auth.validation.passwordLong')
+    expect(validatePassword('x'.repeat(129))).toBe('auth.validation.passwordLong')
     expect(validatePassword('12345678')).toBeNull()
   })
 })

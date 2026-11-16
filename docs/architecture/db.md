@@ -47,11 +47,14 @@
   R2 never serve requests as the table owner (owner bypasses RLS; no FORCE RLS) — assert at startup.
   R3 set the context per transaction only: `set_config('app.user_id', $1, true)` + `app.role` inside
   an explicit transaction (a transaction-mode pooler such as PgBouncer would leak a session SET).
-  R4 bind parameters, never string-built `SET`. R5 values only from the verified token (`sub`) and
-  `users.role`; whitelist role `user|admin`; set both or neither. R6 reset/roll back connections on
+  R4 bind parameters, never string-built `SET`. R5 values only from the verified token and
+  `users.role`; whitelist role `user|admin`; set both or neither. Since AUT-05 the token is the
+  mmlabs one: `user_id` = the ricotdin user mapped from its `sub` (`users.mmlabs_sub`), role =
+  `admin` iff its `roles` contain `ricotdin:admin` (mirrored into `users.role`; §0.3a). R6 reset/roll back connections on
   check-in; test that a reused connection has no context. R7 statement/lock timeouts and connection
   limits per role. R8 no CREATE/TEMP for the app role (done in the schema).
-- **Role source of truth:** `users.role`; trigger `sync_profile_role` mirrors it to `profiles.role`.
+- **Role source of truth:** the mmlabs role `ricotdin:admin` (AUT-05), mirrored on every request into
+  `users.role`; trigger `sync_profile_role` mirrors that to `profiles.role`.
   `prevent_role_escalation` (v2 override, SECURITY INVOKER) decides by **invoking role**: only
   `ricotdin_app` is restricted (admin request context required); service/owner/definer callers pass.
 - **Downgrade of `0001` drops `public`** and is refused outside `ricotdin_test_*` databases unless

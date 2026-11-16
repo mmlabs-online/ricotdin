@@ -6,10 +6,11 @@ describe('parseRuntimeConfig', () => {
     expect(parseRuntimeConfig({ apiUrl: 'https://api.example.com/' })).toEqual({
       apiUrl: 'https://api.example.com',
       authUrl: 'https://api.example.com',
+      turnstileSiteKey: '',
     })
     expect(
       parseRuntimeConfig({ apiUrl: 'https://api.example.com', authUrl: 'https://auth.example.com' }),
-    ).toEqual({ apiUrl: 'https://api.example.com', authUrl: 'https://auth.example.com' })
+    ).toEqual({ apiUrl: 'https://api.example.com', authUrl: 'https://auth.example.com', turnstileSiteKey: '' })
   })
 
   it('allows http only for localhost', () => {
@@ -41,6 +42,14 @@ describe('parseRuntimeConfig', () => {
   it('rejects bodies that are not objects', () => {
     for (const raw of [null, undefined, 'x', 1, [], { apiUrl: 3 }]) {
       expect(() => parseRuntimeConfig(raw)).toThrow(ConfigError)
+    }
+  })
+
+  it('reads the public Turnstile site key (AUT-05)', () => {
+    expect(parseRuntimeConfig({ apiUrl: 'https://a.example', turnstileSiteKey: '0x4AAAAAAA_b-c' }).turnstileSiteKey).toBe('0x4AAAAAAA_b-c')
+    expect(parseRuntimeConfig({ apiUrl: 'https://a.example', turnstileSiteKey: '' }).turnstileSiteKey).toBe('')
+    for (const bad of [7, '<script>', 'a b', 'x'.repeat(101)]) {
+      expect(() => parseRuntimeConfig({ apiUrl: 'https://a.example', turnstileSiteKey: bad })).toThrow(ConfigError)
     }
   })
 })

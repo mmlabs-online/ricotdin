@@ -15,4 +15,14 @@ if ! origin_ok "$RICOTDIN_AUTH_URL"; then
   echo "ricotdin-web: RICOTDIN_AUTH_URL must be an https origin" >&2
   exit 1
 fi
-export RICOTDIN_API_URL RICOTDIN_AUTH_URL
+# Cloudflare Turnstile site key (AUT-05; public, optional): only key characters, it lands in JSON.
+: "${RICOTDIN_TURNSTILE_SITE_KEY:=}"
+case "$RICOTDIN_TURNSTILE_SITE_KEY" in *[!A-Za-z0-9_-]*)
+  echo "ricotdin-web: RICOTDIN_TURNSTILE_SITE_KEY must be a Turnstile site key" >&2
+  exit 1 ;;
+esac
+if [ "${#RICOTDIN_TURNSTILE_SITE_KEY}" -gt 100 ]; then
+  echo "ricotdin-web: RICOTDIN_TURNSTILE_SITE_KEY is too long" >&2
+  exit 1
+fi
+export RICOTDIN_API_URL RICOTDIN_AUTH_URL RICOTDIN_TURNSTILE_SITE_KEY

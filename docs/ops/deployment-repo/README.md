@@ -59,8 +59,11 @@ anything is replaced. Values must be one line without `'`.
   the workflow. Rotating that App Password therefore needs a re-run of both deploys.
 - **Optional:** `MAIL_FROM` (empty = the Gmail address), `SENTRY_DSN`, `JWT_PREVIOUS_PUBLIC_KEY` (only
   during a key rotation).
+- **Sign-in (AUT-05):** `RICOTDIN_TURNSTILE_SITE_KEY` (required, web): the public site key of the
+  Turnstile widget org-admin-api verifies; its hostnames must include `ricotdin.mmlabs.online`.
 - **Not secrets** (committed in the workflow): `WEB_ORIGIN` = `ALLOWED_ORIGINS` =
-  `https://ricotdin.mmlabs.online`, and web `RICOTDIN_API_URL` = `https://ricotdin-api.mmlabs.online`.
+  `https://ricotdin.mmlabs.online`, web `RICOTDIN_API_URL` = `https://ricotdin-api.mmlabs.online` and
+  `RICOTDIN_AUTH_URL` = `https://api.mmlabs.online` (the mmlabs identity API).
   No `API_DOCS`.
 - **`FORWARDED_ALLOW_IPS` is unset** until cloudflared gets a fixed `ipv4_address` in `proxy/compose.yml`
   (never the whole subnet). Until then uvicorn ignores `X-Forwarded-For`, so all clients share one

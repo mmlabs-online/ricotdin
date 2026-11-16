@@ -8,7 +8,10 @@ import { type Role, type SessionView, guardDecision, signInPath } from './guards
 import type { AuthState } from './session'
 
 function view(state: AuthState): SessionView {
-  return state.status === 'signedIn' ? { status: 'signedIn', role: state.user.role } : state
+  if (state.status === 'signedIn') return { status: 'signedIn', role: state.user.role }
+  // joining or verifying the email happens on the sign-in page
+  if (state.status === 'actionRequired') return { status: 'signedOut' }
+  return state
 }
 
 export function RequireRole({ role, children }: { role: Role; children: ReactNode }) {

@@ -35,7 +35,10 @@ def hash_password(password: str) -> str:
     return _hasher.hash(password)
 
 
-def verify_password(password: str, stored: str) -> VerifyResult:
+def verify_password(password: str, stored: str | None) -> VerifyResult:
+    if stored is None:  # an mmlabs-only account (AUT-05) has no ricotdin password
+        verify_dummy(password)
+        return VerifyResult(False)
     scheme = hash_scheme(stored)
     if scheme == "argon2id":
         try:

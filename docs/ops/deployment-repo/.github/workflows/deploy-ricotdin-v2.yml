@@ -172,6 +172,10 @@ jobs:
           WEB_ORIGIN: https://ricotdin.mmlabs.online
           ALLOWED_ORIGINS: https://ricotdin.mmlabs.online
           RICOTDIN_API_URL: https://ricotdin-api.mmlabs.online
+          # Sign-in with the mmlabs account (ricotdin AUT-05): the identity API, and the public site key
+          # of the Turnstile widget org-admin-api verifies (its hostnames must list ricotdin.mmlabs.online).
+          RICOTDIN_AUTH_URL: https://api.mmlabs.online
+          RICOTDIN_TURNSTILE_SITE_KEY: ${{ secrets.RICOTDIN_TURNSTILE_SITE_KEY }}
           # FORWARDED_ALLOW_IPS is deliberately unset: cloudflared has no fixed address yet, and
           # trusting the whole `web` subnet would let any container there forge X-Forwarded-For.
           # Unset, uvicorn ignores the header (all clients share cloudflared's address for rate limits).
@@ -190,7 +194,7 @@ jobs:
           # NAME = required, NAME? = optional.
           api_keys="DATABASE_URL_APP DATABASE_URL_SERVICE DATABASE_URL_WORKER JWT_PRIVATE_KEY JWT_PREVIOUS_PUBLIC_KEY? KEY_ENCRYPTION_SECRET SENTRY_DSN? SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM? WEB_ORIGIN ALLOWED_ORIGINS"
           worker_keys="DATABASE_URL_WORKER KEY_ENCRYPTION_SECRET SENTRY_DSN?"
-          web_keys="RICOTDIN_API_URL"
+          web_keys="RICOTDIN_API_URL RICOTDIN_AUTH_URL RICOTDIN_TURNSTILE_SITE_KEY"
           # Gmail shows App Passwords in groups of four: drop the spaces, as deploy-org-admin-api does.
           SMTP_PASSWORD="${SMTP_PASSWORD// /}"
           # Secret name to report for a key (SMTP comes from the org-admin-api environment).
@@ -199,6 +203,7 @@ jobs:
               SMTP_USER) echo "ORG_ADMIN_SMTP_USERNAME(env org-admin-api)" ;;
               SMTP_PASSWORD) echo "ORG_ADMIN_SMTP_PASSWORD(env org-admin-api)" ;;
               DATABASE_URL_*) echo "$1(in $RICOTDIN_ENV_DIR/db-logins.env: delete it and re-run)" ;;
+              RICOTDIN_*) echo "$1" ;;
               *) echo "RICOTDIN_$1" ;;
             esac
           }

@@ -4,7 +4,7 @@
 import { expect, test } from '@playwright/test'
 import en from '../src/i18n/locales/en.json' with { type: 'json' }
 
-const ADMIN = 'e2e_admin'
+const ADMIN = 'e2e-admin@example.com' // mmlabs signs in with the email (AUT-05)
 const PASSWORD = 'correct horse battery'
 const FAILED = 'Quarterly review (failed)'
 const a = en.admin
@@ -14,7 +14,7 @@ test.use({ locale: 'en-US' })
 test('admin: users, requeue, keys, config, features', async ({ page }) => {
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/sign-in/)
-  await page.locator('input[name=identifier]').fill(ADMIN)
+  await page.locator('input[name=email]').fill(ADMIN)
   await page.locator('input[name=password]').fill(PASSWORD)
   await page.locator('button[type=submit]').click()
   await expect(page.getByRole('heading', { level: 1, name: a.tabs.overview })).toBeVisible()

@@ -171,8 +171,6 @@ export function AdminUsersPage() {
           <span>{t('admin.users.bulk.selected', { count: selected.size })}</span>
           <Button onClick={() => askBulk({ action: 'disable' })} aria-disabled={bulkBusy}>{t('admin.users.actions.disable')}</Button>
           <Button onClick={() => askBulk({ action: 'enable' })} aria-disabled={bulkBusy}>{t('admin.users.actions.enable')}</Button>
-          <Button onClick={() => askBulk({ action: 'set_role', role: 'admin' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeAdmin')}</Button>
-          <Button onClick={() => askBulk({ action: 'set_role', role: 'user' })} aria-disabled={bulkBusy}>{t('admin.users.actions.makeUser')}</Button>
           <Button
             variant="ghost"
             onClick={() => {

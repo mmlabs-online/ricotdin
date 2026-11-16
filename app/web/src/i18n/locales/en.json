@@ -51,15 +51,20 @@
     "newHere": "New to Ricotdin?",
     "createAccount": "Create an account",
     "errors": {
-      "missing": "Enter your email or username and your password.",
-      "invalid_credentials": "That email, username or password is not right.",
+      "missing": "Enter your email and your password.",
+      "invalid_credentials": "That email or password is not right.",
       "email_not_verified": "Please verify your email first. Check your inbox for the link.",
       "account_disabled": "This account has been disabled. Contact an administrator.",
       "rate_limited": "Too many attempts. Wait a few minutes and try again.",
       "network": "Cannot reach the server. Check your connection and try again.",
       "generic": "Sign-in failed. Please try again.",
       "invalidLink": "This link is invalid or has expired.",
-      "unavailable": "Sign-up is not available right now. Try again later."
+      "unavailable": "Sign-up is not available right now. Try again later.",
+      "account_link_conflict": "This email belongs to a ricotdin account linked to another mmlabs account. Contact an administrator.",
+      "turnstile_required": "Please complete the security check first.",
+      "turnstile_failed": "The security check failed. Please try it again.",
+      "weak_password": "That password is too short or too common. Choose another one.",
+      "email_unverified": "Your email is not verified yet. Open the link in the email we sent, then try again."
     },
     "signOutFailed": "We could not end your session on the server. On a shared computer, sign in and sign out again, or close the browser.",
     "resendLink": "Send a new verification email",
@@ -90,10 +95,11 @@
       "submitting": "Creating account…",
       "haveAccount": "Already have an account?",
       "checkInbox": "Check your inbox",
-      "sent": "We sent a verification link to {{email}}. Open it to activate your account, then sign in.",
+      "sent": "We sent a verification link to {{email}}. Open it, then sign in.",
       "notSent": "Your account was created, but the verification email could not be sent right now. Ask for a new one from the sign-in page later.",
-      "taken": "That email or username is already in use.",
-      "invalid": "Check your details and try again."
+      "taken": "That email already has an mmlabs account. Sign in instead.",
+      "invalid": "Check your details and try again.",
+      "mmlabsSubtitle": "One mmlabs account for every mmlabs app. Record meetings and get transcripts, notes and to-dos."
     },
     "verify": {
       "done": "Your email is verified and your password is set. Sign in with it now.",
@@ -101,7 +107,12 @@
       "resend": "Send verification email",
       "confirmHelp": "Choose the password for your account. This confirms your email address and activates the account.",
       "confirm": "Verify and set password",
-      "password": "Password"
+      "password": "Password",
+      "clickHelp": "Confirm that this is your email address.",
+      "button": "Verify my email",
+      "doneMmlabs": "Your email is verified.",
+      "continue": "Continue",
+      "resendSignIn": "Sign in to get a new verification link."
     },
     "reset": {
       "help": "Choose a new password. You will be signed out on every device.",
@@ -109,6 +120,28 @@
       "submit": "Set new password",
       "done": "Your password was changed. Sign in with the new password.",
       "newLink": "Request a new link"
+    },
+    "mmlabsSubtitle": "Use your mmlabs account, the one you use for every mmlabs app.",
+    "emailPlaceholder": "you@example.com",
+    "accounts": {
+      "label": "Accounts signed in on this browser",
+      "continueAs": "Continue as {{email}}",
+      "or": "or sign in with another account"
+    },
+    "pending": {
+      "joinTitle": "Continue to Ricotdin",
+      "joinBody": "You are signed in to mmlabs as {{email}}. Continue to start using Ricotdin with this account.",
+      "joinClosed": "The account {{email}} cannot join Ricotdin right now. Contact an administrator.",
+      "verifyTitle": "Verify your email",
+      "verifyBody": "Open the link we sent to {{email}} to verify your email, then continue.",
+      "resent": "We sent a new verification email. Check your inbox (and spam folder).",
+      "verified": "I have verified my email",
+      "other": "Use another account",
+      "thisAccount": "this account"
+    },
+    "turnstile": {
+      "label": "Security check",
+      "unavailable": "The security check is not available right now. Try again later."
     }
   },
   "page": {
@@ -304,7 +337,8 @@
           "action": "Delete permanently"
         }
       },
-      "viewActivity": "View all activity"
+      "viewActivity": "View all activity",
+      "mmlabsHint": "Roles and passwords are managed in mmlabs (role ricotdin:admin). The admin role follows the account within 15 minutes."
     },
     "quota": {
       "title": "Balance",
@@ -1333,7 +1367,9 @@
       "changed": "Password changed. Other devices were signed out.",
       "currentRequired": "Enter your current password.",
       "mismatch": "The new passwords do not match.",
-      "same": "The new password must be different from the current one."
+      "same": "The new password must be different from the current one.",
+      "mmlabsBody": "Your password belongs to your mmlabs account and is the same in every mmlabs app. Changing it signs you out everywhere.",
+      "reset": "Change password by email"
     },
     "appearance": {
       "title": "Appearance",

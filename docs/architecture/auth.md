@@ -64,3 +64,44 @@
 
 - **Integration tests** (`*_integration.py`) create and drop `ricotdin_test_*` databases on the
   `DATABASE_URL` branch (never point it at `main`); CI runs them against a `pgvector/pgvector:pg18` service.
+
+### 0.3a Sign in with the mmlabs account (AUT-05, owner decision 2026-11-16)
+
+ricotdin's own sign-in is replaced by the mmlabs identity on org-admin-api (`api.mmlabs.online`).
+Contract: org-admin `docs/consumers.md`. The old password / JWT / refresh / email code above stays
+only until AUT-06 removes it (both ship in one release).
+
+- **Browser (`app/web/src/auth/session.ts`, `mmlabs.ts`):** sign-in, sign-up, verify, forgot and
+  reset call `{RICOTDIN_AUTH_URL}/api/v1/auth/*` (= `https://api.mmlabs.online`) with
+  `credentials: 'include'` and `X-MM-App: ricotdin`. mmlabs keeps the device session (cookie
+  `__Host-mm_device`); the chosen account is `localStorage.mm_account_id` (an account session id,
+  not a secret). The access token comes from `POST /api/v1/auth/token {audience: "ricotdin",
+  account_id}`, lives only in memory, is renewed 60 s before `exp` (15 min) and once on a 401; the
+  ricotdin user comes from `GET /auth/me`. `not_member` → "Continue as" (the click is the consent)
+  → `POST /api/v1/auth/apps/ricotdin/join`; `email_unverified` → resend screen. Turnstile
+  (`RICOTDIN_TURNSTILE_SITE_KEY`, CSP `script-src` + `frame-src challenges.cloudflare.com`) for
+  sign-up, forgot-password and sign-in after 3 failures.
+- **API (`app/auth/mmlabs.py`, `linking.py`, `deps.py`):** `current_identity` accepts an ES256
+  token: keys only from `{MMLABS_ISSUER}/.well-known/jwks.json` (cached ≤ 1 h, unknown `kid`
+  refetch ≤ 1/min, a failed refresh keeps the cached keys, no keys at all → 503), `iss` exact,
+  `aud == MMLABS_AUDIENCE` as a string, header `typ == at+jwt`, required `exp iat sub jti iss aud`,
+  30 s leeway, `email_verified is True`. Never logged.
+- **Account mapping:** `users.mmlabs_sub` (migration 0010, unique). First request of an mmlabs
+  account: an unlinked user with the same email (case-insensitive) is linked (owner decision), else
+  a user + profile is created (`password_hash` NULL, email verified, username from the email local
+  part, `-2`, `-3`… on collision; signup quota grant as for registration). A user linked to another
+  `sub` is never relinked (409 `account_link_conflict`). Concurrent first requests create one user.
+- **Role:** `admin` iff the token's `roles` contain `ricotdin:admin`, else `user` (§0.1 R5
+  whitelist); `users.role` is written when it differs, so DB functions and `current_admin` agree.
+  Changes made in mmlabs apply within the token lifetime (≤ 15 min). `PATCH /admin/users/{id}/role`
+  and bulk `set_role` answer 409 `role_managed_externally`. A ricotdin-disabled user gets 403
+  `account_disabled` on every request.
+- **Settings:** `MMLABS_ISSUER` (default `https://api.mmlabs.online`), `MMLABS_AUDIENCE` (default
+  `ricotdin`); web `RICOTDIN_AUTH_URL=https://api.mmlabs.online`, `RICOTDIN_TURNSTILE_SITE_KEY`.
+- **Prerequisites at org-admin:** app `ricotdin` registered (`register-app`, origin
+  `https://ricotdin.mmlabs.online`, join_policy open); role `ricotdin:admin` assigned to the owner;
+  the Turnstile widget lists the hostname `ricotdin.mmlabs.online`.
+- **Tests:** `test_mmlabs_token.py`, `test_mmlabs_linking.py`, `test_mmlabs_identity_integration.py`;
+  web `auth/session.test.ts`, `auth/mmlabs.test.ts`; the e2e suite signs in through a fake mmlabs in
+  `tests/e2e_server.py` (test-only, not in the image).
+

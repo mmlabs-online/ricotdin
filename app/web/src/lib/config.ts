@@ -4,8 +4,11 @@
 export type RuntimeConfig = {
   /** Origin of the v2 API (no path: the API is served at `/`). */
   apiUrl: string
-  /** Origin that serves `/auth/*` (the refresh cookie is host-only, `Path=/auth`). Defaults to apiUrl. */
+  /** Origin of the mmlabs identity API (AUT-05: `https://api.mmlabs.online`). Defaults to apiUrl. */
   authUrl: string
+  /** Cloudflare Turnstile site key for sign-up / forgot-password / repeated sign-in failures
+   * (public; empty when not configured: those forms then explain they are unavailable). */
+  turnstileSiteKey: string
 }
 
 export class ConfigError extends Error {}
@@ -38,7 +41,11 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
   const body = raw as Record<string, unknown>
   const apiUrl = parseOrigin('apiUrl', body.apiUrl)
   const authUrl = body.authUrl === undefined ? apiUrl : parseOrigin('authUrl', body.authUrl)
-  return { apiUrl, authUrl }
+  const rawKey = body.turnstileSiteKey
+  if (rawKey !== undefined && (typeof rawKey !== 'string' || !/^[A-Za-z0-9_-]{0,100}$/.test(rawKey))) {
+    throw new ConfigError('turnstileSiteKey must be a Turnstile site key')
+  }
+  return { apiUrl, authUrl, turnstileSiteKey: rawKey ?? '' }
 }
 
 export async function loadRuntimeConfig(fetchFn: typeof fetch = fetch): Promise<RuntimeConfig> {

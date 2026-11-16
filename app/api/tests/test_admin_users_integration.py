@@ -131,25 +131,18 @@ def test_detail(client: TestClient, world: dict[str, Any], admin: dict[str, str]
 # --- role ----------------------------------------------------------------------------------------
 
 
-def test_role_change_and_guards(
+def test_roles_are_managed_in_mmlabs(
     client: TestClient, world: dict[str, Any], admin: dict[str, str]
 ) -> None:
+    # AUT-05: the role comes from the mmlabs token (ricotdin:admin); ricotdin cannot change it.
     uid = _new_user(world)
     r = client.patch(f"/admin/users/{uid}/role", headers=admin, json={"role": "admin"})
-    assert r.json() == {"ok": True, "role": "admin"}
-    assert _sql(world["db"], "SELECT u.role, p.role FROM users u JOIN profiles p ON p.id = u.id "
-                "WHERE u.id = %s", uid) == [("admin", "admin")]  # fmt: skip
-    assert client.patch(f"/admin/users/{uid}/role", headers=admin,
-                        json={"role": "user"}).status_code == 200  # fmt: skip
-    audits = _audits(world, uid)
-    assert [a[0] for a in audits] == ["user.role_change"] * 2
-    assert audits[0][1] == world["a"] and audits[0][2] == {"from": "user", "to": "admin"}
-    me = client.patch(f"/admin/users/{world['a']}/role", headers=admin, json={"role": "user"})
-    assert me.status_code == 400 and _msg(me) == "You cannot demote yourself."
-    bad = client.patch(f"/admin/users/{uid}/role", headers=admin, json={"role": "owner"})
-    assert bad.status_code == 422
-    assert client.patch(f"/admin/users/{uuid.uuid4()}/role", headers=admin,
-                        json={"role": "user"}).status_code == 404  # fmt: skip
+    assert r.status_code == 409 and r.json()["error"]["code"] == "role_managed_externally"
+    bulk = client.post("/admin/users/bulk", headers=admin,
+                       json={"ids": [str(uid)], "action": "set_role", "role": "admin"})  # fmt: skip
+    assert bulk.status_code == 409 and bulk.json()["error"]["code"] == "role_managed_externally"
+    assert _sql(world["db"], "SELECT role FROM users WHERE id = %s", uid) == [("user",)]
+    assert _audits(world, uid) == []
 
 
 def test_the_last_admin_cannot_be_removed(
@@ -158,8 +151,7 @@ def test_the_last_admin_cannot_be_removed(
     # Every other admin row is disabled: only `a` is an active admin.
     _sql(world["db"], "UPDATE users SET disabled_at = now() WHERE role = 'admin' AND id <> %s",
          world["a"])  # fmt: skip
-    for method, path, body in (("PATCH", "role", {"role": "user"}),
-                               ("PATCH", "status", {"disabled": True}), ("DELETE", "", None)):  # fmt: skip
+    for method, path, body in (("PATCH", "status", {"disabled": True}), ("DELETE", "", None)):
         url = f"/admin/users/{world['a']}/{path}".rstrip("/")
         r = client.request(method, url, headers=admin, json=body)
         assert r.status_code == 400, (path, r.text)
@@ -270,9 +262,6 @@ def test_bulk_skips_self_and_reports_unknown_ids(
     enable = client.post("/admin/users/bulk", headers=admin,
                          json={"ids": [str(u1)], "action": "enable"})  # fmt: skip
     assert enable.json() == {"processed": 1}
-    role = client.post("/admin/users/bulk", headers=admin,
-                       json={"ids": [str(u1)], "action": "set_role", "role": "admin"})  # fmt: skip
-    assert role.json() == {"processed": 1}
     assert client.post("/admin/users/bulk", headers=admin,
                        json={"ids": [], "action": "enable"}).status_code == 422  # fmt: skip
     only_me = client.post("/admin/users/bulk", headers=admin,
@@ -309,21 +298,6 @@ def test_quota_grant_and_history(
 
 
 # --- review follow-ups ------------------------------------------------------------------------------
-
-
-def test_only_active_verified_accounts_become_admins(
-    client: TestClient, world: dict[str, Any], admin: dict[str, str]
-) -> None:
-    unverified = _new_user(world)
-    _sql(world["db"], "UPDATE users SET email_verified_at = NULL WHERE id = %s", unverified)
-    r = client.patch(f"/admin/users/{unverified}/role", headers=admin, json={"role": "admin"})
-    assert (
-        r.status_code == 400 and _msg(r) == "Only an active, verified account can be made an admin."
-    )
-    bulk = client.post("/admin/users/bulk", headers=admin,
-                       json={"ids": [str(unverified)], "action": "set_role", "role": "admin"})  # fmt: skip
-    assert bulk.status_code == 400
-    assert _sql(world["db"], "SELECT role FROM users WHERE id = %s", unverified) == [("user",)]
 
 
 def test_reset_password_is_rate_limited_per_address(
