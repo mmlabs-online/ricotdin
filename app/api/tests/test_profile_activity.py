@@ -10,6 +10,7 @@ from app.domain.activity import (
     EVENT_TYPES,
     SHARE_EVENTS,
     OwnActivityFilters,
+    deleted_meeting_metadata,
     own_activity_row,
     parse_own_activity_filters,
     share_metadata,
@@ -61,6 +62,9 @@ def test_page_per_page_and_type() -> None:
         {"perPage": "0"},
         {"perPage": "51"},
         {"perPage": "1.5"},
+        {"page": "\u00b2"},  # str.isdigit() is True, int() raises (PRF-09 review)
+        {"page": "\u0661\u0662"},  # Arabic-Indic digits
+        {"page": "9" * 5000},  # beyond int()'s digit limit
         {"eventType": "login"},
         {"eventType": "nope"},
     ],
@@ -143,6 +147,14 @@ def test_metadata_of_the_wrong_shape_is_ignored() -> None:
 def test_a_long_folder_name_is_cut() -> None:
     row = _row(event_type="folder_shared", metadata={"folder_name": "x" * 500})
     assert len(str(own_activity_row(row, ME)["folderName"])) == 200
+
+
+def test_deleted_meeting_metadata_keeps_a_short_title() -> None:
+    mid = uuid.uuid4()
+    assert deleted_meeting_metadata(mid, "Weekly") == {"meeting_id": str(mid), "title": "Weekly"}
+    assert deleted_meeting_metadata(mid, "x" * 500)["title"] == "x" * 200
+    assert deleted_meeting_metadata(mid, None) == {"meeting_id": str(mid), "title": None}
+    assert deleted_meeting_metadata(mid, "") == {"meeting_id": str(mid), "title": None}
 
 
 def test_share_metadata() -> None:

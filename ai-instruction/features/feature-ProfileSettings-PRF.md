@@ -262,7 +262,7 @@ As a user, I want to choose my default processing model (Flash ↔ Flash-Lite) s
 ---
 
 ### PRF-09 — Account activity log
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want to view my own recent activity (meetings created/deleted, processing results, recordings, chat, folder shares granted/received) so I can review what happened on my account.
@@ -303,7 +303,7 @@ Re-specced 2026-11-16 (owner Q&A). Since AUT-05 sign-in happens at mmlabs, so ri
 - api + web commands of §0 green; on `/profile`, share a folder with a second account → both see the event.
 
 **Out of scope**
-- Sign-in events (mmlabs), retention of `activity_log`, share role-change events.
+- Sign-in events (mmlabs), retention of `activity_log`, share role-change events, the shares a folder delete cascades away (no `folder_unshared` rows for them).
 
 **Key files (expected)**
 - `app/api/app/routers/{profile,folders,meetings}.py`, `app/api/app/domain/activity.py`, `app/api/migrations/`, `app/web/src/routes/ProfilePage.tsx`, `app/web/src/api/profile.ts`, `app/web/src/lib/profile/activity.ts`, `app/web/src/lib/admin/ops.ts`, i18n.

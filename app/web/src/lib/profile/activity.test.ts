@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACTIVITY_TYPES, activityKey, deviceLabel } from './activity'
+import { ACTIVITY_TYPES, activityKey, deviceLabel, uniqueById } from './activity'
 
 const UA = {
   chromeMac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -52,5 +52,12 @@ describe('activityKey', () => {
       'meeting_created', 'meeting_deleted', 'processing_done', 'processing_failed', 'record_start', 'record_stop',
       'recording_notice_ack', 'chat_message', 'folder_shared', 'folder_unshared',
     ])
+  })
+})
+
+describe('uniqueById', () => {
+  it('keeps the first of each id, in order', () => {
+    expect(uniqueById([{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: 'c' }])).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+    expect(uniqueById([])).toEqual([])
   })
 })

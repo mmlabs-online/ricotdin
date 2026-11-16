@@ -8,6 +8,7 @@
 ### Tính năng
 - Đăng nhập Ricotdin bằng tài khoản mmlabs (tài khoản chung cho mọi app mmlabs, ở `api.mmlabs.online`): đăng nhập, đăng ký, xác minh email, quên/đặt lại mật khẩu đều qua mmlabs, có Cloudflare Turnstile; "Tiếp tục với <email>" khi trình duyệt đã đăng nhập mmlabs ở app khác. Lần đầu đăng nhập, tài khoản Ricotdin cùng email được nối tự động (giữ nguyên cuộc họp); quyền admin lấy từ role mmlabs `ricotdin:admin` (cập nhật trong ≤ 15 phút), không đổi role trong Ricotdin nữa. Đổi mật khẩu trong hồ sơ chuyển sang link quên mật khẩu (AUT-05).
 - Bỏ hệ đăng nhập riêng của Ricotdin: mật khẩu, JWT, refresh token, email xác minh/đặt lại mật khẩu, đổi mật khẩu trong hồ sơ và "đặt lại mật khẩu" của admin; API chỉ nhận token mmlabs. Mật khẩu cũ, phiên cũ và link email cũ bị xoá (AUT-06).
+- Mục "Hoạt động" trong hồ sơ: xem lại hoạt động của chính mình (tạo/xóa cuộc họp, xử lý, ghi âm, chat) kèm thiết bị và IP, và các lần chia sẻ / gỡ chia sẻ thư mục với người khác (cả hai bên đều thấy); lọc theo loại, "Xem thêm" (PRF-09).
 
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
@@ -15,6 +16,7 @@
 - Container `api` cần gọi ra `https://api.mmlabs.online/.well-known/jwks.json` (mạng `web` không internal: được).
 - Migration `0011_wipe_legacy_auth`: xoá mọi `password_hash`, `refresh_tokens`, `email_tokens` (giữ bảng; bỏ hẳn ở ARC-16 phần 2). Sau đó không quay lại được bản trước AUT-05; rollback về bản AUT-05 thì không được dùng `api.env` cũ còn `JWT_PRIVATE_KEY`/SMTP (AUT-06).
 - `deploy-ricotdin-v2.yml` trên repo deployment: bỏ `RICOTDIN_JWT_PRIVATE_KEY`, `RICOTDIN_MAIL_FROM`, SMTP và `environment: org-admin-api` (bản mới ở `docs/ops/deployment-repo/`); sau deploy thành công xoá các secret `RICOTDIN_JWT_*` / `RICOTDIN_MAIL_FROM` (AUT-06).
+- Migration `0012_activity_target_index` (chỉ thêm index `activity_log_target_created`); bước `database` của deploy tự chạy (PRF-09).
 - Bên org-admin: app `ricotdin` đã đăng ký (`register-app`), role `ricotdin:admin` gán cho tài khoản admin (owner đã làm 2026-11-16).
 
 ## [2.1.0] — 2026-11-15

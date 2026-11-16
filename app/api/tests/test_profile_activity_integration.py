@@ -130,3 +130,18 @@ def test_a_deleted_meeting_keeps_its_title(client: TestClient, world: dict[str, 
     assert client.delete(f"/meetings/{mid}", headers=_as(client, "c")).status_code == 200
     [row] = _feed(client, "c", eventType="meeting_deleted")
     assert (row["meetingTitle"], row["meetingId"]) == ("Gone soon", None)
+
+
+def test_meetings_deleted_with_their_folder_keep_their_title(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    r = client.post("/folders", headers=_as(client, "e"), json={"name": "PRF-09 to delete"})
+    fid = r.json()["folder"]["id"]
+    _sql(world["db"], "INSERT INTO meetings (id, user_id, title, status, folder_id) VALUES "
+         "(%s, %s, 'In the folder', 'done', %s)", uuid.uuid4(), world["e"], fid)  # fmt: skip
+    r = client.delete(
+        f"/folders/{fid}", headers=_as(client, "e"), params={"deleteMeetings": "true"}
+    )
+    assert r.status_code == 200, r.text
+    titles = [row["meetingTitle"] for row in _feed(client, "e", eventType="meeting_deleted")]
+    assert "In the folder" in titles

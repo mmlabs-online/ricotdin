@@ -44,3 +44,9 @@ export function deviceLabel(userAgent: string | null | undefined): string | null
   const parts = [browser, system].filter(Boolean)
   return parts.length ? parts.join(' · ') : null
 }
+
+/** The first entry of each id, in order (offset pages can overlap when new rows arrive). */
+export function uniqueById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>()
+  return rows.filter((r) => !seen.has(r.id) && seen.add(r.id) !== undefined)
+}

@@ -1390,7 +1390,7 @@
     "activity": {
       "title": "Activity",
       "body": "What happened on your account in Ricotdin: your own actions with the device and IP address they came from, and folder shares other people made with you. Sign-ins are listed in your mmlabs account.",
-      "filter": "Show",
+      "filter": "Event type",
       "all": "All activity",
       "empty": "No activity yet.",
       "loadError": "Could not load your activity.",
@@ -1420,14 +1420,17 @@
         "record_stop": "You stopped recording",
         "recording_notice_ack": "You accepted the recording notice",
         "chat_message": "You asked a question",
-        "folder_shared_out": "You shared the folder “{{folder}}” with @{{user}} as {{role}}",
-        "folder_shared_in": "@{{user}} shared the folder “{{folder}}” with you as {{role}}",
-        "folder_removed_out": "You removed @{{user}} from the folder “{{folder}}”",
-        "folder_removed_in": "@{{user}} removed you from the folder “{{folder}}”",
-        "folder_left_out": "You left the folder “{{folder}}” shared by @{{user}}",
-        "folder_left_in": "@{{user}} left your folder “{{folder}}”",
+        "folder_shared_out": "You shared the folder “{{folder}}” with {{user}} as {{role}}",
+        "folder_shared_in": "{{user}} shared the folder “{{folder}}” with you as {{role}}",
+        "folder_removed_out": "You removed {{user}} from the folder “{{folder}}”",
+        "folder_removed_in": "{{user}} removed you from the folder “{{folder}}”",
+        "folder_left_out": "You left the folder “{{folder}}” shared by {{user}}",
+        "folder_left_in": "{{user}} left your folder “{{folder}}”",
         "other": "Other activity"
-      }
+      },
+      "emptyFiltered": "No activity of this type.",
+      "someFolder": "a folder",
+      "someone": "a deleted account"
     }
   }
 }

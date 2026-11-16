@@ -1,6 +1,6 @@
 // Profile & preferences (ARC-13c, Make ProfileView): details + avatar, password, appearance,
 // default AI model, the remaining audio minutes / chat questions, and own activity (PRF-09).
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -22,7 +22,7 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { assignableFolders, defaultFolderLost, initialFolderChoice } from '../lib/folders/defaultFolder'
 import { mediaSrc } from '../lib/meetings/detail'
-import { ACTIVITY_TYPES, activityKey, deviceLabel } from '../lib/profile/activity'
+import { ACTIVITY_TYPES, activityKey, deviceLabel, uniqueById } from '../lib/profile/activity'
 import { modelValue, parseModelValue, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
 import { AVATAR_TYPES, uploadErrorKey } from '../lib/upload/upload'
@@ -498,9 +498,13 @@ function ActivitySection() {
   const [type, setType] = useState('')
   const feed = useOwnActivity(type)
   const id = useId()
-  const when = (iso: string) =>
-    new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
-  const rows = feed.data?.pages.flatMap((p) => p.rows) ?? []
+  const lang = i18n.resolvedLanguage ?? 'en'
+  const fmt = useMemo(() => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }), [lang])
+  // offset paging: a row written after page 1 shifts the next page by one, so drop repeats
+  const rows = uniqueById(feed.data?.pages.flatMap((p) => p.rows) ?? [])
+  const more = () => {
+    if (!feed.isFetchingNextPage) void feed.fetchNextPage()
+  }
   return (
     <Section title={t('profile.activity.title')} body={t('profile.activity.body')}>
       <div className="field-row">
@@ -515,28 +519,29 @@ function ActivitySection() {
         </select>
       </div>
       {feed.isPending ? (
-        <p className="tab-note">{t('common.loading')}</p>
-      ) : feed.isError && rows.length === 0 ? (
-        <p className="form-note error" role="alert">
-          {t('profile.activity.loadError')}{' '}
-          <Button variant="ghost" onClick={() => void feed.refetch()}>
-            {t('common.tryAgain')}
-          </Button>
+        <p className="tab-note" role="status">
+          {t('common.loading')}
         </p>
+      ) : feed.isError && rows.length === 0 ? (
+        <div className="activity-more">
+          <p className="form-note error" role="alert">
+            {t('profile.activity.loadError')}
+          </p>
+          <Button onClick={() => void feed.refetch()}>{t('common.tryAgain')}</Button>
+        </div>
       ) : rows.length === 0 ? (
-        <p className="tab-note">{t('profile.activity.empty')}</p>
+        <p className="tab-note">{t(type ? 'profile.activity.emptyFiltered' : 'profile.activity.empty')}</p>
       ) : (
-        <ul className="activity-list">
+        <ul className="activity-list" aria-busy={feed.isFetching}>
           {rows.map((r) => {
             const device = deviceLabel(r.userAgent)
-            const meta = [when(r.createdAt), device, r.ip].filter(Boolean).join(' · ')
             return (
               <li key={r.id}>
                 <span className="bidi-isolate">
                   {t(activityKey(r.eventType, r.direction, r.left), {
-                    folder: displayText(r.folderName ?? '—'),
-                    user: r.otherUser ? displayText(r.otherUser) : '—',
-                    role: r.role ? t(`profile.activity.roles.${r.role === 'editor' ? 'editor' : 'viewer'}`) : '',
+                    folder: r.folderName ? displayText(r.folderName) : t('profile.activity.someFolder'),
+                    user: r.otherUser ? `@${displayText(r.otherUser)}` : t('profile.activity.someone'),
+                    role: t(`profile.activity.roles.${r.role === 'editor' ? 'editor' : 'viewer'}`),
                     interpolation: { escapeValue: false },
                   })}
                 </span>
@@ -548,16 +553,27 @@ function ActivitySection() {
                   ) : (
                     <span className="activity-meeting bidi-isolate">{displayText(r.meetingTitle)}</span>
                   ))}
-                <small>{meta}</small>
+                <small className="activity-meta">
+                  <time dateTime={r.createdAt}>{fmt.format(new Date(r.createdAt))}</time>
+                  {device && <span>{device}</span>}
+                  {r.ip && <span>{r.ip}</span>}
+                </small>
               </li>
             )
           })}
         </ul>
       )}
+      {feed.isFetchNextPageError && (
+        <p className="form-note error" role="alert">
+          {t('profile.activity.loadError')}
+        </p>
+      )}
       {feed.hasNextPage && (
-        <Button variant="ghost" onClick={() => void feed.fetchNextPage()} aria-disabled={feed.isFetchingNextPage}>
-          {feed.isFetchingNextPage ? t('common.loading') : t('profile.activity.more')}
-        </Button>
+        <div className="activity-more">
+          <Button variant="ghost" onClick={more} aria-disabled={feed.isFetchingNextPage} aria-busy={feed.isFetchingNextPage}>
+            {feed.isFetchingNextPage ? t('common.loading') : t('profile.activity.more')}
+          </Button>
+        </div>
       )}
     </Section>
   )

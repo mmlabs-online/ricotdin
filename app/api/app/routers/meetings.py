@@ -35,6 +35,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.access import can_move_meeting, has_role
+from app.domain.activity import deleted_meeting_metadata
 from app.domain.content import edited_by_person
 from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
@@ -752,7 +753,7 @@ async def delete_meeting(
     # meeting_id stays NULL: the row is gone (BUG-012); the id (and title, PRF-09) go in metadata.
     await record_activity(
         db, request, identity.user_id, "meeting_deleted", None,
-        {"meeting_id": str(mid), "title": title},
+        deleted_meeting_metadata(mid, title),
     )  # fmt: skip
     out: dict[str, Any] = {"ok": True}
     if warning:

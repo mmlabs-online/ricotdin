@@ -1390,18 +1390,18 @@
     "activity": {
       "title": "Hoạt động",
       "body": "Những gì đã diễn ra trên tài khoản Ricotdin của bạn: thao tác của chính bạn kèm thiết bị và địa chỉ IP, và các lần người khác chia sẻ thư mục với bạn. Lịch sử đăng nhập xem trong tài khoản mmlabs.",
-      "filter": "Hiển thị",
+      "filter": "Loại hoạt động",
       "all": "Tất cả hoạt động",
       "empty": "Chưa có hoạt động nào.",
       "loadError": "Không tải được hoạt động của bạn.",
       "more": "Xem thêm",
       "roles": {
-        "editor": "người chỉnh sửa",
-        "viewer": "người xem"
+        "editor": "chỉnh sửa",
+        "viewer": "xem"
       },
       "types": {
         "meeting_created": "Tạo cuộc họp",
-        "meeting_deleted": "Xoá cuộc họp",
+        "meeting_deleted": "Xóa cuộc họp",
         "processing_done": "Xử lý xong",
         "processing_failed": "Xử lý lỗi",
         "record_start": "Bắt đầu ghi âm",
@@ -1413,21 +1413,24 @@
       },
       "events": {
         "meeting_created": "Bạn đã thêm một cuộc họp",
-        "meeting_deleted": "Bạn đã xoá một cuộc họp",
+        "meeting_deleted": "Bạn đã xóa một cuộc họp",
         "processing_done": "Một cuộc họp đã xử lý xong",
         "processing_failed": "Một cuộc họp xử lý bị lỗi",
         "record_start": "Bạn đã bắt đầu ghi âm",
         "record_stop": "Bạn đã dừng ghi âm",
         "recording_notice_ack": "Bạn đã xác nhận thông báo ghi âm",
         "chat_message": "Bạn đã đặt một câu hỏi",
-        "folder_shared_out": "Bạn đã chia sẻ thư mục “{{folder}}” với @{{user}} (quyền {{role}})",
-        "folder_shared_in": "@{{user}} đã chia sẻ thư mục “{{folder}}” với bạn (quyền {{role}})",
-        "folder_removed_out": "Bạn đã gỡ @{{user}} khỏi thư mục “{{folder}}”",
-        "folder_removed_in": "@{{user}} đã gỡ bạn khỏi thư mục “{{folder}}”",
-        "folder_left_out": "Bạn đã rời thư mục “{{folder}}” do @{{user}} chia sẻ",
-        "folder_left_in": "@{{user}} đã rời thư mục “{{folder}}” của bạn",
+        "folder_shared_out": "Bạn đã chia sẻ thư mục “{{folder}}” với {{user}} (quyền {{role}})",
+        "folder_shared_in": "{{user}} đã chia sẻ thư mục “{{folder}}” với bạn (quyền {{role}})",
+        "folder_removed_out": "Bạn đã gỡ {{user}} khỏi thư mục “{{folder}}”",
+        "folder_removed_in": "{{user}} đã gỡ bạn khỏi thư mục “{{folder}}”",
+        "folder_left_out": "Bạn đã rời thư mục “{{folder}}” do {{user}} chia sẻ",
+        "folder_left_in": "{{user}} đã rời thư mục “{{folder}}” của bạn",
         "other": "Hoạt động khác"
-      }
+      },
+      "emptyFiltered": "Không có hoạt động thuộc loại này.",
+      "someFolder": "một thư mục",
+      "someone": "một tài khoản đã bị xóa"
     }
   }
 }

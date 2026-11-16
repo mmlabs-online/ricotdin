@@ -58,7 +58,8 @@
   ?actor&action(prefix, wildcards literal)&from&to`. A date-only `to` covers the whole day (also
   ai-usage: the v1 UI appended `T23:59:59Z`); dates outside 1970–2100 are ignored; bad uuids →
   400 (v1 crashed). ARC-14 must render activity `metadata` as text (users write their own
-  `POST /activity` rows). v1's `POST /admin/pipeline/reconcile-quota` is not ported: the worker
+  `POST /activity` rows; since PRF-09 it also holds user-chosen folder names and meeting titles:
+  `folder_shared` / `folder_unshared`, `meeting_deleted`). v1's `POST /admin/pipeline/reconcile-quota` is not ported: the worker
   runs `wallet_reconcile` / `stuck_meetings` every 5 min (the service role cannot run them).
 - **Configuration (10c, `config.py`, pure `domain/admin_config.py`):** `GET|POST /admin/keys`,
   `PATCH|DELETE /admin/keys/{id}` (config keys = `<catalog provider>_api_key` + Speechmatics;

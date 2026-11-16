@@ -3,6 +3,7 @@
 A user sees the rows they wrote (with their own IP and user agent) and the folder-share rows that
 target them (with the actor's username, never the actor's IP or user agent)."""
 
+import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ EVENT_TYPES = (
 DEFAULT_PER_PAGE = 20
 MAX_PER_PAGE = 50
 MAX_NAME_CHARS = 200
+_DIGITS = re.compile(r"[0-9]{1,6}")  # ASCII only: str.isdigit() also takes '²'
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,7 @@ def _bounded_int(raw: Any, name: str, default: int, high: int) -> int:
     if raw is None or raw == "":
         return default
     text = str(raw).strip()
-    if not text.isdigit() or not 1 <= int(text) <= high:
+    if not _DIGITS.fullmatch(text) or not 1 <= int(text) <= high:
         raise BadRequest(f"{name} must be a whole number from 1 to {high}.")
     return int(text)
 
@@ -65,6 +67,11 @@ def share_metadata(
     if left:
         out["left"] = True
     return out
+
+
+def deleted_meeting_metadata(meeting_id: uuid.UUID, title: str | None) -> dict[str, Any]:
+    """``metadata`` of a ``meeting_deleted`` row: the row is gone, so its id and (short) title."""
+    return {"meeting_id": str(meeting_id), "title": (title or "")[:MAX_NAME_CHARS] or None}
 
 
 def _name(meta: Mapping[str, Any], key: str) -> str | None:

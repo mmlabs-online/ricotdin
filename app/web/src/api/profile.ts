@@ -1,5 +1,5 @@
 // Profile data (ARC-13c: PRF-01..04, AIP-06 default model, quota display).
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFetchApi } from '../auth/AuthProvider'
 import { putToDrive, uploadAvatar } from '../lib/upload/upload'
 import { apiJson } from './json'
@@ -63,6 +63,7 @@ export function useOwnActivity(eventType: string) {
       if (eventType) q.set('eventType', eventType)
       return apiJson<ActivityPage>(fetchApi, `/profile/activity?${q}`)
     },
+    placeholderData: keepPreviousData, // a filter change keeps the old rows until the new ones arrive
     getNextPageParam: (last) => (last.page * last.perPage < last.total ? last.page + 1 : undefined),
   })
 }
