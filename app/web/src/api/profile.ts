@@ -1,5 +1,5 @@
 // Profile data (ARC-13c: PRF-01..04, AIP-06 default model, quota display).
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFetchApi } from '../auth/AuthProvider'
 import { putToDrive, uploadAvatar } from '../lib/upload/upload'
 import { apiJson } from './json'
@@ -27,7 +27,46 @@ export interface Preferences {
   allowedModels: Array<{ provider: string; model: string; label: string }>
 }
 
-export const profileKeys = { profile: ['profile'] as const, preferences: ['profile', 'preferences'] as const }
+export const profileKeys = {
+  profile: ['profile'] as const,
+  preferences: ['profile', 'preferences'] as const,
+  activity: (type: string) => ['profile', 'activity', type] as const,
+}
+
+/** PRF-09: one row of GET /profile/activity. ip / userAgent only on the caller's own rows. */
+export interface ActivityEntry {
+  id: string
+  createdAt: string
+  eventType: string
+  direction: 'in' | 'out'
+  meetingId: string | null
+  meetingTitle: string | null
+  folderName: string | null
+  role: string | null
+  otherUser: string | null
+  left: boolean
+  ip: string | null
+  userAgent: string | null
+}
+interface ActivityPage { rows: ActivityEntry[]; total: number; page: number; perPage: number }
+
+export const ACTIVITY_PAGE_SIZE = 20
+
+/** PRF-09: the caller's activity, newest first, 20 at a time ("" = every type). */
+export function useOwnActivity(eventType: string) {
+  const fetchApi = useFetchApi()
+  return useInfiniteQuery({
+    queryKey: profileKeys.activity(eventType),
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => {
+      const q = new URLSearchParams({ page: String(pageParam), perPage: String(ACTIVITY_PAGE_SIZE) })
+      if (eventType) q.set('eventType', eventType)
+      return apiJson<ActivityPage>(fetchApi, `/profile/activity?${q}`)
+    },
+    placeholderData: keepPreviousData, // a filter change keeps the old rows until the new ones arrive
+    getNextPageParam: (last) => (last.page * last.perPage < last.total ? last.page + 1 : undefined),
+  })
+}
 
 export function useProfile() {
   const fetchApi = useFetchApi()

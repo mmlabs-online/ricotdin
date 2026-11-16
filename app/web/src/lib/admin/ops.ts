@@ -152,7 +152,7 @@ export function providerSlot(provider: string): number {
 
 const EVENTS = new Set([
   'login', 'logout', 'record_start', 'record_stop', 'recording_notice_ack', 'meeting_created',
-  'meeting_deleted', 'processing_done', 'processing_failed', 'chat_message', 'meeting_shared', 'meeting_unshared',
+  'meeting_deleted', 'processing_done', 'processing_failed', 'chat_message', 'meeting_shared', 'meeting_unshared', 'folder_shared', 'folder_unshared',
 ])
 export const EVENT_TYPES = [...EVENTS]
 

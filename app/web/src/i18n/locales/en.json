@@ -587,6 +587,8 @@
       "chat_message": "Asked a question",
       "meeting_shared": "Meeting shared",
       "meeting_unshared": "Meeting unshared",
+      "folder_shared": "Folder shared",
+      "folder_unshared": "Folder unshared",
       "other": "Other event"
     },
     "keys": {
@@ -1384,6 +1386,51 @@
       "network": "No connection to the server. Check your network and try again.",
       "generic": "Something went wrong. Please try again.",
       "folderUnavailable": "This folder can no longer be used. Pick another one."
+    },
+    "activity": {
+      "title": "Activity",
+      "body": "What happened on your account in Ricotdin: your own actions with the device and IP address they came from, and folder shares other people made with you. Sign-ins are listed in your mmlabs account.",
+      "filter": "Event type",
+      "all": "All activity",
+      "empty": "No activity yet.",
+      "loadError": "Could not load your activity.",
+      "more": "Show more",
+      "roles": {
+        "editor": "editor",
+        "viewer": "viewer"
+      },
+      "types": {
+        "meeting_created": "Meetings created",
+        "meeting_deleted": "Meetings deleted",
+        "processing_done": "Processing done",
+        "processing_failed": "Processing failed",
+        "record_start": "Recording started",
+        "record_stop": "Recording stopped",
+        "recording_notice_ack": "Recording notices",
+        "chat_message": "Chat questions",
+        "folder_shared": "Folders shared",
+        "folder_unshared": "Folders unshared"
+      },
+      "events": {
+        "meeting_created": "You added a meeting",
+        "meeting_deleted": "You deleted a meeting",
+        "processing_done": "A meeting finished processing",
+        "processing_failed": "A meeting failed to process",
+        "record_start": "You started recording",
+        "record_stop": "You stopped recording",
+        "recording_notice_ack": "You accepted the recording notice",
+        "chat_message": "You asked a question",
+        "folder_shared_out": "You shared the folder “{{folder}}” with {{user}} as {{role}}",
+        "folder_shared_in": "{{user}} shared the folder “{{folder}}” with you as {{role}}",
+        "folder_removed_out": "You removed {{user}} from the folder “{{folder}}”",
+        "folder_removed_in": "{{user}} removed you from the folder “{{folder}}”",
+        "folder_left_out": "You left the folder “{{folder}}” shared by {{user}}",
+        "folder_left_in": "{{user}} left your folder “{{folder}}”",
+        "other": "Other activity"
+      },
+      "emptyFiltered": "No activity of this type.",
+      "someFolder": "a folder",
+      "someone": "a deleted account"
     }
   }
 }

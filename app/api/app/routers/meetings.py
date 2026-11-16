@@ -35,6 +35,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
 from app.domain.access import can_move_meeting, has_role
+from app.domain.activity import deleted_meeting_metadata
 from app.domain.content import edited_by_person
 from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
@@ -524,7 +525,7 @@ def upload_limiter() -> RateLimiter:
 
 async def record_activity(
     db: Database, request: Request, user: uuid.UUID, event: str, meeting: uuid.UUID | None,
-    metadata: dict[str, Any],
+    metadata: dict[str, Any], target: uuid.UUID | None = None,
 ) -> None:  # fmt: skip
     """Best effort, like v1's fire-and-forget logActivity: a failure never breaks the request."""
     try:
@@ -532,13 +533,15 @@ async def record_activity(
             await conn.execute(
                 text(
                     "INSERT INTO public.activity_log (user_id, event_type, meeting_id, metadata, "
-                    "ip, user_agent) VALUES (:u, :e, :m, CAST(:md AS jsonb), :ip, :ua)"
+                    "target_user_id, ip, user_agent) "
+                    "VALUES (:u, :e, :m, CAST(:md AS jsonb), :t, :ip, :ua)"
                 ),
                 {
                     "u": user,
                     "e": event,
                     "m": meeting,
                     "md": json.dumps(metadata),
+                    "t": target,
                     "ip": client_ip(request),
                     "ua": (request.headers.get("user-agent") or "")[:512] or None,
                 },
@@ -736,19 +739,22 @@ async def delete_meeting(
     elif key and await delete_files(db, platform, [key]):
         warning = _STORAGE_WARNING
     async with db.role_transaction(SERVICE) as conn:
-        await conn.execute(
-            text("DELETE FROM public.meetings WHERE id = :id AND user_id = :u"),
-            {"id": mid, "u": identity.user_id},
-        )
+        title = (
+            await conn.execute(
+                text("DELETE FROM public.meetings WHERE id = :id AND user_id = :u RETURNING title"),
+                {"id": mid, "u": identity.user_id},
+            )
+        ).scalar_one_or_none()
     if key and warning is None and is_owned_audio_key(key, str(facts.user_id), str(mid)):
         # An upload confirmed between the storage delete and the row delete would be left
         # behind; /uploaded cannot map it any more once the row is gone, so one more pass is
         # enough (a no-op when nothing is mapped).
         await delete_files(db, platform, [key])
-    # meeting_id stays NULL: the row is gone (BUG-012); the id goes in metadata.
+    # meeting_id stays NULL: the row is gone (BUG-012); the id (and title, PRF-09) go in metadata.
     await record_activity(
-        db, request, identity.user_id, "meeting_deleted", None, {"meeting_id": str(mid)}
-    )
+        db, request, identity.user_id, "meeting_deleted", None,
+        deleted_meeting_metadata(mid, title),
+    )  # fmt: skip
     out: dict[str, Any] = {"ok": True}
     if warning:
         out["warning"] = warning

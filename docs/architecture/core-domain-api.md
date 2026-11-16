@@ -92,6 +92,18 @@
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
 - `POST /activity`: 10 per user per minute (in-process, `app.state.activity_limiter`); the insert is
   best effort and `meetingId` is stored only for a meeting the caller can see (else NULL).
+- **Own activity feed (PRF-09, migration `0012` = index `activity_log_target_created`):**
+  `GET /profile/activity?eventType&page&perPage` (20 by default, ≤ 50; ASCII digits only; unknown
+  type → 400), newest first, as `ricotdin_service` with the filter in code (`activity_log` is
+  admin-only under RLS): rows with `user_id` = caller (with their `ip` / `userAgent`) plus
+  `folder_shared` / `folder_unshared` rows whose `target_user_id` = caller (with the actor's
+  username, never the actor's IP or user agent); only the event types in `app/domain/activity.py`.
+  A meeting title (and id) only while the caller can still see the meeting; a `meeting_deleted`
+  row shows the title stored in its metadata (≤ 200 chars; only the owner deletes). Events:
+  `folder_shared` (add share: user = owner, target = grantee, metadata `{folder_id, folder_name,
+  role}`), `folder_unshared` (remove share, only when a row went: user = actor, target = grantee,
+  or the owner when a grantee leaves, `left: true`). Folder names are a snapshot at event time.
+  Not recorded: role changes on a share, and the shares a folder delete cascades away.
 - Email → account lookups (`POST /users/lookup`, adding a share): 20 per user per 15 min
   (`app.state.lookup_limiter`): v2 searches every user, v1 only the first page.
 - Differences from v1 to know: `PATCH /profile` validates every field before the username-taken

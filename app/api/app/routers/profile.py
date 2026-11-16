@@ -1,5 +1,6 @@
-"""Profile endpoints: change password (ARC-05); profile, quota balance and model preference
-(ARC-07). Avatars live in Google Drive (part 2): ``POST /profile/avatar`` gives an upload URL,
+"""Profile endpoints: profile, quota balance and model preference (ARC-07); the caller's own
+activity feed (PRF-09). Avatars live in Google Drive (part 2): ``POST /profile/avatar`` gives an
+upload URL,
 ``PATCH /profile`` confirms the uploaded file and stores ``avatar_key``; ``avatar_url`` is a
 short-lived ``/media`` link."""
 
@@ -18,6 +19,12 @@ from app.core.errors import (
 )
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
+from app.domain.activity import (
+    EVENT_TYPES,
+    SHARE_EVENTS,
+    own_activity_row,
+    parse_own_activity_filters,
+)
 from app.domain.models import allowed_models, model_label
 from app.domain.rules import parse_preferences_patch, parse_profile_patch
 from app.domain.uploads import (
@@ -239,3 +246,57 @@ async def update_preferences(request: Request, identity: Identity, db: Db) -> di
             except IntegrityError as exc:  # folder deleted after the check above (FK)
                 raise NotFound("Folder not found.") from exc
     return {"ok": True}
+
+
+# --- own activity (PRF-09) ------------------------------------------------------------------------
+
+# The caller's rows, plus the folder-share rows that target them. A meeting title only while the
+# caller can still see the meeting (owner, folder owner or share), like POST /activity.
+_ACTIVITY_WHERE = (
+    "a.event_type = ANY(:types) AND (a.user_id = :me OR "
+    "(a.target_user_id = :me AND a.event_type = ANY(:share)))"
+)
+
+
+@router.get("/activity")
+async def own_activity(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
+    """``?eventType&page&perPage`` (20 by default, at most 50), newest first."""
+    f = parse_own_activity_filters(request.query_params)
+    types = [f.event_type] if f.event_type else list(EVENT_TYPES)
+    args = {"me": identity.user_id, "types": types, "share": list(SHARE_EVENTS)}
+    async with db.role_transaction(SERVICE) as conn:  # activity_log is admin-only under RLS
+        total = (
+            await conn.execute(
+                text(f"SELECT count(*) FROM public.activity_log a WHERE {_ACTIVITY_WHERE}"),  # noqa: S608
+                args,
+            )
+        ).scalar_one()
+        rows = (
+            await conn.execute(
+                text(
+                    "SELECT a.id, a.created_at, a.user_id, a.target_user_id, a.event_type, "  # noqa: S608
+                    "a.meeting_id, a.metadata, a.ip, a.user_agent, "
+                    "CASE WHEN m.user_id = :me OR f.user_id = :me OR EXISTS (SELECT 1 FROM "
+                    "public.folder_shares s WHERE s.folder_id = m.folder_id AND s.user_id = :me) "
+                    "THEN m.title END AS meeting_title, "
+                    "pa.username AS actor_username, pt.username AS target_username "
+                    "FROM public.activity_log a "
+                    "LEFT JOIN public.meetings m ON m.id = a.meeting_id "
+                    "LEFT JOIN public.folders f ON f.id = m.folder_id "
+                    "LEFT JOIN public.profiles pa ON pa.id = a.user_id "
+                    "LEFT JOIN public.profiles pt ON pt.id = a.target_user_id "
+                    f"WHERE {_ACTIVITY_WHERE} "
+                    "ORDER BY a.created_at DESC, a.id DESC LIMIT :lim OFFSET :off"
+                ),
+                {**args, "lim": f.per_page, "off": (f.page - 1) * f.per_page},
+            )
+        ).all()
+    return {
+        "rows": [
+            own_activity_row({**r._mapping, "metadata": jsonb(r.metadata)}, identity.user_id)
+            for r in rows
+        ],
+        "total": total,
+        "page": f.page,
+        "perPage": f.per_page,
+    }

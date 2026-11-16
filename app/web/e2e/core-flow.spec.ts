@@ -83,6 +83,14 @@ for (const [lang, t, locale] of [
       await link.click()
       await expect(page).toHaveURL(/\/meetings\/[0-9a-f-]+\?t=\d+/)
       await expect(page.locator('.transcript-row.active')).toBeVisible()
+
+      // PRF-09: the profile lists the caller's own activity (the upload above, the question)
+      await page.goto('/profile')
+      const activity = page.getByRole('region', { name: t.profile.activity.title })
+      await expect(activity.getByText(t.profile.activity.events.meeting_created).first()).toBeVisible()
+      await activity.getByLabel(t.profile.activity.filter).selectOption('chat_message')
+      await expect(activity.getByText(t.profile.activity.events.chat_message).first()).toBeVisible()
+      await expect(activity.getByText(t.profile.activity.events.meeting_created)).toHaveCount(0)
     })
   })
 }

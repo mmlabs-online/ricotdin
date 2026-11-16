@@ -262,27 +262,51 @@ As a user, I want to choose my default processing model (Flash ↔ Flash-Lite) s
 ---
 
 ### PRF-09 — Account activity log
-**Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
-As a user, I want to view my own recent activity (logins, meetings created/deleted, shares granted/received) so I can review what happened on my account.
+As a user, I want to view my own recent activity (meetings created/deleted, processing results, recordings, chat, folder shares granted/received) so I can review what happened on my account.
+
+**Context**
+Re-specced 2026-11-16 (owner Q&A). Since AUT-05 sign-in happens at mmlabs, so ricotdin records no login events; folder shares were not recorded at all. Chosen: show what is recorded + start recording folder share / unshare (both sides see it), with IP + device for the user's own events, as a section of `/profile`. Rejected: recording sign-ins (duplicates mmlabs), a separate `/activity` page.
 
 **Use Cases**
-1. User opens the "Activity" section of the profile page.
-2. Sees a paginated feed: event type, timestamp, relevant metadata (meeting title, IP).
-3. Filtered to the current user's own events only (never other users' data).
+1. User opens `/profile` → "Activity" section: the 20 newest events, "Show more" loads the next 20.
+2. Filters by event type.
+3. Sees who shared a folder with them / left their folder, and the IP + device of their own actions.
 
 **Frontend**
-- Paginated activity feed inside PRF-01.
-- Same event-type colour badges as the admin activity page.
+- `ActivitySection` in `ProfilePage`: type filter, timeline list (badge, meeting or folder name, time, device · IP), "Show more" (infinite query).
+- Pure `lib/profile/activity.ts`: `deviceLabel(userAgent)` ("Chrome · macOS"), `activityKey(type, direction, left)`, `uniqueById(rows)`; admin `EVENTS` learns `folder_shared` / `folder_unshared`. EN + VI strings.
 
 **Backend**
-- `GET /api/profile/activity?page=&perPage=&eventType=` — user-scoped; returns only the caller's own rows from `activity_log`.
-- Reads `activity_log` with RLS or explicit `user_id = auth.uid()` filter.
+- New events (best effort, like `meeting_created`): `folder_shared` on `POST /folders/{id}/shares` (user_id = owner, target_user_id = grantee, metadata `{folder_id, folder_name, role}`), `folder_unshared` on `DELETE /folders/{id}/shares/{grantee}` (user_id = actor; target = grantee when the owner removes, = owner when a grantee leaves; metadata `{folder_id, folder_name, left}`). `meeting_deleted` metadata also keeps the title.
+- `GET /profile/activity?eventType=&page=&perPage=` (default 20, max 50; bad values → 400): rows where `user_id = me` (with `ip`, `userAgent`) or `target_user_id = me` and the event is a share event (with the actor's username, never their IP / user agent). Meeting title only when the caller can still see the meeting (owner, folder owner or share), else null. Runs as `ricotdin_service` with the filter in code (CLAUDE.md §0.1).
+- Migration `0012_activity_target_index`: `CREATE INDEX activity_log_target_created ON activity_log (target_user_id, created_at DESC) WHERE target_user_id IS NOT NULL`.
 
-**Depends on:** OBS-02, COM-05
+**Acceptance Criteria**
+- Given two users, when A calls `/profile/activity`, then only A's own rows and share rows targeting A come back — never B's other rows, and never B's IP / user agent.
+- Given A shares a folder with B, then A sees `folder_shared` (to B) and B sees it (from A); when B leaves or A removes B, both see `folder_unshared`.
+- Given a meeting the caller can no longer see, then its row stays but `meetingTitle` is null.
+- Given `eventType` / `page` / `perPage`, then the feed is filtered and paged (newest first); invalid values → 400; no valid mmlabs token → 401.
+- Given the profile page, then the Activity section lists events with localized labels (EN + VI), device · IP for own events, and "Show more" until the end.
 
-**Note:** Depends on actually recording these events (OBS-02); share events become meaningful once COM-05 lands.
+**Test Plan**
+- Pure: `app/api/app/domain/activity.py` → `parse_own_activity_filters()`, `own_activity_row()` → `app/api/tests/test_profile_activity.py`.
+- Integration: `app/api/tests/test_profile_activity_integration.py` — isolation, both sides of share/unshare/leave, no foreign IP, lost-access title, filters + paging, 401.
+- Web: `app/web/src/lib/profile/activity.test.ts` — `deviceLabel`, `activityKey`, `uniqueById`.
+
+**Structural flags**
+- Migration 0012 (index only, non-destructive); new route `GET /profile/activity`; ~12 files.
+
+**Done check**
+- api + web commands of §0 green; on `/profile`, share a folder with a second account → both see the event.
+
+**Out of scope**
+- Sign-in events (mmlabs), retention of `activity_log`, share role-change events, the shares a folder delete cascades away (no `folder_unshared` rows for them).
+
+**Key files (expected)**
+- `app/api/app/routers/{profile,folders,meetings}.py`, `app/api/app/domain/activity.py`, `app/api/migrations/`, `app/web/src/routes/ProfilePage.tsx`, `app/web/src/api/profile.ts`, `app/web/src/lib/profile/activity.ts`, `app/web/src/lib/admin/ops.ts`, i18n.
 
 ---
 

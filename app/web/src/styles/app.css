@@ -439,3 +439,14 @@ ul.chart-legend i { width: 10px; height: 10px; border-radius: 2px; }
 .docs-links li { padding: 8px 0; }
 @media (max-width: 1023px) { .feature-split { grid-template-columns: 1fr; } }
 @media (max-width: 767px) { .key-item { grid-template-columns: 1fr; } .field-pair { grid-template-columns: 1fr; } }
+
+/* PRF-09: own activity feed on /profile */
+ul.activity-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.activity-list li { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; overflow-wrap: anywhere; }
+.activity-list .activity-meeting { font-weight: 500; font-size: 13px; width: fit-content; }
+.activity-list a.activity-meeting { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+.activity-list a.activity-meeting:hover, .activity-list a.activity-meeting:focus-visible { text-decoration-thickness: 2px; }
+.activity-meta { display: flex; flex-wrap: wrap; column-gap: 6px; color: var(--muted); font-size: 12px; }
+.activity-meta > * { white-space: nowrap; }
+.activity-meta > * + *::before { content: "·"; margin-right: 6px; }
+.activity-more { margin-top: 8px; }

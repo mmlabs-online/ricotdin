@@ -23,6 +23,7 @@ from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
 from app.db.context import RequestIdentity
 from app.db.session import Database, get_database
+from app.domain.activity import deleted_meeting_metadata, share_metadata
 from app.domain.rules import (
     is_email_identifier,
     normalize_lookup_username,
@@ -187,7 +188,7 @@ async def delete_folder(
     cascade. ``deleteMeetings=true`` also deletes the caller's own meetings in the folder (never
     an editor's, BUG-011), each one's audio first; a storage failure does not stop the delete."""
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
-    meetings: list[tuple[uuid.UUID, str | None]] = []
+    meetings: list[tuple[uuid.UUID, str | None, str]] = []
     async with db.role_transaction(SERVICE) as conn:
         owned = await conn.execute(
             text("SELECT 1 FROM public.folders WHERE id = :id AND user_id = :me FOR UPDATE"),
@@ -200,14 +201,15 @@ async def delete_folder(
             return {"ok": True}
         rows = await conn.execute(
             text(
-                "SELECT id, audio_path FROM public.meetings WHERE folder_id = :id AND user_id = :me"
+                "SELECT id, audio_path, title FROM public.meetings "
+                "WHERE folder_id = :id AND user_id = :me"
             ),
             {"id": fid, "me": identity.user_id},
         )
-        meetings = [(r.id, r.audio_path) for r in rows]
+        meetings = [(r.id, r.audio_path, r.title) for r in rows]
     keys = [
         key
-        for mid, key in meetings
+        for mid, key, _ in meetings
         if key and is_owned_audio_key(key, str(identity.user_id), str(mid))
     ]
     failed = await delete_files(db, platform, keys)
@@ -219,17 +221,18 @@ async def delete_folder(
                 "DELETE FROM public.meetings WHERE id = ANY(:ids) AND user_id = :me "
                 "AND folder_id = :fid"  # a meeting moved out meanwhile stays
             ).bindparams(bindparam("ids", type_=ARRAY(UUID(as_uuid=True)))),
-            {"ids": [m for m, _ in meetings], "me": identity.user_id, "fid": fid},
+            {"ids": [m for m, _, _ in meetings], "me": identity.user_id, "fid": fid},
         )
         await conn.execute(
             text("DELETE FROM public.folders WHERE id = :id AND user_id = :me"),
             {"id": fid, "me": identity.user_id},
         )
     await delete_files(db, platform, keys)  # second pass: uploads confirmed meanwhile
-    for mid, _ in meetings:
+    for mid, _, title in meetings:
         await meeting_activity(
-            db, request, identity.user_id, "meeting_deleted", None, {"meeting_id": str(mid)}
-        )
+            db, request, identity.user_id, "meeting_deleted", None,
+            deleted_meeting_metadata(mid, title),
+        )  # fmt: skip
     return {"ok": True}
 
 
@@ -256,18 +259,18 @@ async def reorder_folders(request: Request, identity: Identity, db: Db) -> dict[
 # --- shares -----------------------------------------------------------------------------------
 
 
-async def _owned_folder(conn: AsyncConnection, folder_id: uuid.UUID, me: uuid.UUID) -> uuid.UUID:
-    """The folder's owner id; 404 if it does not exist, 403 if the caller does not own it."""
-    owner = (
+async def _owned_folder(conn: AsyncConnection, folder_id: uuid.UUID, me: uuid.UUID) -> str:
+    """The folder's name; 404 if it does not exist, 403 if the caller does not own it."""
+    row = (
         await conn.execute(
-            text("SELECT user_id FROM public.folders WHERE id = :id"), {"id": folder_id}
+            text("SELECT user_id, name FROM public.folders WHERE id = :id"), {"id": folder_id}
         )
-    ).scalar_one_or_none()
-    if owner is None:
+    ).first()
+    if row is None:
         raise NotFound(_FOLDER_NOT_FOUND)
-    if owner != me:
+    if row.user_id != me:
         raise Forbidden("Forbidden.")
-    return me
+    return str(row.name)
 
 
 @router.get("/folders/{folder_id}/shares")
@@ -327,7 +330,7 @@ async def add_share(folder_id: str, request: Request, identity: Identity, db: Db
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
     try:
         async with db.role_transaction(SERVICE) as conn:
-            await _owned_folder(conn, fid, identity.user_id)
+            folder_name = await _owned_folder(conn, fid, identity.user_id)
             enforce_limit(request.app.state.lookup_limiter, identity.user_id)
             grantee, username = await _resolve_user(conn, identifier)
             if grantee == identity.user_id:
@@ -343,6 +346,10 @@ async def add_share(folder_id: str, request: Request, identity: Identity, db: Db
         if is_unique_violation(exc):
             raise Conflict("That user is already a member of this folder.") from None
         raise
+    await meeting_activity(  # PRF-09: the owner and the grantee both see it
+        db, request, identity.user_id, "folder_shared", None,
+        share_metadata(fid, folder_name, role=role), target=grantee,
+    )  # fmt: skip
     member = {"userId": str(grantee), "username": username or str(grantee), "role": role}
     return JSONResponse(status_code=201, content={"member": member})
 
@@ -369,26 +376,36 @@ async def change_share(
 
 @router.delete("/folders/{folder_id}/shares/{grantee_id}")
 async def remove_share(
-    folder_id: str, grantee_id: str, identity: Identity, db: Db
+    folder_id: str, grantee_id: str, request: Request, identity: Identity, db: Db
 ) -> dict[str, bool]:
     """The folder owner removes anyone; a grantee may remove themselves (leave)."""
     fid = path_id(folder_id, _FOLDER_NOT_FOUND)
     grantee = parse_uuid(grantee_id)
     async with db.role_transaction(SERVICE) as conn:
-        owner = (
+        folder = (
             await conn.execute(
-                text("SELECT user_id FROM public.folders WHERE id = :id"), {"id": fid}
+                text("SELECT user_id, name FROM public.folders WHERE id = :id"), {"id": fid}
             )
-        ).scalar_one_or_none()
-        if owner is None:
+        ).first()
+        if folder is None:
             raise NotFound(_FOLDER_NOT_FOUND)
+        owner = folder.user_id
         if owner != identity.user_id and grantee != identity.user_id:
             raise Forbidden("Forbidden.")
+        removed = 0
         if grantee is not None:
-            await conn.execute(
-                text("DELETE FROM public.folder_shares WHERE folder_id = :f AND user_id = :u"),
-                {"f": fid, "u": grantee},
-            )
+            removed = (
+                await conn.execute(
+                    text("DELETE FROM public.folder_shares WHERE folder_id = :f AND user_id = :u"),
+                    {"f": fid, "u": grantee},
+                )
+            ).rowcount
+    if removed and grantee is not None:  # PRF-09: a leave targets the owner, a removal the grantee
+        left = grantee == identity.user_id and owner != identity.user_id
+        await meeting_activity(
+            db, request, identity.user_id, "folder_unshared", None,
+            share_metadata(fid, str(folder.name), left=left), target=owner if left else grantee,
+        )  # fmt: skip
     return {"ok": True}
 
 

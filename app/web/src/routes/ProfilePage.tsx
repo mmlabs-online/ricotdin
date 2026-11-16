@@ -1,10 +1,11 @@
 // Profile & preferences (ARC-13c, Make ProfileView): details + avatar, password, appearance,
-// default AI model, and the remaining audio minutes / chat questions.
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+// default AI model, the remaining audio minutes / chat questions, and own activity (PRF-09).
+import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import {
+  useOwnActivity,
   usePreferences,
   useProfile,
   useUpdatePreferences,
@@ -21,6 +22,7 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { assignableFolders, defaultFolderLost, initialFolderChoice } from '../lib/folders/defaultFolder'
 import { mediaSrc } from '../lib/meetings/detail'
+import { ACTIVITY_TYPES, activityKey, deviceLabel, uniqueById } from '../lib/profile/activity'
 import { modelValue, parseModelValue, profileErrorKey, quotaParts } from '../lib/profile/profile'
 import { displayText } from '../lib/text'
 import { AVATAR_TYPES, uploadErrorKey } from '../lib/upload/upload'
@@ -102,6 +104,7 @@ export function ProfilePage() {
       <ModelSection />
       <DefaultFolderSection />
       <UsageSection profile={profile.data} />
+      <ActivitySection />
     </div>
   )
 }
@@ -486,6 +489,92 @@ function UsageSection({ profile }: { profile: Profile }) {
           <dd>{profile.folder_count}</dd>
         </div>
       </dl>
+    </Section>
+  )
+}
+
+function ActivitySection() {
+  const { t, i18n } = useTranslation()
+  const [type, setType] = useState('')
+  const feed = useOwnActivity(type)
+  const id = useId()
+  const lang = i18n.resolvedLanguage ?? 'en'
+  const fmt = useMemo(() => new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' }), [lang])
+  // offset paging: a row written after page 1 shifts the next page by one, so drop repeats
+  const rows = uniqueById(feed.data?.pages.flatMap((p) => p.rows) ?? [])
+  const more = () => {
+    if (!feed.isFetchingNextPage) void feed.fetchNextPage()
+  }
+  return (
+    <Section title={t('profile.activity.title')} body={t('profile.activity.body')}>
+      <div className="field-row">
+        <label htmlFor={id}>{t('profile.activity.filter')}</label>
+        <select id={id} value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">{t('profile.activity.all')}</option>
+          {ACTIVITY_TYPES.map((e) => (
+            <option key={e} value={e}>
+              {t(`profile.activity.types.${e}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {feed.isPending ? (
+        <p className="tab-note" role="status">
+          {t('common.loading')}
+        </p>
+      ) : feed.isError && rows.length === 0 ? (
+        <div className="activity-more">
+          <p className="form-note error" role="alert">
+            {t('profile.activity.loadError')}
+          </p>
+          <Button onClick={() => void feed.refetch()}>{t('common.tryAgain')}</Button>
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="tab-note">{t(type ? 'profile.activity.emptyFiltered' : 'profile.activity.empty')}</p>
+      ) : (
+        <ul className="activity-list" aria-busy={feed.isFetching}>
+          {rows.map((r) => {
+            const device = deviceLabel(r.userAgent)
+            return (
+              <li key={r.id}>
+                <span className="bidi-isolate">
+                  {t(activityKey(r.eventType, r.direction, r.left), {
+                    folder: r.folderName ? displayText(r.folderName) : t('profile.activity.someFolder'),
+                    user: r.otherUser ? `@${displayText(r.otherUser)}` : t('profile.activity.someone'),
+                    role: t(`profile.activity.roles.${r.role === 'editor' ? 'editor' : 'viewer'}`),
+                    interpolation: { escapeValue: false },
+                  })}
+                </span>
+                {r.meetingTitle &&
+                  (r.meetingId ? (
+                    <Link className="activity-meeting bidi-isolate" to={`/meetings/${encodeURIComponent(r.meetingId)}`}>
+                      {displayText(r.meetingTitle)}
+                    </Link>
+                  ) : (
+                    <span className="activity-meeting bidi-isolate">{displayText(r.meetingTitle)}</span>
+                  ))}
+                <small className="activity-meta">
+                  <time dateTime={r.createdAt}>{fmt.format(new Date(r.createdAt))}</time>
+                  {device && <span>{device}</span>}
+                  {r.ip && <span>{r.ip}</span>}
+                </small>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {feed.isFetchNextPageError && (
+        <p className="form-note error" role="alert">
+          {t('profile.activity.loadError')}
+        </p>
+      )}
+      {feed.hasNextPage && (
+        <div className="activity-more">
+          <Button variant="ghost" onClick={more} aria-disabled={feed.isFetchingNextPage} aria-busy={feed.isFetchingNextPage}>
+            {feed.isFetchingNextPage ? t('common.loading') : t('profile.activity.more')}
+          </Button>
+        </div>
+      )}
     </Section>
   )
 }
