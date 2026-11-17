@@ -387,20 +387,37 @@ As a user, I want to enable 2FA so my account has an extra layer of protection.
 **User Story**  
 As a user, I want to export all my data and delete my account (with all traces) so I control my personal data.
 
-**Use Cases**
-1. User requests a full data export → receives a ZIP (transcripts, notes, todos, calendar suggestions, chat history as JSON/Markdown).
-2. User requests account deletion → confirmation dialog; all rows + Storage files purged; auth user deleted.
-3. Export job is async; user receives email when ready (or polls a status endpoint).
+**Context**
+Re-specced 2026-11-17 (owner Q&A), built together with ADM-11. Admins could already delete a user (Drive files first, then every row) and the audio retention purge (PRV-02) exists. Chosen: an immediate ZIP export (no job / email), self-service deletion of the ricotdin account, and an admin export of one user. Rejected: exporting audio (large, needs a background job), whole-meeting retention.
 
-**Frontend**
-- "Export my data" button → triggers async job, shows status.
-- "Delete my account" button → confirmation dialog with explicit acknowledgement text.
+**ZIP contents** (`app/api/app/domain/export.py`, pure)
+- `README.txt`; `profile.json` (profile, preferences, quota balance); `meetings/<date>-<slug>-<id8>/meeting.md` + `meeting.json` for each meeting the user **owns** (title, dates, summary, notes, to-dos, calendar suggestions, transcript with speaker names); `chats.json` (the user's chat sessions and messages); `activity.json` (own activity, PRF-09). No audio, no meetings owned by others.
 
 **Backend**
-- `POST /api/profile/export` — enqueues export job; writes ZIP to temporary Storage path; sends download link.
-- `DELETE /api/profile` — mirrors ADM-11 server-side: cleans Storage files, deletes auth user (DB rows cascade).
-- User-facing half of ADM-11 — build together, don't duplicate.
+- `GET /profile/export` → `ricotdin-export-<username>-<date>.zip` (3 / hour / user; audit `user.export_self`).
+- `DELETE /profile {confirm: "<username>"}` → deletes the caller's ricotdin account like the admin delete (shared service: Drive files first, rows cascade, storage warnings returned; audit `user.delete_self`). The mmlabs account stays; signing in again creates a new, empty ricotdin account.
+- `GET /admin/users/{id}/export` → the same ZIP for an admin (audit `user.export`).
 
-**Depends on:** PRV-02, ADM-11
+**Frontend**
+- Profile "Your data" section: "Download my data" (file download) and "Delete my Ricotdin account" (dialog: type the username; explains what goes and that the mmlabs account stays); after delete the app signs out of ricotdin.
+- Admin user detail: "Export data" action.
 
-**Note:** User-facing half of ADM-11 — build together, don't duplicate; GDPR-style (NFR-2/NFR-6).
+**Acceptance Criteria**
+- Given a user with meetings, chats and a shared folder, when they export, then the ZIP holds their own meetings (MD + JSON, names applied), chats, activity and profile — never another user's meeting or audio.
+- Given `DELETE /profile` with the wrong / missing username → 400; with the right one → every owned meeting audio and the avatar are deleted from Drive, all their rows are gone, others' meetings in their folders stay (uncategorized), an audit row is written.
+- Given an admin, then `GET /admin/users/{id}/export` returns that user's ZIP and is audited; a non-admin gets 403.
+- Exports are limited to 3 / hour / user (429).
+
+**Test Plan**
+- Pure: `app/api/tests/test_export.py` — slug / folder names, meeting Markdown, JSON shapes, README.
+- Integration: `app/api/tests/test_export_integration.py` — ZIP contents and isolation, self delete (wrong / right confirm, Drive files deleted via the fake Drive), admin export + audit + 403, rate limit.
+- Web: dialog confirm logic test; e2e: download + delete in the core flow if practical.
+
+**Structural flags**
+- No migration; 3 new routes; the admin delete logic moves into a shared service.
+
+**Done check**
+- api + web commands of §0 green; on production, download the export and open a meeting's `meeting.md`.
+
+**Out of scope**
+- Exporting audio; whole-meeting retention; deleting the mmlabs account.
