@@ -169,7 +169,8 @@ async def search(request: Request, identity: Identity, db: Db) -> dict[str, Any]
     semantic_ok, semantic = False, []
     limits = request.app.state.semantic_limiter
     try:
-        if all([lim.check(str(identity.user_id), now=time.monotonic()).allowed for lim in limits]):
+        # in order, stopping at the first refusal: a minute-limit refusal spends no daily token
+        if all(lim.check(str(identity.user_id), now=time.monotonic()).allowed for lim in limits):
             semantic = await _semantic(request, db, identity, q)
             semantic_ok = True
     except Exception as exc:  # noqa: BLE001 - any embedding / vector failure keeps keyword results
