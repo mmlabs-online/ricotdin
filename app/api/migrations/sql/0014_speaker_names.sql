@@ -4,3 +4,6 @@ ALTER TABLE public.meetings ADD COLUMN IF NOT EXISTS speaker_names jsonb NOT NUL
 ALTER TABLE public.meetings DROP CONSTRAINT IF EXISTS meetings_speaker_names_object;
 ALTER TABLE public.meetings ADD CONSTRAINT meetings_speaker_names_object
   CHECK (jsonb_typeof(speaker_names) = 'object');
+-- The worker clears the names when a new transcription replaces the segments (the diarizer
+-- numbers the voices afresh): it may update this one column too.
+GRANT UPDATE (speaker_names) ON public.meetings TO ricotdin_worker;

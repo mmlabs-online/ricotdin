@@ -144,6 +144,8 @@ async def _store(ctx: StepContext, transcriber: Transcriber, sub: Submission) ->
         m = {"m": job.meeting_id}
         await conn.execute(text("DELETE FROM transcript_chunks WHERE meeting_id = :m"), m)
         await conn.execute(text("DELETE FROM transcript_segments WHERE meeting_id = :m"), m)
+        # PRO-04: a new diarization numbers the voices afresh; old names would land on others
+        await conn.execute(text("UPDATE meetings SET speaker_names = '{}'::jsonb WHERE id = :m"), m)
         await conn.execute(
             text(_INSERT_SEGMENT),
             [

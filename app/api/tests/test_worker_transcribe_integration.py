@@ -113,6 +113,8 @@ def test_done_stores_segments_settles_and_logs_usage_once(world: dict[str, Any])
         "VALUES (%s, 0, 0, 1, 'old run')",
         case.meeting,
     )
+    _sql(world["db"], "UPDATE meetings SET speaker_names = '{\"Speaker 1\": \"Lan\"}' "
+         "WHERE id = %s", case.meeting)  # fmt: skip
     fake = PollFake()
     before = _balance(world, case)
     assert _once(world, fake)
@@ -123,6 +125,10 @@ def test_done_stores_segments_settles_and_logs_usage_once(world: dict[str, Any])
     ]
     assert _sql(world["db"], "SELECT language FROM meetings WHERE id = %s", case.meeting) == [
         ("en",)
+    ]
+    # PRO-04: a new diarization may number the voices differently: the old names go
+    assert _sql(world["db"], "SELECT speaker_names FROM meetings WHERE id = %s", case.meeting) == [
+        ({},)
     ]
     # reserved 60, used ceil(2.6) = 3: 57 back
     assert _balance(world, case) == before + 57

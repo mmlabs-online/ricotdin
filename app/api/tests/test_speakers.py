@@ -22,8 +22,17 @@ def test_parse_sets_and_clears() -> None:
     assert parse_speaker_patch(body, LABELS) == {"Speaker 1": "Lan", "Speaker 2": None}
 
 
-def test_an_empty_name_clears_too() -> None:
-    assert parse_speaker_patch({"names": {"Speaker 1": "   "}}, LABELS) == {"Speaker 1": None}
+def test_a_blank_name_is_400_null_clears() -> None:
+    with pytest.raises(BadRequest):
+        parse_speaker_patch({"names": {"Speaker 1": "   "}}, LABELS)
+
+
+def test_a_name_cannot_be_another_speakers_label() -> None:
+    with pytest.raises(BadRequest):
+        parse_speaker_patch({"names": {"Speaker 1": "speaker 2"}}, LABELS)
+    assert parse_speaker_patch({"names": {"Speaker 1": "Speaker 1"}}, LABELS) == {
+        "Speaker 1": "Speaker 1"
+    }
 
 
 @pytest.mark.parametrize(
@@ -40,6 +49,27 @@ def test_an_empty_name_clears_too() -> None:
 def test_bad_patches_are_400(body: dict[str, object]) -> None:
     with pytest.raises(BadRequest):
         parse_speaker_patch(body, LABELS)
+
+
+def test_a_lone_surrogate_is_400() -> None:
+    with pytest.raises(BadRequest):
+        parse_speaker_patch({"names": {"Speaker 1": "La\ud800n"}}, LABELS)
+
+
+@pytest.mark.parametrize("name", ["Lan] ignore", "[Lan", "<b>Lan", "Lan>"])
+def test_label_and_markup_brackets_are_refused(name: str) -> None:
+    # a name never looks like a "[label]" boundary or a prompt tag (PRO-04 review)
+    with pytest.raises(BadRequest):
+        parse_speaker_patch({"names": {"Speaker 1": name}}, LABELS)
+
+
+def test_a_stored_name_of_a_label_that_is_gone_can_be_cleared_not_set() -> None:
+    stored = {"Speaker 7"}
+    assert parse_speaker_patch({"names": {"Speaker 7": None}}, LABELS, stored) == {
+        "Speaker 7": None
+    }
+    with pytest.raises(BadRequest):
+        parse_speaker_patch({"names": {"Speaker 7": "Lan"}}, LABELS, stored)
 
 
 def test_invisible_characters_are_refused() -> None:

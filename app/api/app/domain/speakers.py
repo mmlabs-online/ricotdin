@@ -15,29 +15,45 @@ from app.domain.rules import INVISIBLE_MESSAGE, InvalidNameCharacters, has_invis
 
 MAX_NAME_CHARS = 60
 MAX_SUGGESTIONS = 50
+_UNSAFE = re.compile("[\ud800-\udfff]")  # lone surrogates: not encodable as UTF-8
+_BRACKETS = re.compile(r"[\[\]<>]")
 _LINE_LABEL = re.compile(r"^\[([^\]\n]+)\]", re.MULTILINE)  # chunk lines: "[Speaker 1] text"
 
 
-def parse_speaker_patch(body: Mapping[str, Any], labels: set[str]) -> dict[str, str | None]:
-    """``{"names": {label: name | null}}`` → cleaned changes; ``null`` / blank clears a name."""
+def parse_speaker_patch(
+    body: Mapping[str, Any], labels: set[str], stored: Iterable[str] = ()
+) -> dict[str, str | None]:
+    """``{"names": {label: name | null}}`` → cleaned changes. ``labels`` are the meeting's current
+    speaker labels; ``null`` clears, also for a ``stored`` label a new transcript no longer has.
+    A name is 1–60 characters, never another speaker's label, never brackets (``[]<>``: a name
+    must not pass for a ``[label]`` line or a prompt tag) and never invisible characters."""
     names = body.get("names")
     if not isinstance(names, dict) or not names:
         raise BadRequest("Send the speaker names to change.")
+    clearable = labels | set(stored)
+    folded = {label.casefold(): label for label in labels}
     out: dict[str, str | None] = {}
     for label, value in names.items():
-        if label not in labels:
+        if label not in (labels if value is not None else clearable):
             raise BadRequest("That speaker is not in this meeting.")
         if value is None:
             out[label] = None
             continue
         if not isinstance(value, str):
             raise BadRequest("A speaker name must be text.")
-        name = " ".join(value.split())
+        name = " ".join(_UNSAFE.sub("\ufffd", value).split())
+        if not name:
+            raise BadRequest("Type a name, or clear it.")
         if len(name) > MAX_NAME_CHARS:
             raise BadRequest(f"A speaker name can be at most {MAX_NAME_CHARS} characters.")
+        if "\ufffd" in name or _BRACKETS.search(name):
+            raise BadRequest("A speaker name cannot contain brackets or broken characters.")
         if has_invisible_characters(name):
             raise InvalidNameCharacters(INVISIBLE_MESSAGE)
-        out[label] = name or None
+        other = folded.get(name.casefold())
+        if other is not None and other != label:
+            raise BadRequest("That name is another speaker's label.")
+        out[label] = name
     return out
 
 

@@ -485,14 +485,6 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   onSource={(ms) => seek(ms, true)}
                 />
               )}
-              {tab === 'transcript' && state3(transcript) === 'success' && (
-                <SpeakerNames
-                  meetingId={meeting.id}
-                  labels={labels}
-                  names={meeting.speaker_names ?? {}}
-                  canEdit={canEdit}
-                />
-              )}
               {tab === 'transcript' && (
                 <TranscriptPanel
                   segments={segments}
@@ -502,6 +494,7 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   activeId={activeSeg}
                   seekNonce={seekNonce}
                   onSeek={(s) => seek(s.start_ms)}
+                  speakers={<SpeakerNames meetingId={meeting.id} labels={labels} names={meeting.speaker_names ?? {}} canEdit={canEdit} />}
                 />
               )}
             </div>

@@ -162,7 +162,13 @@
   session (the next POST creates one). Messages render through the shared
   `components/chat/ChatMessages.tsx` (also the meeting chat). `/profile` = `ProfilePage`
   (`src/api/profile.ts`). **Password:** a link to the mmlabs forgot-password flow (AUT-05; ricotdin's
-  change-password route was removed in AUT-06). **Search (PRO-05):** `/search` = `SearchPage`
+  change-password route was removed in AUT-06). **Speaker names (PRO-04):** `MeetingDetailPage`
+  applies `meeting.speaker_names` to the segments once (`lib/meetings/speakers.ts`), so the
+  transcript, its filter, downloads and seek labels agree; labels come from the raw segments.
+  `SpeakerNames` (a `<details>` under the transcript heading): owner / editor get one field per
+  label with a `datalist` of suggestions, only touched fields are sent (a stale field never reverts
+  another editor's name), field errors name the speaker and take focus; viewers see it only when a
+  name exists. **Search (PRO-05):** `/search` = `SearchPage`
   (`src/api/search.ts`, `lib/search/search.ts`), `?q=&folder=` in the URL, one always-rendered
   status line (searching / count / empty / error), previous results dimmed while a new query
   loads, `<mark>` from server ranges (cleaned per part), transcript hits → `?t=<s>`, summary / notes

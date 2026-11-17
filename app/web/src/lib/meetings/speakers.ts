@@ -21,11 +21,13 @@ export function applySpeakerNames<T extends { speaker: string | null }>(segments
   return segments.map((s) => (s.speaker !== null && map.has(s.speaker) ? { ...s, speaker: map.get(s.speaker)! } : s))
 }
 
-/** What to send: changed names, and `null` for a name that was cleared. */
-export function namesPatch(before: SpeakerNames, draft: Record<string, string>): Record<string, string | null> {
+/** What to send: changed names among the fields the user touched (`null` for a cleared one). An
+ *  untouched field may hold an older value than `before` (another editor's save): never sent. */
+export function namesPatch(before: SpeakerNames, draft: Record<string, string>, touched: ReadonlySet<string>): Record<string, string | null> {
   const out: Record<string, string | null> = {}
   for (const [label, raw] of Object.entries(draft)) {
-    const name = raw.trim().replace(/\s+/g, ' ')
+    if (!touched.has(label)) continue
+    const name = collapse(raw)
     const was = before[label] ?? ''
     if (name === was) continue
     out[label] = name === '' ? null : name
@@ -33,10 +35,19 @@ export function namesPatch(before: SpeakerNames, draft: Record<string, string>):
   return out
 }
 
-/** i18n key of what is wrong with a typed name, or null (blank clears the name). */
-export function speakerNameProblem(name: string): string | null {
-  const n = name.trim()
-  if (n.length > MAX_SPEAKER_NAME) return 'detail.speakers.tooLong'
+function collapse(name: string): string {
+  return name.trim().replace(/\s+/g, ' ')
+}
+
+/** i18n key of what is wrong with a typed name, or null (blank clears the name). Same rules as the
+ *  API: ≤ 60 code points after collapsing spaces, no invisible characters, no `[]<>`, not another
+ *  speaker's label. */
+export function speakerNameProblem(name: string, label: string, labels: readonly string[]): string | null {
+  const n = collapse(name)
+  if ([...n].length > MAX_SPEAKER_NAME) return 'detail.speakers.tooLong'
   if (displayText(n) !== n) return 'detail.speakers.invisible'
+  if (/[[\]<>]/.test(n)) return 'detail.speakers.brackets'
+  const other = labels.find((l) => l.toLowerCase() === n.toLowerCase())
+  if (other !== undefined && other !== label) return 'detail.speakers.otherLabel'
   return null
 }

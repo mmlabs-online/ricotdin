@@ -13,6 +13,8 @@
   then `match_transcript_chunks(vector, 8, ids)` runs **as `ricotdin_app` in
   `app_transaction`**, so RLS on `transcript_chunks` (`can_access_meeting`) limits every scope;
   `keep_chunks` then drops rows below similarity 0.5 and rows outside the requested meetings.
+  PRO-04: chunk lines `[Speaker 1] …` get the meeting's speaker names (`rename_chunk`) before the
+  prompt; names are user text from editors, cleaned (no `[]<>`, one line) and `_safe()`d like the rest.
   Folder scope = the folder's meetings visible to the caller under RLS (empty → fixed reply, no
   charge, no AI call). Global = no filter (RLS only). Never run the search as a service role.
 - **Answer:** `AIService.generate_json` (operation `chat`, no strict retry). Excerpts and history

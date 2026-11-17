@@ -80,3 +80,13 @@ def test_suggestions_only_from_visible_meetings(
     assert set(names) == {"Lan", "Minh"}  # C sees M1 (folder share), never A's private M3
     assert client.get("/speakers/suggestions", headers=_as(client, "d")).json() == {"names": []}
     assert client.get("/speakers/suggestions").status_code == 401
+
+
+def test_a_name_left_from_an_old_transcript_can_be_cleared(
+    client: TestClient, world: dict[str, Any], labelled: str
+) -> None:
+    _sql(world["db"], "UPDATE meetings SET speaker_names = '{\"Speaker 9\": \"Old\"}' WHERE id = %s",
+         world["m1"])  # fmt: skip
+    assert _patch(client, "a", labelled, {"Speaker 9": "New"}).status_code == 400
+    r = _patch(client, "a", labelled, {"Speaker 9": None})
+    assert r.status_code == 200 and r.json() == {"speakerNames": {}}

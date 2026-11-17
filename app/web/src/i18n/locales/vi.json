@@ -1277,19 +1277,19 @@
       }
     },
     "speakers": {
-      "body": "Đặt tên cho các giọng trong bản ghi. Tên hiện trong bản ghi lời, file tải về, câu trả lời chat, và trong tóm tắt ở lần tạo lại tiếp theo.",
+      "body": "Đặt tên cho từng giọng nói trong cuộc họp. Tên sẽ hiện trong bản ghi lời, file tải về, câu trả lời chat, và trong tóm tắt khi tạo lại.",
       "readOnly": "Tên do chủ cuộc họp hoặc người chỉnh sửa đặt.",
-      "nameFor": "Tên cho {{label}}",
-      "placeholder": "vd. Lan",
       "save": "Lưu tên",
       "saving": "Đang lưu…",
       "saved": "Đã lưu tên người nói.",
       "unchanged": "Không có thay đổi để lưu.",
-      "tooLong": "Tên dài tối đa 60 ký tự.",
-      "invisible": "Tên không được chứa ký tự vô hình hoặc ký tự đổi hướng chữ.",
+      "tooLong": "Tên cho {{label}} dài tối đa 60 ký tự.",
+      "invisible": "Tên cho {{label}} chứa ký tự vô hình hoặc ký tự đổi hướng chữ.",
       "failed": "Không lưu được tên. Vui lòng thử lại.",
-      "none": "Chưa đặt tên",
-      "titleCount": "Người nói ({{count}})"
+      "titleCount": "Người nói ({{count}})",
+      "namePrefix": "Tên cho",
+      "brackets": "Tên cho {{label}} không được chứa [ ] < hoặc >.",
+      "otherLabel": "Tên cho {{label}} trùng nhãn của người nói khác."
     }
   },
   "chat": {

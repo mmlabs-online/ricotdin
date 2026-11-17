@@ -89,7 +89,7 @@ MAX_PENDING_PER_USER = 20  # unfinished uploads per user (each holds a Drive ses
 MEETING_COLUMNS = (
     "id, user_id, title, status, source, storage_provider, audio_path, audio_purged_at, "
     "duration_seconds, language, summary, notes, error_message, started_at, pinned_at, "
-    "folder_id, generation_provider, generation_model, speaker_names, created_at, updated_at"
+    "folder_id, generation_provider, generation_model, created_at, updated_at"
 )
 _NOT_FOUND = "Meeting not found."
 _STORAGE_WARNING = "Audio file could not be removed from storage."
@@ -136,7 +136,10 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
     async with db.app_transaction(identity) as conn:
         row = (
             await conn.execute(
-                text(f"SELECT {MEETING_COLUMNS} FROM public.meetings WHERE id = :id"),  # noqa: S608
+                text(
+                    f"SELECT {MEETING_COLUMNS}, speaker_names "  # noqa: S608 - fixed column list
+                    "FROM public.meetings WHERE id = :id"
+                ),
                 {"id": mid},
             )
         ).first()

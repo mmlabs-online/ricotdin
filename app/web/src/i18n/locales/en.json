@@ -1277,19 +1277,19 @@
       }
     },
     "speakers": {
-      "body": "Name the voices in this recording. Names show in the transcript, downloads and chat answers, and in the summary the next time it is regenerated.",
+      "body": "Name the voices in this meeting. Names show in the transcript, downloads and chat answers, and in the summary the next time it is regenerated.",
       "readOnly": "Names given by the meeting owner or an editor.",
-      "nameFor": "Name for {{label}}",
-      "placeholder": "e.g. Lan",
       "save": "Save names",
       "saving": "Saving…",
       "saved": "Speaker names saved.",
       "unchanged": "No changes to save.",
-      "tooLong": "A name can be at most 60 characters.",
-      "invisible": "Names cannot contain invisible or text-direction characters.",
+      "tooLong": "The name for {{label}} can be at most 60 characters.",
+      "invisible": "The name for {{label}} contains invisible or text-direction characters.",
       "failed": "Could not save the names. Please try again.",
-      "none": "Not named yet",
-      "titleCount": "Speakers ({{count}})"
+      "titleCount": "Speakers ({{count}})",
+      "namePrefix": "Name for",
+      "brackets": "The name for {{label}} cannot contain [ ] < or >.",
+      "otherLabel": "The name for {{label}} is another speaker's label."
     }
   },
   "chat": {

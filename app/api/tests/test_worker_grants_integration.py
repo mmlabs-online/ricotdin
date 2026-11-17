@@ -104,7 +104,7 @@ def test_worker_updates_pipeline_columns_of_meetings_only(db: str) -> None:
         "UPDATE meetings SET status = 'processing', error_message = NULL, summary = 's', "
         "notes = 'n', language = 'en', generation_provider = 'gemini', "
         "generation_model = 'gemini-2.5-flash', duration_seconds = 3, audio_path = NULL, "
-        "audio_purged_at = now() WHERE id = %s",
+        "audio_purged_at = now(), speaker_names = '{}' WHERE id = %s",  # PRO-04: re-transcribe
         MEETING,
     )
     for column, value in [("user_id", USER), ("title", "x"), ("folder_id", None),

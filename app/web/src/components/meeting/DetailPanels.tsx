@@ -1,6 +1,6 @@
 // The tab panels of the meeting detail screen (Make MeetingDetail). Text written by the AI or by
 // other users goes through displayText / Markdown (no links, images or bidi tricks).
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { CalendarDays, Copy, FileAudio, ListTodo, MessageSquareText, Pencil, RefreshCw, Search, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -405,6 +405,7 @@ export function TranscriptPanel({
   activeId,
   seekNonce,
   onSeek,
+  speakers,
 }: {
   segments: TranscriptSegment[]
   state: 'pending' | 'error' | 'success'
@@ -414,6 +415,8 @@ export function TranscriptPanel({
   /** Changes on every seek, so seeking to the same line again scrolls back to it. */
   seekNonce: number
   onSeek: (seg: TranscriptSegment) => void
+  /** PRO-04: the speaker names panel, shown under the transcript heading */
+  speakers?: ReactNode
 }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
@@ -438,6 +441,7 @@ export function TranscriptPanel({
           </label>
         )}
       </div>
+      {speakers}
       <p className="sr-only" role="status">
         {query.trim() ? t('detail.transcript.matches', { count: groups.reduce((n, g) => n + g.segments.length, 0) }) : ''}
       </p>

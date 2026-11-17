@@ -86,7 +86,7 @@ As a user, I want reminders when a to-do is due via email/push so I don't forget
 ---
 
 ### PRO-04 — Speaker naming
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want to set real speaker names instead of "Speaker 1" and remember them across meetings.
@@ -101,19 +101,19 @@ Re-specced 2026-11-17 (owner Q&A). Speechmatics labels speakers per recording (S
 
 **Frontend**
 - `SpeakerNames` panel in the Transcript tab (owner/editor: inputs + save; viewer: read only), `<datalist>` suggestions.
-- Pure `lib/meetings/speakers.ts`: `speakerLabels(segments)`, `applySpeakerNames(segments, names)`, `speakerNamesPatch(before, after)`. EN + VI.
+- Pure `lib/meetings/speakers.ts`: `speakerLabels(segments)`, `applySpeakerNames(segments, names)`, `namesPatch(before, draft, touched)`, `speakerNameProblem(name, label, labels)`. EN + VI.
 
 **Backend**
 - Migration `0014_speaker_names`: `meetings.speaker_names jsonb NOT NULL DEFAULT '{}'` (label → name).
-- `PATCH /meetings/{id}/speakers {names: {"Speaker 1": "Lan", "Speaker 2": null}}`: owner or editor (`can_access_meeting(…, 'editor')`), executed as `ricotdin_service`; labels must exist in the meeting's segments; names 1–60 chars, no invisible characters (SEC-05); `null` clears; returns the full map.
+- `PATCH /meetings/{id}/speakers {names: {"Speaker 1": "Lan", "Speaker 2": null}}`: owner or editor (`can_access_meeting(…, 'editor')`), executed as `ricotdin_service`; labels must exist in the meeting's segments; names 1–60 chars, no invisible characters (SEC-05), no `[]<>`, not another label; `null` clears (also a stored label the transcript no longer has); 30 / min, body ≤ 8 KiB; returns the full map. A new transcription clears the names (review: the diarizer numbers voices afresh).
 - `GET /meetings/{id}` includes `speaker_names`.
 - `GET /speakers/suggestions`: names in `speaker_names` of meetings the caller can see (RLS), most used first, ≤ 50.
 - Chat: retrieved chunk text `[Speaker 1]` → `[Lan]` before the prompt and in citations. Regenerate (API) and analyse (worker) use the names for segment speakers.
-- Pure: `app/api/app/domain/speakers.py` → `parse_speaker_patch()`, `apply_names()`, `rank_suggestions()`.
+- Pure: `app/api/app/domain/speakers.py` → `parse_speaker_patch()`, `apply_name()`, `rename_chunk()`, `rank_suggestions()`.
 
 **Acceptance Criteria**
 - Given an editor names Speaker 1 "Lan", then everyone who can see the meeting sees "Lan" in the transcript; a viewer's or stranger's PATCH → 403 / 404.
-- Given a label not in the meeting, an empty / > 60 char / invisible-character name → 400.
+- Given a label not in the meeting, an empty / > 60 char / invisible-character / bracketed name, or a name equal to another label → 400.
 - Given names, then TXT/MD/SRT exports and chat answers / citations show them; a later regenerate sends them to the AI.
 - Given suggestions, then only names from meetings the caller can see are returned, most used first.
 
