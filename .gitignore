@@ -57,3 +57,7 @@ app/api/openapi.json
 migration-report*.md
 test-results/
 playwright-report/
+
+# dev token file if RICOTDIN_DEV_TOKEN_FILE points inside the repo (OPS-08)
+dev-token
+.dev-token.*

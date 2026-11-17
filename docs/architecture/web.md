@@ -25,6 +25,13 @@
   only to the API origin (`authFetch`); a 401 that arrives after another request refreshed retries
   with the new token without a second rotation. Never put tokens in storage, URLs or logs. Query
   cache is cancelled + cleared when the signed-in user changes.
+- **Dev token mode (OPS-08, dev only):** `RICOTDIN_DEV_TOKEN=1 npm run dev` → `dev/devTokenProxy.ts`
+  serves `/config.json` with `devProxy: '/__dev_api'`, proxies `/__dev_api/*` + `/media` to a loopback
+  API and adds the bearer from `scripts/dev-token.sh`'s file server-side (client `Authorization`
+  dropped; bearer only for same-origin requests). `withDevProxy` (`src/lib/devConfig.ts`) and the
+  `devProxy` session branch (`/auth/me` only, no token in the browser, anything but a user →
+  `unavailable`) run only under `import.meta.env.DEV`, so the build has none of it (`dist/` grep in
+  the OPS-08 done check). Production `parseRuntimeConfig` is unchanged.
 - **Email links:** `/verify-email` and `/reset-password` are public routes (placeholders until
   ARC-13) so a `#token=` link is never bounced through `/sign-in`; `?next=` never carries a fragment.
   nginx logs `$uri` only (no query strings).

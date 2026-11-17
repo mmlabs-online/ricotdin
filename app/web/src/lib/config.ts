@@ -1,6 +1,8 @@
 // Runtime configuration (ARC-11). `config.json` is fetched at start, so one image serves staging
 // and production: swap the file, not the build.
 
+import { withDevProxy } from './devConfig'
+
 export type RuntimeConfig = {
   /** Origin of the v2 API (no path: the API is served at `/`). */
   apiUrl: string
@@ -9,6 +11,8 @@ export type RuntimeConfig = {
   /** Cloudflare Turnstile site key for sign-up / forgot-password / repeated sign-in failures
    * (public; empty when not configured: those forms then explain they are unavailable). */
   turnstileSiteKey: string
+  /** Dev only (OPS-08, `withDevProxy`): the dev server proxies the API and adds the token. */
+  devProxy?: boolean
 }
 
 export class ConfigError extends Error {}
@@ -51,5 +55,7 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
 export async function loadRuntimeConfig(fetchFn: typeof fetch = fetch): Promise<RuntimeConfig> {
   const response = await fetchFn('/config.json', { cache: 'no-store', credentials: 'omit' })
   if (!response.ok) throw new ConfigError(`config.json: HTTP ${response.status}`)
-  return parseRuntimeConfig(await response.json())
+  const raw: unknown = await response.json()
+  const config = parseRuntimeConfig(raw)
+  return import.meta.env.DEV ? withDevProxy(raw, config) : config
 }

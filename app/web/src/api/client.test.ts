@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { AuthSession } from '../auth/session'
 import { authFetch } from './client'
 
-function fakeSession(tokens: string[], refreshOk = true) {
+function fakeSession(tokens: string[], refreshOk = true, devProxy = false) {
   let current = tokens[0] ?? null
   let refreshes = 0
   const session = {
     getToken: async () => current,
+    isDevProxy: () => devProxy,
     refresh: async () => {
       refreshes += 1
       current = tokens[refreshes] ?? null
@@ -80,6 +81,21 @@ describe('authFetch', () => {
     const { session } = fakeSession(['old'], false)
     const r = recorder([401])
     expect((await authFetch(session, API, r.fetchFn)(new Request(`${API}/meetings`))).status).toBe(401)
+    expect(r.seen).toHaveLength(1)
+  })
+
+  it('a 401 without a token does not refresh (signed out)', async () => {
+    const { session, refreshes } = fakeSession([])
+    const r = recorder([401])
+    expect((await authFetch(session, API, r.fetchFn)(new Request(`${API}/meetings`))).status).toBe(401)
+    expect(refreshes()).toBe(0)
+  })
+
+  it('dev token mode (OPS-08): a 401 re-checks the session (expired dev token → retry screen), no retry', async () => {
+    const { session, refreshes } = fakeSession([], true, true)
+    const r = recorder([401])
+    expect((await authFetch(session, API, r.fetchFn)(new Request(`${API}/meetings`))).status).toBe(401)
+    expect(refreshes()).toBe(1)
     expect(r.seen).toHaveLength(1)
   })
 })

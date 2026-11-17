@@ -403,6 +403,61 @@ The steps are spread over the CHANGELOG deploy checklists, `docs/ops/backup-rest
 
 ---
 
+### OPS-08 — Local dev sign-in (dev token proxy)
+**Priority:** Medium | **Status:** 🟡 Implemented (feat/OPS-08-local-dev-sign-in); owner end-to-end check pending
+
+**User Story**  
+As a developer, I want `npm run dev` to open ricotdin already signed in as an mmlabs account I choose so that I can use every screen against my local API although mmlabs Identity only accepts the production origin.
+
+**Context**
+mmlabs Identity registers only `https://ricotdin.mmlabs.online`, so the SPA's sign-in (AUT-05) cannot run from `localhost:5173`; today local dev cannot get past the sign-in screen. tudocuatui solved this with a dev token file + a dev-only proxy that adds the bearer server-side (T-025); this ports that. The ricotdin API is served at `/` and `config.json` takes a plain origin, so the proxy uses the prefix `/__dev_api` and serves its own dev `config.json`. Rejected: a standalone proxy on :8001 (third process, CORS); making the real sign-in form work through a proxied Identity (spoofed Origin + cookies, Turnstile; parked).
+
+**Use Cases**
+1. Developer runs `scripts/dev-token.sh` (email + password asked; `RICOTDIN_DEV_EMAIL` optional), then `RICOTDIN_DEV_TOKEN=1 npm run dev`; the app opens signed in as that account.
+2. To test another account (e.g. a non-admin), re-run the script with another email; reload, no Vite restart.
+3. Token expires (15 min): the next API 401 re-checks the session → retry screen, and Vite logs "run scripts/dev-token.sh"; re-run, press retry.
+
+**Frontend** (as built)
+- `app/web/scripts/dev-token.sh` (port of tudocuatui's: app `ricotdin`, Origin `https://ricotdin.mmlabs.online`, default file `~/.config/ricotdin/dev-token`, override `RICOTDIN_DEV_TOKEN_FILE`; password via `read -s`, never in argv/file/stdout; fresh 0600 `mktemp` file renamed atomically; xtrace off).
+- `app/web/dev/devTokenProxy.ts`: Vite plugin, `apply` only for `serve` (never build/preview) and only when `RICOTDIN_DEV_TOKEN=1`. Proxies `^/__dev_api(/|?|$)` (prefix stripped) and `^/media(?|$)` (the playback link `mediaSrc` resolves to the origin root) → `RICOTDIN_DEV_API` (default `http://127.0.0.1:8000`, loopback only). Drops the client's `Authorization`; adds the bearer (token file read per request) only for `Sec-Fetch-Site: same-origin`, a `localhost` / `127.0.0.1` Host and a matching `Origin` when sent. Serves `/config.json` = `{apiUrl: <origin>, authUrl: <origin>, devProxy: '/__dev_api'}` for a local Host only. Refuses `--host`, `::1`, `allowedHosts: true`.
+- `src/lib/devConfig.ts` `withDevProxy()`: applied by `loadRuntimeConfig` only under `import.meta.env.DEV`; moves `apiUrl` under `/__dev_api` and sets `devProxy: true`. `parseRuntimeConfig` is unchanged (a path is still rejected; an unknown `devProxy` key is ignored).
+- Session: no separate class (`AuthSession` has private fields, so a second class would need every consumer retyped). `SessionDeps.devProxy` (set by `main.tsx` only under `import.meta.env.DEV && config.devProxy`) makes `refreshOnce` call `fetchDevState()` (`src/auth/devSession.ts`: `GET /auth/me`, no token → `devAuthState()`: a user → `signedIn`, anything else → `unavailable`), with the sign-out epoch check; `getToken()` → `null`. `authFetch` re-checks the session on a 401 in this mode.
+
+**Backend**
+- None. No dev bypass in the API: it verifies the real mmlabs token as in production.
+
+**Acceptance Criteria**
+- Given a valid token file and `RICOTDIN_DEV_TOKEN=1 npm run dev`, when `http://localhost:5173` opens, then the app is signed in as that account and `/meetings` loads from the local API.
+- Given the token file is missing, malformed or expired, when a request goes through the proxy, then no `Authorization` is sent, the API answers 401, and Vite logs `[dev-token] token <status> - run scripts/dev-token.sh` once per status change.
+- Given a request that is not same-origin (missing / cross-site / same-site / none `Sec-Fetch-Site`), a non-local Host or a foreign Origin, or one carrying a client `Authorization`, when it hits the proxy, then the client header is dropped and no bearer is added.
+- Given `npm run build`, then `dist/` contains no `__dev_api`, `dev-token`, `devProxy`, `RICOTDIN_DEV` or token-file path (grep check); production `config.json` with a path is still rejected and a `devProxy` key is ignored.
+- Given `RICOTDIN_DEV_API` is not loopback or the server uses `--host` / `::1`, then `npm run dev` refuses to start.
+
+**Test Plan** (as built)
+- Pure logic: `app/web/dev/devTokenProxy.ts` → `proxyTarget()`, `assertLocalServer()`, `tokenFilePath()`, `readDevToken()`, `rewriteAuth()`, `warningFor()`, `stripPrefix()`, `devConfig()`; `src/lib/devConfig.ts` → `withDevProxy()`; `src/auth/devSession.ts` → `devAuthState()`, `fetchDevState()`.
+- Tests: `app/web/dev/devTokenProxy.test.ts`, `app/web/src/lib/devConfig.test.ts`, `app/web/src/auth/devSession.test.ts`, `app/web/src/auth/session.test.ts` (dev proxy block), `app/web/src/api/client.test.ts` (dev 401), `app/web/scripts/dev-token.test.ts` (static invariants: no password in argv, token only to a 0600 temp file, xtrace off).
+
+**Structural flags**
+- Auth in the browser (dev-only code path; build must not contain it), new dev-only env vars `RICOTDIN_DEV_TOKEN`, `RICOTDIN_DEV_API`, `RICOTDIN_DEV_EMAIL`, `RICOTDIN_DEV_TOKEN_FILE`; ~9 files. Stop for plan approval.
+
+**Done check**
+- On WSL/macOS: API running locally, `scripts/dev-token.sh`, `RICOTDIN_DEV_TOKEN=1 npm run dev` → app signed in, meetings list loads; `npm run typecheck && npm test && npm run build` green and the `dist/` grep is empty.
+
+**Out of scope**
+- Native Windows (PowerShell/Node) token script.
+- Real sign-in / sign-out / account switch UI from localhost (proxied Identity).
+- Any API-side dev bypass.
+
+**Key files**
+- `app/web/scripts/dev-token.sh`, `app/web/scripts/dev-token.test.ts`
+- `app/web/dev/devTokenProxy.ts`, `app/web/dev/devTokenProxy.test.ts`
+- `app/web/vite.config.ts`, `app/web/tsconfig.json`, `app/web/package.json` (`@types/node`), `app/web/src/main.tsx`
+- `app/web/src/lib/config.ts`, `app/web/src/lib/devConfig.ts` (+ test)
+- `app/web/src/auth/session.ts`, `app/web/src/auth/devSession.ts` (+ tests), `app/web/src/api/client.ts`
+- `.gitattributes` (`*.sh` LF), `.gitignore` (`dev-token`), `app/web/README.md`, `docs/architecture/web.md` §0.10
+
+---
+
 ## Implementation Order
 
 1. **OPS-01** (CI) — lowest effort, highest confidence gain. Set up GitHub Actions in one session.
@@ -418,6 +473,7 @@ The steps are spread over the CHANGELOG deploy checklists, `docs/ops/backup-rest
 - **OPS-05 depends on:** OPS-04 (release PRs must exist before the deployment repo can consume them)
 - **OPS-06 depends on:** OPS-01 (extends its ci.yml triggers to `dev`)
 - **OPS-07 depends on:** OPS-04 (`/version.json` + `/api/health` endpoints)
+- **OPS-08 depends on:** AUT-05 (mmlabs sign-in, `/auth/me`), ARC-11 (SPA runtime config + auth session)
 
 ## Current CI Coverage (for context)
 

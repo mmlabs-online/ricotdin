@@ -29,6 +29,7 @@ import {
   parseAccounts,
   parseTokenBody,
 } from './mmlabs'
+import { fetchDevState } from './devSession'
 import { expiresAtFrom, isExpiringSoon } from './token'
 
 export type AuthState =
@@ -49,12 +50,14 @@ export type SessionDeps = {
   channel: Channel | null
   locks: Locks | null
   account: AccountStore
+  /** Dev only (OPS-08): the dev server adds the token; honoured only under `import.meta.env.DEV`. */
+  devProxy?: boolean
 }
 
 /** An auth call must not hold the cross-tab lock forever when a server hangs. */
 const AUTH_TIMEOUT_MS = 15_000
 
-function defaultDeps(): SessionDeps {
+export function defaultDeps(): SessionDeps {
   const nav = typeof navigator === 'undefined' ? undefined : navigator
   return {
     fetch: (...args) => fetch(...args),
@@ -97,6 +100,11 @@ export class AuthSession {
     return this.token
   }
 
+  /** Dev token mode (OPS-08): the dev server adds the token. Always false in the build. */
+  isDevProxy(): boolean {
+    return import.meta.env.DEV && this.deps.devProxy === true
+  }
+
   /** Restore the session of the chosen account (app start, or "retry" after `unavailable`). */
   async start(): Promise<void> {
     if (this.state.status === 'unavailable') this.setState({ status: 'loading' })
@@ -110,6 +118,7 @@ export class AuthSession {
   /** A token for the next request, renewed first when it is about to expire. */
   async getToken(): Promise<string | null> {
     if (this.state.status !== 'signedIn') return null
+    if (this.isDevProxy()) return null
     if (isExpiringSoon(this.expiresAt, this.deps.now())) {
       await this.refresh().catch(() => false) // network trouble: try the request anyway
     }
@@ -226,6 +235,12 @@ export class AuthSession {
 
   private async refreshOnce(since: number): Promise<boolean> {
     const epoch = this.epoch
+    if (import.meta.env.DEV && this.deps.devProxy) {
+      const next = await fetchDevState(this.deps.fetch, this.apiUrl)
+      if (epoch !== this.epoch) return false // signed out meanwhile: drop the answer
+      this.setState(next)
+      return next.status === 'signedIn'
+    }
     if (usableShared(this.lastShared, since, this.deps.now())) {
       this.adopt(this.lastShared)
       return true
