@@ -68,7 +68,9 @@ From §0.1 (`docs/architecture/db.md`):
 - (ARC-20) Role names are cluster-wide: **one ricotdin database per server** (production). Runbook,
   migrations + logins from the Mac: `docs/ops/self-hosted-postgres.md`.
   **Never name CREATEDB / CREATEROLE / BYPASSRLS in an ALTER ROLE unconditionally** (it needs that
-  attribute; only ALTER when the role has it). Local dev + CI: a superuser container, never the shared server.
+  attribute; only ALTER when the role has it). Tests + CI: a superuser container, never the shared server.
+  The owner (never an agent) may run the API only against production through the pg tunnel (2026-11-17),
+  runtime logins only, via `with-secrets.sh` (never a file).
 - **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN (RLS does not govern them), and INSERT/UPDATE/DELETE only
   where a policy for that command exists. All meeting content is SELECT-only for the app, so

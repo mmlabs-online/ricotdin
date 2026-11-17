@@ -76,3 +76,41 @@ docker run -d --name ricotdin-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 pgvector/
 
 `app/api/.env`: `DATABASE_URL=postgresql://postgres:dev@localhost:5432/postgres`. CI uses the same
 image (`ci-api.yml`).
+
+## Local dev against production
+
+Owner decision 2026-11-17: local development may run the **API only** against the production
+database, through a pg tunnel that exposes `postgres:5432` as `127.0.0.1:15432` on the dev machine
+(the same way tudocuatui does it). A local container stays the safe default.
+
+**Secrets never go in a file** (workspace rule: values reach a process only at runtime through
+the spaceM `scripts/with-secrets.sh`; decision mmlabs-online/spaceM#49). The production values live
+in Bitwarden, item `agent/ricotdin-prod-tunnel` (custom fields `database_url_app`,
+`database_url_service`, `database_url_worker` = the production runtime logins with `@postgres:5432`
+replaced by `@127.0.0.1:15432`, and `key_encryption_secret`); `secrets.refs.yaml` maps them to the
+names the API reads. `app/api/.env.local` (gitignored) holds **non-secret** settings only:
+`WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173`, `MMLABS_ISSUER`, `LOG_LEVEL`, `API_DOCS`.
+
+The owner, in their own terminal (agents never unlock the vault):
+
+```bash
+export BW_SESSION="$(bw unlock --raw)"     # once per terminal
+cd app/api                                  # spaceM checkout: the workspace root is ../../../..
+../../../../scripts/with-secrets.sh DATABASE_URL_APP DATABASE_URL_SERVICE DATABASE_URL_WORKER -- \
+  uv run --env-file .env.local uvicorn app.main:create_app --factory --reload
+```
+
+Guardrails (every request writes real data):
+
+- **Only the owner runs this.** The values are in the `agent` collection because `with-secrets.sh`
+  reads only that one, but agents must never pass these names to it or start the API against
+  production; agents use a local container.
+- **No owner `DATABASE_URL`**: schema changes go through the deploy only.
+- **Never run against production:** the worker (it would claim real users' jobs and race the
+  production worker), `alembic`, `pytest`, `provision_db_roles`, `gen_baseline`, `connect_gdrive`.
+- **`KEY_ENCRYPTION_SECRET` is unset by default.** Stored provider keys and Drive are then
+  unavailable (media, uploads fail). For a session that needs them, add `KEY_ENCRYPTION_SECRET` to
+  the names above (the production value, through `with-secrets.sh` only). Never another key:
+  anything saved locally (admin keys, Drive config) would be encrypted with it and unreadable in
+  production.
+- `pg_dump` (`docs/ops/backup-restore.md`) before a risky session; stop the tunnel when done.
