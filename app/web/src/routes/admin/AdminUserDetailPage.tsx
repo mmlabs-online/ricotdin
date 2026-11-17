@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAdminUser, useUserActivity, useUserMutations, useUserQuota } from '../../api/admin/users'
 import { useAuth } from '../../auth/AuthProvider'
+import { useExportUser } from '../../api/account'
 import { AdminHead, NoticeBanner, UserStatusBadge, useFormatters, useNotice } from '../../components/admin/AdminParts'
 import { FullPageLoading } from '../../components/FullPageLoading'
 import { Button } from '../../components/ui/Button'
@@ -55,6 +56,7 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
   const { state } = useAuth()
   const me = state.status === 'signedIn' ? state.user.id : ''
   const m = useUserMutations()
+  const exporter = useExportUser() // ADM-11
   const f = useFormatters()
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const ids = { confirmBody: useId() }
@@ -125,6 +127,19 @@ function UserDetail({ user }: { user: NonNullable<ReturnType<typeof useAdminUser
               {t(actions.disable ? 'admin.users.actions.disable' : 'admin.users.actions.enable')}
             </Button>
           )}
+          <Button
+            onClick={() => {
+              if (exporter.isPending) return
+              exporter
+                .mutateAsync(user.id)
+                .then(() => setNotice('admin.userDetail.done.exported'))
+                .catch(fail)
+            }}
+            aria-disabled={exporter.isPending}
+            aria-busy={exporter.isPending}
+          >
+            {exporter.isPending ? t('admin.userDetail.exporting') : t('admin.userDetail.export')}
+          </Button>
           {actions.delete && (
             <Button variant="danger" onClick={() => ask('delete')} aria-disabled={busy}>
               {t('admin.users.actions.delete')}

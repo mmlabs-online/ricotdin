@@ -140,7 +140,8 @@
     "turnstile": {
       "label": "Kiểm tra bảo mật",
       "unavailable": "Bước kiểm tra bảo mật hiện không khả dụng. Vui lòng thử lại sau."
-    }
+    },
+    "accountDeleted": "Tài khoản Ricotdin của bạn đã được xóa. Đăng nhập lại sẽ tạo một tài khoản mới, trống."
   },
   "page": {
     "workspace": "Không gian làm việc",
@@ -291,7 +292,8 @@
       "selfHint": "Bạn không thể đổi quyền, trạng thái hay xóa chính mình.",
       "done": {
         "disable": "Đã khóa và đăng xuất người dùng khỏi mọi thiết bị.",
-        "enable": "Người dùng đăng nhập lại được."
+        "enable": "Người dùng đăng nhập lại được.",
+        "exported": "Đã tải dữ liệu của người dùng (file ZIP)."
       },
       "confirm": {
         "disable": {
@@ -311,7 +313,9 @@
         }
       },
       "viewActivity": "Xem mọi hoạt động",
-      "mmlabsHint": "Role và mật khẩu được quản lý bên mmlabs (role ricotdin:admin). Quyền admin cập nhật theo tài khoản trong vòng 15 phút."
+      "mmlabsHint": "Role và mật khẩu được quản lý bên mmlabs (role ricotdin:admin). Quyền admin cập nhật theo tài khoản trong vòng 15 phút.",
+      "export": "Xuất dữ liệu",
+      "exporting": "Đang chuẩn bị…"
     },
     "quota": {
       "title": "Số dư",
@@ -1448,6 +1452,24 @@
       "emptyFiltered": "Không có hoạt động thuộc loại này.",
       "someFolder": "một thư mục",
       "someone": "một tài khoản đã bị xóa"
+    },
+    "data": {
+      "title": "Dữ liệu của bạn",
+      "body": "Tải về mọi thứ bạn lưu trong Ricotdin, hoặc xóa tài khoản Ricotdin của bạn.",
+      "export": "Tải dữ liệu của tôi",
+      "exporting": "Đang chuẩn bị…",
+      "exported": "Đã tải dữ liệu của bạn (file ZIP).",
+      "exportLimited": "Bạn có thể tải dữ liệu 3 lần mỗi giờ. Vui lòng thử lại sau.",
+      "exportFailed": "Không chuẩn bị được dữ liệu. Vui lòng thử lại.",
+      "delete": "Xóa tài khoản Ricotdin",
+      "deleteTitle": "Xóa tài khoản Ricotdin của bạn?",
+      "deleteBody": "Cuộc họp, bản ghi âm, bản ghi lời, ghi chú, thư mục và các cuộc chat của bạn sẽ bị xóa vĩnh viễn. Cuộc họp do người khác sở hữu vẫn giữ nguyên. Hãy tải dữ liệu về trước nếu muốn giữ bản sao.",
+      "deleteMmlabs": "Tài khoản mmlabs của bạn không bị xóa: đăng nhập lại Ricotdin sẽ tạo một tài khoản mới, trống.",
+      "confirmLabel": "Nhập tên người dùng ({{username}}) để xác nhận",
+      "confirmMismatch": "Đó không phải tên người dùng của bạn.",
+      "deleteConfirm": "Xóa tài khoản",
+      "deleting": "Đang xóa…",
+      "deleteFailed": "Không xóa được tài khoản. Vui lòng thử lại."
     }
   },
   "searchPage": {

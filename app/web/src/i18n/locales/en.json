@@ -140,7 +140,8 @@
     "turnstile": {
       "label": "Security check",
       "unavailable": "The security check is not available right now. Try again later."
-    }
+    },
+    "accountDeleted": "Your Ricotdin account was deleted. Signing in again creates a new, empty account."
   },
   "page": {
     "workspace": "Workspace",
@@ -291,7 +292,8 @@
       "selfHint": "You cannot change your own role or status, or delete yourself.",
       "done": {
         "disable": "The user is disabled and signed out everywhere.",
-        "enable": "The user can sign in again."
+        "enable": "The user can sign in again.",
+        "exported": "The user's data was downloaded (a ZIP file)."
       },
       "confirm": {
         "disable": {
@@ -311,7 +313,9 @@
         }
       },
       "viewActivity": "View all activity",
-      "mmlabsHint": "Roles and passwords are managed in mmlabs (role ricotdin:admin). The admin role follows the account within 15 minutes."
+      "mmlabsHint": "Roles and passwords are managed in mmlabs (role ricotdin:admin). The admin role follows the account within 15 minutes.",
+      "export": "Export data",
+      "exporting": "Preparing…"
     },
     "quota": {
       "title": "Balance",
@@ -1448,6 +1452,24 @@
       "emptyFiltered": "No activity of this type.",
       "someFolder": "a folder",
       "someone": "a deleted account"
+    },
+    "data": {
+      "title": "Your data",
+      "body": "Download everything you keep in Ricotdin, or delete your Ricotdin account.",
+      "export": "Download my data",
+      "exporting": "Preparing…",
+      "exported": "Your data was downloaded (a ZIP file).",
+      "exportLimited": "You can download your data 3 times an hour. Try again later.",
+      "exportFailed": "Could not prepare your data. Please try again.",
+      "delete": "Delete my Ricotdin account",
+      "deleteTitle": "Delete your Ricotdin account?",
+      "deleteBody": "Your meetings, recordings, transcripts, notes, folders and chats are deleted for good. Meetings other people own stay with them. Download your data first if you want a copy.",
+      "deleteMmlabs": "Your mmlabs account is not deleted: signing in to Ricotdin again creates a new, empty account.",
+      "confirmLabel": "Type your username ({{username}}) to confirm",
+      "confirmMismatch": "That is not your username.",
+      "deleteConfirm": "Delete my account",
+      "deleting": "Deleting…",
+      "deleteFailed": "Could not delete your account. Please try again."
     }
   },
   "searchPage": {

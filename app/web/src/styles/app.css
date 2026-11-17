@@ -487,3 +487,8 @@ dl.speaker-fields { display: grid; gap: 6px; margin: 8px 0; }
 .speaker-actions .form-note { margin: 0; }
 .speaker-actions .button { min-height: 44px; }
 @media (max-width: 480px) { .speaker-fields li, .speaker-fields > div { grid-template-columns: 1fr; gap: 4px; } .speaker-fields input { max-width: none; } }
+
+/* PRF-13: own data */
+.data-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.data-actions .button { min-height: 44px; }
+.auth-card .auth-note { margin: 0 0 15px; color: var(--text); background: var(--primary-soft); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; }

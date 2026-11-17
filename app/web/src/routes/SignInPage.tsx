@@ -23,7 +23,9 @@ export function SignInPage() {
   const siteKey = useTurnstileSiteKey()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const signOutFailed = (useLocation().state as { signOutFailed?: boolean } | null)?.signOutFailed === true
+  const navState = useLocation().state as { signOutFailed?: boolean; accountDeleted?: boolean } | null
+  const signOutFailed = navState?.signOutFailed === true
+  const accountDeleted = navState?.accountDeleted === true // PRF-13
   const next = safeReturnTo(params.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -116,6 +118,11 @@ export function SignInPage() {
         {signOutFailed && (
           <p className="auth-error" role="alert">
             {t('auth.signOutFailed')}
+          </p>
+        )}
+        {accountDeleted && (
+          <p className="auth-note" role="status">
+            {t('auth.accountDeleted')}
           </p>
         )}
         {accounts.length > 0 && (
