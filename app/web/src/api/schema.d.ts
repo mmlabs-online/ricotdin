@@ -950,6 +950,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/meetings/{meeting_id}/speakers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Speaker Names */
+        patch: operations["set_speaker_names_meetings__meeting_id__speakers_patch"];
+        trace?: never;
+    };
     "/meetings/{meeting_id}/todos": {
         parameters: {
             query?: never;
@@ -1104,6 +1121,23 @@ export interface paths {
         };
         /** Search */
         get: operations["search_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/speakers/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Speaker Suggestions */
+        get: operations["speaker_suggestions_speakers_suggestions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2968,6 +3002,39 @@ export interface operations {
             };
         };
     };
+    set_speaker_names_meetings__meeting_id__speakers_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_todos_meetings__meeting_id__todos_get: {
         parameters: {
             query?: never;
@@ -3216,6 +3283,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    speaker_suggestions_speakers_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string[];
                     };
                 };
             };

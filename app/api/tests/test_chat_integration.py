@@ -447,3 +447,16 @@ def test_a_meeting_without_a_locked_model_uses_the_system_default(
     assert _sql(world["db"], "SELECT generation_provider FROM meetings WHERE id = %s", mid) == [
         (None,)
     ]  # chat never locks a model
+
+
+def test_the_ai_sees_the_speaker_names(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    # PRO-04: chunk lines "[Speaker 1] …" reach the prompt with the names people set
+    _queries(world, "a")
+    mid = _meeting(world, "a", text="[Speaker 1] We ship on Friday.\n[Speaker 2] Agreed.")
+    _sql(world["db"], "UPDATE meetings SET speaker_names = '{\"Speaker 1\": \"Lan\"}' WHERE id = %s",
+         mid)  # fmt: skip
+    assert _ask(client, "a", meetingId=str(mid)).status_code == 200
+    prompt = _excerpt_texts(ai)
+    assert "[Lan] We ship on Friday." in prompt and "[Speaker 2] Agreed." in prompt

@@ -37,6 +37,7 @@ from app.db.session import Database, get_database
 from app.domain.access import has_role
 from app.domain.models import Pick, system_default
 from app.domain.rules import parse_uuid
+from app.domain.speakers import clean_names, rename_chunk
 from app.rag.answer import (
     ANSWER_SCHEMA,
     SYSTEM_PROMPT,
@@ -438,17 +439,22 @@ async def _retrieve(
                 {"e": vector_literal(vector), "n": MATCH_COUNT, "ids": meeting_ids},
             )
         ).all()
-        owners = {
-            r[0]: r[1]
+        meta = {
+            r[0]: (r[1], clean_names(jsonb(r[2])))
             for r in await conn.execute(
                 text(
-                    "SELECT id, user_id FROM public.meetings WHERE id = ANY(CAST(:ids AS uuid[]))"
+                    "SELECT id, user_id, speaker_names FROM public.meetings "
+                    "WHERE id = ANY(CAST(:ids AS uuid[]))"
                 ),
                 {"ids": list({r.meeting_id for r in rows})},
             )
         }
+    owners = {mid: owner for mid, (owner, _) in meta.items()}
     found = [
-        RetrievedChunk(r.id, r.meeting_id, r.content or "", int(r.start_ms or 0),
+        # PRO-04: the AI and the citations see the names people gave the speakers
+        RetrievedChunk(r.id, r.meeting_id,
+                       rename_chunk(r.content or "", meta.get(r.meeting_id, (None, {}))[1]),
+                       int(r.start_ms or 0),
                        int(r.end_ms or 0), float(r.similarity),
                        shared=owners.get(r.meeting_id) != identity.user_id)
         for r in rows

@@ -260,3 +260,14 @@ def test_a_regenerate_already_in_flight_is_409(client: TestClient, world: dict[s
     assert seen == [] and _ledger(world, mid) == []
     assert _post(client, "a", mid).status_code == 200
     assert mid not in app.state.regenerating
+
+
+def test_regenerate_sends_the_speaker_names(client: TestClient, world: dict[str, Any]) -> None:
+    # PRO-04: the AI reads "Lan" where the transcript says "Speaker 1"
+    seen = install_ai(client, [openai(ANSWER)])
+    mid = _meeting(world, "a")
+    _sql(world["db"], "UPDATE meetings SET speaker_names = '{\"Speaker 1\": \"Lan\"}' WHERE id = %s",
+         mid)  # fmt: skip
+    assert _post(client, "a", mid).status_code == 200
+    sent = " ".join(m["content"] for m in json.loads(seen[0].content)["messages"])
+    assert "[0] Lan (0.0s): hello" in sent and "[0] Speaker 1" not in sent
