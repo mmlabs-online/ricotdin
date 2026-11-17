@@ -1,6 +1,6 @@
 ---
 name: fix-bug
-description: Fix a bug end to end — intake and log it in ai-instruction/bugs.md (BUG-NNN), then ask the user to open a record-only PR (A), log more bugs in the same batch (B) or fix the batch now (C); decide bugfix (on main) vs hotfix (on release/X.Y for a shipped version), reproduce with a failing regression test first, minimal fix, verify, review gates, then close-out (bug log, CHANGELOG, version bump for hotfixes) and the release steps from CLAUDE.md §9k. Use when the user reports a bug, error, regression, or production incident, or asks for a hotfix.
+description: Fix a bug end to end — intake and log it in ai-instruction/bugs.md (BUG-NNN), then ask the user to open a record-only PR (A), log more bugs in the same batch (B) or fix the batch now (C); decide bugfix (on main) vs hotfix (on release/X.Y.Z, the version in production), reproduce with a failing regression test first, minimal fix, verify, review gates, then close-out (bug log, CHANGELOG, version bump for hotfixes) and the release steps from CLAUDE.md §9k. Use when the user reports a bug, error, regression, or production incident, or asks for a hotfix.
 argument-hint: "<bug description, error message, or BUG-NNN>"
 ---
 
@@ -88,9 +88,9 @@ failing regression test first). Grouping, because §9k sends bugfixes and hotfix
 - **Bugfixes** share one branch `fix/BUG-NNN-<slug>` from `main` (`BUG-NNN` = first bugfix of the
   batch, e.g. `fix/BUG-009-010-…` when it is two), one commit per bug, and **one PR** into `main`
   titled `[BUG-NNN, BUG-MMM] <summary>`.
-- **Hotfixes** cannot share that PR: they go to `release/X.Y`. Hotfixes on the **same** line share
-  one `hotfix/BUG-NNN-<slug>` branch, one version bump and one PR into `release/X.Y`; each other
-  line gets its own. Each needs its §9k merge-back.
+- **Hotfixes** cannot share that PR: they go to `release/X.Y.Z` (the version in production). All
+  hotfixes of the batch share one `hotfix/BUG-NNN-<slug>` branch and one PR into it. Each needs its
+  §9k merge-back.
 - A bug whose fix is blocked (no repro, review gates still failing after 2 rounds) stays logged
   with its status; finish the others and list it in the final report.
 
@@ -103,14 +103,14 @@ Find whether the faulty code is in a released version:
 ```
 git tag -l 'v*' --sort=-v:refname          # released versions
 git branch -r --list 'origin/release/*'     # release lines
-git log origin/release/X.Y --oneline -- <file>   # is the faulty code on that line?
+git log origin/release/X.Y.Z --oneline -- <file>   # is the faulty code in that version?
 ```
 
-- **Hotfix** — the bug is in a version running in production (`vX.Y.Z` on `release/X.Y`)
+- **Hotfix** — the bug is in a version running in production (`vX.Y.Z` = branch `release/X.Y.Z`, the highest tag)
   **and** severity is S1/S2 (or the user explicitly wants it shipped now).
 - **Bugfix** — everything else: bug only on `main` (not released yet), or S3/S4 that can wait for the next release.
 
-State the decision with the reason and the target line (`release/X.Y`), and **wait for the
+State the decision with the reason and the target (`release/X.Y.Z`), and **wait for the
 user to confirm**. Record `Fix type` in `bugs.md`; set status `in_progress`.
 
 ## Step 4 — Branch
@@ -118,7 +118,7 @@ user to confirm**. Record `Fix type` in `bugs.md`; set status `in_progress`.
 Working tree must be clean (or the user confirms the changes belong here).
 
 - Bugfix: `git checkout main && git pull && git checkout -b fix/BUG-NNN-<slug>`
-- Hotfix: `git checkout release/X.Y && git pull && git checkout -b hotfix/BUG-NNN-<slug>`
+- Hotfix: `git checkout release/X.Y.Z && git pull && git checkout -b hotfix/BUG-NNN-<slug>`
 
 In a batch (option C), only the first bug of each group creates the branch; later bugs of the
 group continue on it. The uncommitted Step 2 `bugs.md` entries come along.
@@ -179,7 +179,7 @@ Fix confirmed findings → back to Step 7. Max 2 rounds; report what's still ope
 1. `bugs.md`: status `fixed`, `Fixed in` = `main` (bugfix) or the new `X.Y.Z` (hotfix),
    `Link` = branch name; fill **Fix** in the details (incl. the regression test name).
 2. Hotfix only:
-   - `npm version X.Y.(Z+1) --no-git-tag-version`
+   - No version bump: the version is the name of the release branch the owner cuts (OPS-09).
    - `CHANGELOG.md`: new `## [X.Y.(Z+1)] — YYYY-MM-DD` section with `### Sửa lỗi`
      (`- <what was broken, user-visible> (BUG-NNN)`) and a deploy checklist if there is a migration.
 3. Bugfix only: `CHANGELOG.md` → `## [Unreleased]` → `### Sửa lỗi` → `- … (BUG-NNN)`
@@ -198,15 +198,15 @@ Agents never approve, merge or enable auto-merge on any PR; the owner merges.
 2. Record `PR #N` in the `Link` cell of `bugs.md`. It ships with the next normal release.
 
 **Hotfix** (`CLAUDE.md` §9k "Hotfix")
-1. Push `hotfix/BUG-NNN-<slug>`; PR into `release/X.Y`, title `[BUG-NNN] <summary>`
-   (`gh pr create --base release/X.Y --head hotfix/BUG-NNN-<slug> …`).
-   Record `PR #N` in `bugs.md`.
-2. The merge is a push to `release/X.Y` with the bumped version: `release.yml` tags
-   `vX.Y.(Z+1)`, builds both images, creates the GitHub Release and opens PR
-   `ricotdin vX.Y.(Z+1)` on `mmlabs-online/deployment`. No hand tagging.
-3. Merge `release/X.Y` back into `main` so the fix isn't lost (a PR `release/X.Y` → `main`).
+1. Push `hotfix/BUG-NNN-<slug>`; PR into `release/X.Y.Z`, title `[BUG-NNN] <summary>`
+   (`gh pr create --base release/X.Y.Z --head hotfix/BUG-NNN-<slug> …`).
+   Record `PR #N` in `bugs.md`. Merging it releases nothing (tag `vX.Y.Z` exists).
+2. **Owner only** (the push deploys to production; agents never push `release/*`):
+   `git checkout release/X.Y.Z && git pull && git checkout -b release/X.Y.(Z+1) && git push -u origin release/X.Y.(Z+1)`
+   → `release.yml` tags `vX.Y.(Z+1)`, builds both images, merges the deployment PR (= deploy,
+   migrations included) and creates the GitHub Release.
+3. Merge `release/X.Y.(Z+1)` back into `main` so the fix isn't lost (a PR → `main`).
    Resolve any conflict in favour of keeping both the fix and newer `main` work; re-run Step 7 on `main`.
-4. Deploy = the owner merges the deployment PR (it runs the release's migrations itself).
 
 ## Final report
 

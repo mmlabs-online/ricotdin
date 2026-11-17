@@ -458,6 +458,36 @@ mmlabs Identity registers only `https://ricotdin.mmlabs.online`, so the SPA's si
 
 ---
 
+### OPS-09 — Release by branch name, auto-deploy
+**Priority:** High | **Status:** ✅ Implemented (ci/OPS-09-auto-release)
+
+**User Story**  
+As the owner, I want pushing a new branch `release/X.Y.Z` to tag, build and deploy that version so that a release needs no version bump, hand tag or manual deployment merge.
+
+**Context**
+The owner cut `release/2.1.1` and `release/2.1.2` expecting a release; `release.yml` only ran for
+`release/X.Y` with bumped version files, so nothing happened. Owner decisions 2026-11-17: the version
+is the branch name; the deployment PR is merged at once (no wait for its checks); release notes fall
+back to GitHub's generated notes.
+
+**Acceptance Criteria**
+- Given a new branch `release/2.2.0` is pushed, then tag `v2.2.0` is created, both CI suites run, the images are pushed, the deployment PR is opened and merged (deploy starts there) and a GitHub Release exists.
+- Given a later push to an existing `release/X.Y.Z` (tag exists), then nothing is released.
+- Given `release/1.2.0` or `release/2.2`, then nothing is tagged (v1 rejected; old `X.Y` lines no longer trigger).
+- Given `release/2.2.0-rc1`, then only images are pushed.
+- Given a hotfix `release/2.1.3` after `v2.2.0`, then its deployment PR stays open (no automatic rollback).
+
+**Structural flags**
+- Production deploy config (High tier): the branch push deploys; no human gate on the deployment PR.
+
+**Done check**
+- First real release `release/2.2.0`: the run tags, merges `ricotdin v2.2.0` on the deployment repo and `deploy-ricotdin-v2` succeeds.
+
+**Key files**
+- `.github/workflows/release.yml`, `.github/workflows/github-release.yml`, `CLAUDE.md` §9k/§9l, `docs/architecture/release-cutover.md`, `.claude/skills/fix-bug/SKILL.md`
+
+---
+
 ## Implementation Order
 
 1. **OPS-01** (CI) — lowest effort, highest confidence gain. Set up GitHub Actions in one session.

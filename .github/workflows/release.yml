@@ -1,27 +1,24 @@
 name: Release
 
-# v2 (ARC-15). Two ways in:
-#   - push to a release branch release/X.Y (cut from main, or a hotfix merged into it): the guard
-#     reads the version from app/api/pyproject.toml + app/web/package.json and, when tag
-#     v<version> does not exist yet, creates and pushes it, then releases it. When the tag exists
-#     already (a push without a version bump) nothing is released;
-#   - push a tag vX.Y.Z by hand on release/X.Y (as before).
-# A tag pushed by this workflow (GITHUB_TOKEN) does not start it again, so a version runs once.
-# Then:
-#   1. guard: tag on release/X.Y, same version in app/api/pyproject.toml and app/web/package.json;
+# v2 (ARC-15, OPS-09). One way in: push a NEW branch release/X.Y.Z (cut from main; a hotfix is a new
+# branch release/X.Y.(Z+1) cut from the previous release branch). The version is the branch name:
+# no version file to bump, no tag to push by hand.
+#   1. guard: tag vX.Y.Z from the branch name (v2+ only); when the tag exists already (a later push
+#      to the same branch) nothing is released: cut a new release/X.Y.Z instead;
 #   2. the full API and web CI (ci-api.yml, ci-web.yml, reused as-is);
 #   3. build + push mingming21400/ricotdin-api:vX.Y.Z (API and worker share it) and
 #      mingming21400/ricotdin-web:vX.Y.Z (+ latest when it is the highest version);
 #   4. open PR "ricotdin vX.Y.Z" on mmlabs-online/deployment pinning BOTH images by digest in
-#      apps/ricotdin-v2/release.env (the only ricotdin deployment: v1 and staging are retired,
-#      ARC-20). A prerelease tag (vX.Y.Z-rc1) only builds and pushes the images: no deployment PR.
-#   5. the GitHub Release with the version's CHANGELOG.md section (github-release.yml).
-# Deploy = run the release's `alembic upgrade head` on the Mac, then review + merge that PR
-# (docs/ops/go-live.md).
+#      apps/ricotdin-v2/release.env and MERGE it at once (owner decision 2026-11-17): the merge
+#      starts deploy-ricotdin-v2 there (pg_dump → alembic upgrade head → replace containers), so
+#      pushing the release branch IS the production deploy. Only for the highest plain version: an
+#      older line (hotfix after a newer release) gets a PR left open, never an automatic rollback.
+#      A prerelease branch (release/X.Y.Z-rc1) only builds and pushes the images.
+#   5. the GitHub Release: the version's CHANGELOG.md section, else GitHub's generated notes.
+# A tag pushed by this workflow (GITHUB_TOKEN) does not start any workflow, so a version runs once.
 on:
   push:
-    branches: ['release/[0-9]+.[0-9]+'] # release/X.Y only (not release/1.1-style v1 or release/2.0.0)
-    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+    branches: ['release/[0-9]+.[0-9]+.[0-9]+*'] # release/X.Y.Z[-pre]; old release/X.Y lines never release again
 
 permissions:
   contents: read
@@ -39,68 +36,40 @@ env:
 
 jobs:
   guard:
-    name: tag · branch · version
+    name: tag from the branch name
     runs-on: ubuntu-latest
     permissions:
-      contents: write # creates the tag on a release-branch push
+      contents: write # creates the tag
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       skip: ${{ steps.tag.outputs.skip }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the branch check needs the history
 
-      # Branch push: the tag comes from the version files (created below if it is new).
-      # Tag push: the tag is the ref itself.
       - name: Decide the tag
         id: tag
-        env:
-          REF_TYPE: ${{ github.ref_type }}
         run: |
-          API_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' app/api/pyproject.toml | head -1)"
-          WEB_VERSION="$(node -p "require('./app/web/package.json').version")"
-          if [ "$API_VERSION" != "$WEB_VERSION" ]; then
-            echo "::error::app/api/pyproject.toml has $API_VERSION but app/web/package.json has $WEB_VERSION"
+          TAG="v${GITHUB_REF_NAME#release/}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::$GITHUB_REF_NAME is not release/X.Y.Z (or release/X.Y.Z-rc1)"
             exit 1
           fi
-          if [ "$REF_TYPE" = "tag" ]; then
-            TAG="$GITHUB_REF_NAME"
-          else
-            TAG="v$API_VERSION"
-            LINE="${GITHUB_REF_NAME#release/}"
-            case "$API_VERSION" in
-              "$LINE".*) ;;
-              *) echo "::error::Branch $GITHUB_REF_NAME has version $API_VERSION: it must be $LINE.<patch>"; exit 1 ;;
-            esac
-            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-              echo "::notice::$TAG exists already: nothing to release. Bump both version files to release a new one."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          TAG_VERSION="${TAG#v}"
-          MAJOR="${TAG_VERSION%%.*}"
-          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || [ "$MAJOR" -lt 2 ]; then
-            echo "::error::$TAG is not a v2+ version tag: v1 is retired (ARC-20), only v2+ is released"
+          MAJOR="${TAG#v}"; MAJOR="${MAJOR%%.*}"
+          if [ "$MAJOR" -lt 2 ]; then
+            echo "::error::$TAG: v1 is retired (ARC-20), only v2+ is released"
             exit 1
           fi
-          BRANCH="release/$(echo "$TAG_VERSION" | cut -d. -f1,2)"
-          if ! git branch -r --contains "$GITHUB_SHA" | grep -qx "  origin/$BRANCH"; then
-            echo "::error::$TAG must be on branch $BRANCH"
-            exit 1
-          fi
-          if [ "$API_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Both version files say $API_VERSION, tag is $TAG"
-            exit 1
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::$TAG exists already: nothing to release. Cut a new branch release/X.Y.Z for a new version."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create the tag
-        if: github.ref_type == 'branch' && steps.tag.outputs.skip != 'true'
+        if: steps.tag.outputs.skip != 'true'
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -121,7 +90,7 @@ jobs:
     uses: ./.github/workflows/ci-web.yml
 
   build:
-    name: build & push images · open deployment PR
+    name: build & push images · deploy (deployment PR, merged)
     needs: [guard, verify-api, verify-web]
     runs-on: ubuntu-latest
     env:
@@ -185,9 +154,9 @@ jobs:
 
       # Writes ONLY apps/ricotdin-v2/release.env (the deployment repo's pr-scope.yml must allow
       # it). DEPLOY_REPO_TOKEN: fine-grained PAT on mmlabs-online/deployment only,
-      # Contents + Pull requests read/write. The deployment repo must dismiss stale approvals on
-      # new commits: a re-run for the same tag force-pushes the release branch.
-      - name: Open deployment PR
+      # Contents + Pull requests read/write (also what merging the PR needs). A re-run for the same tag
+      # force-pushes the deployment release branch.
+      - name: Open and merge the deployment PR (deploys)
         if: ${{ !contains(needs.guard.outputs.tag, '-') }}
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
@@ -202,6 +171,10 @@ jobs:
             echo "::error::build-push-action returned no digest"
             exit 1
           fi
+
+          # Deploy automatically only the highest plain version: a hotfix on an older line released after
+          # a newer one must never roll production back (and its schema forward-only migrations).
+          HIGHEST="$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
 
           gh auth setup-git
           gh repo clone "$DEPLOY_REPO" deployment -- --depth 1
@@ -228,13 +201,23 @@ jobs:
           # --force: re-running the workflow for the same tag rewrites the release branch.
           git push --force -u origin "$BRANCH"
 
-          OPEN_PR="$(gh pr list --head "$BRANCH" --state open --json url -q '.[0].url')"
-          if [ -n "$OPEN_PR" ]; then
-            echo "Open PR $OPEN_PR — branch updated."
+          PR="$(gh pr list --head "$BRANCH" --state open --json url -q '.[0].url')"
+          if [ -n "$PR" ]; then
+            echo "Open PR $PR — branch updated."
           else
-            gh pr create --title "$APP $TAG" --head "$BRANCH" \
-              --body "Deploy \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            PR="$(gh pr create --title "$APP $TAG" --head "$BRANCH" \
+              --body "Deploy \`$API_IMAGE:$TAG@$API_DIGEST\` (API + worker) and \`$WEB_IMAGE:$TAG@$WEB_DIGEST\` (commit $GITHUB_SHA). Written by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.")"
           fi
+
+          # OPS-09 (owner decision 2026-11-17): merge at once; the merge starts deploy-ricotdin-v2 on the
+          # deployment repo (pg_dump → alembic upgrade head → replace containers). A merge by this PAT is a
+          # normal push there, so it does start that workflow (a GITHUB_TOKEN push would not).
+          if [ "$TAG" != "$HIGHEST" ]; then
+            echo "::warning::$TAG is not the highest version ($HIGHEST): PR $PR left open, NOT deployed. Merge it by hand only if you really mean to roll production back."
+            exit 0
+          fi
+          gh pr merge "$PR" --merge --subject "$APP $TAG"
+          echo "::notice::Merged $PR: deploy-ricotdin-v2 now deploys $TAG on $DEPLOY_REPO (Actions tab there)."
 
   github-release:
     needs: [guard, build]
