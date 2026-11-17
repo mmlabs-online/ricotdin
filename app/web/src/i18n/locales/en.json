@@ -992,7 +992,8 @@
       "confirm": "Delete permanently",
       "done": "Meeting deleted.",
       "warning": "Meeting deleted, but its recording could not be removed from storage. An administrator can clean it up."
-    }
+    },
+    "searchContent": "Search in content"
   },
   "folders": {
     "title": "Manage folders",
@@ -1431,6 +1432,34 @@
       "emptyFiltered": "No activity of this type.",
       "someFolder": "a folder",
       "someone": "a deleted account"
+    }
+  },
+  "searchPage": {
+    "title": "Search",
+    "subtitle": "Find words and topics in the transcripts, summaries and notes of every meeting you can open.",
+    "label": "Search meetings",
+    "placeholder": "Search transcripts, summaries and notes…",
+    "folder": "Folder",
+    "allFolders": "All folders",
+    "submit": "Search",
+    "tooShort": "Type at least 2 characters.",
+    "intro": "Type a word or a phrase. Accents and capitals do not matter, and results with the same meaning are included.",
+    "searching": "Searching…",
+    "count_one": "1 meeting for “{{query}}”",
+    "count_other": "{{count}} meetings for “{{query}}”",
+    "empty": "Nothing found. Try other words or another folder.",
+    "keywordOnly": "Showing exact word matches only: the meaning search is unavailable right now.",
+    "at": "At {{time}}",
+    "related": "related",
+    "kind": {
+      "transcript": "Transcript",
+      "summary": "Summary",
+      "notes": "Notes"
+    },
+    "errors": {
+      "rateLimited": "Too many searches. Wait a minute and try again.",
+      "network": "No connection to the server. Check your network and try again.",
+      "generic": "Search failed. Please try again."
     }
   }
 }

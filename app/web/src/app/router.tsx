@@ -10,6 +10,7 @@ import { ResetPasswordPage } from '../routes/auth/ResetPasswordPage'
 import { VerifyEmailPage } from '../routes/auth/VerifyEmailPage'
 import { MeetingsPage } from '../routes/MeetingsPage'
 import { RecordPage } from '../routes/RecordPage'
+import { SearchPage } from '../routes/SearchPage'
 import { SignInPage } from '../routes/SignInPage'
 import { StatusPage } from '../routes/StatusPage'
 import { AdminActivityPage } from '../routes/admin/AdminActivityPage'
@@ -75,6 +76,7 @@ export function createRouter() {
         { path: 'meetings/:meetingId', element: <MeetingDetailPage /> },
         { path: 'record', element: <RecordPage /> },
         { path: 'chat', element: <ChatPage /> },
+        { path: 'search', element: <SearchPage /> },
         { path: 'profile', element: <ProfilePage /> },
         { path: '*', element: <StatusPage kind="notFound" /> },
       ],
