@@ -489,6 +489,12 @@ dl.speaker-fields { display: grid; gap: 6px; margin: 8px 0; }
 @media (max-width: 480px) { .speaker-fields li, .speaker-fields > div { grid-template-columns: 1fr; gap: 4px; } .speaker-fields input { max-width: none; } }
 
 /* PRF-13: own data */
-.data-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.data-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.danger-zone { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 4px; }
+.danger-zone .button { min-height: 44px; }
+.delete-account-copy { margin-bottom: 16px; display: grid; gap: 8px; }
+.delete-account-copy p { margin: 0; }
+.delete-account-main { color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.5; }
+.delete-account-note { color: var(--text); background: var(--surface-subtle); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; line-height: 1.5; }
 .data-actions .button { min-height: 44px; }
 .auth-card .auth-note { margin: 0 0 15px; color: var(--text); background: var(--primary-soft); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 14px; }

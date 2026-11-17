@@ -23,9 +23,14 @@ export function SignInPage() {
   const siteKey = useTurnstileSiteKey()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const navState = useLocation().state as { signOutFailed?: boolean; accountDeleted?: boolean } | null
+  const location = useLocation()
+  const navState = location.state as { signOutFailed?: boolean; accountDeleted?: boolean } | null
   const signOutFailed = navState?.signOutFailed === true
-  const accountDeleted = navState?.accountDeleted === true // PRF-13
+  // PRF-13: shown once (kept in state), then dropped from history so a reload does not repeat it
+  const [accountDeleted] = useState(navState?.accountDeleted === true)
+  useEffect(() => {
+    if (navState?.accountDeleted) void navigate(location.pathname + location.search, { replace: true, state: null })
+  }, [navState, navigate, location.pathname, location.search])
   const next = safeReturnTo(params.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -121,7 +126,7 @@ export function SignInPage() {
           </p>
         )}
         {accountDeleted && (
-          <p className="auth-note" role="status">
+          <p className="auth-note" tabIndex={-1} ref={(el) => el?.focus()}>
             {t('auth.accountDeleted')}
           </p>
         )}
@@ -148,7 +153,7 @@ export function SignInPage() {
             aria-invalid={errorKey !== null && invalid.email}
             aria-describedby={errorKey ? errorId : undefined}
             maxLength={320}
-            autoFocus={accounts.length === 0}
+            autoFocus={accounts.length === 0 && !accountDeleted}
           />
         </label>
         <label>

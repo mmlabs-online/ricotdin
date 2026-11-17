@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deleteConfirmed, filenameFromDisposition } from './account'
+import { deleteConfirmed, deleteProblem, filenameFromDisposition } from './account'
 
 describe('deleteConfirmed', () => {
   it('needs the exact username (spaces around are fine)', () => {
@@ -18,5 +18,13 @@ describe('filenameFromDisposition', () => {
   })
   it('never a path', () => {
     expect(filenameFromDisposition('attachment; filename="../../evil.zip"', 'x.zip')).toBe('evil.zip')
+  })
+})
+
+describe('deleteProblem', () => {
+  it('empty, wrong, or none', () => {
+    expect(deleteProblem('  ', 'lan')).toBe('profile.data.confirmEmpty')
+    expect(deleteProblem('Lan', 'lan')).toBe('profile.data.confirmMismatch')
+    expect(deleteProblem('lan', 'lan')).toBeNull()
   })
 })

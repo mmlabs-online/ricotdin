@@ -21,7 +21,7 @@ import { useApiUrl, useAuth } from '../auth/AuthProvider'
 import { useDeleteOwnAccount, useExportOwnData } from '../api/account'
 import { ApiError } from '../api/errors'
 import { Modal } from '../components/ui/Modal'
-import { deleteConfirmed } from '../lib/profile/account'
+import { deleteProblem } from '../lib/profile/account'
 import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
@@ -594,8 +594,11 @@ function DataSection({ username }: { username: string | null }) {
   const [note, setNote] = useNote()
   const [asking, setAsking] = useState(false)
   const [typed, setTyped] = useState('')
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<{ key: string; n: number } | null>(null)
+  const input = useRef<HTMLInputElement>(null)
   const ids = { body: useId(), input: useId(), err: useId(), note: useId() }
+  const busy = remove.isPending
+  const fail = (key: string) => setDeleteError((p) => ({ key, n: (p?.n ?? 0) + 1 }))
 
   function download() {
     if (exporter.isPending) return
@@ -606,9 +609,20 @@ function DataSection({ username }: { username: string | null }) {
       .catch((err: unknown) => setNote(err instanceof ApiError && err.status === 429 ? 'profile.data.exportLimited' : 'profile.data.exportFailed'))
   }
 
+  function open() {
+    setTyped('')
+    setDeleteError(null)
+    setAsking(true)
+  }
+
   function confirmDelete() {
-    if (remove.isPending) return
-    if (!deleteConfirmed(typed, username)) return setDeleteError('profile.data.confirmMismatch')
+    if (busy) return
+    const problem = deleteProblem(typed, username)
+    if (problem) {
+      fail(problem)
+      input.current?.focus()
+      return
+    }
     setDeleteError(null)
     remove
       .mutateAsync(typed.trim())
@@ -616,7 +630,7 @@ function DataSection({ username }: { username: string | null }) {
         await session.signOut() // signing in again would create a new, empty account at once
         void navigate('/sign-in', { replace: true, state: { accountDeleted: true } })
       })
-      .catch(() => setDeleteError('profile.data.deleteFailed'))
+      .catch(() => fail('profile.data.deleteFailed'))
   }
 
   return (
@@ -625,16 +639,25 @@ function DataSection({ username }: { username: string | null }) {
         <Button onClick={download} aria-disabled={exporter.isPending} aria-busy={exporter.isPending}>
           {exporter.isPending ? t('profile.data.exporting') : t('profile.data.export')}
         </Button>
-        <Button variant="danger" onClick={() => setAsking(true)}>
-          {t('profile.data.delete')}
-        </Button>
       </div>
       <FormNote note={note} id={ids.note} />
+      <div className="danger-zone">
+        <h3 className="subhead">{t('profile.data.deleteHeading')}</h3>
+        <p className="tab-note">{t('profile.data.deleteHint')}</p>
+        {username ? (
+          <Button variant="danger" onClick={open}>
+            {t('profile.data.delete')}
+          </Button>
+        ) : (
+          <p className="tab-note">{t('profile.data.needUsername')}</p>
+        )}
+      </div>
       {asking && (
-        <Modal title={t('profile.data.deleteTitle')} onClose={() => !remove.isPending && setAsking(false)} describedBy={ids.body}>
-          <div id={ids.body}>
-            <p className="modal-copy">{t('profile.data.deleteBody')}</p>
-            <p className="modal-copy">{t('profile.data.deleteMmlabs')}</p>
+        <Modal title={t('profile.data.deleteTitle')} onClose={() => !busy && setAsking(false)} describedBy={ids.body}>
+          <div id={ids.body} className="delete-account-copy">
+            <p className="delete-account-main">{t('profile.data.deleteBody')}</p>
+            <p className="modal-copy">{t('profile.data.deleteKeep')}</p>
+            <p className="delete-account-note">{t('profile.data.deleteMmlabs')}</p>
           </div>
           <form
             onSubmit={(e) => {
@@ -646,6 +669,7 @@ function DataSection({ username }: { username: string | null }) {
               <span>{t('profile.data.confirmLabel', { username: username ?? '' })}</span>
               <input
                 id={ids.input}
+                ref={input}
                 type="text"
                 autoComplete="off"
                 autoCapitalize="none"
@@ -655,21 +679,21 @@ function DataSection({ username }: { username: string | null }) {
                   setTyped(e.target.value)
                   if (deleteError) setDeleteError(null)
                 }}
-                aria-invalid={deleteError === 'profile.data.confirmMismatch' || undefined}
+                aria-invalid={deleteError !== null && deleteError.key !== 'profile.data.deleteFailed' ? true : undefined}
                 aria-describedby={deleteError ? ids.err : undefined}
               />
             </label>
             {deleteError && (
-              <p id={ids.err} className="form-note error" role="alert">
-                {t(deleteError)}
+              <p key={deleteError.n} id={ids.err} className="form-note error" role="alert">
+                {t(deleteError.key)}
               </p>
             )}
             <div className="modal-actions">
-              <Button variant="ghost" onClick={() => setAsking(false)} aria-disabled={remove.isPending}>
+              <Button variant="ghost" onClick={() => !busy && setAsking(false)} aria-disabled={busy}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="danger" type="submit" aria-disabled={remove.isPending} aria-busy={remove.isPending}>
-                {remove.isPending ? t('profile.data.deleting') : t('profile.data.deleteConfirm')}
+              <Button variant="danger" type="submit" aria-disabled={busy} aria-busy={busy}>
+                {busy ? t('profile.data.deleting') : t('profile.data.deleteConfirm')}
               </Button>
             </div>
           </form>

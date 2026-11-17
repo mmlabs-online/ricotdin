@@ -1457,19 +1457,24 @@
       "title": "Dữ liệu của bạn",
       "body": "Tải về mọi thứ bạn lưu trong Ricotdin, hoặc xóa tài khoản Ricotdin của bạn.",
       "export": "Tải dữ liệu của tôi",
-      "exporting": "Đang chuẩn bị…",
+      "exporting": "Đang chuẩn bị dữ liệu…",
       "exported": "Đã tải dữ liệu của bạn (file ZIP).",
       "exportLimited": "Bạn có thể tải dữ liệu 3 lần mỗi giờ. Vui lòng thử lại sau.",
       "exportFailed": "Không chuẩn bị được dữ liệu. Vui lòng thử lại.",
       "delete": "Xóa tài khoản Ricotdin",
       "deleteTitle": "Xóa tài khoản Ricotdin của bạn?",
-      "deleteBody": "Cuộc họp, bản ghi âm, bản ghi lời, ghi chú, thư mục và các cuộc chat của bạn sẽ bị xóa vĩnh viễn. Cuộc họp do người khác sở hữu vẫn giữ nguyên. Hãy tải dữ liệu về trước nếu muốn giữ bản sao.",
+      "deleteBody": "Cuộc họp, bản ghi âm, bản ghi lời, ghi chú, thư mục và các cuộc chat của bạn sẽ bị xóa vĩnh viễn.",
       "deleteMmlabs": "Tài khoản mmlabs của bạn không bị xóa: đăng nhập lại Ricotdin sẽ tạo một tài khoản mới, trống.",
       "confirmLabel": "Nhập tên người dùng ({{username}}) để xác nhận",
       "confirmMismatch": "Đó không phải tên người dùng của bạn.",
       "deleteConfirm": "Xóa tài khoản",
       "deleting": "Đang xóa…",
-      "deleteFailed": "Không xóa được tài khoản. Vui lòng thử lại."
+      "deleteFailed": "Không xóa được tài khoản. Vui lòng thử lại.",
+      "deleteHeading": "Xóa tài khoản",
+      "deleteHint": "Xóa vĩnh viễn cuộc họp, bản ghi âm, bản ghi lời, ghi chú, thư mục và các cuộc chat của bạn. Tài khoản mmlabs vẫn giữ nguyên.",
+      "needUsername": "Hãy đặt tên người dùng ở phần thông tin phía trên trước khi xóa tài khoản.",
+      "deleteKeep": "Cuộc họp do người khác sở hữu vẫn giữ nguyên. Hãy tải dữ liệu về trước nếu muốn giữ bản sao.",
+      "confirmEmpty": "Nhập tên người dùng để xác nhận."
     }
   },
   "searchPage": {

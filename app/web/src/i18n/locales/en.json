@@ -1457,19 +1457,24 @@
       "title": "Your data",
       "body": "Download everything you keep in Ricotdin, or delete your Ricotdin account.",
       "export": "Download my data",
-      "exporting": "Preparing…",
+      "exporting": "Preparing your data…",
       "exported": "Your data was downloaded (a ZIP file).",
       "exportLimited": "You can download your data 3 times an hour. Try again later.",
       "exportFailed": "Could not prepare your data. Please try again.",
       "delete": "Delete my Ricotdin account",
       "deleteTitle": "Delete your Ricotdin account?",
-      "deleteBody": "Your meetings, recordings, transcripts, notes, folders and chats are deleted for good. Meetings other people own stay with them. Download your data first if you want a copy.",
+      "deleteBody": "Your meetings, recordings, transcripts, notes, folders and chats will be deleted for good.",
       "deleteMmlabs": "Your mmlabs account is not deleted: signing in to Ricotdin again creates a new, empty account.",
       "confirmLabel": "Type your username ({{username}}) to confirm",
       "confirmMismatch": "That is not your username.",
       "deleteConfirm": "Delete my account",
       "deleting": "Deleting…",
-      "deleteFailed": "Could not delete your account. Please try again."
+      "deleteFailed": "Could not delete your account. Please try again.",
+      "deleteHeading": "Delete your account",
+      "deleteHint": "Deletes your meetings, recordings, transcripts, notes, folders and chats for good. Your mmlabs account stays.",
+      "needUsername": "Set a username in your details above before you can delete the account.",
+      "deleteKeep": "Meetings other people own stay with them. Download your data first if you want a copy.",
+      "confirmEmpty": "Type your username to confirm."
     }
   },
   "searchPage": {
