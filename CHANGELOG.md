@@ -11,6 +11,7 @@
 - Mục "Hoạt động" trong hồ sơ: xem lại hoạt động của chính mình (tạo/xóa cuộc họp, xử lý, ghi âm, chat) kèm thiết bị và IP, và các lần chia sẻ / gỡ chia sẻ thư mục với người khác (cả hai bên đều thấy); lọc theo loại, "Xem thêm" (PRF-09).
 - Trang Tìm kiếm (`/search`, mở từ ô tìm ở trang Cuộc họp): tìm trong bản ghi lời, tóm tắt và ghi chú của mọi cuộc họp bạn được xem, không cần gõ dấu, kèm tìm theo ý nghĩa; kết quả nhóm theo cuộc họp, từ khớp được tô, bấm để mở đúng giây hoặc đúng tab; lọc theo thư mục (PRO-05).
 - Đặt tên người nói: trong tab Bản ghi lời, chủ cuộc họp và người chỉnh sửa đặt tên thật cho Speaker 1, Speaker 2… (có gợi ý các tên đã dùng); tên hiện trong bản ghi lời, file tải về, câu trả lời chat và tóm tắt ở lần tạo lại. Chép lại bản ghi lời sẽ xóa tên cũ (PRO-04).
+- Dữ liệu của bạn: tải toàn bộ dữ liệu của mình (file ZIP gồm cuộc họp dạng Markdown + JSON, chat, nhật ký hoạt động, hồ sơ; không gồm audio) và tự xóa tài khoản Ricotdin (nhập tên người dùng để xác nhận; tài khoản mmlabs vẫn giữ, đăng nhập lại tạo tài khoản mới trống, không được tặng lại quota). Admin xuất được dữ liệu của một người dùng (PRF-13, ADM-11).
 
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
@@ -18,6 +19,7 @@
 - Container `api` cần gọi ra `https://api.mmlabs.online/.well-known/jwks.json` (mạng `web` không internal: được).
 - Migration `0011_wipe_legacy_auth`: xoá mọi `password_hash`, `refresh_tokens`, `email_tokens` (giữ bảng; bỏ hẳn ở ARC-16 phần 2). Sau đó không quay lại được bản trước AUT-05; rollback về bản AUT-05 thì không được dùng `api.env` cũ còn `JWT_PRIVATE_KEY`/SMTP (AUT-06).
 - `deploy-ricotdin-v2.yml` trên repo deployment: bỏ `RICOTDIN_JWT_PRIVATE_KEY`, `RICOTDIN_MAIL_FROM`, SMTP và `environment: org-admin-api` (bản mới ở `docs/ops/deployment-repo/`); sau deploy thành công xoá các secret `RICOTDIN_JWT_*` / `RICOTDIN_MAIL_FROM` (AUT-06).
+- Migration `0015_deleted_accounts` (bảng `deleted_accounts`: hash của mmlabs sub + thời điểm xóa, chỉ `ricotdin_service`); bước `database` của deploy tự chạy (PRF-13).
 - Migration `0014_speaker_names` (thêm cột `meetings.speaker_names`, cấp cho worker quyền UPDATE riêng cột này); bước `database` của deploy tự chạy (PRO-04).
 - Migration `0013_search_fold` (chỉ tạo hàm `ricotdin_fold`, quyền EXECUTE cho `ricotdin_app`); bước `database` của deploy tự chạy (PRO-05).
 - Migration `0012_activity_target_index` (chỉ thêm index `activity_log_target_created`); bước `database` của deploy tự chạy (PRF-09).

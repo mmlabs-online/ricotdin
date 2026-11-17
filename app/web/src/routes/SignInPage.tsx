@@ -24,12 +24,13 @@ export function SignInPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const location = useLocation()
-  const navState = location.state as { signOutFailed?: boolean; accountDeleted?: boolean } | null
+  const navState = location.state as { signOutFailed?: boolean; accountDeleted?: boolean; deleteUncertain?: boolean } | null
   const signOutFailed = navState?.signOutFailed === true
   // PRF-13: shown once (kept in state), then dropped from history so a reload does not repeat it
   const [accountDeleted] = useState(navState?.accountDeleted === true)
+  const [deleteUncertain] = useState(navState?.deleteUncertain === true)
   useEffect(() => {
-    if (navState?.accountDeleted) void navigate(location.pathname + location.search, { replace: true, state: null })
+    if (navState?.accountDeleted || navState?.deleteUncertain) void navigate(location.pathname + location.search, { replace: true, state: null })
   }, [navState, navigate, location.pathname, location.search])
   const next = safeReturnTo(params.get('next'))
   const [email, setEmail] = useState('')
@@ -125,9 +126,9 @@ export function SignInPage() {
             {t('auth.signOutFailed')}
           </p>
         )}
-        {accountDeleted && (
+        {(accountDeleted || deleteUncertain) && (
           <p className="auth-note" tabIndex={-1} ref={(el) => el?.focus()}>
-            {t('auth.accountDeleted')}
+            {t(deleteUncertain ? 'auth.accountDeleteUncertain' : 'auth.accountDeleted')}
           </p>
         )}
         {accounts.length > 0 && (
@@ -153,7 +154,7 @@ export function SignInPage() {
             aria-invalid={errorKey !== null && invalid.email}
             aria-describedby={errorKey ? errorId : undefined}
             maxLength={320}
-            autoFocus={accounts.length === 0 && !accountDeleted}
+            autoFocus={accounts.length === 0 && !accountDeleted && !deleteUncertain}
           />
         </label>
         <label>

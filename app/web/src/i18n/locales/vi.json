@@ -141,7 +141,8 @@
       "label": "Kiểm tra bảo mật",
       "unavailable": "Bước kiểm tra bảo mật hiện không khả dụng. Vui lòng thử lại sau."
     },
-    "accountDeleted": "Tài khoản Ricotdin của bạn đã được xóa. Đăng nhập lại sẽ tạo một tài khoản mới, trống."
+    "accountDeleted": "Tài khoản Ricotdin của bạn đã được xóa. Đăng nhập lại sẽ tạo một tài khoản mới, trống.",
+    "accountDeleteUncertain": "Không nhận được phản hồi khi xóa tài khoản Ricotdin: có thể tài khoản đã được xóa. Hãy đăng nhập lại để kiểm tra; nếu tài khoản vẫn còn, bạn có thể xóa trong hồ sơ."
   },
   "page": {
     "workspace": "Không gian làm việc",

@@ -92,6 +92,21 @@
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
 - `POST /activity`: 10 per user per minute (in-process, `app.state.activity_limiter`); the insert is
   best effort and `meetingId` is stored only for a meeting the caller can see (else NULL).
+- **Own data (PRF-13 / ADM-11, migration `0015` = `deleted_accounts`):** `GET /profile/export`
+  → ZIP (`services/account.export_account`, pure layout in `domain/export.py`): `README.txt`,
+  `profile.json`, `chats.json`, `activity.json`, `meetings/<date>-<slug>-<id8>/meeting.{md,json}`
+  for the meetings the user **owns** (speaker names applied, `startedAt` included); no audio, no
+  meetings owned by others, no keys / storage paths / `mmlabs_sub`. Read as `ricotdin_service`
+  (the WHERE clauses are the only gate); built off the event loop, at most 2 at a time; 3 / hour
+  per user (shared with admin exports); audited (`user.export_self`). `DELETE /profile
+  {confirm: username}` → `services/account.delete_account` (shared with the admin delete): disable
+  → identity cache dropped → Drive files (owned audio + avatar) → audit + tombstone → rows
+  cascade; the username is checked in the first transaction only. The tombstone
+  (`deleted_accounts`: sha256 of the mmlabs `sub` + `deleted_at`, service-only) makes the first
+  request of that mmlabs account refuse a token issued at or before the delete (401
+  `account_deleted`) and create a newer one's account **without** the signup quota grant.
+  A stuck delete shows as `user.delete_self_started` without `user.delete_self` (the account is
+  disabled): finish it with the admin delete.
 - **Speaker names (PRO-04, migration `0014` = `meetings.speaker_names jsonb` label → name):**
   `PATCH /meetings/{id}/speakers {names: {label: name|null}}` — owner / editor
   (`meeting_facts(lock=True)`; no role → 404, viewer → 403), written as `ricotdin_service`; 30 / min

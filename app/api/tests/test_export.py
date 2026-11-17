@@ -24,6 +24,7 @@ def _meeting(**over: object) -> ExportMeeting:
         "id": MID,
         "title": "Họp ngân sách Q3",
         "created_at": AT,
+        "started_at": datetime(2026, 11, 16, 23, 30, tzinfo=UTC),
         "status": "done",
         "duration_seconds": 125,
         "language": "vi",
@@ -65,7 +66,7 @@ def test_meeting_folder_is_unique_and_safe() -> None:
 def test_meeting_markdown_has_every_part_with_names() -> None:
     md = meeting_markdown(_meeting())
     assert md.startswith("# Họp ngân sách Q3\n")
-    assert "2026-11-17" in md and "02:05" in md  # date, duration
+    assert "2026-11-16T23:30:00+00:00" in md and "02:05" in md  # when it took place, duration
     assert "## Summary\n\nChốt ngân sách." in md
     assert "## Notes\n\n## Ý chính" in md
     assert "- [ ] Gửi báo cáo — Lan — 2026-11-20" in md
@@ -111,3 +112,25 @@ def test_build_zip_round_trips() -> None:
         assert sorted(z.namelist()) == ["a.txt", "d/b.json"]
         assert z.read("a.txt").decode() == "xin chào"
         assert z.getinfo("a.txt").compress_type == zipfile.ZIP_DEFLATED
+
+
+def test_the_meeting_time_is_exported() -> None:
+    md = meeting_markdown(_meeting())
+    assert "2026-11-16T23:30:00+00:00" in md
+    files = export_files(profile={}, meetings=[_meeting()], chats=[], activity=[], generated_at=AT)
+    meeting = json.loads(files["meetings/2026-11-17-hop-ngan-sach-q3-12345678/meeting.json"])
+    assert meeting["startedAt"] == "2026-11-16T23:30:00+00:00"
+
+
+def test_datetimes_are_iso_everywhere() -> None:
+    files = export_files(profile={"created_at": AT}, meetings=[], chats=[{"at": AT}],
+                         activity=[{"created_at": AT}], generated_at=AT)  # fmt: skip
+    for name in ("profile.json", "chats.json", "activity.json"):
+        assert "2026-11-17T09:30:00+00:00" in files[name], name
+
+
+def test_two_meetings_never_share_a_folder() -> None:
+    a = _meeting(id=uuid.UUID("12345678-0000-0000-0000-000000000001"))
+    b = _meeting(id=uuid.UUID("12345678-0000-0000-0000-000000000002"))
+    files = export_files(profile={}, meetings=[a, b], chats=[], activity=[], generated_at=AT)
+    assert len([n for n in files if n.endswith("meeting.md")]) == 2

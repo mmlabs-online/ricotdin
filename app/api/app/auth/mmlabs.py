@@ -50,6 +50,7 @@ class MmlabsClaims:
     sub: str
     email: str  # lower-cased when ASCII
     roles: tuple[str, ...]
+    issued_at: int = 0  # ``iat`` (PRF-13: a token from before an account delete is refused)
 
 
 def check_header(header: Mapping[str, Any]) -> str:
@@ -89,7 +90,9 @@ def check_claims(payload: Mapping[str, Any], *, issuer: str, audience: str) -> M
         raise InvalidMmlabsToken("roles")
     # Only ASCII is case-folded: Unicode folding can turn one address into another (U+212A → "k"),
     # and a non-ASCII address is never linked by email (linking.py).
-    return MmlabsClaims(sub, email.lower() if email.isascii() else email, tuple(roles))
+    iat = payload.get("iat")
+    issued = int(iat) if isinstance(iat, int | float) and not isinstance(iat, bool) else 0
+    return MmlabsClaims(sub, email.lower() if email.isascii() else email, tuple(roles), issued)
 
 
 def role_from_roles(roles: tuple[str, ...]) -> str:

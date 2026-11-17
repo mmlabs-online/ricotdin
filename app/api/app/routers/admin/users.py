@@ -225,7 +225,10 @@ async def delete_user(
     async def audit(conn: AsyncConnection, action: str, meta: dict[str, Any]) -> None:
         await write_audit(conn, admin, action, "user", str(uid), meta)
 
-    failed = await delete_account(db, platform, uid, check=check, audit=audit, action="user.delete")
+    failed = await delete_account(
+        db, platform, uid, check=check, audit=audit, action="user.delete",
+        on_disabled=lambda: request.app.state.mmlabs_identities.forget_user(uid),
+    )  # fmt: skip
     out: dict[str, Any] = {"ok": True, "deleted": uid}
     if failed:
         out["storageWarnings"] = [f"Storage cleanup failed for {failed} file(s)."]

@@ -131,3 +131,44 @@ def test_self_delete_needs_the_username_then_removes_files_and_rows(
                                   "ORDER BY created_at", str(uid))]  # fmt: skip
     assert actions == ["user.delete_self_started", "user.delete_self"]
     assert client.get("/profile/export").status_code == 401
+
+
+def test_a_deleted_account_comes_back_empty_without_a_second_grant(
+    client: TestClient, world: dict[str, Any]
+) -> None:
+    # PRF-13 review: the tombstone refuses tokens from before the delete; a new sign-in gets a new,
+    # empty account without the signup grant (no free quota by deleting and signing in again)
+    from datetime import UTC, datetime, timedelta
+
+    uid = _user(world["db"], f"back{secrets.token_hex(3)}")
+    username = _sql(world["db"], "SELECT username FROM profiles WHERE id = %s", uid)[0][0]
+    old = bearer(uid, issued=datetime.now(UTC) - timedelta(seconds=5))
+    r = client.request("DELETE", "/profile", headers=old, json={"confirm": username})
+    assert r.status_code == 200, r.text
+    assert _sql(world["db"], "SELECT count(*) FROM deleted_accounts") != [(0,)]
+    again = client.get("/auth/me", headers=old)  # e.g. another tab polling with the old token
+    assert again.status_code == 401 and again.json()["error"]["code"] == "account_deleted"
+    fresh = bearer(uid, issued=datetime.now(UTC) + timedelta(seconds=2))
+    me = client.get("/auth/me", headers=fresh)
+    assert me.status_code == 200, me.text
+    new_id = uuid.UUID(me.json()["id"])
+    assert new_id != uid
+    assert _sql(world["db"], "SELECT count(*) FROM quota_ledger WHERE user_id = %s", new_id) == [
+        (0,)
+    ]
+
+
+def test_an_admin_delete_leaves_a_tombstone_too(client: TestClient, world: dict[str, Any]) -> None:
+    from tests.mmlabs_auth import sub_for
+
+    _sql(world["db"], "UPDATE users SET role = 'admin' WHERE id = %s", world["c"])
+    uid = _user(world["db"], f"adm{secrets.token_hex(3)}")
+    r = client.delete(f"/admin/users/{uid}", headers=bearer(world["c"], "admin"))
+    assert r.status_code == 200, r.text
+    import hashlib
+
+    h = hashlib.sha256(sub_for(uid).encode()).hexdigest()
+    assert _sql(world["db"], "SELECT count(*) FROM deleted_accounts WHERE sub_hash = %s", h) == [
+        (1,)
+    ]
+    _sql(world["db"], "UPDATE users SET role = 'user' WHERE id = %s", world["c"])

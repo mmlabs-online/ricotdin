@@ -8,6 +8,7 @@ reported, never fatal), then the ``users`` row goes and everything cascades (mee
 chats, quota, …; audit rows keep a NULL actor). Keys that appeared in between (an upload
 confirmed just before the disable) get a second Drive pass after the row delete."""
 
+import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -62,17 +63,20 @@ async def _disable(conn: AsyncConnection, uid: uuid.UUID) -> None:
 
 
 async def delete_account(
-    db: Database, platform: Platform, uid: uuid.UUID, *, check: Step, audit: Audit, action: str
-) -> int:
+    db: Database, platform: Platform, uid: uuid.UUID, *, check: Step, audit: Audit, action: str,
+    on_disabled: Callable[[], None] = lambda: None,
+) -> int:  # fmt: skip
     """Deletes the account; returns how many Drive files could not be removed. ``check`` runs at
     the start of both transactions (it may raise); ``audit`` writes ``<action>_started`` and
-    ``<action>`` rows in them."""
+    ``<action>`` rows in them; ``on_disabled`` runs once the disable is committed (the caller
+    drops the identity cache, so the account cannot upload during the Drive pass)."""
     async with db.role_transaction(SERVICE) as conn:
         await check(conn)
         await _disable(conn, uid)  # no new uploads while the files go
         first = await owned_keys(conn, uid)
         # committed before the irreversible Drive pass: a delete that stops half-way leaves a trace
         await audit(conn, f"{action}_started", {"files": len(first)})
+    on_disabled()
     failed = await delete_files(db, platform, first)
     async with db.role_transaction(SERVICE) as conn:
         await check(conn)  # re-checked: the target may have changed
@@ -86,12 +90,27 @@ async def delete_account(
         # (the email stays on the row)
         await audit(conn, action, {"meetings": meetings, "files": len(first) + len(late),
                                    "files_failed": len(failed)})  # fmt: skip
+        # PRF-13 review: the tombstone (sha256 of the mmlabs sub = linking.sub_hash): no second
+        # signup grant, and tokens from before now cannot re-create the account
+        await conn.execute(
+            text(
+                "INSERT INTO public.deleted_accounts (sub_hash, deleted_at) "
+                "SELECT encode(sha256(convert_to(mmlabs_sub, 'UTF8')), 'hex'), now() "
+                "FROM public.users WHERE id = :id AND mmlabs_sub IS NOT NULL "
+                "ON CONFLICT (sub_hash) DO UPDATE SET deleted_at = EXCLUDED.deleted_at"
+            ),
+            {"id": uid},
+        )
         await conn.execute(text("DELETE FROM public.users WHERE id = :id"), {"id": uid})
     failed += await delete_files(db, platform, late)  # the map rows outlive the user
     return len(failed)
 
 
 # --- export ---------------------------------------------------------------------------------------
+
+
+EXPORT_CONCURRENCY = 2
+_EXPORTS = asyncio.Semaphore(EXPORT_CONCURRENCY)
 
 
 @dataclass(frozen=True)
@@ -124,8 +143,9 @@ async def export_account(db: Database, uid: uuid.UUID, now: datetime) -> Export 
             return None
         meetings = await _rows(
             conn,
-            "SELECT id, title, created_at, status, duration_seconds, language, summary, notes, "
-            "speaker_names FROM public.meetings WHERE user_id = :u ORDER BY created_at",
+            "SELECT id, title, created_at, started_at, status, duration_seconds, language, "
+            "summary, notes, speaker_names FROM public.meetings WHERE user_id = :u "
+            "ORDER BY created_at",
             u=uid,
         )
         ids = [m["id"] for m in meetings]
@@ -177,7 +197,8 @@ async def export_account(db: Database, uid: uuid.UUID, now: datetime) -> Export 
     segs, tds, cal = by_meeting(segments), by_meeting(todos), by_meeting(calendar)
     export_meetings = [
         ExportMeeting(
-            id=m["id"], title=m["title"], created_at=m["created_at"], status=m["status"],
+            id=m["id"], title=m["title"], created_at=m["created_at"],
+            started_at=m["started_at"], status=m["status"],
             duration_seconds=m["duration_seconds"], language=m["language"], summary=m["summary"],
             notes=m["notes"], speaker_names=clean_names(jsonb(m["speaker_names"])),
             segments=segs.get(m["id"], []),
@@ -192,16 +213,17 @@ async def export_account(db: Database, uid: uuid.UUID, now: datetime) -> Export 
     for msg in messages:
         by_session.setdefault(msg.pop("session_id"), []).append(msg)
     chats = [{**s, "messages": by_session.get(s["id"], [])} for s in sessions]
-    files = export_files(
-        profile=dict(profile._mapping),
-        meetings=export_meetings,
-        chats=chats,
-        activity=[{**a, "metadata": jsonb(a["metadata"])} for a in activity],
-        generated_at=now,
-    )
-    return Export(
-        export_filename(profile.username, now), build_zip(files, now), len(export_meetings)
-    )
+    activity_rows = [{**a, "metadata": jsonb(a["metadata"])} for a in activity]
+
+    def build() -> bytes:
+        files = export_files(profile=dict(profile._mapping), meetings=export_meetings, chats=chats,
+                             activity=activity_rows, generated_at=now)  # fmt: skip
+        return build_zip(files, now)
+
+    # CPU-bound (Markdown, JSON, deflate): off the event loop, at most EXPORT_CONCURRENCY at a time
+    async with _EXPORTS:
+        data = await asyncio.to_thread(build)
+    return Export(export_filename(profile.username, now), data, len(export_meetings))
 
 
 EXPORTS_PER_HOUR = 3

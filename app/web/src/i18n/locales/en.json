@@ -141,7 +141,8 @@
       "label": "Security check",
       "unavailable": "The security check is not available right now. Try again later."
     },
-    "accountDeleted": "Your Ricotdin account was deleted. Signing in again creates a new, empty account."
+    "accountDeleted": "Your Ricotdin account was deleted. Signing in again creates a new, empty account.",
+    "accountDeleteUncertain": "We did not get an answer while deleting your Ricotdin account: it may already be deleted. Sign in again to check; if it still exists, you can delete it from your profile."
   },
   "page": {
     "workspace": "Workspace",

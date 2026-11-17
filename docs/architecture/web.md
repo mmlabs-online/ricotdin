@@ -162,7 +162,12 @@
   session (the next POST creates one). Messages render through the shared
   `components/chat/ChatMessages.tsx` (also the meeting chat). `/profile` = `ProfilePage`
   (`src/api/profile.ts`). **Password:** a link to the mmlabs forgot-password flow (AUT-05; ricotdin's
-  change-password route was removed in AUT-06). **Speaker names (PRO-04):** `MeetingDetailPage`
+  change-password route was removed in AUT-06). **Your data (PRF-13):** last section of
+  `/profile`: download (`api/account.ts`, file name from `Content-Disposition`, exposed by CORS)
+  and a separate delete zone; the dialog asks for the username (`deleteProblem`), keeps Cancel /
+  Escape inert while deleting, then signs out and lands on `/sign-in` with a one-time note
+  (`accountDeleted`, or `deleteUncertain` when the answer was lost: network / 5xx / already
+  disabled). Admin user detail: "Export data". **Speaker names (PRO-04):** `MeetingDetailPage`
   applies `meeting.speaker_names` to the segments once (`lib/meetings/speakers.ts`), so the
   transcript, its filter, downloads and seek labels agree; labels come from the raw segments.
   `SpeakerNames` (a `<details>` under the transcript heading): owner / editor get one field per

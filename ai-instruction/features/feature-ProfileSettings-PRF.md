@@ -382,7 +382,7 @@ As a user, I want to enable 2FA so my account has an extra layer of protection.
 ---
 
 ### PRF-13 — Data export & account deletion
-**Status:** ❌ Not started
+**Status:** ✅ Done
 
 **User Story**  
 As a user, I want to export all my data and delete my account (with all traces) so I control my personal data.
@@ -414,7 +414,7 @@ Re-specced 2026-11-17 (owner Q&A), built together with ADM-11. Admins could alre
 - Web: dialog confirm logic test; e2e: download + delete in the core flow if practical.
 
 **Structural flags**
-- No migration; 3 new routes; the admin delete logic moves into a shared service.
+- Migration `0015_deleted_accounts` (review: tombstone = sha256 of the mmlabs sub + when; no second signup grant, tokens from before the delete refused); 3 new routes; the admin delete logic moves into a shared service.
 
 **Done check**
 - api + web commands of §0 green; on production, download the export and open a meeting's `meeting.md`.

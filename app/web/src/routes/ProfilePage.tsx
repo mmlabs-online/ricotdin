@@ -21,7 +21,7 @@ import { useApiUrl, useAuth } from '../auth/AuthProvider'
 import { useDeleteOwnAccount, useExportOwnData } from '../api/account'
 import { ApiError } from '../api/errors'
 import { Modal } from '../components/ui/Modal'
-import { deleteProblem } from '../lib/profile/account'
+import { deleteMayHaveHappened, deleteProblem } from '../lib/profile/account'
 import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
@@ -615,6 +615,11 @@ function DataSection({ username }: { username: string | null }) {
     setAsking(true)
   }
 
+  async function leave(uncertain: boolean) {
+    const confirmed = await session.signOut() // signing in again creates a new, empty account
+    void navigate('/sign-in', { replace: true, state: { accountDeleted: !uncertain, deleteUncertain: uncertain, signOutFailed: !confirmed } })
+  }
+
   function confirmDelete() {
     if (busy) return
     const problem = deleteProblem(typed, username)
@@ -626,11 +631,13 @@ function DataSection({ username }: { username: string | null }) {
     setDeleteError(null)
     remove
       .mutateAsync(typed.trim())
-      .then(async () => {
-        await session.signOut() // signing in again would create a new, empty account at once
-        void navigate('/sign-in', { replace: true, state: { accountDeleted: true } })
+      .then(() => leave(false))
+      .catch((err: unknown) => {
+        // a lost answer (network, timeout, 5xx) or an already disabled account: the delete may
+        // have gone through on the server, so a retry would only confuse; sign out instead
+        if (deleteMayHaveHappened(err)) return leave(true)
+        fail('profile.data.deleteFailed')
       })
-      .catch(() => fail('profile.data.deleteFailed'))
   }
 
   return (

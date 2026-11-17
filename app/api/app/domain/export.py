@@ -11,7 +11,7 @@ import uuid
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from app.domain.search import fold
@@ -33,6 +33,7 @@ class ExportMeeting:
     summary: str | None
     notes: str | None
     speaker_names: Mapping[str, str]
+    started_at: datetime | None = None  # when the meeting took place (recording start)
     segments: Sequence[Mapping[str, Any]] = field(default_factory=list)
     todos: Sequence[Mapping[str, Any]] = field(default_factory=list)
     calendar: Sequence[Mapping[str, Any]] = field(default_factory=list)
@@ -62,7 +63,7 @@ def _names(m: ExportMeeting) -> dict[str, str]:
 def meeting_markdown(m: ExportMeeting) -> str:
     names = _names(m)
     out = [f"# {m.title or 'Untitled meeting'}", ""]
-    meta = [m.created_at.date().isoformat()]
+    meta = [m.started_at.isoformat() if m.started_at else m.created_at.date().isoformat()]
     if m.duration_seconds:
         meta.append(_clock(m.duration_seconds * 1000))
     if m.language:
@@ -102,6 +103,7 @@ def meeting_json(m: ExportMeeting) -> dict[str, Any]:
         "id": str(m.id),
         "title": m.title,
         "createdAt": m.created_at.isoformat(),
+        "startedAt": m.started_at.isoformat() if m.started_at else None,
         "status": m.status,
         "durationSeconds": m.duration_seconds,
         "language": m.language,
@@ -136,8 +138,12 @@ def _readme(generated_at: datetime, meetings: int) -> str:
     )
 
 
+def _plain(value: Any) -> Any:
+    return value.isoformat() if isinstance(value, date | datetime) else str(value)
+
+
 def _dump(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, indent=2, default=str) + "\n"
+    return json.dumps(value, ensure_ascii=False, indent=2, default=_plain) + "\n"
 
 
 def export_files(
@@ -156,6 +162,8 @@ def export_files(
     }
     for m in meetings:
         base = f"meetings/{meeting_folder(m)}"
+        if f"{base}/meeting.md" in files:  # same date, slug and id prefix: use the full id
+            base = f"meetings/{m.created_at.date().isoformat()}-{slugify(m.title)}-{m.id}"
         files[f"{base}/meeting.md"] = meeting_markdown(m)
         files[f"{base}/meeting.json"] = _dump(meeting_json(m))
     return files

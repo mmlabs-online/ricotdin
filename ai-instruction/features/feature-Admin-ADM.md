@@ -258,7 +258,7 @@ As an admin, I want to change runtime config (model, audio retention, sign-up to
 ---
 
 ### ADM-11 — Data control & privacy
-**Status:** ❌ Not started
+**Status:** ✅ Done
 
 **User Story**  
 As an admin, I want to export or erase all of a user's data on request so that we can answer privacy requests.
@@ -290,7 +290,7 @@ Re-specced 2026-11-17 (owner Q&A), built together with PRF-13 (the user-facing h
 - Web: dialog confirm logic test; e2e: download + delete in the core flow if practical.
 
 **Structural flags**
-- No migration; 3 new routes; the admin delete logic moves into a shared service.
+- Migration `0015_deleted_accounts` (review: tombstone = sha256 of the mmlabs sub + when; no second signup grant, tokens from before the delete refused); 3 new routes; the admin delete logic moves into a shared service.
 
 **Done check**
 - api + web commands of §0 green; on production, download the export and open a meeting's `meeting.md`.

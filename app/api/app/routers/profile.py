@@ -350,7 +350,12 @@ async def delete_own_account(
     actor = await _actor(db, request, uid)
     confirm = body.get("confirm")
 
+    confirmed = False
+
     async def check(conn: AsyncConnection) -> None:
+        nonlocal confirmed
+        if confirmed:  # second transaction: the username was proven in the first (review A1)
+            return
         username = (
             await conn.execute(
                 text("SELECT username FROM public.profiles WHERE id = :u"), {"u": uid}
@@ -358,13 +363,15 @@ async def delete_own_account(
         ).scalar_one_or_none()
         if not isinstance(confirm, str) or username is None or confirm.strip() != username:
             raise BadRequest(_CONFIRM)
+        confirmed = True
 
     async def audit(conn: AsyncConnection, action: str, meta: dict[str, Any]) -> None:
         await write_audit(conn, actor, action, "user", str(uid), meta)
 
     failed = await delete_account(
-        db, platform, uid, check=check, audit=audit, action="user.delete_self"
-    )
+        db, platform, uid, check=check, audit=audit, action="user.delete_self",
+        on_disabled=lambda: request.app.state.mmlabs_identities.forget_user(uid),
+    )  # fmt: skip
     request.app.state.mmlabs_identities.forget_user(uid)
     out: dict[str, Any] = {"ok": True}
     if failed:

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deleteConfirmed, deleteProblem, filenameFromDisposition } from './account'
+import { ApiError } from '../../api/errors'
+import { deleteConfirmed, deleteMayHaveHappened, deleteProblem, filenameFromDisposition } from './account'
 
 describe('deleteConfirmed', () => {
   it('needs the exact username (spaces around are fine)', () => {
@@ -26,5 +27,18 @@ describe('deleteProblem', () => {
     expect(deleteProblem('  ', 'lan')).toBe('profile.data.confirmEmpty')
     expect(deleteProblem('Lan', 'lan')).toBe('profile.data.confirmMismatch')
     expect(deleteProblem('lan', 'lan')).toBeNull()
+  })
+})
+
+describe('deleteMayHaveHappened', () => {
+  it('a lost answer or an already disabled account', () => {
+    expect(deleteMayHaveHappened(new ApiError(0, 'network', 'x'))).toBe(true)
+    expect(deleteMayHaveHappened(new ApiError(504, 'internal', 'x'))).toBe(true)
+    expect(deleteMayHaveHappened(new ApiError(403, 'account_disabled', 'x'))).toBe(true)
+    expect(deleteMayHaveHappened(new TypeError('fetch failed'))).toBe(true)
+  })
+  it('a refusal is not', () => {
+    expect(deleteMayHaveHappened(new ApiError(400, 'bad_request', 'x'))).toBe(false)
+    expect(deleteMayHaveHappened(new ApiError(429, 'rate_limited', 'x'))).toBe(false)
   })
 })
