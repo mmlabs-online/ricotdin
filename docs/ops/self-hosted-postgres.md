@@ -76,3 +76,24 @@ docker run -d --name ricotdin-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 pgvector/
 
 `app/api/.env`: `DATABASE_URL=postgresql://postgres:dev@localhost:5432/postgres`. CI uses the same
 image (`ci-api.yml`).
+
+## Local dev against production
+
+Owner decision 2026-11-17: local development may run the **API only** against the production
+database, through a pg tunnel that exposes `postgres:5432` as `127.0.0.1:15432` on the dev machine
+(the same way tudocuatui does it). A local container stays the safe default.
+
+`app/api/.env.local` (gitignored, owner fills the values; agents never see them):
+`DATABASE_URL_APP` / `_SERVICE` / `_WORKER` = the production runtime logins with
+`@postgres:5432` replaced by `@127.0.0.1:15432`, plus `KEY_ENCRYPTION_SECRET`, `WEB_ORIGIN` /
+`ALLOWED_ORIGINS=http://localhost:5173`. Run `uv run --env-file .env.local uvicorn app.main:create_app --factory --reload`.
+
+Guardrails (every request writes real data):
+
+- **No owner `DATABASE_URL`** in that file: schema changes go through the deploy only.
+- **Never run with it:** the worker (it would claim real users' jobs and race the production
+  worker), `alembic`, `pytest`, `provision_db_roles`, `gen_baseline`, `connect_gdrive`.
+- **`KEY_ENCRYPTION_SECRET` = the production value or unset**, never another key: anything saved
+  locally (admin keys, Drive config) would be encrypted with it and unreadable in production.
+  Unset: stored provider keys and Drive are unavailable (media, uploads fail).
+- `pg_dump` (`docs/ops/backup-restore.md`) before a risky session; stop the tunnel when done.

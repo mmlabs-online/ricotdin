@@ -11,8 +11,12 @@
   database per server** (production; staging retired 2026-11-12). Runbook, migrations + logins from
   the Mac: `docs/ops/self-hosted-postgres.md`. **Never name CREATEDB / CREATEROLE / BYPASSRLS in an
   ALTER ROLE unconditionally** (it needs that attribute; only ALTER when the role has it).
-  Local dev + CI: a superuser `pgvector/pgvector:pg17-trixie` container (`app/api/.env`
-  `DATABASE_URL`, used for scratch databases); never the shared server. Neon (`ricotdin-sg`) is no
+  Tests + CI: a superuser `pgvector/pgvector:pg17-trixie` container (`app/api/.env`
+  `DATABASE_URL`, used for scratch databases); never the shared server. Local dev may run the
+  **API only** against the production database through the pg tunnel (owner decision 2026-11-17),
+  with the runtime logins only and the guardrails in `docs/ops/self-hosted-postgres.md`
+  (*Local dev against production*): no owner login, no worker / alembic / pytest / role scripts,
+  `KEY_ENCRYPTION_SECRET` = the production value or unset. Neon (`ricotdin-sg`) is no
   longer used; production started with an empty database (owner deletes the Neon project).
 - **Schema = Alembic** in `app/api/migrations/` (version table in schema `alembic`).
   `uv run --env-file .env alembic upgrade head`. New schema changes = new Alembic revisions, never
