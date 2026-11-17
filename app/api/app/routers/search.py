@@ -7,6 +7,7 @@ query embedded once (``embed-query``; no quota charge) against ``match_transcrip
 embedding failure keeps the keyword results (``semanticAvailable: false``). Pure parts:
 ``app/domain/search.py``."""
 
+import time
 import uuid
 from typing import Annotated, Any
 
@@ -42,8 +43,13 @@ Identity = Annotated[RequestIdentity, Depends(current_identity)]
 Db = Annotated[Database, Depends(get_database)]
 
 SEARCHES_PER_MINUTE = 30
+# The meaning search spends a call on the shared embedding key pool (the worker and chat use it
+# too) and charges no quota: tighter limits keep one account from draining it (PRO-05 review).
+SEMANTIC_PER_MINUTE = 10
+SEMANTIC_PER_DAY = 300
 SEGMENT_CANDIDATES = 200
 MEETING_CANDIDATES = 50
+PER_MEETING = 5  # = fuse()'s per_meeting
 _TOO_MANY = "Too many searches. Wait a minute."
 
 
@@ -51,9 +57,16 @@ def search_limiter() -> RateLimiter:
     return RateLimiter(capacity=SEARCHES_PER_MINUTE, refill_per_second=SEARCHES_PER_MINUTE / 60)
 
 
+def semantic_limiter() -> tuple[RateLimiter, ...]:
+    return (
+        RateLimiter(capacity=SEMANTIC_PER_MINUTE, refill_per_second=SEMANTIC_PER_MINUTE / 60),
+        RateLimiter(capacity=SEMANTIC_PER_DAY, refill_per_second=SEMANTIC_PER_DAY / 86_400),
+    )
+
+
 def _all_terms(column: str, n: int) -> str:
-    """``ricotdin_fold(<column>) LIKE :t0 AND …``: only fixed column names and indices go in."""
-    return " AND ".join(f"public.ricotdin_fold({column}) LIKE :t{i} ESCAPE '\\'" for i in range(n))
+    """``<folded column> LIKE :t0 AND …``: only fixed column names and indices go in."""
+    return " AND ".join(f"{column} LIKE :t{i} ESCAPE '\\'" for i in range(n))
 
 
 async def _keyword(conn: AsyncConnection, q: SearchQuery) -> list[KeywordHit]:
@@ -64,28 +77,36 @@ async def _keyword(conn: AsyncConnection, q: SearchQuery) -> list[KeywordHit]:
     segments = (
         await conn.execute(
             text(
-                "SELECT s.meeting_id, s.start_ms, s.end_ms, s.text "  # noqa: S608
+                # at most PER_MEETING segments per meeting, so one long meeting full of a common
+                # word cannot fill every candidate slot
+                "SELECT meeting_id, start_ms, end_ms, text, created_at FROM ("  # noqa: S608
+                "SELECT s.meeting_id, s.start_ms, s.end_ms, s.text, m.created_at, "
+                "s.segment_index, row_number() OVER (PARTITION BY s.meeting_id "
+                "ORDER BY s.segment_index) AS rn "
                 "FROM public.transcript_segments s "
                 "JOIN public.meetings m ON m.id = s.meeting_id "
-                f"WHERE {_all_terms('s.text', n)} {folder}"
-                "ORDER BY m.created_at DESC, s.segment_index LIMIT :lim"
+                "CROSS JOIN LATERAL (SELECT public.ricotdin_fold(s.text) AS t) x "  # once per row
+                f"WHERE {_all_terms('x.t', n)} {folder}) hits WHERE rn <= :per "
+                "ORDER BY created_at DESC, segment_index LIMIT :lim"
             ),
-            {**args, "lim": SEGMENT_CANDIDATES},
+            {**args, "lim": SEGMENT_CANDIDATES, "per": PER_MEETING},
         )
     ).all()
     meetings = (
         await conn.execute(
             text(
-                "SELECT m.id, m.summary, m.notes FROM public.meetings m "  # noqa: S608
-                f"WHERE (({_all_terms('m.summary', n)}) OR ({_all_terms('m.notes', n)})) {folder}"
+                "SELECT m.id, m.summary, m.notes, m.created_at FROM public.meetings m "  # noqa: S608
+                "CROSS JOIN LATERAL (SELECT public.ricotdin_fold(m.summary) AS s, "
+                "public.ricotdin_fold(m.notes) AS n) x "
+                f"WHERE (({_all_terms('x.s', n)}) OR ({_all_terms('x.n', n)})) {folder}"
                 "ORDER BY m.created_at DESC LIMIT :lim"
             ),
             {**args, "lim": MEETING_CANDIDATES},
         )
     ).all()
-    hits = [
-        KeywordHit(r.meeting_id, "transcript", int(r.start_ms), int(r.end_ms), r.text,
-                   term_hits(r.text, q.terms))
+    dated = [
+        (r.created_at, KeywordHit(r.meeting_id, "transcript", int(r.start_ms), int(r.end_ms),
+                                  r.text, term_hits(r.text, q.terms)))
         for r in segments
     ]  # fmt: skip
     for r in meetings:
@@ -93,8 +114,11 @@ async def _keyword(conn: AsyncConnection, q: SearchQuery) -> list[KeywordHit]:
         for kind, body in fields:
             folded = fold(body or "")
             if body and all(t in folded for t in q.terms):
-                hits.append(KeywordHit(r.id, kind, None, None, body, term_hits(body, q.terms)))
-    return hits
+                hit = KeywordHit(r.id, kind, None, None, body, term_hits(body, q.terms))
+                dated.append((r.created_at, hit))
+    # newest meeting first: fuse() keeps this order between equal scores
+    dated.sort(key=lambda d: d[0], reverse=True)
+    return [h for _, h in dated]
 
 
 async def _semantic(
@@ -142,9 +166,12 @@ async def search(request: Request, identity: Identity, db: Db) -> dict[str, Any]
     )
     async with db.app_transaction(identity) as conn:
         keyword = await _keyword(conn, q)
-    semantic_ok = True
+    semantic_ok, semantic = False, []
+    limits = request.app.state.semantic_limiter
     try:
-        semantic = await _semantic(request, db, identity, q)
+        if all([lim.check(str(identity.user_id), now=time.monotonic()).allowed for lim in limits]):
+            semantic = await _semantic(request, db, identity, q)
+            semantic_ok = True
     except Exception as exc:  # noqa: BLE001 - any embedding / vector failure keeps keyword results
         semantic_ok, semantic = False, []
         log.warning("search: semantic part failed (%s)", type(exc).__name__)

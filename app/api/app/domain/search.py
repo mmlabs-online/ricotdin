@@ -41,6 +41,7 @@ _TABLE = str.maketrans(FOLD_FROM, FOLD_TO)
 MIN_QUERY_CHARS = 2
 MAX_QUERY_CHARS = 200
 MAX_TERMS = 8
+MIN_TERM_CHARS = 2  # a 1-character term matches nearly every row (no index)
 EXCERPT_CHARS = 240
 RRF_K = 60
 _UNSAFE = re.compile("[\x00\ud800-\udfff]")
@@ -72,9 +73,9 @@ def parse_search(query: Mapping[str, Any]) -> SearchQuery:
             f"Type {MIN_QUERY_CHARS} to {MAX_QUERY_CHARS} characters to search.",
         )
     words = (fold(w).strip(_EDGE_PUNCT) for w in text.split())
-    terms = tuple(dict.fromkeys(w for w in words if w))[:MAX_TERMS]
+    terms = tuple(dict.fromkeys(w for w in words if len(w) >= MIN_TERM_CHARS))[:MAX_TERMS]
     if not terms:
-        raise BadRequest("Type a word to search.")
+        raise BadRequest(f"Type a word of at least {MIN_TERM_CHARS} characters to search.")
     folder_raw = str(query.get("folderId") or "").strip()
     try:
         folder = uuid.UUID(folder_raw) if folder_raw else None
@@ -115,7 +116,8 @@ def _merge(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
 def excerpt(
     text: str, terms: Sequence[str], width: int = EXCERPT_CHARS
 ) -> tuple[str, list[tuple[int, int]]]:
-    """A window of ``text`` around the first match (``…`` where cut) and the match ranges in it."""
+    """A window of ``text`` around the first match (``…`` where cut) and the match ranges in it,
+    counted in UTF-16 code units like JavaScript string indices (the web slices with them)."""
     body = unicodedata.normalize("NFC", text)
     folded = fold(body)
     matches = _merge([r for t in terms for r in _occurrences(folded, t)])
@@ -127,8 +129,16 @@ def excerpt(
         start = max(0, end - width)
     lead = "…" if start > 0 else ""
     shift = len(lead) - start
-    ranges = [(a + shift, b + shift) for a, b in matches if a >= start and b <= end]
-    return lead + body[start:end] + ("…" if end < len(body) else ""), ranges
+    out = lead + body[start:end] + ("…" if end < len(body) else "")
+    ranges = [
+        (_u16(out, a + shift), _u16(out, b + shift)) for a, b in matches if a >= start and b <= end
+    ]
+    return out, ranges
+
+
+def _u16(text: str, index: int) -> int:
+    """Code-point index → UTF-16 code-unit index (characters beyond the BMP count twice)."""
+    return index + sum(1 for c in text[:index] if ord(c) > 0xFFFF)
 
 
 @dataclass(frozen=True)
@@ -158,6 +168,7 @@ class ResultItem:
     ranges: list[tuple[int, int]]
     source: Source
     score: float
+    end_ms: int | None = None  # only to match semantic chunks; not returned
 
 
 @dataclass
@@ -175,8 +186,10 @@ def fuse(
     max_meetings: int = 20,
     per_meeting: int = 5,
 ) -> list[ResultGroup]:
-    """Reciprocal-rank fusion of both lists, grouped by meeting (best first). A semantic chunk
-    whose time range holds a keyword transcript hit of the same meeting adds to that hit."""
+    """Reciprocal-rank fusion of both lists, grouped by meeting (best first; equal scores keep the
+    given order, which the router makes newest meeting first). A semantic chunk adds its score to
+    every keyword transcript hit of the same meeting whose time range overlaps it; with none, it
+    becomes its own hit. Two segments of a meeting starting at the same ms collapse into one."""
     items: dict[tuple[uuid.UUID, str, int | None], tuple[uuid.UUID, ResultItem]] = {}
     ranked_kw = sorted(keyword, key=lambda h: -h.score)
     for rank, h in enumerate(ranked_kw):
@@ -185,23 +198,23 @@ def fuse(
             continue
         text, ranges = excerpt(h.text, terms)
         items[key] = (h.meeting_id, ResultItem(h.kind, h.start_ms, text, ranges, "keyword",
-                                               1 / (RRF_K + rank + 1)))  # fmt: skip
+                                               1 / (RRF_K + rank + 1), h.end_ms))  # fmt: skip
     for rank, s in enumerate(sorted(semantic, key=lambda h: -h.similarity)):
         gain = 1 / (RRF_K + rank + 1)
-        covered = next(
-            (it for (mid, kind, at), (_, it) in items.items()
-             if mid == s.meeting_id and kind == "transcript" and it.source == "keyword"
-             and at is not None and s.start_ms <= at <= s.end_ms),
-            None,
-        )  # fmt: skip
-        if covered is not None:
-            covered.source, covered.score = "both", covered.score + gain
+        covered = [
+            it for (mid, kind, at), (_, it) in items.items()
+            if mid == s.meeting_id and kind == "transcript" and it.source != "semantic"
+            and at is not None and at < s.end_ms and (it.end_ms or at) > s.start_ms
+        ]  # fmt: skip
+        for it in covered:
+            it.source, it.score = "both", it.score + gain
+        if covered:
             continue
         key = (s.meeting_id, "transcript", s.start_ms)
         if key not in items:
             text, ranges = excerpt(s.text, terms)
             items[key] = (s.meeting_id, ResultItem("transcript", s.start_ms, text, ranges,
-                                                   "semantic", gain))  # fmt: skip
+                                                   "semantic", gain, s.end_ms))  # fmt: skip
     groups: dict[uuid.UUID, ResultGroup] = {}
     for mid, item in items.values():
         group = groups.setdefault(mid, ResultGroup(mid, 0.0))

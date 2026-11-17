@@ -993,7 +993,8 @@
       "done": "Meeting deleted.",
       "warning": "Meeting deleted, but its recording could not be removed from storage. An administrator can clean it up."
     },
-    "searchContent": "Search in content"
+    "searchContent": "Search in content",
+    "searchContentFor": "Search “{{query}}” in meeting content"
   },
   "folders": {
     "title": "Manage folders",
@@ -1459,7 +1460,9 @@
     "errors": {
       "rateLimited": "Too many searches. Wait a minute and try again.",
       "network": "No connection to the server. Check your network and try again.",
-      "generic": "Search failed. Please try again."
-    }
+      "generic": "Search failed. Please try again.",
+      "query": "Type a word of at least 2 letters or digits."
+    },
+    "allFoldersAction": "Search all folders"
   }
 }

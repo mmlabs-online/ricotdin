@@ -2,7 +2,7 @@
 // Quota and "Shared with me" / "Archive" widgets of the prototype are left out until their data
 // exists (ARC-13).
 import { useEffect, useId, useRef, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
@@ -69,6 +69,9 @@ export function AppShell() {
     }
   }, [menuOpen])
 
+  const { pathname } = useLocation()
+  // PRO-05: /search is a view of the meetings library
+  const inLibrary = (to: string) => to === '/meetings' && pathname.startsWith('/search')
   const nav: NavEntry[] = [
     { to: '/meetings', icon: Home, label: t('nav.meetings') },
     { to: '/record', icon: Mic2, label: t('nav.record') },
@@ -105,7 +108,7 @@ export function AppShell() {
         </div>
         <nav className="nav" aria-label={t('nav.main')}>
           {nav.map(({ to, icon: Icon, label }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} aria-label={label} title={label}>
+            <NavLink key={to} to={to} className={({ isActive }) => `nav-item ${isActive || inLibrary(to) ? 'active' : ''}`} aria-label={label} title={label}>
               <Icon aria-hidden="true" />
               {!collapsed && <span>{label}</span>}
             </NavLink>
@@ -199,7 +202,7 @@ export function AppShell() {
 
       <nav className="mobile-nav" aria-label={t('nav.mobile')}>
         {mobileNav.map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to} className={({ isActive }) => (isActive ? 'active' : '')}>
+          <NavLink key={to} to={to} className={({ isActive }) => (isActive || inLibrary(to) ? 'active' : '')}>
             <Icon size={20} aria-hidden="true" />
             <span>{label}</span>
           </NavLink>

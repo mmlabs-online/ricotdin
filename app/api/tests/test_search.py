@@ -77,6 +77,12 @@ def test_parse_folder() -> None:
     assert parse_search({"q": "ab", "folderId": ""}).folder_id is None
 
 
+def test_one_character_terms_are_dropped() -> None:
+    assert parse_search({"q": "a ngân b"}).terms == ("ngan",)
+    with pytest.raises(BadRequest):
+        parse_search({"q": "a b c"})  # nothing left to search for
+
+
 def test_at_most_eight_terms() -> None:
     q = parse_search({"q": " ".join(f"w{i}" for i in range(12))})
     assert len(q.terms) == MAX_TERMS == 8
@@ -129,6 +135,12 @@ def test_no_match_gives_the_start() -> None:
     assert text.startswith("a a") and text.endswith("…") and ranges == []
 
 
+def test_ranges_count_utf16_units_like_the_browser() -> None:
+    text, ranges = excerpt("🎉 Ngân sách", ("ngan",))
+    assert ranges == [(3, 7)]  # the emoji is 2 UTF-16 units (1 code point)
+    assert text.encode("utf-16-le")[6:14].decode("utf-16-le") == "Ngân"
+
+
 def test_overlapping_matches_merge() -> None:
     text, ranges = excerpt("abcdef", ("abc", "bcd"))
     assert ranges == [(0, 4)]
@@ -164,6 +176,21 @@ def test_a_semantic_chunk_covering_a_keyword_segment_merges() -> None:
     [group] = groups
     [item] = group.items
     assert (item.source, item.start_ms) == ("both", 5_000)
+
+
+def test_a_segment_overlapping_the_chunk_start_merges_and_every_covered_hit_gains() -> None:
+    hits = [_kw(M1, start=9_000, end=12_000), _kw(M1, start=20_000, end=21_000, score=2)]
+    [group] = fuse(hits, [_sem(M1, 10_000, 30_000)], ("ngan",))
+    assert sorted((i.start_ms, i.source) for i in group.items) == [
+        (9_000, "both"),
+        (20_000, "both"),
+    ]
+
+
+def test_equal_scores_keep_the_given_order() -> None:
+    # the router passes hits newest meeting first: a tie must not reorder them
+    groups = fuse([_kw(M2, "summary", None), _kw(M1), _kw(M3, "notes", None)], [], ("ngan",))
+    assert [g.meeting_id for g in groups] == [M2, M1, M3]
 
 
 def test_semantic_only_results_are_kept() -> None:

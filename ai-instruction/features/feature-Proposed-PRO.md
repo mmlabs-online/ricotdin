@@ -112,7 +112,7 @@ As a user, I want to set real speaker names instead of "Speaker 1" and remember 
 ---
 
 ### PRO-05 — Library-wide search
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want keyword + semantic search across all meetings for quick lookup.
@@ -129,10 +129,10 @@ Re-specced 2026-11-17 (owner Q&A). Today the Meetings search box filters titles 
 **Frontend**
 - `SearchPage` (`/search`, `q` + `folder` in the URL): search box, folder filter, result groups (meeting title link, items with kind badge, time, highlighted excerpt), loading / empty / error / "semantic unavailable" notes. EN + VI.
 - Meetings page: a "Search in content" link next to the title filter, carrying the typed text.
-- Pure `lib/search/search.ts`: `highlightParts(text, ranges)`, `resultHref(item)`.
+- Pure `lib/search/search.ts`: `highlightParts(text, ranges)`, `resultHref(item)`, `tabFromSearch`, `searchHref`, `validQuery`.
 
 **Backend**
-- `GET /search?q=&folderId=` (`q` 2–200 chars after trim, at most 8 terms; 30 searches / user / min): as `ricotdin_app`, so RLS limits everything to meetings the caller can see.
+- `GET /search?q=&folderId=` (`q` 2–200 chars after trim, terms of ≥ 2 chars, at most 8; 30 searches / user / min; the semantic part 10 / min and 300 / day, else keyword only): as `ricotdin_app`, so RLS limits everything to meetings the caller can see.
   - Keyword: every term must occur (accent- and case-insensitive) in a transcript segment, the summary or the notes; folded with SQL `ricotdin_fold(text)` = Python `fold()`.
   - Semantic: the query embedded once (`embed-query`, no quota charge) → `match_transcript_chunks` (similarity ≥ 0.5, top 8). An embedding failure keeps the keyword results and returns `semanticAvailable: false`.
   - Fusion (pure): reciprocal-rank fusion of the two lists; a semantic chunk covering a keyword segment of the same meeting merges into it; grouped by meeting, at most 20 meetings × 5 items.
@@ -142,7 +142,7 @@ Re-specced 2026-11-17 (owner Q&A). Today the Meetings search box filters titles 
 - Given meetings of other users, when the caller searches, then only meetings they own, own the folder of, or have a share on appear.
 - Given "ngan sach" (or "NGÂN SÁCH"), then text containing "Ngân sách" matches; a multi-word query needs every word.
 - Given a query with no shared words but the same meaning, then semantic results appear; given the embedding fails, then keyword results still come back with `semanticAvailable: false` and the page says so.
-- Given a transcript result, then it links to `/meetings/:id?t=<ms>`.
+- Given a transcript result, then it links to `/meetings/:id?t=<seconds>`; a summary / notes result opens that tab (`?tab=`).
 - Given `q` shorter than 2 / longer than 200 chars → 400; more than 30 searches a minute → 429; no valid mmlabs token → 401.
 
 **Test Plan**

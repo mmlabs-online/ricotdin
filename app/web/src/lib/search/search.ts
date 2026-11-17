@@ -30,7 +30,14 @@ export function highlightParts(text: string, ranges: ReadonlyArray<readonly [num
 /** Where a result opens: a transcript hit at its second, a summary / notes hit on the meeting. */
 export function resultHref(meetingId: string, item: { kind: string; startMs: number | null }): string {
   if (item.kind === 'transcript' && item.startMs !== null) return meetingSeekPath(meetingId, item.startMs)
-  return `/meetings/${encodeURIComponent(meetingId)}`
+  const tab = item.kind === 'notes' ? 'notes' : 'summary'
+  return `/meetings/${encodeURIComponent(meetingId)}?tab=${tab}`
+}
+
+/** `?tab=summary|notes` from a search hit → the meeting tab to open first, else null. */
+export function tabFromSearch(search: string): 'summary' | 'notes' | null {
+  const tab = new URLSearchParams(search).get('tab')
+  return tab === 'summary' || tab === 'notes' ? tab : null
 }
 
 export function readSearchParams(search: string): { q: string; folder: string } {

@@ -1,5 +1,6 @@
 // Library-wide search (PRO-05): keyword + semantic search in transcripts, summaries and notes of
-// every meeting the caller can see; results grouped by meeting, transcript hits open at the second.
+// every meeting the caller can see; results grouped by meeting, transcript hits open at the second,
+// summary / notes hits on their tab. The URL (`?q=&folder=`) is the source of truth.
 import { useId, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { Search } from 'lucide-react'
@@ -14,6 +15,7 @@ import { displayText } from '../lib/text'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 function errorKey(err: unknown): string {
+  if (err instanceof ApiError && err.status === 400) return 'searchPage.errors.query'
   if (err instanceof ApiError && err.status === 429) return 'searchPage.errors.rateLimited'
   if (err instanceof ApiError && err.status === 0) return 'searchPage.errors.network'
   return 'searchPage.errors.generic'
@@ -26,27 +28,48 @@ export function SearchPage() {
   const navigate = useNavigate()
   const { q, folder } = readSearchParams(location.search)
   const [draft, setDraft] = useState(q)
-  const [tooShort, setTooShort] = useState(false)
-  const folders = useFolders()
-  const result = useSearch(q, folder)
-  const ids = { input: useId(), folder: useId(), hint: useId() }
-  const fmt = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en', { dateStyle: 'medium' })
-
   const [seen, setSeen] = useState(q)
   if (seen !== q) {
     // back / forward changed the URL: show its query in the box
     setSeen(q)
     setDraft(q)
   }
+  const [tooShort, setTooShort] = useState(false)
+  const folders = useFolders()
+  const result = useSearch(q, folder)
+  const ids = { input: useId(), folder: useId(), hint: useId() }
+  const fmt = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en', { dateStyle: 'medium' })
 
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!validQuery(draft)) return setTooShort(true)
+  function go(nextQ: string, nextFolder: string) {
+    if (!validQuery(nextQ)) return setTooShort(true)
     setTooShort(false)
-    void navigate(searchHref(draft, folder))
+    void navigate(searchHref(nextQ, nextFolder))
+  }
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    go(draft, folder)
   }
 
-  const groups = result.data?.groups ?? []
+  const active = validQuery(q)
+  const data = result.data
+  const stale = result.isPlaceholderData // the rows of the previous query, while this one loads
+  const loading = active && (result.isPending || stale)
+  const failed = active && result.isError && !result.isFetching
+  const noRetry = result.error instanceof ApiError && (result.error.status === 429 || result.error.status === 400)
+  const groups = data && !stale ? data.groups : (data?.groups ?? [])
+  // one always-rendered status line: searching → count / nothing found / error
+  const status = !active
+    ? ''
+    : loading
+      ? t('searchPage.searching')
+      : failed
+        ? t(errorKey(result.error))
+        : data
+          ? data.groups.length === 0
+            ? t('searchPage.empty')
+            : t('searchPage.count', { count: data.groups.length, query: data.query })
+          : ''
+
   return (
     <>
       <div className="page-head">
@@ -64,25 +87,36 @@ export function SearchPage() {
           <input
             id={ids.input}
             type="search"
+            enterKeyHint="search"
+            autoFocus={!q}
             value={draft}
             maxLength={MAX_QUERY}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              if (tooShort) setTooShort(false)
+            }}
             placeholder={t('searchPage.placeholder')}
             aria-describedby={tooShort ? ids.hint : undefined}
             aria-invalid={tooShort || undefined}
           />
         </label>
-        <div className="search-folder">
-          <label htmlFor={ids.folder}>{t('searchPage.folder')}</label>
-          <select id={ids.folder} value={folder} onChange={(e) => void navigate(searchHref(q || draft, e.target.value))}>
-            <option value="">{t('searchPage.allFolders')}</option>
-            {(folders.data ?? []).map((f) => (
-              <option key={f.id} value={f.id}>
-                {displayText(f.name)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <label className="sr-only" htmlFor={ids.folder}>
+          {t('searchPage.folder')}
+        </label>
+        <select
+          id={ids.folder}
+          className="search-folder"
+          value={folder}
+          // the typed text when it is a query, else the one on screen (never a half-typed mix)
+          onChange={(e) => go(validQuery(draft) ? draft : q, e.target.value)}
+        >
+          <option value="">{t('searchPage.allFolders')}</option>
+          {(folders.data ?? []).map((f) => (
+            <option key={f.id} value={f.id}>
+              {displayText(f.name)}
+            </option>
+          ))}
+        </select>
         <Button variant="primary" type="submit">
           {t('searchPage.submit')}
         </Button>
@@ -91,31 +125,29 @@ export function SearchPage() {
         {tooShort ? t('searchPage.tooShort') : ''}
       </p>
 
-      {!validQuery(q) ? (
+      <p className={active ? 'search-count' : 'sr-only'} role="status">
+        {status}
+      </p>
+
+      {!active ? (
         <p className="tab-note">{t('searchPage.intro')}</p>
-      ) : result.isPending ? (
-        <p className="tab-note" role="status">
-          {t('searchPage.searching')}
-        </p>
-      ) : result.isError && !result.data ? (
-        <div className="empty" role="alert">
-          <p>{t(errorKey(result.error))}</p>
-          <Button onClick={() => void result.refetch()}>{t('common.tryAgain')}</Button>
-        </div>
       ) : (
-        <section aria-labelledby="search-results" aria-busy={result.isFetching}>
-          <h2 id="search-results" className="search-count" aria-live="polite">
-            {t('searchPage.count', { count: groups.length, query: q })}
-          </h2>
-          {result.data?.semanticAvailable === false && (
-            <p className="notice-banner warning" role="status">
-              {t('searchPage.keywordOnly')}
-            </p>
+        <>
+          {failed && !noRetry && (
+            <div className="search-actions">
+              <Button onClick={() => void result.refetch()}>{t('common.tryAgain')}</Button>
+            </div>
           )}
-          {groups.length === 0 ? (
-            <p className="tab-note">{t('searchPage.empty')}</p>
-          ) : (
-            <ul className="search-results">
+          {data?.semanticAvailable === false && !stale && (
+            <p className="notice-banner warning">{t('searchPage.keywordOnly')}</p>
+          )}
+          {data && !failed && data.groups.length === 0 && !loading && folder && (
+            <div className="search-actions">
+              <Button onClick={() => go(q, '')}>{t('searchPage.allFoldersAction')}</Button>
+            </div>
+          )}
+          {groups.length > 0 && !failed && (
+            <ul className={stale ? 'search-results stale' : 'search-results'} aria-busy={loading}>
               {groups.map((g) => (
                 <li key={g.meetingId} className="search-group">
                   <div className="search-group-head">
@@ -126,7 +158,7 @@ export function SearchPage() {
                   </div>
                   <ul>
                     {g.items.map((item, i) => (
-                      <li key={`${item.kind}-${item.startMs ?? i}`}>
+                      <li key={`${item.kind}-${item.startMs ?? 'x'}-${i}`}>
                         <ResultItem meetingId={g.meetingId} item={item} />
                       </li>
                     ))}
@@ -135,7 +167,7 @@ export function SearchPage() {
               ))}
             </ul>
           )}
-        </section>
+        </>
       )}
     </>
   )

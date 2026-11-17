@@ -149,3 +149,49 @@ def test_rate_limited(client: TestClient, seeded: _Embedder) -> None:
 )
 def test_sql_fold_equals_python_fold(world: dict[str, Any], value: str) -> None:
     assert _sql(world["db"], "SELECT public.ricotdin_fold(%s)", value) == [(fold(value),)]
+
+
+def test_someone_elses_folder_finds_nothing(
+    client: TestClient, world: dict[str, Any], seeded: _Embedder
+) -> None:
+    calls = len(seeded.calls)
+    body = _search(client, "d", q="budget overrun", folderId=str(world["f1"]))
+    assert body["groups"] == []
+    assert len(seeded.calls) == calls  # no visible meeting in it: no embedding call
+
+
+def test_the_meaning_search_has_its_own_limit(client: TestClient, seeded: _Embedder) -> None:
+    app: Any = client.app
+    original = app.state.semantic_limiter
+    app.state.semantic_limiter = (RateLimiter(capacity=1, refill_per_second=0.0001),)
+    try:
+        assert _search(client, "a", q="budget overrun")["semanticAvailable"] is True
+        calls = len(seeded.calls)
+        body = _search(client, "a", q="ngan sach")
+        assert body["semanticAvailable"] is False  # keyword results only, no provider call
+        assert "M3 no audio" in _titles(body)
+        assert len(seeded.calls) == calls
+    finally:
+        app.state.semantic_limiter = original
+
+
+def test_one_meeting_cannot_crowd_out_the_others(
+    client: TestClient, world: dict[str, Any], seeded: _Embedder
+) -> None:
+    db = world["db"]
+    for i in range(210):  # newest meeting first in the scan: these alone exceed the old LIMIT
+        _sql(db, "INSERT INTO transcript_segments (meeting_id, segment_index, start_ms, end_ms, "
+             "text) VALUES (%s, %s, %s, %s, 'quokka again')", world["m3"], 100 + i, i * 1000,
+             i * 1000 + 500)  # fmt: skip
+    _sql(db, "INSERT INTO transcript_segments (meeting_id, segment_index, start_ms, end_ms, text) "
+         "VALUES (%s, 99, 1000, 2000, 'one quokka')", world["m1"])  # fmt: skip
+    _sql(db, "UPDATE meetings SET created_at = now() + interval '1 day' WHERE id = %s", world["m3"])
+    titles = _titles(_search(client, "a", q="quokka"))
+    assert set(titles) == {"M3 no audio", "M1"}
+    _sql(db, "UPDATE meetings SET created_at = now() WHERE id = %s", world["m3"])
+
+
+@pytest.mark.parametrize("value", ["ΣΟΦΙΑ", "МОСКВА", "Øresund Æble"])
+def test_sql_fold_equals_python_fold_beyond_latin(world: dict[str, Any], value: str) -> None:
+    # outside the translate table both sides rely on lower(): holds on the UTF-8 locale we run
+    assert _sql(world["db"], "SELECT public.ricotdin_fold(%s)", value) == [(fold(value),)]

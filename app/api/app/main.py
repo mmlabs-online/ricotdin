@@ -107,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.regenerate_limiter = meetings_router.regenerate_limiter()
     app.state.chat_limiter = chat_router.chat_limiter()
     app.state.search_limiter = search_router.search_limiter()
+    app.state.semantic_limiter = search_router.semantic_limiter()
     app.state.content_limiter = note_versions_router.content_limiter()
     app.state.key_check_limiter = admin_config_router.key_check_limiter()
     app.state.regenerating = set()  # meeting ids with a regenerate in flight (this process)

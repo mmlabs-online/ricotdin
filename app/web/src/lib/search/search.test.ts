@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { highlightParts, readSearchParams, resultHref, searchHref, validQuery } from './search'
+import { highlightParts, readSearchParams, resultHref, searchHref, tabFromSearch, validQuery } from './search'
 
 describe('highlightParts', () => {
   it('splits text around the ranges', () => {
@@ -27,9 +27,16 @@ describe('resultHref', () => {
   it('a transcript hit opens the meeting at that second', () => {
     expect(resultHref('m-1', { kind: 'transcript', startMs: 125_400 })).toBe('/meetings/m-1?t=125')
   })
-  it('a summary or notes hit opens the meeting', () => {
-    expect(resultHref('m 1', { kind: 'summary', startMs: null })).toBe('/meetings/m%201')
-    expect(resultHref('m-1', { kind: 'notes', startMs: null })).toBe('/meetings/m-1')
+  it('a summary or notes hit opens that tab', () => {
+    expect(resultHref('m 1', { kind: 'summary', startMs: null })).toBe('/meetings/m%201?tab=summary')
+    expect(resultHref('m-1', { kind: 'notes', startMs: null })).toBe('/meetings/m-1?tab=notes')
+  })
+  it('the meeting page reads the tab back', () => {
+    expect(tabFromSearch('?tab=notes')).toBe('notes')
+    expect(tabFromSearch('?tab=summary')).toBe('summary')
+    expect(tabFromSearch('?tab=transcript')).toBeNull()
+    expect(tabFromSearch('?tab=__proto__')).toBeNull()
+    expect(tabFromSearch('')).toBeNull()
   })
 })
 
