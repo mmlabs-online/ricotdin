@@ -15,6 +15,29 @@ Sign-in uses the mmlabs account (AUT-05): set `authUrl` in `public/config.json` 
 identity API that registered your local origin (a local org-admin-api, see its `docs/consumers.md`),
 and give the ricotdin API `WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173` plus `MMLABS_ISSUER`.
 
+### Dev loop signed in (OPS-08, WSL / macOS)
+
+Production mmlabs Identity only accepts `https://ricotdin.mmlabs.online`, so the sign-in form cannot
+run on localhost. Instead the dev server adds a real token on the Node side:
+
+```bash
+# 1. the API at 127.0.0.1:8000 (app/api; local DB, or production through the tunnel with the
+#    guardrails in docs/ops/self-hosted-postgres.md)
+scripts/dev-token.sh                     # asks email + password; RICOTDIN_DEV_EMAIL=… to skip the email
+RICOTDIN_DEV_TOKEN=1 npm run dev         # http://localhost:5173 opens signed in as that account
+```
+
+- The token (15 min) is written to `~/.config/ricotdin/dev-token` (`RICOTDIN_DEV_TOKEN_FILE`),
+  outside the repo, and never reaches the browser. When it expires the app shows the retry screen and
+  Vite logs `[dev-token] token expired - run scripts/dev-token.sh`: run it again, press retry.
+  Another account (e.g. a non-admin): run the script with another email.
+- `dev/devTokenProxy.ts` (dev server only, inert without `RICOTDIN_DEV_TOKEN=1`, never in the build)
+  proxies `/__dev_api/*` (prefix stripped) and `/media` to `RICOTDIN_DEV_API`
+  (default `http://127.0.0.1:8000`, loopback only) and serves its own `/config.json`. The SPA then
+  skips mmlabs and only calls `/auth/me`; sign-in / sign-out screens do not work in this mode.
+- `npm run dev` refuses `--host` / `allowedHosts: true`. Identity asks for Turnstile after 3 failed
+  sign-ins: sign in once on the production site, then retry.
+
 ## Layout
 
 | Path | What |

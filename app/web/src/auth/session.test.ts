@@ -296,3 +296,39 @@ describe('AuthSession (mmlabs)', () => {
     expect(f.calls).toHaveLength(0)
   })
 })
+
+describe('AuthSession (dev proxy, OPS-08)', () => {
+  const DEV_API = 'http://localhost:5173/__dev_api'
+  const devDeps = (answers: Array<() => Response>) => {
+    const f = fakeDeps(answers, undefined, null)
+    return { ...f, deps: { ...f.deps, devProxy: true } }
+  }
+
+  it('asks only the API for /auth/me, without a token (the dev server adds it), and is signed in', async () => {
+    const f = devDeps([json(200, user)])
+    const s = new AuthSession(DEV_API, DEV_API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'signedIn', user })
+    expect(f.calls).toHaveLength(1)
+    expect(f.calls[0]?.url).toBe(`${DEV_API}/auth/me`)
+    expect(header(f.calls[0], 'Authorization')).toBeNull()
+    expect(await s.getToken()).toBeNull()
+    expect(f.calls).toHaveLength(1) // no renewal per request
+  })
+
+  it('a missing or expired dev token (401) shows the retry screen; retry signs in', async () => {
+    const f = devDeps([err(401, 'unauthorized'), json(200, user)])
+    const s = new AuthSession(DEV_API, DEV_API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'unavailable' })
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'signedIn', user })
+  })
+
+  it('the API being down is unavailable, not signed out', async () => {
+    const f = devDeps([() => { throw new TypeError('network') }])
+    const s = new AuthSession(DEV_API, DEV_API, f.deps)
+    await s.start()
+    expect(s.getState()).toEqual({ status: 'unavailable' })
+  })
+})

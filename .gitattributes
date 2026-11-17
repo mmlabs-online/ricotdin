@@ -1,0 +1,2 @@
+# Shell scripts must keep LF on every checkout (bash fails on CRLF; OPS-08).
+*.sh text eol=lf

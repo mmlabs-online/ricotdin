@@ -11,6 +11,7 @@
 - Mục "Hoạt động" trong hồ sơ: xem lại hoạt động của chính mình (tạo/xóa cuộc họp, xử lý, ghi âm, chat) kèm thiết bị và IP, và các lần chia sẻ / gỡ chia sẻ thư mục với người khác (cả hai bên đều thấy); lọc theo loại, "Xem thêm" (PRF-09).
 - Trang Tìm kiếm (`/search`, mở từ ô tìm ở trang Cuộc họp): tìm trong bản ghi lời, tóm tắt và ghi chú của mọi cuộc họp bạn được xem, không cần gõ dấu, kèm tìm theo ý nghĩa; kết quả nhóm theo cuộc họp, từ khớp được tô, bấm để mở đúng giây hoặc đúng tab; lọc theo thư mục (PRO-05).
 - Đặt tên người nói: trong tab Bản ghi lời, chủ cuộc họp và người chỉnh sửa đặt tên thật cho Speaker 1, Speaker 2… (có gợi ý các tên đã dùng); tên hiện trong bản ghi lời, file tải về, câu trả lời chat và tóm tắt ở lần tạo lại. Chép lại bản ghi lời sẽ xóa tên cũ (PRO-04).
+- Chỉ cho dev: `scripts/dev-token.sh` + `RICOTDIN_DEV_TOKEN=1 npm run dev` mở app ở localhost đã đăng nhập sẵn bằng một tài khoản mmlabs (token gắn ở phía dev server, không xuống trình duyệt, không có trong bản build). Không ảnh hưởng production (OPS-08).
 
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.

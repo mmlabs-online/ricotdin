@@ -10,7 +10,7 @@ import { I18nextProvider } from 'react-i18next'
 import { createApiClient, createFetchApi } from './api/client'
 import { ApiError } from './api/errors'
 import { AuthProvider } from './auth/AuthProvider'
-import { AuthSession } from './auth/session'
+import { AuthSession, defaultDeps } from './auth/session'
 import { createRouter } from './app/router'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ErrorScreen } from './components/ErrorScreen'
@@ -42,7 +42,8 @@ async function boot(): Promise<void> {
     )
     return
   }
-  const session = new AuthSession(config.authUrl, config.apiUrl)
+  const deps = import.meta.env.DEV && config.devProxy ? { ...defaultDeps(), devProxy: true } : undefined // OPS-08
+  const session = new AuthSession(config.authUrl, config.apiUrl, deps)
   const api = createApiClient(config.apiUrl, session)
   const fetchApi = createFetchApi(config.apiUrl, session)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: retryable, staleTime: 30_000 } } })
