@@ -179,7 +179,7 @@ CLAUDE.md §0.3, §0.8 and §0.10 list these as open: (1) someone can register a
 **Out of scope**
 - Username bidi check (owner chose folders + meetings only).
 - Changing the 409 for a verified email (account enumeration; decided 2026-10-26).
-- PRF-11 session list / remote sign-out (builds on the 90-day rule).
+- PRF-11 session list / remote sign-out (superseded 2026-11-17: the mmlabs account owns sessions since AUT-05).
 
 **Key files (expected)**
 - `app/api/app/routers/auth.py`, `app/api/app/auth/service.py`, `app/api/app/auth/` (refresh rule), `app/api/app/domain/rules.py`, `app/api/app/routers/chat.py`, `app/api/app/email/templates.py`
