@@ -71,6 +71,7 @@ async def create_user(
     username: str,
     *,
     mmlabs_sub: str | None = None,
+    signup_grant: bool = True,
 ) -> uuid.UUID:
     """users + profiles (role forced to 'user'), then the signup quota grant (non-fatal).
     No password: only mmlabs signs users in (AUT-06); its email is verified (mmlabs checked it)."""
@@ -89,6 +90,8 @@ async def create_user(
         text("INSERT INTO profiles (id, username, role) VALUES (:id, :u, 'user')"),
         {"id": user_id, "u": username},
     )
+    if not signup_grant:  # PRF-13: an account re-created after a delete gets no second grant
+        return user_id
     try:
         async with conn.begin_nested():
             await conn.execute(

@@ -42,7 +42,12 @@ Contract: org-admin `docs/consumers.md`. AUT-06 removed ricotdin's own auth (§0
 - **Account mapping:** `users.mmlabs_sub` (migration 0010, unique). First request of an mmlabs
   account: an unlinked user with the same email (case-insensitive) is linked (owner decision), else
   a user + profile is created (`password_hash` NULL, email verified, username from the email local
-  part, `-2`, `-3`… on collision; signup quota grant as for registration). A user linked to another
+  part, `-2`, `-3`… on collision; signup quota grant as for registration). An account deleted
+  before (`deleted_accounts`, PRF-13) is not re-created from a token issued at or before the
+  delete (401 `account_deleted`); a newer sign-in gets a new, empty account without the grant.
+  This guards in-flight requests only: a tab or device still signed in to mmlabs refreshes its
+  token and, with the newer `iat`, gets that new empty account. Tombstones are kept (no purge);
+  they hold only the sha256 of the `sub`. A user linked to another
   `sub` is never relinked (409 `account_link_conflict`). Concurrent first requests create one user.
 - **Role:** `admin` iff the token's `roles` contain `ricotdin:admin`, else `user` (§0.1 R5
   whitelist); `users.role` is written when it differs, so DB functions and `current_admin` agree.

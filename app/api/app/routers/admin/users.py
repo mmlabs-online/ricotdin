@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -32,11 +32,10 @@ from app.domain.admin import (
     parse_status,
     user_status,
 )
-from app.routers._common import SERVICE, json_object, jsonb, path_id
+from app.routers._common import SERVICE, enforce_limit, json_object, jsonb, path_id
 from app.routers.admin._common import CurrentAdmin, lock_admin_count, write_audit
-from app.routers.meetings import delete_files
+from app.services.account import delete_account, export_account, zip_response
 from app.services.platform import Platform, get_platform
-from app.services.storage.ownership import is_owned_audio_key, is_owned_avatar_key
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 log = get_logger("admin.users")
@@ -45,6 +44,7 @@ Db = Annotated[Database, Depends(get_database)]
 Plat = Annotated[Platform, Depends(get_platform)]
 
 _NOT_FOUND = "User not found."
+_TOO_MANY_EXPORTS = "Too many exports. Wait a while and try again."
 _USER_COLUMNS = (
     "u.id, u.email, p.username, u.role, u.disabled_at, u.email_verified_at, u.created_at, "
     "u.last_sign_in_at"
@@ -212,63 +212,42 @@ async def _set_disabled(conn: AsyncConnection, uid: uuid.UUID, disable: bool) ->
 async def delete_user(
     user_id: str, request: Request, admin: CurrentAdmin, db: Db, platform: Plat
 ) -> Any:
-    """Files first (CLAUDE.md §9c): the account is disabled and signed out, then every owned
-    meeting audio and the avatar are deleted from Drive, each in its own step; a failure becomes
-    ``storageWarnings`` and the user is still deleted. Rows cascade (meetings, folders, chat,
-    quota, …; audit rows keep a NULL actor). Keys that appeared in between (an upload the user
-    confirmed just before being disabled) get a second Drive pass after the row delete."""
+    """Files first, then rows (``services/account.delete_account``); the self / last-admin guards
+    are checked at the start of both of its transactions. A Drive failure becomes
+    ``storageWarnings`` and the user is still deleted."""
     uid = path_id(user_id, _NOT_FOUND)
-    async with db.role_transaction(SERVICE) as conn:
+
+    async def check(conn: AsyncConnection) -> None:
         count = await lock_admin_count(conn, admin, uid)
         target = await _target(conn, uid)
         guard_delete(admin.user_id, uid, target.role, count)
-        await _set_disabled(conn, uid, True)  # no new uploads while the files go
-        first = await _owned_keys(conn, uid)
-        # Committed before the irreversible Drive pass: a delete that stops half-way (caller
-        # demoted meanwhile, database error, restart) still leaves its trace.
-        await write_audit(conn, admin, "user.delete_started", "user", str(uid),
-                          {"files": len(first)})  # fmt: skip
-    failed = await delete_files(db, platform, first)
-    async with db.role_transaction(SERVICE) as conn:
-        count = await lock_admin_count(conn, admin, uid)  # re-checked: the target may have changed
-        target = await _target(conn, uid)
-        guard_delete(admin.user_id, uid, target.role, count)
-        late = [k for k in await _owned_keys(conn, uid) if k not in first]
-        meetings = (
-            await conn.execute(
-                text("SELECT count(*) FROM public.meetings WHERE user_id = :u"), {"u": uid}
-            )
-        ).scalar_one()
-        await conn.execute(text("DELETE FROM public.users WHERE id = :id"), {"id": uid})
-        await write_audit(conn, admin, "user.delete", "user", str(uid),
-                          {"meetings": meetings, "files": len(first) + len(late),
-                           "files_failed": len(failed)})  # fmt: skip
-    failed += await delete_files(db, platform, late)  # the map rows outlive the user
+
+    async def audit(conn: AsyncConnection, action: str, meta: dict[str, Any]) -> None:
+        await write_audit(conn, admin, action, "user", str(uid), meta)
+
+    failed = await delete_account(
+        db, platform, uid, check=check, audit=audit, action="user.delete",
+        on_disabled=lambda: request.app.state.mmlabs_identities.forget_user(uid),
+    )  # fmt: skip
     out: dict[str, Any] = {"ok": True, "deleted": uid}
     if failed:
-        out["storageWarnings"] = [f"Storage cleanup failed for {len(failed)} file(s)."]
+        out["storageWarnings"] = [f"Storage cleanup failed for {failed} file(s)."]
     request.app.state.mmlabs_identities.forget_user(uid)  # AUT-05
     return out
 
 
-async def _owned_keys(conn: AsyncConnection, uid: uuid.UUID) -> list[str]:
-    """The user's own meeting audio keys and avatar key (a forged path is never included)."""
-    meetings = (
-        await conn.execute(
-            text("SELECT id, user_id, audio_path FROM public.meetings WHERE user_id = :u"),
-            {"u": uid},
-        )
-    ).all()
-    keys = [
-        m.audio_path for m in meetings
-        if m.audio_path and is_owned_audio_key(m.audio_path, str(m.user_id), str(m.id))
-    ]  # fmt: skip
-    avatar = (
-        await conn.execute(text("SELECT avatar_key FROM public.profiles WHERE id = :u"), {"u": uid})
-    ).scalar_one_or_none()
-    if avatar and is_owned_avatar_key(avatar, str(uid)):
-        keys.append(avatar)
-    return keys
+@router.get("/users/{user_id}/export")
+async def export_user(user_id: str, request: Request, admin: CurrentAdmin, db: Db) -> Response:
+    """ADM-11: the user's own data as a ZIP (``services/account.export_account``), audited."""
+    uid = path_id(user_id, _NOT_FOUND)
+    enforce_limit(request.app.state.export_limiter, admin.user_id, _TOO_MANY_EXPORTS)
+    export = await export_account(db, uid, datetime.now(UTC))
+    if export is None:
+        raise NotFound(_NOT_FOUND)
+    async with db.role_transaction(SERVICE) as conn:
+        await write_audit(conn, admin, "user.export", "user", str(uid),
+                          {"meetings": export.meetings, "bytes": len(export.data)})  # fmt: skip
+    return zip_response(export)
 
 
 # --- bulk -----------------------------------------------------------------------------------------

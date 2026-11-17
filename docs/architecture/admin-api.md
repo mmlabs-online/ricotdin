@@ -14,7 +14,10 @@
   username, LIKE wildcards literal; month usage keeps tokens and audio seconds apart),
   `GET /admin/users/{id}`, `PATCH …/role {role}` (409 `role_managed_externally` since AUT-05: roles
   live in mmlabs), `PATCH …/status {disabled}` (disable → `disabled_at`, the identity cache entry
-  is dropped so it applies at once; no reset-password since AUT-06), `DELETE /admin/users/{id}` (owned meeting audio +
+  is dropped so it applies at once; no reset-password since AUT-06), `GET /admin/users/{id}/export`
+  (ADM-11: the user's own-data ZIP, as `GET /profile/export`; audited `user.export`; 3 / hour per
+  admin), `DELETE /admin/users/{id}` (`services/account.delete_account`, also leaves the PRF-13
+  tombstone; owned meeting audio +
   avatar deleted from Drive first, each in its own step, failures → `storageWarnings`; then the
   user row, everything cascades), `POST /admin/users/bulk {ids ≤ 50, action
   disable|enable|set_role, role?}` (caller skipped, unknown ids in `errors`, one transaction and

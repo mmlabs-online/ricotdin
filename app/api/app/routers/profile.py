@@ -5,13 +5,15 @@ upload URL,
 short-lived ``/media`` link."""
 
 import time
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.auth.deps import current_identity
+from app.auth.deps import client_ip, current_identity
 from app.core.errors import (
     BadRequest,
     Conflict,
@@ -35,8 +37,10 @@ from app.domain.uploads import (
     parse_avatar_request,
 )
 from app.routers._common import SERVICE, enforce_limit, is_unique_violation, json_object, jsonb
+from app.routers.admin._common import Admin, write_audit
 from app.routers.meetings import delete_files
 from app.services.access import folder_assignable
+from app.services.account import delete_account, export_account, zip_response
 from app.services.platform import Platform, get_platform
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_avatar_key
@@ -300,3 +304,76 @@ async def own_activity(request: Request, identity: Identity, db: Db) -> dict[str
         "page": f.page,
         "perPage": f.per_page,
     }
+
+
+# --- own data: export and delete (PRF-13) ---------------------------------------------------------
+
+_TOO_MANY_EXPORTS = "Too many exports. Wait a while and try again."
+_CONFIRM = "Type your username to confirm."
+
+
+async def _actor(db: Database, request: Request, uid: Any) -> Admin:
+    """The audit actor for the user's own action (``audit_logs`` keeps the email after a delete)."""
+    async with db.role_transaction(SERVICE) as conn:
+        email = (
+            await conn.execute(text("SELECT email FROM public.users WHERE id = :u"), {"u": uid})
+        ).scalar_one_or_none()
+    if email is None:
+        raise NotFound("Profile not found.")
+    return Admin(uid, email, client_ip(request),
+                 (request.headers.get("user-agent") or "")[:512] or None)  # fmt: skip
+
+
+@router.get("/export")
+async def export_own_data(request: Request, identity: Identity, db: Db) -> Response:
+    """The caller's own meetings, chats, activity and profile as a ZIP (no audio)."""
+    enforce_limit(request.app.state.export_limiter, identity.user_id, _TOO_MANY_EXPORTS)
+    actor = await _actor(db, request, identity.user_id)
+    export = await export_account(db, identity.user_id, datetime.now(UTC))
+    if export is None:
+        raise NotFound("Profile not found.")
+    async with db.role_transaction(SERVICE) as conn:
+        await write_audit(conn, actor, "user.export_self", "user", str(identity.user_id),
+                          {"meetings": export.meetings, "bytes": len(export.data)})  # fmt: skip
+    return zip_response(export)
+
+
+@router.delete("")
+async def delete_own_account(
+    request: Request, identity: Identity, db: Db, platform: Plat
+) -> dict[str, Any]:
+    """``{confirm: "<username>"}``: deletes the caller's ricotdin account like an admin delete
+    (Drive files first, then every row). The mmlabs account stays; signing in again creates a new,
+    empty ricotdin account."""
+    body = await json_object(request, max_bytes=1024)
+    uid = identity.user_id
+    actor = await _actor(db, request, uid)
+    confirm = body.get("confirm")
+
+    confirmed = False
+
+    async def check(conn: AsyncConnection) -> None:
+        nonlocal confirmed
+        if confirmed:  # second transaction: the username was proven in the first (review A1)
+            return
+        username = (
+            await conn.execute(
+                text("SELECT username FROM public.profiles WHERE id = :u"), {"u": uid}
+            )
+        ).scalar_one_or_none()
+        if not isinstance(confirm, str) or username is None or confirm.strip() != username:
+            raise BadRequest(_CONFIRM)
+        confirmed = True
+
+    async def audit(conn: AsyncConnection, action: str, meta: dict[str, Any]) -> None:
+        await write_audit(conn, actor, action, "user", str(uid), meta)
+
+    failed = await delete_account(
+        db, platform, uid, check=check, audit=audit, action="user.delete_self",
+        on_disabled=lambda: request.app.state.mmlabs_identities.forget_user(uid),
+    )  # fmt: skip
+    request.app.state.mmlabs_identities.forget_user(uid)
+    out: dict[str, Any] = {"ok": True}
+    if failed:
+        out["storageWarnings"] = [f"Storage cleanup failed for {failed} file(s)."]
+    return out

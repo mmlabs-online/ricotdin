@@ -434,13 +434,31 @@ export interface paths {
         post?: never;
         /**
          * Delete User
-         * @description Files first (CLAUDE.md §9c): the account is disabled and signed out, then every owned
-         *     meeting audio and the avatar are deleted from Drive, each in its own step; a failure becomes
-         *     ``storageWarnings`` and the user is still deleted. Rows cascade (meetings, folders, chat,
-         *     quota, …; audit rows keep a NULL actor). Keys that appeared in between (an upload the user
-         *     confirmed just before being disabled) get a second Drive pass after the row delete.
+         * @description Files first, then rows (``services/account.delete_account``); the self / last-admin guards
+         *     are checked at the start of both of its transactions. A Drive failure becomes
+         *     ``storageWarnings`` and the user is still deleted.
          */
         delete: operations["delete_user_admin_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{user_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export User
+         * @description ADM-11: the user's own data as a ZIP (``services/account.export_account``), audited.
+         */
+        get: operations["export_user_admin_users__user_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1040,7 +1058,13 @@ export interface paths {
         get: operations["get_profile_profile_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Own Account
+         * @description ``{confirm: "<username>"}``: deletes the caller's ricotdin account like an admin delete
+         *     (Drive files first, then every row). The mmlabs account stays; signing in again creates a new,
+         *     empty ricotdin account.
+         */
+        delete: operations["delete_own_account_profile_delete"];
         options?: never;
         head?: never;
         /**
@@ -1088,6 +1112,26 @@ export interface paths {
          *     ``PATCH /profile {avatar_key, avatar_file_id, avatar_size}``.
          */
         post: operations["avatar_upload_profile_avatar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profile/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Own Data
+         * @description The caller's own meetings, chats, activity and profile as a ZIP (no audio).
+         */
+        get: operations["export_own_data_profile_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1931,6 +1975,37 @@ export interface operations {
         };
     };
     delete_user_admin_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_user_admin_users__user_id__export_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3156,6 +3231,28 @@ export interface operations {
             };
         };
     };
+    delete_own_account_profile_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     update_profile_profile_patch: {
         parameters: {
             query?: never;
@@ -3218,6 +3315,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    export_own_data_profile_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

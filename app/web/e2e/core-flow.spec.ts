@@ -99,6 +99,16 @@ for (const [lang, t, locale] of [
       await expect(activity.getByText(t.profile.activity.events.chat_message).first()).toBeVisible()
       await expect(activity.getByText(t.profile.activity.events.meeting_created)).toHaveCount(0)
 
+      // PRF-13: download my data (a ZIP) from the same page; the delete dialog asks for the username
+      const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: t.profile.data.export }).click()])
+      expect(download.suggestedFilename()).toMatch(/^ricotdin-export-.+\.zip$/)
+      await page.getByRole('button', { name: t.profile.data.delete }).click()
+      const dialog = page.getByRole('dialog', { name: t.profile.data.deleteTitle })
+      await dialog.getByRole('textbox').fill('not-my-name')
+      await dialog.getByRole('button', { name: t.profile.data.deleteConfirm }).click()
+      await expect(dialog.getByRole('alert')).toHaveText(t.profile.data.confirmMismatch)
+      await dialog.getByRole('button', { name: t.common.cancel }).click()
+
       // PRO-05: search the content from the Meetings page (no accents needed), open the hit
       await page.goto('/meetings')
       await page.getByRole('searchbox', { name: t.meetings.search }).fill('DESIGN partners')
