@@ -31,7 +31,7 @@ Local setup (database, env files, Google Drive connection) is in `app/api/README
 
 ## Release and deploy
 
-Tag `vX.Y.Z` on `release/X.Y` → `release.yml` builds `ricotdin-api` + `ricotdin-web` and opens the
-deployment PR; run the release's migrations on the Mac, then merge it to deploy to
-https://ricotdin.mmlabs.online (the only environment). Details: `CLAUDE.md` §9k, `docs/ops/go-live.md`,
+Push a new branch `release/X.Y.Z` → `release.yml` tags `vX.Y.Z`, builds `ricotdin-api` + `ricotdin-web`,
+opens the deployment PR and merges it, which deploys to https://ricotdin.mmlabs.online (the only
+environment: database dump, migrations, then the containers). Details: `CLAUDE.md` §9k, `docs/ops/go-live.md`,
 `docs/ops/self-hosted-postgres.md`.

@@ -119,50 +119,54 @@ Full detail: `docs/architecture/release-cutover.md` (§0.11); owner runbooks in 
 land on `main`, a bare `gh pr create` targets `main`, and `schedule` workflows run
 from `main`; still pass `--base` explicitly). One trunk since 2026-11-15 (owner decision, `dev` deleted):
 - `main` — the only working branch: every feature / bugfix PR goes into it (and hotfix merge-backs).
-  It may hold unreleased work; what is released is `release/X.Y` and its tags.
-- `release/X.Y` — one branch per minor version line, cut from `main`. Receives **bugfixes
-  only**, never new features. All `vX.Y.Z` tags live here.
+  It may hold unreleased work; what is released is a `release/X.Y.Z` branch and its tag.
+- `release/X.Y.Z` — **one branch per version** (OPS-09, owner decision 2026-11-17). The branch name IS
+  the version: pushing a new one tags `vX.Y.Z` and **deploys it to production**. Never push to it
+  afterwards expecting a release (the tag exists: nothing happens); cut a new `release/X.Y.Z`.
+- `release/X.Y` (`release/2.0`, `release/2.1`) — the lines before OPS-09; they never release again.
 - `release/1.1` — v1, retired (ARC-20): nothing is released from it any more.
   **Never merge `release/1.1` into `main`**: it has v1 at the repo root and would bring
   the deleted v1 code back.
 
-**Versioning:** SemVer. `app/api/pyproject.toml` and `app/web/package.json` `version` MUST both equal
-the tag without the `v`; `release.yml` rejects a tag that does not match, whose major is < 2, or whose
-commit is not on `release/X.Y`.
+**Versioning:** SemVer, from the branch name only: new features or migrations → new minor
+(`release/2.2.0`), bugfixes only → new patch. `release.yml` rejects a name that is not
+`release/X.Y.Z[-pre]` or whose major is < 2. The version files (`app/api/pyproject.toml`,
+`app/web/package.json`) are no longer checked or bumped; the running version is `RICOTDIN_VERSION`
+(`GET /version.json`).
 
-**New minor/major release `X.Y.0`:**
-1. On `main`: the api and web commands in §0 are green.
-2. Bump both version files to `X.Y.0`; add a `## [X.Y.0]` section to `CHANGELOG.md`
-   (features + deploy checklist: new Alembic revisions, new env vars, manual steps + known issues).
-3. Commit `chore(release): vX.Y.0` on a branch, PR into `main` (`gh pr create --base main`), merge after CI is green.
-4. Cut the branch: `git checkout main && git pull && git checkout -b release/X.Y && git push -u origin release/X.Y`.
-5. **The push tags it:** `release.yml` runs on every push to `release/X.Y`, reads the version files
-   and, if tag `v<version>` does not exist yet, creates it (no hand tagging; a push without a version
-   bump releases nothing). A hand-pushed tag `vX.Y.Z` on `release/X.Y` still works.
-   → `release.yml` runs both CI suites, pushes `mingming21400/ricotdin-api:vX.Y.0` and
-   `mingming21400/ricotdin-web:vX.Y.0` (+ `latest` if highest) and opens PR `ricotdin vX.Y.0` on
-   `mmlabs-online/deployment` (see Deploy below). A prerelease tag (`vX.Y.0-rc1`) only pushes images.
-6. The GitHub Release is created by the same run (`github-release.yml`, notes = the `## [X.Y.Z]`
-   section of `CHANGELOG.md`). For a tag released before that, or to redo it: *Actions → GitHub
-   Release → Run workflow* with the tag.
+**Release `X.Y.Z` = push a new branch** (owner only; agents never push `release/*`):
+1. On `main`: the api and web commands in §0 are green; the deployment repo already has whatever the
+   release needs (workflow changes, new `RICOTDIN_*` secrets: the `CHANGELOG.md` deploy checklist),
+   **because the push deploys at once**.
+2. Optional: rename `## [Unreleased]` in `CHANGELOG.md` to `## [X.Y.Z]` in a PR into `main` first; without
+   it the GitHub Release uses GitHub's generated notes.
+3. `git checkout main && git pull && git checkout -b release/X.Y.Z && git push -u origin release/X.Y.Z`.
+4. `release.yml`: tags `vX.Y.Z` → both CI suites → pushes `mingming21400/ricotdin-api:vX.Y.Z` and
+   `mingming21400/ricotdin-web:vX.Y.Z` (+ `latest` if highest) → opens PR `ricotdin vX.Y.Z` on
+   `mmlabs-online/deployment` and **merges it at once** (only for the highest version) → GitHub Release.
+   A prerelease branch (`release/X.Y.Z-rc1`) only pushes images.
+5. The merge starts `deploy-ricotdin-v2` on the deployment repo (see Deploy below); watch it there.
 
-**Hotfix `X.Y.(Z+1)`:**
-1. Branch from `release/X.Y` (e.g. `hotfix/BUG-NNN-<topic>`), fix + test, bump both versions, add CHANGELOG entry.
-2. PR into `release/X.Y`; the merge (a push to `release/X.Y` with the bumped version) tags `vX.Y.(Z+1)` and releases it.
-3. Merge `release/X.Y` back into `main` so the fix is not lost in the next release
-   (X ≥ 2 only — never `release/1.1`, see above). `latest` only moves when the pushed tag is the
-   highest version, so a hotfix on an old line never drags `latest` backwards.
+**Hotfix `X.Y.(Z+1)`** (bug in production while `main` holds unreleased work; otherwise fix on `main`
+and release a new version):
+1. Branch `hotfix/BUG-NNN-<topic>` from `release/X.Y.Z` (the version in production), fix + test,
+   CHANGELOG entry; PR into `release/X.Y.Z` (merging it releases nothing: the tag exists).
+2. After the merge: `git checkout release/X.Y.Z && git pull && git checkout -b release/X.Y.(Z+1) &&
+   git push -u origin release/X.Y.(Z+1)` → tags, builds and deploys it.
+3. Merge `release/X.Y.(Z+1)` back into `main` (a PR) so the fix is not lost. A hotfix on an older
+   line than the highest tag is built and gets a deployment PR, but it is **never merged
+   automatically** (that would roll production back); `latest` never moves backwards.
 
-**Deploy = merge the deployment PR (OPS-04):** the PR writes ONLY `apps/ricotdin-v2/release.env`
+**Deploy (OPS-04, automatic since OPS-09):** the deployment PR writes ONLY `apps/ricotdin-v2/release.env`
 (`RICOTDIN_API_IMAGE`, `RICOTDIN_WEB_IMAGE`, both `:tag@digest`, + `RICOTDIN_VERSION`); runtime
 secrets are `RICOTDIN_*` repository secrets of the deployment repo, written to the server env files by
 each deploy, never committed anywhere. The secret `DEPLOY_REPO_TOKEN` is a
-fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW). The version is
-served by public `GET /version.json`; `GET /health` backs the image `HEALTHCHECK`. Never deploy
-`main` or `latest`. The deploy itself dumps the database and runs that release's `alembic upgrade head`
-before replacing any container (`docs/ops/self-hosted-postgres.md`).
-Rollback = a deployment PR pinning the previous release's digests (only safe if no destructive
-migration ran in between).
+fine-grained PAT on `mmlabs-online/deployment` only (Contents + Pull requests RW: enough to open and
+merge the PR). The version is served by public `GET /version.json`; `GET /health` backs the image
+`HEALTHCHECK`. Never deploy `main` or `latest`. The deploy itself dumps the database and runs that
+release's `alembic upgrade head` before replacing any container (`docs/ops/self-hosted-postgres.md`).
+Rollback = a deployment PR pinning the previous release's digests, merged by hand (only safe if no
+destructive migration ran in between).
 
 ## 9l. Traceability (feature / bug ↔ branch ↔ commit ↔ PR)
 
@@ -172,10 +176,10 @@ the `/add-feature`, `/ship-feature` and `/fix-bug` skills apply it automatically
 
 | Artifact | Convention |
 |---|---|
-| Branch | `feat/<CODE>-<slug>` · `fix/BUG-NNN-<slug>` (from `main`) · `hotfix/BUG-NNN-<slug>` (from `release/X.Y`) · `docs/<CODE>-<slug>` |
+| Branch | `feat/<CODE>-<slug>` · `fix/BUG-NNN-<slug>` (from `main`) · `hotfix/BUG-NNN-<slug>` (from `release/X.Y.Z` in production) · `docs/<CODE>-<slug>` |
 | Commit | Conventional Commits with the code at the end: `feat(rag): folder export (RAG-05)`, `fix(quota): no double charge (BUG-004)` |
 | PR title | `[<CODE>] <summary>`; body from `.github/pull_request_template.md` |
-| Release PR | `chore(release): vX.Y.Z`; body lists every code included (command below) |
+| Release | branch `release/X.Y.Z` (the push tags and deploys it, §9k); optional CHANGELOG PR `chore(release): vX.Y.Z` renaming `[Unreleased]` |
 | CHANGELOG | each bullet ends with its code(s): `- … (PRO-09)` |
 | Back-link | after a PR is opened, add `PR #N` to the Note cell in `tracking.md` / the Link cell in `bugs.md` |
 
@@ -183,7 +187,7 @@ Look-ups:
 ```
 git log --oneline --grep 'PRO-09'                         # commits for a code
 gh pr list --state all --search 'PRO-09 in:title'          # PRs for a code
-git log $(git describe --tags --abbrev=0 origin/main)..origin/main --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes in the next release
+git log $(git tag -l 'v*' --sort=-v:refname | head -1)..origin/main --format=%s | grep -oE '\b[A-Z]+-[0-9]+\b' | sort -u   # codes in the next release
 ```
 
 ## 10. Working agreement (how to collaborate with me)

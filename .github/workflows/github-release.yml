@@ -1,7 +1,7 @@
 name: GitHub Release
 
 # The GitHub Release for a version tag, with the notes taken from that version's `## [X.Y.Z]`
-# section of CHANGELOG.md (CLAUDE.md §9k step 6).
+# section of CHANGELOG.md, or GitHub's generated notes when there is none (OPS-09).
 #   - called by release.yml once the images are pushed;
 #   - or by hand (Actions → GitHub Release → Run workflow, tag vX.Y.Z), e.g. for a tag released
 #     before this workflow existed.
@@ -57,10 +57,13 @@ jobs:
           # meta-characters in the version).
           awk -v h="## [$VERSION]" 'index($0, h) == 1 {f = 1; next} /^## \[/ {f = 0} f' \
             CHANGELOG.md > notes.md
+          NOTES=(--notes-file notes.md)
           if ! grep -q '[^[:space:]]' notes.md; then
             case "$TAG" in
               *-*) echo "Prerelease $TAG." > notes.md ;;
-              *) echo "::error::CHANGELOG.md has no '## [$VERSION]' section"; exit 1 ;;
+              # OPS-09: releases come from a branch name, nobody renames [Unreleased] any more.
+              *) echo "::notice::CHANGELOG.md has no '## [$VERSION]' section: GitHub's generated notes."
+                 NOTES=(--generate-notes) ;;
             esac
           fi
           FLAGS=(--latest=false)
@@ -72,4 +75,4 @@ jobs:
               ;;
           esac
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" \
-            --notes-file notes.md "${FLAGS[@]}"
+            "${NOTES[@]}" "${FLAGS[@]}"

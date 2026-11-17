@@ -13,6 +13,8 @@
 - Đặt tên người nói: trong tab Bản ghi lời, chủ cuộc họp và người chỉnh sửa đặt tên thật cho Speaker 1, Speaker 2… (có gợi ý các tên đã dùng); tên hiện trong bản ghi lời, file tải về, câu trả lời chat và tóm tắt ở lần tạo lại. Chép lại bản ghi lời sẽ xóa tên cũ (PRO-04).
 - Dữ liệu của bạn: tải toàn bộ dữ liệu của mình (file ZIP gồm cuộc họp dạng Markdown + JSON, chat, nhật ký hoạt động, hồ sơ; không gồm audio) và tự xóa tài khoản Ricotdin (nhập tên người dùng để xác nhận; tài khoản mmlabs vẫn giữ, đăng nhập lại tạo tài khoản mới trống, không được tặng lại quota). Admin xuất được dữ liệu của một người dùng (PRF-13, ADM-11).
 
+- Phát hành bằng tên nhánh: push nhánh mới `release/X.Y.Z` là tự tạo tag `vX.Y.Z`, build image và tự merge PR deployment (tức là deploy luôn); không cần bump version hay tag tay. Bản hotfix cho dòng cũ hơn bản mới nhất chỉ mở PR, không tự deploy (OPS-09).
+
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
 - Web env: `RICOTDIN_AUTH_URL=https://api.mmlabs.online` và secret mới `RICOTDIN_TURNSTILE_SITE_KEY` (site key của widget Turnstile mà org-admin-api dùng, widget phải có hostname `ricotdin.mmlabs.online`). Cập nhật `deploy-ricotdin-v2.yml` trên repo deployment.
