@@ -1275,6 +1275,21 @@
         "gone": "Phiên bản này không còn trong lịch sử.",
         "failed": "Đã có lỗi xảy ra. Hãy thử lại."
       }
+    },
+    "speakers": {
+      "body": "Đặt tên cho các giọng trong bản ghi. Tên hiện trong bản ghi lời, file tải về, câu trả lời chat, và trong tóm tắt ở lần tạo lại tiếp theo.",
+      "readOnly": "Tên do chủ cuộc họp hoặc người chỉnh sửa đặt.",
+      "nameFor": "Tên cho {{label}}",
+      "placeholder": "vd. Lan",
+      "save": "Lưu tên",
+      "saving": "Đang lưu…",
+      "saved": "Đã lưu tên người nói.",
+      "unchanged": "Không có thay đổi để lưu.",
+      "tooLong": "Tên dài tối đa 60 ký tự.",
+      "invisible": "Tên không được chứa ký tự vô hình hoặc ký tự đổi hướng chữ.",
+      "failed": "Không lưu được tên. Vui lòng thử lại.",
+      "none": "Chưa đặt tên",
+      "titleCount": "Người nói ({{count}})"
     }
   },
   "chat": {

@@ -25,6 +25,7 @@ import { useDeleteMeeting, useFolders, type Meeting } from '../api/meetings'
 import { AudioPlayer, type AudioPlayerHandle } from '../components/AudioPlayer'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { CalendarPanel, NotesPanel, SummaryPanel, TodosPanel, TranscriptPanel } from '../components/meeting/DetailPanels'
+import { SpeakerNames } from '../components/meeting/SpeakerNames'
 import { MeetingChat } from '../components/meeting/MeetingChat'
 import { DeleteMeetingDialog } from '../components/meetings/DeleteMeetingDialog'
 import { MoveDialog } from '../components/meetings/MoveDialog'
@@ -54,6 +55,7 @@ import {
 } from '../lib/meetings/detail'
 import { durationParts, statusKind } from '../lib/meetings/list'
 import { tabFromSearch } from '../lib/search/search'
+import { applySpeakerNames, speakerLabels } from '../lib/meetings/speakers'
 import { displayText } from '../lib/text'
 import { buildTranscript, transcriptFilename, transcriptMime, type TranscriptFormat, type TranscriptSegment } from '../lib/transcript/export'
 
@@ -127,7 +129,10 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   const suggestions = useSuggestions(id, done)
   const audioUrl = useAudioUrl(id, wantAudio)
   const src = audioUrl.isSuccess ? mediaSrc(apiUrl, audioUrl.data.url) : null
-  const segments = useMemo(() => transcript.data ?? [], [transcript.data])
+  const rawSegments = useMemo(() => transcript.data ?? [], [transcript.data])
+  // PRO-04: everything shown or downloaded uses the names people gave the speakers
+  const segments = useMemo(() => applySpeakerNames(rawSegments, meeting.speaker_names), [rawSegments, meeting.speaker_names])
+  const labels = useMemo(() => speakerLabels(rawSegments), [rawSegments])
 
   const todoStatus = useTodoStatus(id)
   const dismiss = useDismissSuggestion(id)
@@ -478,6 +483,14 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
                   onDismiss={dismissSuggestion}
                   onIcs={ics}
                   onSource={(ms) => seek(ms, true)}
+                />
+              )}
+              {tab === 'transcript' && state3(transcript) === 'success' && (
+                <SpeakerNames
+                  meetingId={meeting.id}
+                  labels={labels}
+                  names={meeting.speaker_names ?? {}}
+                  canEdit={canEdit}
                 />
               )}
               {tab === 'transcript' && (
