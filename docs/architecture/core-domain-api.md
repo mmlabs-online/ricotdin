@@ -106,7 +106,9 @@
   request of that mmlabs account refuse a token issued at or before the delete (401
   `account_deleted`) and create a newer one's account **without** the signup quota grant.
   A stuck delete shows as `user.delete_self_started` without `user.delete_self` (the account is
-  disabled): finish it with the admin delete.
+  disabled): finish it with the admin delete. Admin exports share the 3 / hour bucket with the admin's own
+  export (keyed on the admin id). Exported chats are the user's own sessions, including those on
+  meetings shared with them.
 - **Speaker names (PRO-04, migration `0014` = `meetings.speaker_names jsonb` label → name):**
   `PATCH /meetings/{id}/speakers {names: {label: name|null}}` — owner / editor
   (`meeting_facts(lock=True)`; no role → 404, viewer → 403), written as `ricotdin_service`; 30 / min
