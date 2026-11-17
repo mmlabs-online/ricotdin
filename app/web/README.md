@@ -20,16 +20,17 @@ and give the ricotdin API `WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173`
 Production mmlabs Identity only accepts `https://ricotdin.mmlabs.online`, so the sign-in form cannot
 run on localhost. Instead the dev server adds a real token on the Node side:
 
-**Against production, one command** (owner only; guardrails and the one-time setup of the pg tunnel and
-`~/.config/ricotdin/prod-tunnel.env`: `docs/ops/self-hosted-postgres.md`, *Local dev against production*):
+**Against production, one command** (owner only, same flow as tudocuatui; pg tunnel and guardrails:
+`docs/ops/self-hosted-postgres.md`, *Local dev against production*):
 
 ```bash
-scripts/start-dev.sh               # tunnel → dev token if needed → API on 127.0.0.1:8000 → npm run dev
-scripts/start-dev.sh --with-key    # + KEY_ENCRYPTION_SECRET (prod-key.env) for provider keys / Drive
+scripts/start-dev.sh               # 1 sign in → 2 pg tunnel → 3 three DB passwords + API on 127.0.0.1:8000 → 4 npm run dev
+scripts/start-dev.sh --with-key    # + asks for KEY_ENCRYPTION_SECRET, for provider keys / Drive
 ```
 
-It runs only the API (never the worker, migrations or tests), refuses the owner `DATABASE_URL`, a login
-not on `127.0.0.1:15432`, or a secrets file that is not mode 600 / is inside the repo. Ctrl-C stops both.
+Passwords are typed (`read -s`) every run and reach only the API process; nothing is stored. It runs only
+the API (never the worker, migrations or tests), with the runtime logins through `127.0.0.1:15432` only.
+Ctrl-C stops both.
 
 **By hand** (e.g. the API on a local DB):
 
