@@ -21,6 +21,8 @@ export interface Meeting extends MeetingRow {
   started_at: string | null
   generation_provider: string | null
   generation_model: string | null
+  /** PRO-04: transcript label → the name people gave it */
+  speaker_names?: Record<string, string>
   updated_at: string
 }
 

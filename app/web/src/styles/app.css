@@ -473,3 +473,17 @@ ul.search-results { list-style: none; margin: 8px 0 0; padding: 0; display: grid
 .search-hit-related { color: var(--muted); font-weight: 500; }
 .search-hit-text { font-size: 14px; overflow-wrap: anywhere; }
 .search-hit mark { background: var(--primary-soft); color: inherit; border-radius: 2px; padding: 0 1px; font-weight: 600; }
+
+/* PRO-04: speaker names */
+.speaker-names { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 14px; margin: 0 0 14px; background: var(--surface); }
+.speaker-names > summary { cursor: pointer; font-weight: 600; font-size: 14px; min-height: 32px; line-height: 32px; color: var(--primary); }
+ul.speaker-fields { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+.speaker-fields li, .speaker-fields > div { display: grid; grid-template-columns: minmax(70px, 140px) minmax(0, 1fr); gap: 10px; align-items: center; }
+.speaker-fields label, .speaker-fields dt { font-size: 13px; color: var(--muted); }
+.speaker-fields input { min-height: 40px; width: 100%; min-width: 0; max-width: 320px; box-sizing: border-box; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 0 10px; }
+dl.speaker-fields { display: grid; gap: 6px; margin: 8px 0; }
+.speaker-fields dd { margin: 0; font-size: 14px; }
+.speaker-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.speaker-actions .form-note { margin: 0; }
+.speaker-actions .button { min-height: 44px; }
+@media (max-width: 480px) { .speaker-fields li, .speaker-fields > div { grid-template-columns: 1fr; gap: 4px; } .speaker-fields input { max-width: none; } }

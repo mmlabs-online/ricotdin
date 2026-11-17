@@ -85,6 +85,9 @@
     segments (and old chunks), `meetings.language`, `usage_log` (`audio_seconds`, `key_id` only if
     the admin key still exists) → `analyse`. A re-run with `transcription_settled` skips to
     `analyse`. Language-detect rejection (first time) → re-download, transcode, resubmit `en`.
+    Replacing the segments also clears `meetings.speaker_names` (PRO-04: a new diarization numbers
+    the voices afresh; migration `0014` grants the worker UPDATE on that column). `analyse` applies
+    the names to the segment speakers it sends to the AI.
 - **AI layer (08c, `app/services/ai/`; also used by the API's `regenerate`):**
   - `catalog.py` = providers (`name`, `kind`, `base_url`) + models (the only model list;
     `domain/models.REGISTERED` derives from it). **Adding a provider:** OpenAI-compatible (DeepSeek,

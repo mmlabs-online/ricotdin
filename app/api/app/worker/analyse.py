@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core.logging import get_logger
+from app.domain.speakers import apply_name, clean_names
 from app.services.ai.analysis import (
     ANALYSIS_SCHEMA,
     SegmentText,
@@ -46,7 +47,7 @@ async def run_analyse(ctx: StepContext) -> Outcome:
                 await conn.execute(
                     text(
                         "SELECT id, user_id, status, started_at, generation_provider, "
-                        "generation_model FROM meetings WHERE id = :m"
+                        "generation_model, speaker_names FROM meetings WHERE id = :m"
                     ),
                     {"m": job.meeting_id},
                 )
@@ -69,7 +70,8 @@ async def run_analyse(ctx: StepContext) -> Outcome:
         if not rows:
             raise PipelineError(GENERIC_FAILURE, detail="analyse: the meeting has no transcript")
         provider, model = await lock_model(conn, dict(meeting), job.payload)
-    segments = [SegmentText(r.speaker, r.start_ms, r.text) for r in rows]
+    names = clean_names(meeting["speaker_names"])  # PRO-04: a reprocess keeps the names
+    segments = [SegmentText(apply_name(r.speaker, names), r.start_ms, r.text) for r in rows]
     started = meeting["started_at"]
     meeting_date = started.isoformat() if started is not None else None
     try:

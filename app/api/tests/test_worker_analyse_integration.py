@@ -289,3 +289,14 @@ def test_rate_limited_keys_requeue_analyse_without_an_attempt(world: dict[str, A
         "analyse", "queued", 0, True,
     )  # fmt: skip
     assert _meeting(world, case)[0] == "processing"
+
+
+def test_analyse_sends_the_speaker_names(world: dict[str, Any]) -> None:
+    # PRO-04: names given since the last transcription reach the AI (e.g. a reprocess of analysis)
+    case = _analysing(world)
+    _sql(world["db"], "UPDATE meetings SET speaker_names = '{\"Speaker 1\": \"Lan\"}' "
+         "WHERE id = %s", case.meeting)  # fmt: skip
+    ai, seen = ai_with(lambda r: gemini(ANSWER))
+    assert _once(world, ai)
+    sent = json.dumps(seen[0], ensure_ascii=False)
+    assert "Lan (0.0s): line 0" in sent and "] Speaker 1 (0.0s)" not in sent

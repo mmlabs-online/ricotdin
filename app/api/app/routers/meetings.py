@@ -39,6 +39,7 @@ from app.domain.activity import deleted_meeting_metadata
 from app.domain.content import edited_by_person
 from app.domain.models import regenerate_charge_seconds
 from app.domain.rules import can_reprocess, parse_meeting_patch, parse_uuid
+from app.domain.speakers import apply_name, clean_names
 from app.domain.uploads import (
     MAX_UPLOAD_BYTES,
     audio_key,
@@ -55,6 +56,7 @@ from app.routers._common import (
     enforce_limit,
     json_body,
     json_object,
+    jsonb,
     path_id,
 )
 from app.services.access import folder_assignable, meeting_facts
@@ -134,7 +136,10 @@ async def get_meeting(meeting_id: str, identity: Identity, db: Db) -> dict[str, 
     async with db.app_transaction(identity) as conn:
         row = (
             await conn.execute(
-                text(f"SELECT {MEETING_COLUMNS} FROM public.meetings WHERE id = :id"),  # noqa: S608
+                text(
+                    f"SELECT {MEETING_COLUMNS}, speaker_names "  # noqa: S608 - fixed column list
+                    "FROM public.meetings WHERE id = :id"
+                ),
                 {"id": mid},
             )
         ).first()
@@ -382,7 +387,7 @@ async def _checked_regenerate(
                 await conn.execute(
                     text(
                         "SELECT id, user_id, status, started_at, duration_seconds, "
-                        "generation_provider, generation_model FROM public.meetings "
+                        "generation_provider, generation_model, speaker_names FROM public.meetings "
                         "WHERE id = :id FOR UPDATE"
                     ),
                     {"id": mid},
@@ -462,7 +467,8 @@ async def _regenerate(
     db: Database, request: Request, mid: uuid.UUID, meeting: Any, rows: Any, provider: str,
     model: str,
 ) -> dict[str, Any]:  # fmt: skip
-    segments = [SegmentText(r.speaker, r.start_ms, r.text) for r in rows]
+    names = clean_names(jsonb(meeting["speaker_names"]))  # PRO-04: the AI sees the real names
+    segments = [SegmentText(apply_name(r.speaker, names), r.start_ms, r.text) for r in rows]
     started = meeting["started_at"]
     meeting_date = started.isoformat() if started is not None else None
     ai: AIService = request.app.state.ai

@@ -30,6 +30,7 @@ from app.routers import meetings as meetings_router
 from app.routers import note_versions as note_versions_router
 from app.routers import profile as profile_router
 from app.routers import search as search_router
+from app.routers import speakers as speakers_router
 from app.routers.admin import config as admin_config_router
 from app.routers.admin import ops as admin_ops_router
 from app.routers.admin import users as admin_users_router
@@ -122,7 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     for module in (
         meetings_router, note_versions_router, content_router, folders_router, activity_router,
-        chat_router, search_router,
+        chat_router, search_router, speakers_router,
         admin_users_router, admin_ops_router, admin_config_router,
     ):  # fmt: skip
         app.include_router(module.router)

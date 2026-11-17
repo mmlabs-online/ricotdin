@@ -317,3 +317,29 @@ export function useRestoreVersion(meetingId: string) {
     },
   })
 }
+
+/** PRO-04: names already used in meetings the caller can see (for the name fields). */
+export function useSpeakerSuggestions(enabled: boolean) {
+  const fetchApi = useFetchApi()
+  return useQuery({
+    queryKey: ['speakers', 'suggestions'] as const,
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: async () => (await apiJson<{ names: string[] }>(fetchApi, '/speakers/suggestions')).names,
+  })
+}
+
+/** PRO-04: set / clear speaker names (owner or editor); the meeting shows them at once. */
+export function useSpeakerNames(meetingId: string) {
+  const fetchApi = useFetchApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationKey: [...DETAIL_EDIT, 'speakers'],
+    mutationFn: (names: Record<string, string | null>) =>
+      apiJson<{ speakerNames: Record<string, string> }>(fetchApi, `/meetings/${enc(meetingId)}/speakers`, { method: 'PATCH', body: { names } }),
+    onSuccess: (r) => {
+      qc.setQueryData<Meeting>(detailKeys.meeting(meetingId), (m) => (m ? { ...m, speaker_names: r.speakerNames } : m))
+      void qc.invalidateQueries({ queryKey: ['speakers', 'suggestions'] })
+    },
+  })
+}

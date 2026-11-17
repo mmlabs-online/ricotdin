@@ -92,6 +92,17 @@
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
 - `POST /activity`: 10 per user per minute (in-process, `app.state.activity_limiter`); the insert is
   best effort and `meetingId` is stored only for a meeting the caller can see (else NULL).
+- **Speaker names (PRO-04, migration `0014` = `meetings.speaker_names jsonb` label → name):**
+  `PATCH /meetings/{id}/speakers {names: {label: name|null}}` — owner / editor
+  (`meeting_facts(lock=True)`; no role → 404, viewer → 403), written as `ricotdin_service`; 30 / min
+  (`content_limiter`), body ≤ 8 KiB. A name is set only for a label the meeting's segments have,
+  1–60 chars after collapsing spaces, no invisible characters, no `[]<>`, not another label;
+  `null` clears (also a stored label the transcript no longer has). `GET /meetings/{id}` returns
+  `speaker_names` (the list does not). `GET /speakers/suggestions`: names in the newest 500 named
+  meetings the caller can see (RLS), most used first, ≤ 50. Labels in the segments are never
+  rewritten; names are applied on display / export (web), in chat excerpts and in the analysis
+  prompt. A new transcription clears the map (the worker may update that one column): the
+  diarizer numbers voices afresh. Names copied into summaries / chat answers stay with them.
 - **Library search (PRO-05, migration `0013` = function `ricotdin_fold`):** `GET /search?q&folderId`
   (`routers/search.py`, pure parts `domain/search.py`). `q` 2–200 chars, terms of ≥ 2 chars, at
   most 8; 30 searches / user / min. Everything runs as `ricotdin_app`, so RLS keeps segments,

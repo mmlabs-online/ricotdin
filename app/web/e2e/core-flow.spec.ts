@@ -43,6 +43,13 @@ for (const [lang, t, locale] of [
       await page.getByRole('tab', { name: t.detail.tabs.transcript }).click()
       await expect(page.getByRole('tabpanel')).toContainText('onboarding copy')
 
+      // PRO-04: name a speaker; the transcript shows the name at once
+      await page.locator('.speaker-names > summary').click()
+      await page.getByLabel(`${t.detail.speakers.namePrefix} Maya`).fill('Maya Tran')
+      await page.getByRole('button', { name: t.detail.speakers.save }).click()
+      await expect(page.locator('.speaker-names')).toContainText(t.detail.speakers.saved)
+      await expect(page.locator('.transcript-row strong.speaker', { hasText: 'Maya Tran' })).toBeVisible()
+
       // ask about this meeting; the citation seeks the transcript
       await page.getByLabel(t.detail.chat.inputLabel).fill(lang === 'vi' ? 'Bản beta có bao nhiêu đối tác?' : 'How many partners in the beta?')
       await page.getByLabel(t.detail.chat.inputLabel).press('Enter')

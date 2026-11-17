@@ -86,28 +86,52 @@ As a user, I want reminders when a to-do is due via email/push so I don't forget
 ---
 
 ### PRO-04 — Speaker naming
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want to set real speaker names instead of "Speaker 1" and remember them across meetings.
 
+**Context**
+Re-specced 2026-11-17 (owner Q&A). Speechmatics labels speakers per recording (S1, S2…), so "Speaker 1" is not the same person across meetings. Chosen: names per meeting, and "remember" = the name field suggests names the user already used (no guessing who is who). Names show in the transcript, exports, chat and the next summary regeneration. Owner + editor can name; viewers see. Rejected: voice identification (biometric, its own ticket), names per meeting only without suggestions.
+
 **Use Cases**
-1. Meeting detail transcript shows "Speaker 1", "Speaker 2", etc.
-2. User clicks a speaker label → inline edit → types real name.
-3. `PATCH /api/meetings/:id/speakers` saves the mapping.
-4. Optionally: system learns and auto-applies the mapping across future meetings from the same context.
-5. Transcript display replaces generic labels with real names everywhere.
+1. In the Transcript tab a "Speakers" panel lists Speaker 1, Speaker 2… with a name field each.
+2. Typing a name offers names used before (most used first); saving updates the transcript at once.
+3. Exports (TXT/MD/SRT) and chat answers / citations use the names; "Regenerate summary" afterwards uses them too.
 
 **Frontend**
-- Inline speaker label editor in the transcript.
-- Speaker legend panel (list of all speakers in this meeting with name fields).
-- Real names reflected immediately in transcript display.
+- `SpeakerNames` panel in the Transcript tab (owner/editor: inputs + save; viewer: read only), `<datalist>` suggestions.
+- Pure `lib/meetings/speakers.ts`: `speakerLabels(segments)`, `applySpeakerNames(segments, names)`, `namesPatch(before, draft, touched)`, `speakerNameProblem(name, label, labels)`. EN + VI.
 
 **Backend**
-- `speaker_mappings` table: `id, meeting_id, speaker_label, display_name, user_id`.
-- API to CRUD speaker mappings.
-- Transcript view joins speaker_mappings when rendering.
-- Depends on: PRP-03 (diarization).
+- Migration `0014_speaker_names`: `meetings.speaker_names jsonb NOT NULL DEFAULT '{}'` (label → name).
+- `PATCH /meetings/{id}/speakers {names: {"Speaker 1": "Lan", "Speaker 2": null}}`: owner or editor (`can_access_meeting(…, 'editor')`), executed as `ricotdin_service`; labels must exist in the meeting's segments; names 1–60 chars, no invisible characters (SEC-05), no `[]<>`, not another label; `null` clears (also a stored label the transcript no longer has); 30 / min, body ≤ 8 KiB; returns the full map. A new transcription clears the names (review: the diarizer numbers voices afresh).
+- `GET /meetings/{id}` includes `speaker_names`.
+- `GET /speakers/suggestions`: names in `speaker_names` of meetings the caller can see (RLS), most used first, ≤ 50.
+- Chat: retrieved chunk text `[Speaker 1]` → `[Lan]` before the prompt and in citations. Regenerate (API) and analyse (worker) use the names for segment speakers.
+- Pure: `app/api/app/domain/speakers.py` → `parse_speaker_patch()`, `apply_name()`, `rename_chunk()`, `rank_suggestions()`.
+
+**Acceptance Criteria**
+- Given an editor names Speaker 1 "Lan", then everyone who can see the meeting sees "Lan" in the transcript; a viewer's or stranger's PATCH → 403 / 404.
+- Given a label not in the meeting, an empty / > 60 char / invisible-character / bracketed name, or a name equal to another label → 400.
+- Given names, then TXT/MD/SRT exports and chat answers / citations show them; a later regenerate sends them to the AI.
+- Given suggestions, then only names from meetings the caller can see are returned, most used first.
+
+**Test Plan**
+- Pure: `app/api/tests/test_speakers.py`; web `app/web/src/lib/meetings/speakers.test.ts`.
+- Integration: `app/api/tests/test_speakers_integration.py` — owner/editor/viewer/stranger, validation, detail includes names, suggestions under RLS, chat chunk rename.
+
+**Structural flags**
+- Migration 0014 (one column), 2 new routes; ~15 files.
+
+**Done check**
+- api + web commands of §0 green; on production, name a speaker and see it in the transcript, an export and a chat answer.
+
+**Out of scope**
+- Voice identification; applying names to other meetings automatically; regenerating existing summaries automatically.
+
+**Key files (expected)**
+- `app/api/app/domain/speakers.py`, `app/api/app/routers/meetings.py`, `app/api/app/routers/chat.py`, `app/api/app/worker/analyse.py`, `app/api/migrations/`, `app/web/src/components/meeting/DetailPanels.tsx`, `app/web/src/lib/meetings/speakers.ts`, `app/web/src/lib/transcript/export.ts`, i18n.
 
 ---
 
