@@ -91,6 +91,16 @@ for (const [lang, t, locale] of [
       await activity.getByLabel(t.profile.activity.filter).selectOption('chat_message')
       await expect(activity.getByText(t.profile.activity.events.chat_message).first()).toBeVisible()
       await expect(activity.getByText(t.profile.activity.events.meeting_created)).toHaveCount(0)
+
+      // PRO-05: search the content from the Meetings page (no accents needed), open the hit
+      await page.goto('/meetings')
+      await page.getByRole('searchbox', { name: t.meetings.search }).fill('DESIGN partners')
+      await page.getByRole('link', { name: t.meetings.searchContent }).click()
+      await expect(page).toHaveURL(/\/search\?q=DESIGN\+partners/)
+      const hit = page.locator('.search-hit').first()
+      await expect(hit.locator('mark').first()).toBeVisible()
+      await hit.click()
+      await expect(page).toHaveURL(/\/meetings\/[0-9a-f-]+/)
     })
   })
 }

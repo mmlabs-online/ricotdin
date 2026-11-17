@@ -29,6 +29,7 @@ from app.routers import media as media_router
 from app.routers import meetings as meetings_router
 from app.routers import note_versions as note_versions_router
 from app.routers import profile as profile_router
+from app.routers import search as search_router
 from app.routers.admin import config as admin_config_router
 from app.routers.admin import ops as admin_ops_router
 from app.routers.admin import users as admin_users_router
@@ -105,6 +106,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.process_limiter = meetings_router.process_limiter()
     app.state.regenerate_limiter = meetings_router.regenerate_limiter()
     app.state.chat_limiter = chat_router.chat_limiter()
+    app.state.search_limiter = search_router.search_limiter()
+    app.state.semantic_limiter = search_router.semantic_limiter()
     app.state.content_limiter = note_versions_router.content_limiter()
     app.state.key_check_limiter = admin_config_router.key_check_limiter()
     app.state.regenerating = set()  # meeting ids with a regenerate in flight (this process)
@@ -119,7 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     for module in (
         meetings_router, note_versions_router, content_router, folders_router, activity_router,
-        chat_router,
+        chat_router, search_router,
         admin_users_router, admin_ops_router, admin_config_router,
     ):  # fmt: skip
         app.include_router(module.router)

@@ -92,6 +92,20 @@
   gemini only). Bodies are read with `routers/_common.json_object` (bad JSON / non-object → 400).
 - `POST /activity`: 10 per user per minute (in-process, `app.state.activity_limiter`); the insert is
   best effort and `meetingId` is stored only for a meeting the caller can see (else NULL).
+- **Library search (PRO-05, migration `0013` = function `ricotdin_fold`):** `GET /search?q&folderId`
+  (`routers/search.py`, pure parts `domain/search.py`). `q` 2–200 chars, terms of ≥ 2 chars, at
+  most 8; 30 searches / user / min. Everything runs as `ricotdin_app`, so RLS keeps segments,
+  summaries, notes and chunks to meetings the caller can see; a foreign `folderId` finds nothing.
+  Keyword: every term `LIKE` (escaped) on `ricotdin_fold(text)` = Python `fold()` (NFC, the same
+  `translate` table for Vietnamese / Latin accents, `lower()`; a test pins the table; outside it
+  both sides rely on `lower()`, which matches Python on the UTF-8 locale of our Postgres image),
+  folded once per row, at most 5 segments per meeting, 200 segment + 50 meeting candidates, no
+  index yet (`pg_trgm` on the IMMUTABLE function when data grows). Semantic: the query embedded
+  once (`embed-query`, no quota charge) → `match_transcript_chunks` (similarity ≥ 0.5, top 8),
+  limited to 10 / min and 300 / day per user (shared key pool); over the limit or on any failure
+  the response has keyword results only and `semanticAvailable: false`. `fuse()`:
+  reciprocal-rank fusion (k 60), a chunk boosts every overlapping keyword segment, ties keep
+  newest meeting first, ≤ 20 meetings × 5 items. Excerpt ranges are UTF-16 code units (JS).
 - **Own activity feed (PRF-09, migration `0012` = index `activity_log_target_created`):**
   `GET /profile/activity?eventType&page&perPage` (20 by default, ≤ 50; ASCII digits only; unknown
   type → 400), newest first, as `ricotdin_service` with the filter in code (`activity_log` is

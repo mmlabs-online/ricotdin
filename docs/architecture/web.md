@@ -162,7 +162,13 @@
   session (the next POST creates one). Messages render through the shared
   `components/chat/ChatMessages.tsx` (also the meeting chat). `/profile` = `ProfilePage`
   (`src/api/profile.ts`). **Password:** a link to the mmlabs forgot-password flow (AUT-05; ricotdin's
-  change-password route was removed in AUT-06). **Activity (PRF-09):** last section of the page,
+  change-password route was removed in AUT-06). **Search (PRO-05):** `/search` = `SearchPage`
+  (`src/api/search.ts`, `lib/search/search.ts`), `?q=&folder=` in the URL, one always-rendered
+  status line (searching / count / empty / error), previous results dimmed while a new query
+  loads, `<mark>` from server ranges (cleaned per part), transcript hits → `?t=<s>`, summary / notes
+  hits → `?tab=summary|notes` (read by `MeetingDetailPage`). The Meetings toolbar links to it with
+  the typed text and folder; the empty title-filter state offers it too; the Meetings nav item
+  stays active on `/search`. **Activity (PRF-09):** last section of the page,
   `useOwnActivity` (infinite query over `GET /profile/activity`, keeps the old rows while a new
   filter loads, rows de-duplicated by id), one sentence per row from the caller's side
   (`lib/profile/activity.ts` `activityKey`), device from the user agent (`deviceLabel`). The "all meetings" chat session is stored as `{u: userId, s: sessionId}` and

@@ -23,6 +23,7 @@ import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
 import { getMeetingRole } from '../lib/access/roles'
 import { filterMeetings, type FolderFilter } from '../lib/meetings/list'
+import { searchHref } from '../lib/search/search'
 import { displayText, isInvisibleCharactersError } from '../lib/text'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
@@ -160,6 +161,10 @@ export function MeetingsPage() {
             aria-label={t('meetings.search')}
           />
         </label>
+        {/* PRO-05: the box filters titles; this searches transcripts, summaries and notes */}
+        <Link className="button button-ghost search-content-link" to={searchHref(search, activeFolder === 'all' || activeFolder === 'none' ? '' : activeFolder)}>
+          <Search size={16} aria-hidden="true" /> {t('meetings.searchContent')}
+        </Link>
         <div className="folder-pills" role="group" aria-label={t('meetings.folders.filter')}>
           {[
             { id: 'all', name: t('meetings.folders.all'), shared: false },
@@ -206,9 +211,16 @@ export function MeetingsPage() {
                 </div>
                 <h2>{(meetings.data ?? []).length === 0 ? t('meetings.empty.first') : t('meetings.empty.title')}</h2>
                 <p>{(meetings.data ?? []).length === 0 ? t('meetings.empty.firstBody') : t('meetings.empty.body')}</p>
-                <Link className="button button-primary" to="/record">
-                  {t('meetings.record')}
-                </Link>
+                {search.trim().length >= 2 && (meetings.data ?? []).length > 0 ? (
+                  // PRO-05: the title filter found nothing; offer the content search
+                  <Link className="button button-primary" to={searchHref(search)}>
+                    {t('meetings.searchContentFor', { query: search.trim() })}
+                  </Link>
+                ) : (
+                  <Link className="button button-primary" to="/record">
+                    {t('meetings.record')}
+                  </Link>
+                )}
               </div>
             ) : (
               list.map((m) => (

@@ -992,7 +992,9 @@
       "confirm": "Xóa vĩnh viễn",
       "done": "Đã xóa cuộc họp.",
       "warning": "Đã xóa cuộc họp nhưng chưa xóa được tệp ghi âm khỏi kho lưu trữ. Quản trị viên có thể dọn sau."
-    }
+    },
+    "searchContent": "Tìm trong nội dung",
+    "searchContentFor": "Tìm “{{query}}” trong nội dung cuộc họp"
   },
   "folders": {
     "title": "Quản lý thư mục",
@@ -1432,5 +1434,35 @@
       "someFolder": "một thư mục",
       "someone": "một tài khoản đã bị xóa"
     }
+  },
+  "searchPage": {
+    "title": "Tìm kiếm",
+    "subtitle": "Tìm từ và chủ đề trong bản ghi lời, tóm tắt và ghi chú của mọi cuộc họp bạn được mở.",
+    "label": "Tìm trong cuộc họp",
+    "placeholder": "Tìm trong bản ghi lời, tóm tắt và ghi chú…",
+    "folder": "Thư mục",
+    "allFolders": "Tất cả thư mục",
+    "submit": "Tìm",
+    "tooShort": "Nhập ít nhất 2 ký tự.",
+    "intro": "Nhập một từ hoặc cụm từ. Không cần gõ dấu hay chữ hoa; kết quả cùng ý nghĩa cũng được hiển thị.",
+    "searching": "Đang tìm…",
+    "count_one": "1 cuộc họp cho “{{query}}”",
+    "count_other": "{{count}} cuộc họp cho “{{query}}”",
+    "empty": "Không tìm thấy. Thử từ khác hoặc thư mục khác.",
+    "keywordOnly": "Chỉ hiển thị kết quả khớp từ: tìm theo ý nghĩa đang tạm không dùng được.",
+    "at": "Lúc {{time}}",
+    "related": "liên quan",
+    "kind": {
+      "transcript": "Bản ghi lời",
+      "summary": "Tóm tắt",
+      "notes": "Ghi chú"
+    },
+    "errors": {
+      "rateLimited": "Bạn tìm quá nhiều lần. Đợi một phút rồi thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "generic": "Tìm kiếm thất bại. Vui lòng thử lại.",
+      "query": "Nhập một từ có ít nhất 2 chữ cái hoặc chữ số."
+    },
+    "allFoldersAction": "Tìm trong tất cả thư mục"
   }
 }

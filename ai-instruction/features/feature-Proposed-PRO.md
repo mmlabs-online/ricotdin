@@ -112,26 +112,55 @@ As a user, I want to set real speaker names instead of "Speaker 1" and remember 
 ---
 
 ### PRO-05 — Library-wide search
-**Priority:** Medium | **Status:** ❌ Not started
+**Priority:** Medium | **Status:** ✅ Done
 
 **User Story**  
 As a user, I want keyword + semantic search across all meetings for quick lookup.
 
+**Context**
+Re-specced 2026-11-17 (owner Q&A). Today the Meetings search box filters titles only (in the browser) and Chat answers with AI (one chat question each). Chosen: keyword + semantic search over transcript, summary and notes on a `/search` page, reached from the Meetings search box; no quota charge. Rejected: keyword only (misses "budget" ≈ "cost"), transcript only, a search-only nav entry.
+
 **Use Cases**
-1. User types a query in a global search bar.
-2. System performs both keyword (full-text) and semantic (vector) search across all transcripts.
-3. Results show meeting title, matching excerpt, timestamp, relevance score.
-4. User clicks a result → navigates to the meeting detail at the relevant timestamp.
+1. User types in the Meetings search box → "Search in content" → `/search?q=…`.
+2. Sees results grouped by meeting (newest-relevant first), each with an excerpt and the matched words highlighted; a transcript hit shows its timestamp.
+3. Clicks a transcript hit → meeting detail at that second; a summary / notes hit → meeting detail.
+4. Narrows to one folder.
 
 **Frontend**
-- Global search bar (header or dedicated `/search` page).
-- Result cards: meeting title, matched excerpt (highlighted), timestamp chip.
+- `SearchPage` (`/search`, `q` + `folder` in the URL): search box, folder filter, result groups (meeting title link, items with kind badge, time, highlighted excerpt), loading / empty / error / "semantic unavailable" notes. EN + VI.
+- Meetings page: a "Search in content" link next to the title filter, carrying the typed text.
+- Pure `lib/search/search.ts`: `highlightParts(text, ranges)`, `resultHref(item)`, `tabFromSearch`, `searchHref`, `validQuery`.
 
 **Backend**
-- Full-text search: Postgres `tsvector` on `transcript_segments.text`.
-- Semantic search: `match_transcript_chunks` RPC (already exists).
-- Result fusion: rank by combined score.
-- Depends on: PRP-06 (embeddings).
+- `GET /search?q=&folderId=` (`q` 2–200 chars after trim, terms of ≥ 2 chars, at most 8; 30 searches / user / min; the semantic part 10 / min and 300 / day, else keyword only): as `ricotdin_app`, so RLS limits everything to meetings the caller can see.
+  - Keyword: every term must occur (accent- and case-insensitive) in a transcript segment, the summary or the notes; folded with SQL `ricotdin_fold(text)` = Python `fold()`.
+  - Semantic: the query embedded once (`embed-query`, no quota charge) → `match_transcript_chunks` (similarity ≥ 0.5, top 8). An embedding failure keeps the keyword results and returns `semanticAvailable: false`.
+  - Fusion (pure): reciprocal-rank fusion of the two lists; a semantic chunk covering a keyword segment of the same meeting merges into it; grouped by meeting, at most 20 meetings × 5 items.
+- Migration `0013_search_fold`: `public.ricotdin_fold(text)` (IMMUTABLE, SQL, no SECURITY DEFINER; EXECUTE to `ricotdin_app` only). No extension.
+
+**Acceptance Criteria**
+- Given meetings of other users, when the caller searches, then only meetings they own, own the folder of, or have a share on appear.
+- Given "ngan sach" (or "NGÂN SÁCH"), then text containing "Ngân sách" matches; a multi-word query needs every word.
+- Given a query with no shared words but the same meaning, then semantic results appear; given the embedding fails, then keyword results still come back with `semanticAvailable: false` and the page says so.
+- Given a transcript result, then it links to `/meetings/:id?t=<seconds>`; a summary / notes result opens that tab (`?tab=`).
+- Given `q` shorter than 2 / longer than 200 chars → 400; more than 30 searches a minute → 429; no valid mmlabs token → 401.
+
+**Test Plan**
+- Pure: `app/api/app/domain/search.py` → `fold()`, `parse_search()`, `excerpt()`, `fuse()` → `app/api/tests/test_search.py` (incl. `fold` = the migration's translate table).
+- Integration: `app/api/tests/test_search_integration.py` — RLS isolation, accents, all terms, semantic (stand-in embedder), embedding failure, folder filter, 400/429/401, SQL `ricotdin_fold` = Python `fold`.
+- Web: `app/web/src/lib/search/search.test.ts`; e2e core flow searches the uploaded meeting.
+
+**Structural flags**
+- Migration 0013 (one function), new route `/search`, new page; ~15 files.
+
+**Done check**
+- api + web commands of §0 green; on production, a word from a meeting's transcript (typed without accents) finds it on `/search`.
+
+**Out of scope**
+- A keyword index (pg_trgm / tsvector) until the data needs it; searching to-dos and chat; date filters.
+
+**Key files (expected)**
+- `app/api/app/domain/search.py`, `app/api/app/routers/search.py`, `app/api/migrations/`, `app/web/src/routes/SearchPage.tsx`, `app/web/src/api/search.ts`, `app/web/src/lib/search/search.ts`, `app/web/src/routes/MeetingsPage.tsx`, i18n.
 
 ---
 

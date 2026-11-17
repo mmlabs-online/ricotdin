@@ -53,6 +53,7 @@ import {
   type TodoStatus,
 } from '../lib/meetings/detail'
 import { durationParts, statusKind } from '../lib/meetings/list'
+import { tabFromSearch } from '../lib/search/search'
 import { displayText } from '../lib/text'
 import { buildTranscript, transcriptFilename, transcriptMime, type TranscriptFormat, type TranscriptSegment } from '../lib/transcript/export'
 
@@ -140,7 +141,9 @@ function MeetingDetail({ meeting }: { meeting: Meeting }) {
   useMeeting(id, queued) // keeps polling while a re-run waits for a worker
   const waiting = isQueued(meeting, queued?.at ?? null)
   const [seekNonce, setSeekNonce] = useState(0)
-  const [tab, setTab] = useState<Tab>(() => (parseSeekParam(location.search) !== null ? 'transcript' : 'summary'))
+  const [tab, setTab] = useState<Tab>(() =>
+    parseSeekParam(location.search) !== null ? 'transcript' : (tabFromSearch(location.search) ?? 'summary'),
+  ) // PRO-05: a search hit opens the tab it names
   const [activeSeg, setActiveSeg] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'move' | 'delete' | 'regenerate' | 'reprocess' | null>(null)
