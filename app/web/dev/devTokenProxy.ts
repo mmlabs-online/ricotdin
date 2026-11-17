@@ -45,8 +45,9 @@ export function proxyTarget(env: NodeJS.ProcessEnv): string {
 /** The dev server must not be reachable from the network while it adds the bearer token. */
 export function assertLocalServer(server: { host?: string | boolean; allowedHosts?: unknown }): void {
   const host = server.host
-  if (host !== undefined && (typeof host !== 'string' || !LOOPBACK.has(host))) {
-    throw new Error('[dev-token] the dev server must listen on 127.0.0.1, localhost or ::1 (no --host)')
+  // Not ::1: the SPA config accepts http only for localhost / 127.0.0.1.
+  if (host !== undefined && host !== 'localhost' && host !== '127.0.0.1') {
+    throw new Error('[dev-token] the dev server must listen on 127.0.0.1 or localhost (no --host)')
   }
   if (server.allowedHosts === true) {
     throw new Error('[dev-token] server.allowedHosts: true is not allowed with the dev token proxy')
@@ -83,15 +84,22 @@ export function readDevToken(file: string, nowMs: number): TokenResult {
   return { status: 'ok', token: raw }
 }
 
-/** The client's Authorization is always dropped; the bearer is set only for same-origin (or
- * non-browser) requests and a valid token. */
+/** The client's Authorization is always dropped. The bearer is set only for a valid token on a
+ * same-origin browser request (`Sec-Fetch-Site: same-origin`; a missing header gets none, so old
+ * browsers and other local processes cannot borrow it; curl must send the header on purpose), to a
+ * local Host (no tunnel, no DNS rebinding), with a matching Origin when one is sent. */
 export function rewriteAuth(headers: IncomingHttpHeaders, result: TokenResult): IncomingHttpHeaders {
   const out: IncomingHttpHeaders = { ...headers }
   delete out.authorization
-  const site = headers['sec-fetch-site']
-  if (result.status === 'ok' && (site === undefined || site === 'same-origin')) {
-    out.authorization = `Bearer ${result.token}`
-  }
+  const host = headers.host
+  const origin = headers.origin
+  const allowed =
+    result.status === 'ok' &&
+    headers['sec-fetch-site'] === 'same-origin' &&
+    host !== undefined &&
+    DEV_HOST.test(host) &&
+    (origin === undefined || origin === `http://${host}`)
+  if (allowed) out.authorization = `Bearer ${result.token}`
   return out
 }
 

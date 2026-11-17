@@ -39,9 +39,20 @@ describe('scripts/dev-token.sh (static invariants)', () => {
   it('never prints the token and writes it only to the token file', () => {
     for (const l of lines.filter((l) => /\$\{?(token|out)\b/.test(l))) {
       expect(l).not.toMatch(/\becho\b/)
-      expect(l).toMatch(/>"\$FILE\.tmp"|^\s*token=|^\s*expires_in=/)
+      expect(l).toMatch(/>"\$tmp"|^\s*token=|^\s*expires_in=/)
     }
-    expect(src).toContain('mv "$FILE.tmp" "$FILE"')
+    expect(src).toContain('mv "$tmp" "$FILE"')
+  })
+
+  it('writes through a fresh 0600 temp file in the target dir (no predictable name), removed on exit', () => {
+    expect(src).not.toContain('$FILE.tmp')
+    expect(src).toContain('tmp="$(mktemp "$(dirname "$FILE")/.dev-token.XXXXXX")"')
+    expect(src).toContain('chmod 600 "$tmp"')
+    expect(src).toMatch(/trap '[^']*rm -f "\$\{tmp:-\}"[^']*' EXIT/)
+  })
+
+  it('cannot leak the password or token through xtrace', () => {
+    expect(src).toMatch(/^set -eu\n\{ set \+x; \} 2>\/dev\/null$/m)
   })
 
   it('keeps the token file outside the repo by default; RICOTDIN_DEV_TOKEN_FILE overrides', () => {

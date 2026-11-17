@@ -29,7 +29,7 @@ import {
   parseAccounts,
   parseTokenBody,
 } from './mmlabs'
-import { devAuthState } from './devSession'
+import { fetchDevState } from './devSession'
 import { expiresAtFrom, isExpiringSoon } from './token'
 
 export type AuthState =
@@ -100,6 +100,11 @@ export class AuthSession {
     return this.token
   }
 
+  /** Dev token mode (OPS-08): the dev server adds the token. Always false in the build. */
+  isDevProxy(): boolean {
+    return import.meta.env.DEV && this.deps.devProxy === true
+  }
+
   /** Restore the session of the chosen account (app start, or "retry" after `unavailable`). */
   async start(): Promise<void> {
     if (this.state.status === 'unavailable') this.setState({ status: 'loading' })
@@ -113,7 +118,7 @@ export class AuthSession {
   /** A token for the next request, renewed first when it is about to expire. */
   async getToken(): Promise<string | null> {
     if (this.state.status !== 'signedIn') return null
-    if (import.meta.env.DEV && this.deps.devProxy) return null
+    if (this.isDevProxy()) return null
     if (isExpiringSoon(this.expiresAt, this.deps.now())) {
       await this.refresh().catch(() => false) // network trouble: try the request anyway
     }
@@ -229,8 +234,13 @@ export class AuthSession {
   }
 
   private async refreshOnce(since: number): Promise<boolean> {
-    if (import.meta.env.DEV && this.deps.devProxy) return this.refreshDev()
     const epoch = this.epoch
+    if (import.meta.env.DEV && this.deps.devProxy) {
+      const next = await fetchDevState(this.deps.fetch, this.apiUrl)
+      if (epoch !== this.epoch) return false // signed out meanwhile: drop the answer
+      this.setState(next)
+      return next.status === 'signedIn'
+    }
     if (usableShared(this.lastShared, since, this.deps.now())) {
       this.adopt(this.lastShared)
       return true
@@ -272,24 +282,6 @@ export class AuthSession {
     this.adopt(msg)
     this.broadcast(msg)
     return true
-  }
-
-  /** Dev only (OPS-08): no mmlabs call and no token here; the dev server adds the bearer. */
-  private async refreshDev(): Promise<boolean> {
-    let res: Response
-    try {
-      res = await this.deps.fetch(`${this.apiUrl}/auth/me`, {
-        method: 'GET',
-        credentials: 'omit',
-        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
-      })
-    } catch (err) {
-      throw apiErrorFrom(0, err)
-    }
-    const body: unknown = await res.json().catch(() => null)
-    const next = devAuthState(res.status, body)
-    this.setState(next)
-    return next.status === 'signedIn'
   }
 
   /** The ricotdin user for a fresh token. A ricotdin refusal (disabled, link conflict) signs out. */

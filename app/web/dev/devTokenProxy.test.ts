@@ -145,25 +145,37 @@ describe('readDevToken', () => {
 
 describe('rewriteAuth', () => {
   const ok = { status: 'ok', token: FRESH } as const
+  const same = { host: 'localhost:5173', 'sec-fetch-site': 'same-origin' }
 
   it('always strips the client Authorization header', () => {
-    const out = rewriteAuth({ authorization: 'Bearer attacker', accept: 'x' }, ok)
+    const out = rewriteAuth({ ...same, authorization: 'Bearer attacker', accept: 'x' }, ok)
     expect(out.authorization).toBe(`Bearer ${FRESH}`)
     expect(out.accept).toBe('x')
     expect(rewriteAuth({ authorization: 'Bearer attacker' }, { status: 'expired' })).toEqual({})
   })
 
-  it('adds the bearer for sec-fetch-site same-origin or absent; not cross-site, same-site, none', () => {
-    expect(rewriteAuth({}, ok).authorization).toBe(`Bearer ${FRESH}`)
-    expect(rewriteAuth({ 'sec-fetch-site': 'same-origin' }, ok).authorization).toBe(`Bearer ${FRESH}`)
+  it('adds the bearer only for sec-fetch-site same-origin; not absent, cross-site, same-site, none', () => {
+    expect(rewriteAuth(same, ok).authorization).toBe(`Bearer ${FRESH}`)
+    expect(rewriteAuth({ host: 'localhost:5173' }, ok).authorization).toBeUndefined()
     for (const site of ['cross-site', 'same-site', 'none']) {
-      expect(rewriteAuth({ 'sec-fetch-site': site }, ok).authorization).toBeUndefined()
+      expect(rewriteAuth({ ...same, 'sec-fetch-site': site }, ok).authorization).toBeUndefined()
+    }
+  })
+
+  it('only for a local Host (no tunnel / DNS rebinding) and a matching Origin when one is sent', () => {
+    expect(rewriteAuth({ ...same, host: '127.0.0.1:5173' }, ok).authorization).toBe(`Bearer ${FRESH}`)
+    for (const host of [undefined, 'evil.test', 'abc.ngrok.app', 'localhost.evil.test:5173']) {
+      expect(rewriteAuth({ ...same, host }, ok).authorization, String(host)).toBeUndefined()
+    }
+    expect(rewriteAuth({ ...same, origin: 'http://localhost:5173' }, ok).authorization).toBe(`Bearer ${FRESH}`)
+    for (const origin of ['http://evil.test', 'http://localhost:5174', 'null']) {
+      expect(rewriteAuth({ ...same, origin }, ok).authorization, origin).toBeUndefined()
     }
   })
 
   it('no header when the token is missing, expired or malformed', () => {
     for (const status of ['missing', 'expired', 'malformed'] as const) {
-      expect(rewriteAuth({}, { status }).authorization).toBeUndefined()
+      expect(rewriteAuth(same, { status }).authorization).toBeUndefined()
     }
   })
 })
@@ -189,12 +201,13 @@ describe('warnings', () => {
       removeHeader: (n: string) => delete headers[n],
       setHeader: (n: string, v: string) => (headers[n] = v),
     }
-    handler(proxyReq, { headers: { authorization: 'Bearer attacker' } })
-    handler(proxyReq, { headers: {} })
+    const same = { host: 'localhost:5173', 'sec-fetch-site': 'same-origin' }
+    handler(proxyReq, { headers: { ...same, authorization: 'Bearer attacker' } })
+    handler(proxyReq, { headers: same })
     expect(warn).toHaveBeenCalledTimes(1)
     expect(headers.authorization).toBeUndefined()
     fs.writeFileSync(file, FRESH)
-    handler(proxyReq, { headers: {} })
+    handler(proxyReq, { headers: same })
     expect(headers.authorization).toBe(`Bearer ${FRESH}`)
     expect(warn.mock.calls.flat().join(' ')).not.toContain(FRESH)
   })
@@ -228,11 +241,11 @@ describe('dev server guards', () => {
     expect(proxyTarget({ RICOTDIN_DEV_API: 'http://[::1]:9000' })).toBe('http://[::1]:9000')
   })
 
-  it('allows only a loopback server host', () => {
-    for (const host of [undefined, '127.0.0.1', 'localhost', '::1']) {
+  it('allows only a loopback server host the SPA config accepts (no ::1)', () => {
+    for (const host of [undefined, '127.0.0.1', 'localhost']) {
       expect(() => assertLocalServer({ host })).not.toThrow()
     }
-    for (const host of [true, '0.0.0.0', '192.168.1.5', '']) {
+    for (const host of [true, '0.0.0.0', '192.168.1.5', '', '::1']) {
       expect(() => assertLocalServer({ host })).toThrow()
     }
   })

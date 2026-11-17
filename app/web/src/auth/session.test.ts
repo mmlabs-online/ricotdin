@@ -331,4 +331,22 @@ describe('AuthSession (dev proxy, OPS-08)', () => {
     await s.start()
     expect(s.getState()).toEqual({ status: 'unavailable' })
   })
+
+  it('a sign-out while /auth/me is pending is not undone by its answer', async () => {
+    let answer: (r: Response) => void = () => {}
+    const f = devDeps([])
+    const deps = { ...f.deps, fetch: () => new Promise<Response>((resolve) => (answer = resolve)) }
+    const s = new AuthSession(DEV_API, DEV_API, deps)
+    const started = s.start()
+    const out = s.signOut() // forgets the session at once, then waits for the running refresh
+    answer(new Response(JSON.stringify(user), { status: 200 }))
+    await out
+    await started
+    expect(s.getState()).toEqual({ status: 'signedOut' })
+  })
+
+  it('isDevProxy is true only with the devProxy dependency', () => {
+    expect(new AuthSession(DEV_API, DEV_API, devDeps([]).deps).isDevProxy()).toBe(true)
+    expect(new AuthSession(AUTH, API, fakeDeps([]).deps).isDevProxy()).toBe(false)
+  })
 })

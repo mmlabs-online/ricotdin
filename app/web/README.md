@@ -35,8 +35,13 @@ RICOTDIN_DEV_TOKEN=1 npm run dev         # http://localhost:5173 opens signed in
   proxies `/__dev_api/*` (prefix stripped) and `/media` to `RICOTDIN_DEV_API`
   (default `http://127.0.0.1:8000`, loopback only) and serves its own `/config.json`. The SPA then
   skips mmlabs and only calls `/auth/me`; sign-in / sign-out screens do not work in this mode.
-- `npm run dev` refuses `--host` / `allowedHosts: true`. Identity asks for Turnstile after 3 failed
-  sign-ins: sign in once on the production site, then retry.
+- The bearer is added only to same-origin browser requests (`Sec-Fetch-Site: same-origin`) for a
+  `localhost` / `127.0.0.1` Host with a matching `Origin`; a curl call must send
+  `-H 'Sec-Fetch-Site: same-origin'` on purpose. Drive uploads go straight to Google, so the API still
+  needs `WEB_ORIGIN=http://localhost:5173`.
+- The token is a real production ricotdin token: it stays valid for its 15 minutes even after the
+  script's logout. `npm run dev` refuses `--host`, `::1` and `allowedHosts: true`. Identity asks for
+  Turnstile after 3 failed sign-ins: sign in once on the production site, then retry.
 
 ## Layout
 

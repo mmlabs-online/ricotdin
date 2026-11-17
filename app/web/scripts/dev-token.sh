@@ -12,6 +12,7 @@
 #
 # Env: RICOTDIN_DEV_EMAIL (else asked), RICOTDIN_DEV_TOKEN_FILE (default ~/.config/ricotdin/dev-token).
 set -eu
+{ set +x; } 2>/dev/null
 set -o pipefail
 
 IDENTITY="https://api.mmlabs.online/api/v1"
@@ -22,7 +23,8 @@ UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 
 umask 077
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+tmp=""
+trap 'rm -rf "$work"; rm -f "${tmp:-}"' EXIT
 trap 'exit 130' INT TERM HUP
 jar="$work/jar"
 resp="$work/resp"
@@ -85,6 +87,10 @@ expires_in="${out##* }"
 printf '{"account_id":"%s"}' "$account_id" | post /auth/logout >/dev/null 2>&1 || true
 
 mkdir -p "$(dirname "$FILE")"
-printf '%s\n' "$token" >"$FILE.tmp"
-mv "$FILE.tmp" "$FILE"
+# A fresh 0600 file (never a pre-existing, predictable name), renamed atomically.
+tmp="$(mktemp "$(dirname "$FILE")/.dev-token.XXXXXX")"
+chmod 600 "$tmp"
+printf '%s\n' "$token" >"$tmp"
+mv "$tmp" "$FILE"
+tmp=""
 echo "dev-token: wrote $FILE (valid for ${expires_in}s)"

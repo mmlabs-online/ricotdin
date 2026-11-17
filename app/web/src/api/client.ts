@@ -21,7 +21,12 @@ export function authFetch(session: AuthSession, apiUrl: string, fetchFn: typeof 
     const retry = input.clone() // the body can be read only once
     const token = await session.getToken()
     const first = await fetchFn(withToken(input, token))
-    if (first.status !== 401 || !token) return first
+    if (first.status !== 401) return first
+    if (!token) {
+      // Dev token mode (OPS-08): the dev token may have expired; re-check so the retry screen shows.
+      if (session.isDevProxy()) void session.refresh().catch(() => false)
+      return first
+    }
     // Another request already refreshed while this one was in flight: just retry with that token.
     const fresh = session.accessToken
     if (fresh && fresh !== token) return fetchFn(withToken(retry, fresh))
