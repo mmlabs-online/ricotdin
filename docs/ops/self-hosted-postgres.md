@@ -83,8 +83,11 @@ Owner decision 2026-11-17: local development may run the **API only** against th
 database, through a pg tunnel that exposes `postgres:5432` as `127.0.0.1:15432` on the dev machine
 (the same way tudocuatui does it). A local container stays the safe default.
 
-It uses the **existing pg tunnel** (the one tudocuatui uses): the shared server holds both
-databases, so `127.0.0.1:15432` reaches `ricotdin` too. Nothing to create.
+It uses the **pg tunnel** the dev machine already runs for tudocuatui: container
+`pg-tunnel-pg-tunnel-1` (cloudflared → `db.mmlabs.online`, Cloudflare Access email login, 24 h),
+listening on `127.0.0.1:15432`. The shared server holds both databases, so it reaches `ricotdin` too.
+On a new dev machine: deployment repo `postgres/remote/compose.yml` and `postgres/REMOTE-ACCESS.md`
+(`docker compose up -d`, then the login link from `docker compose logs -f`).
 
 **The production values live only in owner files outside every repo** (workspace decision
 mmlabs-online/spaceM D18: Bitwarden removed, owner-only secrets never go through `with-secrets.sh`):
