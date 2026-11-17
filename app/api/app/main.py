@@ -34,6 +34,7 @@ from app.routers import speakers as speakers_router
 from app.routers.admin import config as admin_config_router
 from app.routers.admin import ops as admin_ops_router
 from app.routers.admin import users as admin_users_router
+from app.services.account import export_limiter
 from app.services.ai.service import AIService
 from app.services.platform import Platform
 
@@ -108,6 +109,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.regenerate_limiter = meetings_router.regenerate_limiter()
     app.state.chat_limiter = chat_router.chat_limiter()
     app.state.search_limiter = search_router.search_limiter()
+    app.state.export_limiter = export_limiter()  # PRF-13 / ADM-11
     app.state.semantic_limiter = search_router.semantic_limiter()
     app.state.content_limiter = note_versions_router.content_limiter()
     app.state.key_check_limiter = admin_config_router.key_check_limiter()
