@@ -30,7 +30,7 @@ describe('scripts/start-dev.sh (static invariants)', () => {
   it('signs in first, then the tunnel, then asks for the passwords (same order as tudocuatui)', () => {
     const token = code.indexOf('scripts/dev-token.sh" || fail')
     const tunnel = code.indexOf('docker start')
-    const ask = code.indexOf('ask "Password ricotdin_api_login"')
+    const ask = code.indexOf('ask_login ricotdin_api_login')
     expect(token).toBeGreaterThan(0)
     expect(tunnel).toBeGreaterThan(token)
     expect(ask).toBeGreaterThan(tunnel)
@@ -54,6 +54,12 @@ describe('scripts/start-dev.sh (static invariants)', () => {
     const logins = [...code.matchAll(/login_url (\w+) "\$pw"/g)].map((m) => m[1])
     expect(logins).toEqual(['ricotdin_api_login', 'ricotdin_service_login', 'ricotdin_worker_login'])
     expect(code).not.toMatch(/export DATABASE_URL=|postgresql:\/\/ricotdin:/)
+  })
+
+  it('rejects a typed value that is not a provisioned password, without printing it', () => {
+    expect(code).toContain('[[ "$pw" =~ ^[A-Za-z0-9_-]{43}$ ]]')
+    expect(code).toContain('got ${#pw})')
+    expect(code).not.toMatch(/echo[^\n]*\$pw\b|printf[^\n]*"\$pw"[^\n]*>&2/)
   })
 
   it('drops inherited secrets and UV_ENV_FILE, exports the typed values only to the API, then forgets them', () => {

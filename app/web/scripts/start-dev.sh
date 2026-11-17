@@ -89,11 +89,18 @@ login_url() { # login, password
     let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => process.stdout.write(encodeURIComponent(s)));')"
   printf 'postgresql://%s:%s@%s/ricotdin?sslmode=disable' "$1" "$enc" "$DB_HOST"
 }
-ask "Password ricotdin_api_login" pw
+# provision_db_roles makes secrets.token_urlsafe(32): 43 characters of A-Z a-z 0-9 - _. Catches a pasted
+# whole URL, quotes or a stray space before the API fails with "password authentication failed".
+ask_login() { # login
+  ask "Password $1" pw
+  [[ "$pw" =~ ^[A-Za-z0-9_-]{43}$ ]] \
+    || fail "that is not a $1 password (expected 43 characters A-Z a-z 0-9 - _, got ${#pw}): paste only the part between '$1:' and '@'."
+}
+ask_login ricotdin_api_login
 url_app="$(login_url ricotdin_api_login "$pw")"
-ask "Password ricotdin_service_login" pw
+ask_login ricotdin_service_login
 url_service="$(login_url ricotdin_service_login "$pw")"
-ask "Password ricotdin_worker_login" pw
+ask_login ricotdin_worker_login
 url_worker="$(login_url ricotdin_worker_login "$pw")"
 unset pw enc
 key=""
