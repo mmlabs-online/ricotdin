@@ -20,14 +20,27 @@ and give the ricotdin API `WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173`
 Production mmlabs Identity only accepts `https://ricotdin.mmlabs.online`, so the sign-in form cannot
 run on localhost. Instead the dev server adds a real token on the Node side:
 
+**Against production, one command** (owner only; guardrails and the one-time setup of the pg tunnel and
+`~/.config/ricotdin/prod-tunnel.env`: `docs/ops/self-hosted-postgres.md`, *Local dev against production*):
+
 ```bash
-# 1. the API at 127.0.0.1:8000 (app/api; local DB, or production through the tunnel with the
-#    guardrails in docs/ops/self-hosted-postgres.md)
+scripts/start-dev.sh               # tunnel → dev token if needed → API on 127.0.0.1:8000 → npm run dev
+scripts/start-dev.sh --with-key    # + KEY_ENCRYPTION_SECRET (prod-key.env) for provider keys / Drive
+```
+
+It runs only the API (never the worker, migrations or tests), refuses the owner `DATABASE_URL`, a login
+not on `127.0.0.1:15432`, or a secrets file that is not mode 600 / is inside the repo. Ctrl-C stops both.
+
+**By hand** (e.g. the API on a local DB):
+
+```bash
+# 1. the API at 127.0.0.1:8000 (app/api)
 scripts/dev-token.sh                     # asks email + password; RICOTDIN_DEV_EMAIL=… to skip the email
 RICOTDIN_DEV_TOKEN=1 npm run dev         # http://localhost:5173 opens signed in as that account
 ```
 
-- The token (15 min) is written to `~/.config/ricotdin/dev-token` (`RICOTDIN_DEV_TOKEN_FILE`),
+- The token (15 min today; 12 h once org-admin-api USR-13 sets `ACCESS_TOKEN_TTL_SECONDS=43200`; the
+  API checks only `exp`, so it needs no change) is written to `~/.config/ricotdin/dev-token` (`RICOTDIN_DEV_TOKEN_FILE`),
   outside the repo, and never reaches the browser. When it expires the app shows the retry screen and
   Vite logs `[dev-token] token expired - run scripts/dev-token.sh`: run it again, press retry.
   Another account (e.g. a non-admin): run the script with another email.

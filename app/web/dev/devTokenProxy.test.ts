@@ -206,10 +206,12 @@ describe('warnings', () => {
     handler(proxyReq, { headers: same })
     expect(warn).toHaveBeenCalledTimes(1)
     expect(headers.authorization).toBeUndefined()
-    fs.writeFileSync(file, FRESH)
+    // The plugin reads the real clock, so this token must be fresh relative to now, not to NOW.
+    const live = jwt(Math.floor(Date.now() / 1000) + 600)
+    fs.writeFileSync(file, live)
     handler(proxyReq, { headers: same })
-    expect(headers.authorization).toBe(`Bearer ${FRESH}`)
-    expect(warn.mock.calls.flat().join(' ')).not.toContain(FRESH)
+    expect(headers.authorization).toBe(`Bearer ${live}`)
+    expect(warn.mock.calls.flat().join(' ')).not.toContain(live)
   })
 })
 
