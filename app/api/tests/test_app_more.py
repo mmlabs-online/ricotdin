@@ -54,6 +54,12 @@ def test_retry_after_is_readable_cross_origin() -> None:
     assert "retry-after" in r.headers.get("access-control-expose-headers", "").lower()
 
 
+def test_the_export_file_name_is_readable_cross_origin() -> None:
+    # PRF-13: the SPA names the downloaded ZIP from Content-Disposition
+    r = _client().get("/health", headers={"Origin": ORIGIN})
+    assert "content-disposition" in r.headers.get("access-control-expose-headers", "").lower()
+
+
 def test_docs_are_off_by_default_and_on_when_asked() -> None:
     off = _client()
     assert off.get("/docs").status_code == 404

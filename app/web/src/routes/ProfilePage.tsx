@@ -1,9 +1,10 @@
 // Profile & preferences (ARC-13c, Make ProfileView): details + avatar, password, appearance,
-// default AI model, the remaining audio minutes / chat questions, and own activity (PRF-09).
+// default AI model, the remaining audio minutes / chat questions, own activity (PRF-09), and own
+// data: export / delete the account (PRF-13).
 import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Check, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import {
   useOwnActivity,
   usePreferences,
@@ -16,7 +17,11 @@ import {
 } from '../api/profile'
 import { useFolders, type Folder } from '../api/meetings'
 import { initials } from '../app/initials'
-import { useApiUrl } from '../auth/AuthProvider'
+import { useApiUrl, useAuth } from '../auth/AuthProvider'
+import { useDeleteOwnAccount, useExportOwnData } from '../api/account'
+import { ApiError } from '../api/errors'
+import { Modal } from '../components/ui/Modal'
+import { deleteMayHaveHappened, deleteProblem } from '../lib/profile/account'
 import { normalizeUsername, validateUsername } from '../auth/validate'
 import { FullPageLoading } from '../components/FullPageLoading'
 import { Button } from '../components/ui/Button'
@@ -105,6 +110,7 @@ export function ProfilePage() {
       <DefaultFolderSection />
       <UsageSection profile={profile.data} />
       <ActivitySection />
+      <DataSection username={profile.data.username} />
     </div>
   )
 }
@@ -574,6 +580,131 @@ function ActivitySection() {
             {feed.isFetchingNextPage ? t('common.loading') : t('profile.activity.more')}
           </Button>
         </div>
+      )}
+    </Section>
+  )
+}
+
+function DataSection({ username }: { username: string | null }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { session } = useAuth()
+  const exporter = useExportOwnData()
+  const remove = useDeleteOwnAccount()
+  const [note, setNote] = useNote()
+  const [asking, setAsking] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [deleteError, setDeleteError] = useState<{ key: string; n: number } | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const ids = { body: useId(), input: useId(), err: useId(), note: useId() }
+  const busy = remove.isPending
+  const fail = (key: string) => setDeleteError((p) => ({ key, n: (p?.n ?? 0) + 1 }))
+
+  function download() {
+    if (exporter.isPending) return
+    setNote(null)
+    exporter
+      .mutateAsync()
+      .then(() => setNote('profile.data.exported', true))
+      .catch((err: unknown) => setNote(err instanceof ApiError && err.status === 429 ? 'profile.data.exportLimited' : 'profile.data.exportFailed'))
+  }
+
+  function open() {
+    setTyped('')
+    setDeleteError(null)
+    setAsking(true)
+  }
+
+  async function leave(uncertain: boolean) {
+    const confirmed = await session.signOut() // signing in again creates a new, empty account
+    void navigate('/sign-in', { replace: true, state: { accountDeleted: !uncertain, deleteUncertain: uncertain, signOutFailed: !confirmed } })
+  }
+
+  function confirmDelete() {
+    if (busy) return
+    const problem = deleteProblem(typed, username)
+    if (problem) {
+      fail(problem)
+      input.current?.focus()
+      return
+    }
+    setDeleteError(null)
+    remove
+      .mutateAsync(typed.trim())
+      .then(() => leave(false))
+      .catch((err: unknown) => {
+        // a lost answer (network, timeout, 5xx) or an already disabled account: the delete may
+        // have gone through on the server, so a retry would only confuse; sign out instead
+        if (deleteMayHaveHappened(err)) return leave(true)
+        fail('profile.data.deleteFailed')
+      })
+  }
+
+  return (
+    <Section title={t('profile.data.title')} body={t('profile.data.body')}>
+      <div className="data-actions">
+        <Button onClick={download} aria-disabled={exporter.isPending} aria-busy={exporter.isPending}>
+          {exporter.isPending ? t('profile.data.exporting') : t('profile.data.export')}
+        </Button>
+      </div>
+      <FormNote note={note} id={ids.note} />
+      <div className="danger-zone">
+        <h3 className="subhead">{t('profile.data.deleteHeading')}</h3>
+        <p className="tab-note">{t('profile.data.deleteHint')}</p>
+        {username ? (
+          <Button variant="danger" onClick={open}>
+            {t('profile.data.delete')}
+          </Button>
+        ) : (
+          <p className="tab-note">{t('profile.data.needUsername')}</p>
+        )}
+      </div>
+      {asking && (
+        <Modal title={t('profile.data.deleteTitle')} onClose={() => !busy && setAsking(false)} describedBy={ids.body}>
+          <div id={ids.body} className="delete-account-copy">
+            <p className="delete-account-main">{t('profile.data.deleteBody')}</p>
+            <p className="modal-copy">{t('profile.data.deleteKeep')}</p>
+            <p className="delete-account-note">{t('profile.data.deleteMmlabs')}</p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              confirmDelete()
+            }}
+          >
+            <label className="modal-field" htmlFor={ids.input}>
+              <span>{t('profile.data.confirmLabel', { username: username ?? '' })}</span>
+              <input
+                id={ids.input}
+                ref={input}
+                type="text"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={typed}
+                onChange={(e) => {
+                  setTyped(e.target.value)
+                  if (deleteError) setDeleteError(null)
+                }}
+                aria-invalid={deleteError !== null && deleteError.key !== 'profile.data.deleteFailed' ? true : undefined}
+                aria-describedby={deleteError ? ids.err : undefined}
+              />
+            </label>
+            {deleteError && (
+              <p key={deleteError.n} id={ids.err} className="form-note error" role="alert">
+                {t(deleteError.key)}
+              </p>
+            )}
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={() => !busy && setAsking(false)} aria-disabled={busy}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="danger" type="submit" aria-disabled={busy} aria-busy={busy}>
+                {busy ? t('profile.data.deleting') : t('profile.data.deleteConfirm')}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </Section>
   )

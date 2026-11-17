@@ -33,8 +33,10 @@ def sub_for(uid: uuid.UUID) -> str:
     return f"t-{uid}"
 
 
-def bearer(uid: uuid.UUID, role: str = "user", email: str | None = None) -> dict[str, str]:
-    now = datetime.now(UTC)
+def bearer(
+    uid: uuid.UUID, role: str = "user", email: str | None = None, issued: datetime | None = None
+) -> dict[str, str]:
+    now = issued or datetime.now(UTC)
     roles = ["ricotdin:member"] + (["ricotdin:admin"] if role == "admin" else [])
     claims = {"iss": ISSUER, "aud": "ricotdin", "sub": sub_for(uid),
               "email": email or f"{uid}@example.test", "email_verified": True, "roles": roles,

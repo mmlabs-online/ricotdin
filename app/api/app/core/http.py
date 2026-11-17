@@ -112,7 +112,7 @@ def install_middleware(app: FastAPI, origins: list[str]) -> None:
         allow_credentials=True,  # harmless: ricotdin sets no cookie since AUT-06
         allow_methods=["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-MM-App"],
-        expose_headers=["Retry-After"],
+        expose_headers=["Retry-After", "Content-Disposition"],  # PRF-13: the export file name
         max_age=600,
     )
 

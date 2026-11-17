@@ -104,6 +104,7 @@ V2_ONLY_TABLES = {
     "storage_objects",
     "scheduler_runs",
     "meeting_note_versions",  # PRO-06: v2-only version history
+    "deleted_accounts",  # PRF-13: tombstones of deleted accounts
 }
 # v2-only tables with nothing to copy (``users`` is filled from Supabase ``auth.users``).
 NOT_COPIED_TABLES = V2_ONLY_TABLES - {"users"}

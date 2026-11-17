@@ -8,12 +8,14 @@ token on every request (``users.role`` is written when it differs, so the databa
 the admin API that read it agree). All SQL runs as ``ricotdin_service`` (CLAUDE.md §0.1).
 """
 
+import hashlib
 import re
 import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 
 from sqlalchemy import text
@@ -22,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.auth import service
 from app.auth.mmlabs import MmlabsClaims
-from app.core.errors import Conflict, Forbidden
+from app.core.errors import Conflict, Forbidden, Unauthorized
 
 USERNAME_MIN, USERNAME_MAX = 3, 30
 _INVALID = re.compile(r"[^a-z0-9_-]+")
@@ -33,6 +35,27 @@ MAX_USERNAME_TRIES = 50
 class AccountDisabled(Forbidden):
     code = "account_disabled"
     message = "Your account has been disabled. Please contact an administrator."
+
+
+class AccountDeleted(Unauthorized):
+    code = "account_deleted"
+    message = "This Ricotdin account was deleted. Sign in again to start a new, empty one."
+
+
+def sub_hash(sub: str) -> str:
+    """What ``deleted_accounts`` keeps of an mmlabs ``sub`` (SQL: ``encode(sha256(..), 'hex')``)."""
+    return hashlib.sha256(sub.encode("utf-8")).hexdigest()
+
+
+def after_delete(
+    deleted_at: datetime | None, *, issued_at: int
+) -> Literal["grant", "no_grant", "refuse"]:
+    """First request of an mmlabs account with no ricotdin user (PRF-13 review): never deleted →
+    a normal signup; deleted → a token issued at or before the delete is refused (a request that
+    raced the delete, another tab), a newer sign-in gets a new account without the signup grant."""
+    if deleted_at is None:
+        return "grant"
+    return "refuse" if issued_at <= int(deleted_at.timestamp()) else "no_grant"
 
 
 class AccountLinkConflict(Conflict):
@@ -185,14 +208,24 @@ async def _link_or_create(conn: AsyncConnection, claims: MmlabsClaims) -> uuid.U
             {"u": decision.user_id},
         )
         return decision.user_id
+    deleted_at = (
+        await conn.execute(
+            text("SELECT deleted_at FROM public.deleted_accounts WHERE sub_hash = :h"),
+            {"h": sub_hash(claims.sub)},
+        )
+    ).scalar_one_or_none()
+    after = after_delete(deleted_at, issued_at=claims.issued_at)
+    if after == "refuse":
+        raise AccountDeleted()
     for username in username_candidates(claims.email, MAX_USERNAME_TRIES):
         if await service.username_taken(conn, username):
             continue
         try:
             async with conn.begin_nested():
                 return await service.create_user(
-                    conn, claims.email, username, mmlabs_sub=claims.sub
-                )
+                    conn, claims.email, username, mmlabs_sub=claims.sub,
+                    signup_grant=after == "grant",
+                )  # fmt: skip
         except IntegrityError as exc:
             if _constraint(exc) == "profiles_username_key":
                 continue  # username taken meanwhile: try the next one

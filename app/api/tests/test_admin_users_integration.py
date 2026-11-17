@@ -295,7 +295,7 @@ def test_delete_never_touches_a_forged_key(
 def test_a_delete_stopped_half_way_is_still_audited(
     client: TestClient, world: dict[str, Any], admin: dict[str, str], monkeypatch: Any
 ) -> None:
-    from app.routers.admin import users as admin_users
+    from app.services import account as admin_users  # the delete runs there (PRF-13)
 
     uid = _new_user(world)
     original = admin_users.delete_files  # type: ignore[attr-defined]

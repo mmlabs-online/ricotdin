@@ -23,7 +23,15 @@ export function SignInPage() {
   const siteKey = useTurnstileSiteKey()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const signOutFailed = (useLocation().state as { signOutFailed?: boolean } | null)?.signOutFailed === true
+  const location = useLocation()
+  const navState = location.state as { signOutFailed?: boolean; accountDeleted?: boolean; deleteUncertain?: boolean } | null
+  const signOutFailed = navState?.signOutFailed === true
+  // PRF-13: shown once (kept in state), then dropped from history so a reload does not repeat it
+  const [accountDeleted] = useState(navState?.accountDeleted === true)
+  const [deleteUncertain] = useState(navState?.deleteUncertain === true)
+  useEffect(() => {
+    if (navState?.accountDeleted || navState?.deleteUncertain) void navigate(location.pathname + location.search, { replace: true, state: null })
+  }, [navState, navigate, location.pathname, location.search])
   const next = safeReturnTo(params.get('next'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -118,6 +126,11 @@ export function SignInPage() {
             {t('auth.signOutFailed')}
           </p>
         )}
+        {(accountDeleted || deleteUncertain) && (
+          <p className="auth-note" tabIndex={-1} ref={(el) => el?.focus()}>
+            {t(deleteUncertain ? 'auth.accountDeleteUncertain' : 'auth.accountDeleted')}
+          </p>
+        )}
         {accounts.length > 0 && (
           <div className="auth-accounts" role="group" aria-label={t('auth.accounts.label')}>
             {accounts.map((a) => (
@@ -141,7 +154,7 @@ export function SignInPage() {
             aria-invalid={errorKey !== null && invalid.email}
             aria-describedby={errorKey ? errorId : undefined}
             maxLength={320}
-            autoFocus={accounts.length === 0}
+            autoFocus={accounts.length === 0 && !accountDeleted && !deleteUncertain}
           />
         </label>
         <label>
