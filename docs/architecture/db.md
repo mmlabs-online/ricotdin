@@ -14,8 +14,8 @@
   Tests + CI: a superuser `pgvector/pgvector:pg17-trixie` container (`app/api/.env`
   `DATABASE_URL`, used for scratch databases); never the shared server. Local dev may run the
   **API only** against the production database through the pg tunnel (owner decision 2026-11-17),
-  with the runtime logins only, from owner files outside every repo (`~/.config/ricotdin/*.env`,
-  mode 600; spaceM D18), and the guardrails in `docs/ops/self-hosted-postgres.md` (*Local dev
+  with the runtime logins only, whose passwords the owner types at runtime (`app/web/scripts/start-dev.sh`,
+  `read -s`, never a file; same as tudocuatui), and the guardrails in `docs/ops/self-hosted-postgres.md` (*Local dev
   against production*): owner only, no owner login, no worker / alembic / pytest / role scripts,
   `KEY_ENCRYPTION_SECRET` unset unless a session needs it (then the production value). Neon (`ricotdin-sg`) is no
   longer used; production started with an empty database (owner deletes the Neon project).

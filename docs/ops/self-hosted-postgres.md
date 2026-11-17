@@ -89,34 +89,33 @@ listening on `127.0.0.1:15432`. The shared server holds both databases, so it re
 On a new dev machine: deployment repo `postgres/remote/compose.yml` and `postgres/REMOTE-ACCESS.md`
 (`docker compose up -d`, then the login link from `docker compose logs -f`).
 
-**The production values live only in owner files outside every repo** (workspace decision
-mmlabs-online/spaceM D18: Bitwarden removed, owner-only secrets never go through `with-secrets.sh`):
-
-| File (mode 600) | Holds |
-|---|---|
-| `~/.config/ricotdin/prod-tunnel.env` | `DATABASE_URL_APP`, `DATABASE_URL_SERVICE`, `DATABASE_URL_WORKER`: the production runtime logins from `~/.config/ricotdin/db-logins.env` on the Mac, with `@postgres:5432` replaced by `@127.0.0.1:15432` |
-| `~/.config/ricotdin/prod-key.env` | `KEY_ENCRYPTION_SECRET`: the production value (from `api.env` on the Mac), only if a session needs it |
-
+**No secret is stored on the dev machine** (same as tudocuatui): the owner types the passwords of
+the three runtime logins (`ricotdin_api_login`, `ricotdin_service_login`, `ricotdin_worker_login`;
+their values are in `~/.config/ricotdin/db-logins.env` on the Mac) each time the dev loop starts.
+They are read with `read -s`, URL-encoded into `postgresql://<login>:…@127.0.0.1:15432/ricotdin`
+and exported only to the API process; never written to a file, printed or passed as an argument.
 `app/api/.env.local` (gitignored) holds **non-secret** settings only:
 `WEB_ORIGIN` / `ALLOWED_ORIGINS=http://localhost:5173`, `MMLABS_ISSUER`, `LOG_LEVEL`, `API_DOCS`.
 
-The owner, in their own terminal, from `app/api`:
+The owner, in their own terminal (WSL / macOS), from the repo root:
 
 ```bash
-uv run --env-file .env.local --env-file ~/.config/ricotdin/prod-tunnel.env \
-  uvicorn app.main:create_app --factory --reload
+app/web/scripts/start-dev.sh               # sign in → tunnel → 3 passwords → API on 127.0.0.1:8000 → npm run dev
+app/web/scripts/start-dev.sh --with-key    # also asks for KEY_ENCRYPTION_SECRET
 ```
+
+Details of the dev loop (dev token, proxy): `app/web/README.md`.
 
 Guardrails (every request writes real data):
 
-- **Only the owner runs this.** Agents never read these files (`permissions.deny` in spaceM) and
-  never start the API against production; agents use a local container.
-- **No owner `DATABASE_URL`**: schema changes go through the deploy only.
+- **Only the owner runs this.** Agents never start the API against production; agents use a local
+  container.
+- **No owner `DATABASE_URL`**: schema changes go through the deploy only. The script builds only the
+  three runtime logins and always through the tunnel.
 - **Never run against production:** the worker (it would claim real users' jobs and race the
   production worker), `alembic`, `pytest`, `provision_db_roles`, `gen_baseline`, `connect_gdrive`.
 - **`KEY_ENCRYPTION_SECRET` is unset by default.** Stored provider keys and Drive are then
-  unavailable (media, uploads fail). For a session that needs them, add
-  `--env-file ~/.config/ricotdin/prod-key.env` (the production value only). Never another key:
-  anything saved locally (admin keys, Drive config) would be encrypted with it and unreadable in
-  production.
+  unavailable (media, uploads fail). For a session that needs them, use `--with-key` and type the
+  production value (from `api.env` on the Mac) only. Never another key: anything saved locally
+  (admin keys, Drive config) would be encrypted with it and unreadable in production.
 - `pg_dump` (`docs/ops/backup-restore.md`) before a risky session; stop the tunnel when done.
