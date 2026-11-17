@@ -36,5 +36,7 @@ grep -E '^DATABASE_URL_' .env > runtime.env          # runtime-only: never the o
 docker run -p 8000:8000 --env-file runtime.env ricotdin-api:local
 ```
 
-Never point `DATABASE_URL` at the `main` (production) branch: the integration tests create and drop
-`ricotdin_test_*` databases there.
+Never point `DATABASE_URL` at production: the integration tests create and drop
+`ricotdin_test_*` databases there. The owner may run the API alone against production through the
+pg tunnel (runtime logins injected by `scripts/with-secrets.sh`, never in a file) with the guardrails in
+`docs/ops/self-hosted-postgres.md` (*Local dev against production*).
