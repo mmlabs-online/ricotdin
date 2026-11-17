@@ -334,7 +334,7 @@ As a user, I want to manage my notification preferences (e.g. auto-summary email
 ---
 
 ### PRF-11 — Connected sessions / devices
-**Status:** ❌ Not started
+**Status:** ⛔ Superseded (owner 2026-11-17): since AUT-05 ricotdin signs in with the mmlabs account, whose sessions and devices are managed in mmlabs (org-admin), not here. Not built in ricotdin.
 
 **User Story**  
 As a user, I want to see and sign out my active sessions/devices so I can secure my account if a device is lost.
@@ -357,7 +357,7 @@ As a user, I want to see and sign out my active sessions/devices so I can secure
 ---
 
 ### PRF-12 — Two-factor authentication
-**Status:** ❌ Not started
+**Status:** ⛔ Superseded (owner 2026-11-17): since AUT-05 a second factor belongs to the mmlabs sign-in (org-admin), which every mmlabs app shares. Not built in ricotdin.
 
 **User Story**  
 As a user, I want to enable 2FA so my account has an extra layer of protection.

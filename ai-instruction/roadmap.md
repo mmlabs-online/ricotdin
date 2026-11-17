@@ -35,7 +35,6 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 | Item | Codes | Depends on |
 |---|---|---|
 | Own activity feed; library search | PRF-09, PRO-05 | — |
-| Active sessions + remote sign-out; then 2FA (TOTP) | PRF-11, PRF-12 | — (90-day refresh lifetime shipped in SEC-05) |
 | Speaker naming / personalised diarization | PRO-04 | — |
 | Admin data retention + user export / full erase (built together) | ADM-11, PRF-13 | — |
 | Auto-email results; proactive reminders; notification settings | PRO-01, PRO-03, PRF-10 | PRO-03 + PRF-10 after PRO-01; **PRO-03 lifts the CLAUDE.md §1 exclusion (owner 2026-11-09): update §1 in that PR** |
@@ -60,6 +59,7 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 | PRO-02 Google Calendar sync | Out of MVP scope (CLAUDE.md §1); not chosen 2026-11-09 | Explicit owner go decision |
 | PRO-07 native app (Tauri), PRO-08 AI quality, COM-04 tenant isolation | No UI + API of their own (owner rule 2026-11-09); PRO-07 is a project of its own | After v2 is live |
 | COM-02 legal docs | Not code (needs a lawyer) | Before outside users or real payments |
+| PRF-11 sessions / devices, PRF-12 2FA (superseded 2026-11-17) | Since AUT-05 sign-in is the mmlabs account: sessions, devices and a second factor belong to mmlabs (org-admin), shared by every mmlabs app | If mmlabs adds them, ricotdin only links to its account page |
 | Dependabot | Owner decision 2026-11-09 | — |
 | PRV-01 Gemini billing | Owner decision 2026-10-23 | Outside users, commercialisation, legal requirement |
 | PRV-03, CST-02 | Superseded (PRV-02 purge; storage is Drive, ARC-17) — close CST-02 | — |
