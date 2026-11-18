@@ -43,6 +43,10 @@ API_URL="http://127.0.0.1:8000"
 [ -f "$API/.env.local" ] || fail "app/api/.env.local not found (non-secret settings: WEB_ORIGIN, MMLABS_ISSUER, ...)."
 grep -Eq '^[[:space:]]*(export[[:space:]]+)?(DATABASE_URL|KEY_ENCRYPTION_SECRET)' "$API/.env.local" \
   && fail "remove DATABASE_URL* / KEY_ENCRYPTION_SECRET from app/api/.env.local; this script asks for them at runtime."
+# uv prints the text of a line it cannot parse: a stray pasted secret would land in the terminal. Report
+# line numbers only.
+bad_lines="$(grep -nEv '^[[:space:]]*(#|$)|^[A-Z][A-Z0-9_]*=' "$API/.env.local" | cut -d: -f1 | tr '\n' ' ' || true)"
+[ -z "$bad_lines" ] || fail "app/api/.env.local line(s) ${bad_lines}are not NAME=value (a pasted value?); fix them, uv would print them."
 for tool in docker uv npm node curl pkill pgrep; do
   command -v "$tool" >/dev/null || fail "$tool not found."
 done
@@ -68,6 +72,20 @@ if [ "$(docker inspect -f '{{.State.Running}}' "$TUNNEL" 2>/dev/null || true)" !
   echo "Starting $TUNNEL ..."
   docker start "$TUNNEL" >/dev/null 2>&1 || fail "cannot start $TUNNEL. New machine: deployment repo postgres/remote/compose.yml (docker compose up -d), see postgres/REMOTE-ACCESS.md."
 fi
+# The Cloudflare Access session lasts 24 h; once it is over cloudflared logs "websocket: bad handshake"
+# and, on the next connection, the login link (not a secret: it only starts the email one-time PIN).
+access_hint() {
+  logs="$(docker logs --since 10m "$TUNNEL" 2>&1 || true)"
+  link="$(printf '%s\n' "$logs" | grep -oE 'https://db\.mmlabs\.online/cdn-cgi/access/cli[^[:space:]"]*' | tail -1 || true)"
+  if [ -n "$link" ]; then
+    echo "start-dev: Cloudflare Access login needed. Open this link, enter the emailed code, then run again:" >&2
+    echo "  $link" >&2
+  elif printf '%s\n' "$logs" | grep -q 'bad handshake'; then
+    echo "start-dev: the Cloudflare Access login expired (\"bad handshake\" in docker logs $TUNNEL)." >&2
+    echo "  Run: docker restart $TUNNEL && sleep 3 && (exec 3<>/dev/tcp/127.0.0.1/15432) ; docker logs --tail 20 $TUNNEL" >&2
+    echo "  and open the https://db.mmlabs.online/cdn-cgi/access/cli... link it prints." >&2
+  fi
+}
 # cloudflared accepts the local TCP connection even when it cannot reach db.mmlabs.online (Access login
 # expired, tunnel still starting), so an open port proves nothing: Postgres must answer an SSLRequest
 # (8 bytes) with one byte, N or S.
@@ -80,7 +98,7 @@ for _ in 1 2 3 4 5 6; do
   if pg_answers; then up=1; break; fi
   sleep 2
 done
-[ -n "$up" ] || fail "Postgres does not answer through $DB_HOST. Cloudflare Access login expired? Open the login link from: docker logs $TUNNEL (deployment repo postgres/REMOTE-ACCESS.md), then run this again."
+[ -n "$up" ] || { access_hint; fail "Postgres does not answer through $DB_HOST (deployment repo postgres/REMOTE-ACCESS.md)."; }
 
 # --- 3. API on the production database ---------------------------------------------------
 echo "Step 3/4: API (passwords of the runtime logins: ~/.config/ricotdin/db-logins.env on the Mac)"
@@ -151,10 +169,10 @@ echo "Waiting for the API ($API_URL/health) ..."
 ready=""
 for _ in $(seq 1 120); do
   if curl -fsS -o /dev/null -m 2 "$API_URL/health" 2>/dev/null; then ready=1; break; fi
-  kill -0 "$api_pid" 2>/dev/null || fail "the API exited; see the [api] lines above (wrong password? tunnel login expired? docker logs $TUNNEL)."
+  kill -0 "$api_pid" 2>/dev/null || { access_hint; fail "the API exited; see the [api] lines above (wrong password?)."; }
   sleep 1
 done
-[ -n "$ready" ] || fail "the API did not answer within 120 s (see the [api] lines above)."
+[ -n "$ready" ] || { access_hint; fail "the API did not answer within 120 s (see the [api] lines above)."; }
 
 # --- 4. SPA ------------------------------------------------------------------------------
 echo

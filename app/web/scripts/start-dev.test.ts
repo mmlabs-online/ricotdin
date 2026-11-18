@@ -85,7 +85,13 @@ describe('scripts/start-dev.sh (static invariants)', () => {
     const probe = code.indexOf('if pg_answers; then')
     expect(probe).toBeGreaterThan(code.indexOf('docker start'))
     expect(probe).toBeLessThan(code.indexOf('ask_login ricotdin_api_login'))
-    expect(code).toContain('Cloudflare Access login expired?')
+    expect(code).toContain('access_hint; fail "Postgres does not answer')
+    expect(code).toContain('access_hint; fail "the API exited')
+  })
+
+  it('refuses a .env.local line that is not NAME=value, reporting line numbers only (uv would print the text)', () => {
+    expect(code).toContain("grep -nEv '^[[:space:]]*(#|$)|^[A-Z][A-Z0-9_]*=' \"$API/.env.local\" | cut -d: -f1")
+    expect(code.indexOf('bad_lines=')).toBeLessThan(code.indexOf('Step 1/4'))
   })
 
   it('binds the API to loopback and starts the SPA in dev token mode', () => {
