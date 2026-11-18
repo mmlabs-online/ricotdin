@@ -71,8 +71,21 @@ describe('scripts/start-dev.sh (static invariants)', () => {
     expect(code.match(/export /g)).toHaveLength(2)
   })
 
-  it('stops the API process tree on exit, not only uv', () => {
+  it('stops the API process tree on exit, not only uv, and SIGKILLs a startup stuck on the database', () => {
     expect(code).toMatch(/pkill -TERM -P "\$api_pid"/)
+    expect(code).toContain('kids="$(pgrep -P "$api_pid" || true)"')
+    expect(code).toContain('kill -KILL "$api_pid" $kids')
+  })
+
+  it('checks that Postgres itself answers through the tunnel (an open port proves nothing) before the passwords', () => {
+    // SSLRequest: length 8, code 80877103, as octal escapes (never literal NUL bytes in the script).
+    expect(src).toContain("local req='\\000\\000\\000\\010\\004\\322\\026\\057'")
+    expect(src).not.toContain('\0')
+    expect(code).toContain('read -r -t 8 -n 1 _ <&3')
+    const probe = code.indexOf('if pg_answers; then')
+    expect(probe).toBeGreaterThan(code.indexOf('docker start'))
+    expect(probe).toBeLessThan(code.indexOf('ask_login ricotdin_api_login'))
+    expect(code).toContain('Cloudflare Access login expired?')
   })
 
   it('binds the API to loopback and starts the SPA in dev token mode', () => {

@@ -40,7 +40,7 @@ scripts/dev-token.sh                     # asks email + password; RICOTDIN_DEV_E
 RICOTDIN_DEV_TOKEN=1 npm run dev         # http://localhost:5173 opens signed in as that account
 ```
 
-- The token (15 min today; 12 h once org-admin-api USR-13 sets `ACCESS_TOKEN_TTL_SECONDS=43200`; the
+- The token (12 h since org-admin-api USR-13, `ACCESS_TOKEN_TTL_SECONDS=43200`; the
   API checks only `exp`, so it needs no change) is written to `~/.config/ricotdin/dev-token` (`RICOTDIN_DEV_TOKEN_FILE`),
   outside the repo, and never reaches the browser. When it expires the app shows the retry screen and
   Vite logs `[dev-token] token expired - run scripts/dev-token.sh`: run it again, press retry.
@@ -53,7 +53,7 @@ RICOTDIN_DEV_TOKEN=1 npm run dev         # http://localhost:5173 opens signed in
   `localhost` / `127.0.0.1` Host with a matching `Origin`; a curl call must send
   `-H 'Sec-Fetch-Site: same-origin'` on purpose. Drive uploads go straight to Google, so the API still
   needs `WEB_ORIGIN=http://localhost:5173`.
-- The token is a real production ricotdin token: it stays valid for its 15 minutes even after the
+- The token is a real production ricotdin token: it stays valid until it expires even after the
   script's logout. `npm run dev` refuses `--host`, `::1` and `allowedHosts: true`. Identity asks for
   Turnstile after 3 failed sign-ins: sign in once on the production site, then retry.
 

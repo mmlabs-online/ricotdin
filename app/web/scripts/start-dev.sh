@@ -43,7 +43,7 @@ API_URL="http://127.0.0.1:8000"
 [ -f "$API/.env.local" ] || fail "app/api/.env.local not found (non-secret settings: WEB_ORIGIN, MMLABS_ISSUER, ...)."
 grep -Eq '^[[:space:]]*(export[[:space:]]+)?(DATABASE_URL|KEY_ENCRYPTION_SECRET)' "$API/.env.local" \
   && fail "remove DATABASE_URL* / KEY_ENCRYPTION_SECRET from app/api/.env.local; this script asks for them at runtime."
-for tool in docker uv npm node curl pkill; do
+for tool in docker uv npm node curl pkill pgrep; do
   command -v "$tool" >/dev/null || fail "$tool not found."
 done
 curl -fsS -o /dev/null -m 2 "$API_URL/health" 2>/dev/null && fail "something already answers on $API_URL; stop it first."
@@ -68,12 +68,19 @@ if [ "$(docker inspect -f '{{.State.Running}}' "$TUNNEL" 2>/dev/null || true)" !
   echo "Starting $TUNNEL ..."
   docker start "$TUNNEL" >/dev/null 2>&1 || fail "cannot start $TUNNEL. New machine: deployment repo postgres/remote/compose.yml (docker compose up -d), see postgres/REMOTE-ACCESS.md."
 fi
+# cloudflared accepts the local TCP connection even when it cannot reach db.mmlabs.online (Access login
+# expired, tunnel still starting), so an open port proves nothing: Postgres must answer an SSLRequest
+# (8 bytes) with one byte, N or S.
+pg_answers() {
+  local req='\000\000\000\010\004\322\026\057'
+  (exec 3<>/dev/tcp/127.0.0.1/15432 && printf "$req" >&3 && IFS= read -r -t 8 -n 1 _ <&3) 2>/dev/null
+}
 up=""
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if (exec 3<>/dev/tcp/127.0.0.1/15432) 2>/dev/null; then up=1; break; fi
-  sleep 1
+for _ in 1 2 3 4 5 6; do
+  if pg_answers; then up=1; break; fi
+  sleep 2
 done
-[ -n "$up" ] || fail "nothing listens on $DB_HOST ($TUNNEL)."
+[ -n "$up" ] || fail "Postgres does not answer through $DB_HOST. Cloudflare Access login expired? Open the login link from: docker logs $TUNNEL (deployment repo postgres/REMOTE-ACCESS.md), then run this again."
 
 # --- 3. API on the production database ---------------------------------------------------
 echo "Step 3/4: API (passwords of the runtime logins: ~/.config/ricotdin/db-logins.env on the Mac)"
@@ -120,8 +127,16 @@ api_pid=""
 cleanup() {
   if [ -n "$api_pid" ] && kill -0 "$api_pid" 2>/dev/null; then
     # api_pid is uv; stop its uvicorn child too, so the API never outlives this script on production.
+    kids="$(pgrep -P "$api_pid" || true)"
     pkill -TERM -P "$api_pid" 2>/dev/null || true
     kill "$api_pid" 2>/dev/null || true
+    # uvicorn ignores SIGTERM while its startup waits on the database: give it 10 s, then SIGKILL.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "$api_pid" 2>/dev/null || break
+      sleep 1
+    done
+    # shellcheck disable=SC2086
+    kill -KILL "$api_pid" $kids 2>/dev/null || true
     wait "$api_pid" 2>/dev/null || true
   fi
 }
@@ -134,12 +149,12 @@ unset url_app url_service url_worker key
 
 echo "Waiting for the API ($API_URL/health) ..."
 ready=""
-for _ in $(seq 1 60); do
+for _ in $(seq 1 120); do
   if curl -fsS -o /dev/null -m 2 "$API_URL/health" 2>/dev/null; then ready=1; break; fi
   kill -0 "$api_pid" 2>/dev/null || fail "the API exited; see the [api] lines above (wrong password? tunnel login expired? docker logs $TUNNEL)."
   sleep 1
 done
-[ -n "$ready" ] || fail "the API did not answer within 60 s."
+[ -n "$ready" ] || fail "the API did not answer within 120 s (see the [api] lines above)."
 
 # --- 4. SPA ------------------------------------------------------------------------------
 echo
