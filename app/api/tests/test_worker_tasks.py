@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from app.domain.models import SYSTEM_DEFAULT
 from app.services.ai import catalog
 from app.worker.schedule import LEASE_S, TASK_TIMEOUT_S, TASKS
 from app.worker.tasks.keyhealth import (
@@ -89,13 +90,20 @@ def test_no_probe_puts_the_key_in_the_url() -> None:
         assert "secret-key" in "".join(p.headers.values())
 
 
-def test_probe_shapes() -> None:
+def test_bug_022_gemini_probe_generates_with_the_default_model() -> None:
+    # Listing models succeeds even when the key cannot call the model the app uses.
     gemini = probe_for("gemini_api_key", "k")
     assert gemini is not None
     assert (gemini.method, gemini.url) == (
-        "GET", "https://generativelanguage.googleapis.com/v1beta/models",
+        "POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
     )  # fmt: skip
-    assert gemini.headers == {"x-goog-api-key": "k"} and gemini.body is None
+    assert catalog.PROVIDERS["gemini"].probe_model == SYSTEM_DEFAULT[1]
+    assert gemini.headers == {"x-goog-api-key": "k"}
+    assert gemini.body == {"contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+                           "generationConfig": {"maxOutputTokens": 1}}  # fmt: skip
+
+
+def test_probe_shapes() -> None:
     openai = probe_for("openai_api_key", "k")
     assert openai is not None and (openai.method, openai.url) == (
         "GET", "https://api.openai.com/v1/models",

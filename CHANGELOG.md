@@ -15,6 +15,9 @@
 
 - Phát hành bằng tên nhánh: push nhánh mới `release/X.Y.Z` là tự tạo tag `vX.Y.Z`, build image và tự merge PR deployment (tức là deploy luôn); không cần bump version hay tag tay. Bản hotfix cho dòng cũ hơn bản mới nhất chỉ mở PR, không tự deploy (OPS-09).
 
+### Sửa lỗi
+- Phân tích cuộc họp và chat bằng Gemini không còn lỗi "The AI service could not process this meeting" (Google trả 404 cho `gemini-2.5-flash` với project mới): model mặc định là `gemini-3.8-flash`; cuộc họp và cài đặt đang ghi `gemini-2.5-flash` tự gọi `gemini-3.8-flash` (bấm chạy lại cuộc họp lỗi). Kiểm tra key Gemini giờ gọi thử đúng model này, nên key không dùng được model sẽ không còn hiện "healthy" (BUG-022).
+
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.
 - Web env: `RICOTDIN_AUTH_URL=https://api.mmlabs.online` và secret mới `RICOTDIN_TURNSTILE_SITE_KEY` (site key của widget Turnstile mà org-admin-api dùng, widget phải có hostname `ricotdin.mmlabs.online`). Cập nhật `deploy-ricotdin-v2.yml` trên repo deployment.

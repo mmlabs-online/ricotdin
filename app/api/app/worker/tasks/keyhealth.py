@@ -55,7 +55,16 @@ def probe_for(config_key: str, key: str) -> Probe | None:
     if info is None:
         return None
     if info.kind == "gemini":
-        return Probe("GET", f"{info.base_url}/models", {"x-goog-api-key": key})
+        headers = {"x-goog-api-key": key}
+        if info.probe_model:
+            # Listing models succeeds even when the key cannot call the model the app uses
+            # (BUG-022): generate one token with the default model instead.
+            return Probe(
+                "POST", f"{info.base_url}/models/{info.probe_model}:generateContent", headers,
+                {"contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+                 "generationConfig": {"maxOutputTokens": 1}},
+            )  # fmt: skip
+        return Probe("GET", f"{info.base_url}/models", headers)
     if info.kind == "openai_compat":
         bearer = {"Authorization": f"Bearer {key}"}
         if info.probe_model:

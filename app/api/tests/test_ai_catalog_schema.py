@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from app.domain.models import REGISTERED, SYSTEM_DEFAULT, model_label
-from app.services.ai.catalog import MODELS, PROVIDERS, UnknownModel, find_model
+from app.services.ai.catalog import MODELS, PROVIDERS, RETIRED, UnknownModel, api_model, find_model
 from app.services.ai.schema import to_gemini_schema, to_openai_strict_schema
 
 # --- catalog ------------------------------------------------------------------------------------
@@ -41,6 +41,22 @@ def test_find_model() -> None:
         find_model("gemini", "gemini-9")
     with pytest.raises(UnknownModel):
         find_model("nope", "gpt-4o")
+
+
+def test_bug_022_the_default_is_a_model_google_still_serves() -> None:
+    # Since 2026-09-18 Google answers gemini-2.5-flash with 404 for new projects.
+    assert SYSTEM_DEFAULT == ("gemini", "gemini-3.8-flash")
+    assert SYSTEM_DEFAULT in REGISTERED
+    assert api_model(*SYSTEM_DEFAULT) == "gemini-3.8-flash"
+
+
+def test_bug_022_a_retired_model_is_called_as_its_replacement() -> None:
+    # Stored rows (meeting locks, profiles, app_settings) still name it: it stays registered.
+    assert ("gemini", "gemini-2.5-flash") in REGISTERED
+    assert api_model("gemini", "gemini-2.5-flash") == "gemini-3.8-flash"
+    assert api_model("openai", "gpt-4o") == "gpt-4o"
+    for (provider, _), new in RETIRED.items():
+        assert (provider, new) in REGISTERED and (provider, new) not in RETIRED
 
 
 def test_labels() -> None:

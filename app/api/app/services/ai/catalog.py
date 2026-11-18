@@ -40,12 +40,20 @@ class UnknownModel(LookupError):
     pass
 
 
+# The system default generation model (``domain.models.SYSTEM_DEFAULT``) and the model the Gemini
+# key health check generates with (BUG-022).
+GEMINI_DEFAULT = "gemini-3.8-flash"
+
 PROVIDERS: dict[str, ProviderInfo] = {
     p.name: p
     for p in (
         ProviderInfo(
-            "gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "Gemini"
-        ),
+            "gemini",
+            "gemini",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "Gemini",
+            GEMINI_DEFAULT,
+        ),  # fmt: skip
         ProviderInfo("openai", "openai_compat", "https://api.openai.com/v1", "OpenAI"),
         ProviderInfo("grok", "openai_compat", "https://api.x.ai/v1", "Grok", "grok-3-mini"),
         ProviderInfo("anthropic", "anthropic", "https://api.anthropic.com", "Anthropic"),
@@ -53,6 +61,7 @@ PROVIDERS: dict[str, ProviderInfo] = {
 }
 
 MODELS: tuple[ModelInfo, ...] = (
+    ModelInfo("gemini", GEMINI_DEFAULT, f"Gemini — {GEMINI_DEFAULT}"),
     ModelInfo("gemini", "gemini-2.5-flash", "Gemini — gemini-2.5-flash"),
     ModelInfo("openai", "gpt-4o", "OpenAI — GPT-4o"),
     ModelInfo("openai", "gpt-4o-mini", "OpenAI — GPT-4o mini"),
@@ -67,6 +76,17 @@ MODELS: tuple[ModelInfo, ...] = (
 # Embeddings are pinned (the stored vectors and every query must use the same model): changing it
 # means re-embedding every meeting, a migration of its own.
 EMBEDDING = EmbeddingModel("gemini", "gemini-embedding-001", 768, "gemini-embedding")
+
+
+# Models the provider no longer serves (to new projects), called as their replacement. They stay in
+# MODELS because stored rows name them: meeting locks, profile defaults, app_settings (BUG-022:
+# Google answers gemini-2.5-flash with 404 for new projects since 2026-09-18).
+RETIRED: dict[tuple[str, str], str] = {("gemini", "gemini-2.5-flash"): GEMINI_DEFAULT}
+
+
+def api_model(provider: str, model: str) -> str:
+    """The model id sent to the provider for a stored (provider, model) pair."""
+    return RETIRED.get((provider, model), model)
 
 
 def find_model(provider: str, model: str) -> tuple[ProviderInfo, ModelInfo]:

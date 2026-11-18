@@ -32,6 +32,7 @@
 | BUG-019 | migrate_from_supabase crashes printing the report on a Windows console (cp1252) and exits 1 even on PASS | S3 | fixed | dev | ARC-03 | bugfix | dev | fix/BUG-019-migrate-console-encoding, PR #39 |
 | BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
+| BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired |
 
 ---
 
@@ -446,3 +447,45 @@ suite. Verified against `pgvector/pgvector:pg18`: full `pytest -q` 819 passed (8
 - **Status:** v1 is frozen to hotfixes and v1.1.1 is not deployed, so no hotfix is planned unless
   v1 goes live again. Found while porting it to v2 (ARC-08e, 2026-11-03), where the ledger stays
   the source of truth and the wallet is SET to the ledger sum, with a zero-delta audit row.
+
+
+## BUG-022 — Gemini generation 404: gemini-2.5-flash no longer served to new users; key health says healthy
+
+**Reported:** 2026-11-18 · **Severity:** S1 (every Gemini analyse/chat fails in production: core flow down) · **Found in:** v2.2.0 · **Feature:** ARC-08c, ARC-08e
+
+**Steps to reproduce**
+1. Production v2.2.0, Gemini keys from new Google AI projects in the v2 key pool.
+2. Upload a meeting (or chat): the job fails at step `analyse`, `last_error = AIRejected: gemini HTTP 404 NOT_FOUND`,
+   meeting error "The AI service could not process this meeting." (meeting 7531e43b, 2026-11-18).
+3. Admin → keys → health check: every Gemini key is `healthy` (`OK (200)`).
+
+**Expected**
+Analyse and chat succeed with a healthy Gemini key; a key that cannot generate is not reported healthy.
+
+**Actual**
+Google answers `generateContent` with 404: "This model models/gemini-2.5-flash is no longer available to new users.
+Please update your code to use models/gemini-3.8-flash" (owner's direct call with the same key, 2026-11-18). Since
+2026-09-18 Google limits 2.5 models to projects that used them before. The key can see `gemini-3.8-flash`.
+
+**Root cause** (confirmed by the owner's direct call)
+- `gemini-2.5-flash` is the only Gemini generation model: `app/api/app/services/ai/catalog.py:56` (`MODELS`), the
+  built-in `SYSTEM_DEFAULT` at `app/api/app/domain/models.py:12`, and the seeded settings `generation.system_default` /
+  `generation.allowed_models` / `pipeline.model` (`migrations/sql/0001_baseline.sql:1129-1135`). Each meeting stores its
+  model at first start (`services/ai/model_lock.py`) and profiles store a default, so stored rows name it too.
+- The Gemini health probe is `GET /models` (`app/api/app/worker/tasks/keyhealth.py:58`): it proves the key is valid,
+  not that it can call the model the app uses.
+
+**Fix** (bugfix on `main`, owner choice; no migration)
+- `catalog.GEMINI_DEFAULT = "gemini-3.8-flash"` (the model Google's 404 names): registered in `MODELS`, the built-in
+  `SYSTEM_DEFAULT`, and the Gemini `probe_model`.
+- `catalog.RETIRED` + `api_model()`: a stored `gemini:gemini-2.5-flash` (meeting locks, profile defaults, app_settings)
+  stays registered and valid but is sent to Google as `gemini-3.8-flash`; `usage_log.model` records the model called.
+  A failed meeting succeeds on retry without touching its lock.
+- Key health: the Gemini probe generates one token with `probe_model` (`generateContent`, `maxOutputTokens: 1`)
+  instead of listing models, so a key that cannot call the model is no longer `healthy` (a 404 is `unknown`).
+- Regression tests: `test_ai_catalog_schema.py::test_bug_022_the_default_is_a_model_google_still_serves`,
+  `::test_bug_022_a_retired_model_is_called_as_its_replacement`,
+  `test_ai_service.py::test_bug_022_a_meeting_locked_to_gemini_2_5_flash_calls_the_replacement`,
+  `test_worker_tasks.py::test_bug_022_gemini_probe_generates_with_the_default_model` (all failed before the fix).
+- Follow-ups (not done): admins may add `gemini-3.8-flash` to the allowed models and make it the system default at
+  `/admin` (the 2.5 entry keeps working meanwhile); a clearer health detail for a 404 ("probe model unavailable").
