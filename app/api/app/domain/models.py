@@ -3,13 +3,13 @@ v1 preferences route). Pure. The model list lives in ``app.services.ai.catalog``
 
 from typing import Any
 
-from app.services.ai.catalog import MODELS
+from app.services.ai.catalog import GEMINI_DEFAULT, MODELS
 
 Pick = tuple[str, str]  # (provider, model)
 
 REGISTERED: tuple[Pick, ...] = tuple((m.provider, m.model) for m in MODELS)
 _LABELS = {(m.provider, m.model): m.label for m in MODELS}
-SYSTEM_DEFAULT: Pick = ("gemini", "gemini-2.5-flash")
+SYSTEM_DEFAULT: Pick = ("gemini", GEMINI_DEFAULT)
 FALLBACK_ALLOWED: list[Pick] = [SYSTEM_DEFAULT]
 
 

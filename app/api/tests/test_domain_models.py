@@ -47,7 +47,7 @@ def test_allowed_models_drops_unregistered_and_malformed() -> None:
 def test_allowed_models_falls_back_when_not_a_list() -> None:
     assert allowed_models(None) == FALLBACK_ALLOWED
     assert allowed_models({"a": 1}) == FALLBACK_ALLOWED
-    assert FALLBACK_ALLOWED == [("gemini", "gemini-2.5-flash")]
+    assert FALLBACK_ALLOWED == [("gemini", "gemini-3.8-flash")]
 
 
 def test_is_model_allowed() -> None:

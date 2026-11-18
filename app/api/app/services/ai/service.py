@@ -213,6 +213,7 @@ class AIService:
             info, _ = catalog.find_model(provider, model)
         except catalog.UnknownModel:
             raise AIRejected(detail=f"unknown generation model {provider}:{model}") from None
+        model = catalog.api_model(provider, model)  # a retired model is called as its replacement
         adapter = self.adapters.get(info.kind)
         if adapter is None:
             raise AIRejected(detail=f"no adapter for provider kind {info.kind}")

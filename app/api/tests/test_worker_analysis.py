@@ -160,8 +160,11 @@ def test_parse_pick() -> None:
 
 def test_system_default_must_be_registered() -> None:
     assert system_default({"provider": "openai", "model": "gpt-4o"}) == GPT
-    assert system_default({"provider": "openai", "model": "gpt-9"}) == GEMINI
-    assert system_default(None) == GEMINI
+    assert system_default({"provider": "openai", "model": "gpt-9"}) == (
+        "gemini",
+        "gemini-3.8-flash",
+    )
+    assert system_default(None) == ("gemini", "gemini-3.8-flash")  # BUG-022
 
 
 @pytest.mark.parametrize(

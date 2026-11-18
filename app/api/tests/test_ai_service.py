@@ -98,7 +98,7 @@ def parse_json(raw: str) -> dict[str, Any]:
     return data
 
 
-def call(svc: AIService, provider: str = "gemini", model: str = "gemini-2.5-flash",
+def call(svc: AIService, provider: str = "gemini", model: str = "gemini-3.8-flash",
          retry: str | None = "STRICT", parse: Callable[[str], Any] = parse_json) -> Any:  # fmt: skip
     async def go() -> Any:
         return await svc.generate_json(
@@ -117,11 +117,19 @@ K1, K2 = KeyWithMeta(KID, "key-one"), KeyWithMeta(None, "key-two")
 # --- request shapes -----------------------------------------------------------------------------
 
 
+def test_bug_022_a_meeting_locked_to_gemini_2_5_flash_calls_the_replacement() -> None:
+    server = Server(gemini_ok('{"x": "a"}'))
+    svc = Svc(server, [K1])
+    assert call(svc, model="gemini-2.5-flash") == {"x": "a"}
+    assert server.requests[0].url.path == "/v1beta/models/gemini-3.8-flash:generateContent"
+    assert svc.usage[0]["model"] == "gemini-3.8-flash"  # usage names the model actually billed
+
+
 def test_gemini_request_uses_a_header_key_and_the_converted_schema() -> None:
     server = Server(gemini_ok('{"x": "a"}'))
     assert call(Svc(server, [K1])) == {"x": "a"}
     req = server.requests[0]
-    assert req.url.path == "/v1beta/models/gemini-2.5-flash:generateContent"
+    assert req.url.path == "/v1beta/models/gemini-3.8-flash:generateContent"
     assert req.url.host == "generativelanguage.googleapis.com"
     assert "key" not in req.url.params and req.headers["x-goog-api-key"] == "key-one"
     body = server.body(0)
