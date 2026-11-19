@@ -20,7 +20,8 @@
 - **Answer:** `AIService.generate_json` (operation `chat`, no strict retry). Excerpts and history
   are untrusted (the system prompt says so); a citation is kept only if its `chunk_id` was
   retrieved, and its meeting/times come from that chunk. Bad output → error reply (v1 showed the
-  raw text). Model: meeting chat = the meeting's locked pair, else the system default; folder /
+  raw text). Model: meeting chat = the meeting's locked pair while the admin still allows it (BUG-023), else the
+  system default; folder /
   global = the system default (AIP-04). Chat does not lock a model.
 - **Quota (v1 QUO-03, actor pays):** one agent query per question via `quota_apply_movement`
   (`agent:<message id>:charge`, no overdraw) in the same transaction as the user message;

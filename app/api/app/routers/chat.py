@@ -58,7 +58,7 @@ from app.rag.scope import (
 from app.routers._common import SERVICE, as_dict, enforce_limit, json_object, jsonb
 from app.routers.meetings import record_activity
 from app.services.access import folder_viewable, meeting_facts
-from app.services.ai.model_lock import stored_pick
+from app.services.ai.model_lock import stored_pick, usable_lock
 from app.services.ai.service import AIService, UsageContext
 from app.worker.embed import vector_literal
 
@@ -256,7 +256,10 @@ async def chat(request: Request, identity: Identity, db: Db) -> dict[str, Any]:
 
     async with db.role_transaction(SERVICE) as conn:
         if mid is not None:
-            pick = await _check_meeting(conn, mid, me) or await _system_default(conn)
+            # BUG-023: a lock the admin no longer allows → the system default
+            pick = await usable_lock(
+                conn, await _check_meeting(conn, mid, me)
+            ) or await _system_default(conn)
         else:
             if fid is not None:
                 await _check_folder(conn, fid, me)

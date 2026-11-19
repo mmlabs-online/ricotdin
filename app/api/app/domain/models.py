@@ -78,6 +78,13 @@ def resolve_generation_model(
     return default
 
 
+def lock_is_valid(held: Pick, allowed: list[Pick], default: Pick) -> bool:
+    """BUG-023: a meeting's locked pair is kept only while the admin still allows it (or it is the
+    system default); otherwise it is resolved again, so withdrawing a model (e.g. one without keys)
+    moves its meetings to the current choice."""
+    return held == default or is_model_allowed(*held, allowed)
+
+
 MAX_CHARGE_SECONDS = 86_400
 
 

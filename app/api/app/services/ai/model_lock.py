@@ -2,7 +2,8 @@
 ``lib/ai/resolve.ts``). Written once, at the first ``start`` of a meeting: the upload's
 ``payload.preferred_provider/model`` (only if allowed — it is unchecked at ``/uploaded``), else the
 owner's default (``profiles.default_*``), else the system default. Every later run and
-``regenerate`` reuse the stored pair."""
+``regenerate`` reuse the stored pair while the admin still allows it (BUG-023: a withdrawn model is
+resolved again and the new pair stored)."""
 
 import json
 import uuid
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.domain.models import (
     Pick,
     allowed_models,
+    lock_is_valid,
     parse_pick,
     resolve_generation_model,
     system_default,
@@ -30,7 +32,7 @@ def stored_pick(provider: object, model: object) -> Pick | None:
     return None
 
 
-async def resolve_for(conn: AsyncConnection, user_id: uuid.UUID, payload: dict[str, Any]) -> Pick:
+async def _settings(conn: AsyncConnection) -> tuple[list[Pick], Pick]:
     rows = (
         await conn.execute(
             text(
@@ -40,6 +42,22 @@ async def resolve_for(conn: AsyncConnection, user_id: uuid.UUID, payload: dict[s
         )
     ).all()
     settings = {r.key: _json(r.value) for r in rows}
+    return (
+        allowed_models(settings.get("generation.allowed_models")),
+        system_default(settings.get("generation.system_default")),
+    )
+
+
+async def usable_lock(conn: AsyncConnection, held: Pick | None) -> Pick | None:
+    """The stored pair if it may still be used (BUG-023), else None (chat: the system default)."""
+    if held is None:
+        return None
+    allowed, default = await _settings(conn)
+    return held if lock_is_valid(held, allowed, default) else None
+
+
+async def resolve_for(conn: AsyncConnection, user_id: uuid.UUID, payload: dict[str, Any]) -> Pick:
+    allowed, default = await _settings(conn)
     pref_row = (
         await conn.execute(
             text("SELECT default_provider, default_model FROM profiles WHERE id = :u"),
@@ -50,32 +68,30 @@ async def resolve_for(conn: AsyncConnection, user_id: uuid.UUID, payload: dict[s
     pick = parse_pick(
         {"provider": payload.get("preferred_provider"), "model": payload.get("preferred_model")}
     )
-    return resolve_generation_model(
-        allowed_models(settings.get("generation.allowed_models")),
-        system_default(settings.get("generation.system_default")),
-        pref,
-        pick,
-    )
+    return resolve_generation_model(allowed, default, pref, pick)
 
 
 async def lock_model(
     conn: AsyncConnection, meeting: dict[str, Any], payload: dict[str, Any]
 ) -> Pick:
-    """The meeting's locked pair; resolves and stores one when the meeting has none."""
+    """The meeting's locked pair; resolves and stores one when the meeting has none, or when the
+    admin no longer allows the stored one (BUG-023)."""
     held = stored_pick(meeting.get("generation_provider"), meeting.get("generation_model"))
-    if held is not None:
+    if held is not None and await usable_lock(conn, held) is not None:
         return held
     pick = await resolve_for(conn, meeting["user_id"], payload)
     row = (
         await conn.execute(
             text(
                 "UPDATE meetings SET generation_provider = :p, generation_model = :m "
-                "WHERE id = :id AND generation_provider IS NULL "
+                "WHERE id = :id AND generation_provider IS NOT DISTINCT FROM CAST(:op AS text) "
+                "AND generation_model IS NOT DISTINCT FROM CAST(:om AS text) "
                 "RETURNING generation_provider, generation_model"
             ),
-            {"p": pick[0], "m": pick[1], "id": meeting["id"]},
+            {"p": pick[0], "m": pick[1], "id": meeting["id"],
+             "op": held[0] if held else None, "om": held[1] if held else None},
         )
-    ).first()
+    ).first()  # fmt: skip
     if row is None:  # locked concurrently: use what is stored
         again = (
             await conn.execute(
