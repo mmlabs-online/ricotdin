@@ -116,6 +116,9 @@
     `analyse` / `regenerate` for older meetings) only over the pair it replaces (concurrent locks keep
     the first). BUG-023: a model the admin withdraws (e.g. GPT without OpenAI keys) moves its meetings
     to the current choice on the next run; meeting chat then uses the system default (never writes).
+    BUG-024: `catalog.RETIRED` pairs stay registered but are read as their replacement everywhere
+    (`current_pick`: allow-list, system default, profile default, upload pick) and are not offered
+    (`SELECTABLE` for `/admin` and the profile picker).
   - Analysis (`analysis.py`): v1 prompt format (`[N] Speaker (s.s): text`, MEETING_DATE), prompt
     text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: only the repository root —
     five levels above the module — or `/app`, where the image carries it; never a walk up the tree). Untrusted output: fields fall back one by one, bad items

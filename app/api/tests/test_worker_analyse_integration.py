@@ -151,7 +151,7 @@ def _lock(world: dict[str, Any], case: Case, payload: dict[str, Any]) -> tuple[s
         # grok is registered but not on the seeded allow-list: unchecked at /uploaded, refused here
         ({"preferred_provider": "grok", "preferred_model": "grok-4"}, ("openai", "gpt-4o-mini"),
          ("openai", "gpt-4o-mini")),
-        ({}, None, ("gemini", "gemini-2.5-flash")),
+        ({}, None, ("gemini", "gemini-3.8-flash")),  # BUG-024
     ],
 )  # fmt: skip
 def test_model_lock_is_written_once(
@@ -182,9 +182,9 @@ def test_bug_023_a_lock_the_admin_no_longer_allows_is_re_resolved(world: dict[st
     _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = 'generation.allowed_models'",
          json.dumps([{"provider": "gemini", "model": "gemini-2.5-flash"}]))  # fmt: skip
     try:
-        assert _lock(world, case, {}) == ("gemini", "gemini-2.5-flash")  # the system default
+        assert _lock(world, case, {}) == ("gemini", "gemini-3.8-flash")  # the system default
         assert _rows(world, "SELECT generation_provider, generation_model FROM meetings "
-                     "WHERE id = %s", case) == [("gemini", "gemini-2.5-flash")]  # fmt: skip
+                     "WHERE id = %s", case) == [("gemini", "gemini-3.8-flash")]  # fmt: skip
     finally:
         _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = "
              "'generation.allowed_models'", json.dumps(before))  # fmt: skip

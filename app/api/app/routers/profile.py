@@ -27,7 +27,7 @@ from app.domain.activity import (
     own_activity_row,
     parse_own_activity_filters,
 )
-from app.domain.models import allowed_models, model_label
+from app.domain.models import allowed_models, current_pick, model_label
 from app.domain.rules import parse_preferences_patch, parse_profile_patch
 from app.domain.uploads import (
     MAX_AVATAR_BYTES,
@@ -41,6 +41,7 @@ from app.routers.admin._common import Admin, write_audit
 from app.routers.meetings import delete_files
 from app.services.access import folder_assignable
 from app.services.account import delete_account, export_account, zip_response
+from app.services.ai.model_lock import stored_pick
 from app.services.platform import Platform, get_platform
 from app.services.storage.media_token import DEFAULT_MEDIA_TTL_S
 from app.services.storage.ownership import is_owned_avatar_key
@@ -202,9 +203,13 @@ async def get_preferences(identity: Identity, db: Db) -> dict[str, Any]:
             )
         ).first()
     folder = row.default_folder_id if row else None
+    stored = stored_pick(row.default_provider, row.default_model) if row else None
+    current = (
+        current_pick(stored) if stored else None
+    )  # BUG-024: a retired default as its replacement
     return {
-        "provider": row.default_provider if row else None,
-        "model": row.default_model if row else None,
+        "provider": current[0] if current else None,
+        "model": current[1] if current else None,
         "defaultFolderId": str(folder) if folder else None,
         "locale": row.locale if row else None,
         "allowedModels": [

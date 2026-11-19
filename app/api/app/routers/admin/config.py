@@ -37,7 +37,7 @@ from app.domain.admin_config import (
     parse_new_key,
 )
 from app.domain.admin_ops import is_stale_task
-from app.domain.models import REGISTERED, allowed_models, model_label, system_default
+from app.domain.models import SELECTABLE, allowed_models, model_label, system_default
 from app.domain.rules import parse_uuid
 from app.routers._common import SERVICE, enforce_limit, is_unique_violation, json_object, jsonb
 from app.routers.admin._common import CurrentAdmin, write_audit
@@ -315,7 +315,7 @@ async def generation_config(admin: CurrentAdmin, db: Db) -> dict[str, Any]:
     return {
         **_generation_out(allowed, default),
         "registeredModels": [
-            {"provider": p, "model": m, "label": model_label(p, m)} for p, m in REGISTERED
+            {"provider": p, "model": m, "label": model_label(p, m)} for p, m in SELECTABLE
         ],
     }
 
@@ -326,7 +326,7 @@ async def update_generation_config(request: Request, admin: CurrentAdmin, db: Db
     async with db.role_transaction(SERVICE) as conn:
         await conn.execute(text("SELECT pg_advisory_xact_lock(hashtext('generation_config'))"))
         current_allowed, _ = await _generation(conn)
-        allowed, default = parse_generation_config(body, list(REGISTERED), current_allowed)
+        allowed, default = parse_generation_config(body, list(SELECTABLE), current_allowed)
         upsert = (
             "INSERT INTO public.app_settings (key, value, updated_by, updated_at) "
             "VALUES (:k, CAST(:v AS jsonb), :by, now()) ON CONFLICT (key) DO UPDATE SET "

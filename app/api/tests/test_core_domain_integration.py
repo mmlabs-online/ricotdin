@@ -592,10 +592,16 @@ def test_preferences(client: TestClient, world: dict[str, Any]) -> None:
     r = client.get("/profile/preferences", headers=_as(client, "b"))
     body = r.json()
     assert body["provider"] is None and body["model"] is None
+    _sql(world["db"], "UPDATE profiles SET default_provider = 'gemini', default_model = "
+         "'gemini-2.5-flash' WHERE id = %s", world["b"])  # fmt: skip
+    retired = client.get("/profile/preferences", headers=_as(client, "b")).json()
+    assert (retired["provider"], retired["model"]) == ("gemini", "gemini-3.8-flash")  # BUG-024
+    _sql(world["db"], "UPDATE profiles SET default_provider = NULL, default_model = NULL "
+         "WHERE id = %s", world["b"])  # fmt: skip
     assert {
         "provider": "gemini",
-        "model": "gemini-2.5-flash",
-        "label": "Gemini — gemini-2.5-flash",
+        "model": "gemini-3.8-flash",  # the seeded retired 2.5 reads as its replacement (BUG-024)
+        "label": "Gemini — gemini-3.8-flash",
     } in body["allowedModels"]
     allowed = {(m["provider"], m["model"]) for m in body["allowedModels"]}
     pick = sorted(allowed)[0]

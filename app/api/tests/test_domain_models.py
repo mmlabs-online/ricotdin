@@ -6,10 +6,14 @@ from typing import Any
 from app.domain.models import (
     FALLBACK_ALLOWED,
     REGISTERED,
+    SELECTABLE,
     allowed_models,
+    current_pick,
     is_model_allowed,
     lock_is_valid,
     model_label,
+    resolve_generation_model,
+    system_default,
 )
 
 SEED = [
@@ -29,7 +33,7 @@ def test_registry_has_the_v1_models() -> None:
 
 def test_allowed_models_from_config() -> None:
     assert allowed_models(SEED) == [
-        ("gemini", "gemini-2.5-flash"),
+        ("gemini", "gemini-3.8-flash"),  # the seeded retired model reads as its replacement
         ("openai", "gpt-4o"),
         ("openai", "gpt-4o-mini"),
     ]
@@ -98,3 +102,36 @@ def test_bug_023_an_allowed_lock_or_the_system_default_stays() -> None:
     assert (
         lock_is_valid(("openai", "not-registered"), [("openai", "not-registered")], gemini) is False
     )
+
+
+def test_bug_024_a_retired_model_is_not_offered() -> None:
+    assert ("gemini", "gemini-2.5-flash") not in SELECTABLE
+    assert ("gemini", "gemini-3.8-flash") in SELECTABLE
+    assert current_pick(("gemini", "gemini-2.5-flash")) == ("gemini", "gemini-3.8-flash")
+    assert current_pick(("openai", "gpt-4o")) == ("openai", "gpt-4o")
+
+
+def test_bug_024_stored_settings_read_the_retired_model_as_its_replacement() -> None:
+    seeded = [{"provider": "gemini", "model": "gemini-2.5-flash"},
+              {"provider": "gemini", "model": "gemini-3.8-flash"},
+              {"provider": "openai", "model": "gpt-4o"}]  # fmt: skip
+    assert allowed_models(seeded) == [("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")]
+    assert system_default({"provider": "gemini", "model": "gemini-2.5-flash"}) == (
+        "gemini", "gemini-3.8-flash",
+    )  # fmt: skip
+
+
+def test_bug_024_a_retired_preference_still_counts_as_its_replacement() -> None:
+    gemini, gpt = ("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")
+    retired = ("gemini", "gemini-2.5-flash")
+    # a profile default or an upload pick stored as 2.5 is the user's choice of 3.8, not "none"
+    assert resolve_generation_model([gemini, gpt], gpt, retired, None) == gemini
+    assert resolve_generation_model([gemini, gpt], gpt, None, retired) == gemini
+
+
+def test_bug_024_a_meeting_locked_to_the_retired_model_keeps_its_lock() -> None:
+    # 2.5 is the old default, so most meetings hold it: it means 3.8, it must not be re-resolved
+    # to another provider (e.g. the user's GPT default) just because the settings now read as 3.8.
+    gemini, gpt = ("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")
+    assert lock_is_valid(("gemini", "gemini-2.5-flash"), [gemini, gpt], gpt) is True
+    assert lock_is_valid(("gemini", "gemini-2.5-flash"), [gpt], gemini) is True
