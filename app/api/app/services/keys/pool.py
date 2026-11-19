@@ -75,12 +75,27 @@ class AllKeysExhausted(Exception):
         self.attempts = attempts
         self.last_error_type = type(last).__name__ if last is not None else None
         self.last_status = _status(last) if last is not None else None
+        if isinstance(last, TimeoutError | ConnectionError):
+            # BUG-025: no HTTP answer at all (network or timeout): not a key or quota problem
+            super().__init__(
+                f"{pool_name} did not answer: all {key_count} key(s) failed after {attempts} "
+                f"attempt(s) with a network error or timeout (last error {describe_error(last)})"
+            )
+            return
         detail = f" (last error {self.last_error_type}"
         detail += f" {self.last_status})" if self.last_status else ")"
         super().__init__(
             f"all {key_count} {pool_name} key(s) exhausted after {attempts} attempt(s); "
             "check key validity and quota" + (detail if last is not None else "")
         )
+
+
+def describe_error(err: BaseException) -> str:
+    """For logs (BUG-025): the class name, plus the message for network / timeout errors, whose
+    text is ours ("<provider> <httpx error class>"); other messages may carry a provider body."""
+    if isinstance(err, TimeoutError | ConnectionError) and str(err):
+        return f"{type(err).__name__}: {err}"
+    return type(err).__name__
 
 
 def _status(err: BaseException) -> int | None:
@@ -299,8 +314,8 @@ class KeyPool[C]:
             log.warning("%s key #%d forbidden (403): 15 min cooldown", self._name, state.index,
                         extra={"error": error})  # fmt: skip
         else:
-            log.warning("%s key #%d transient error; rotating", self._name, state.index,
-                        extra={"error": error})  # fmt: skip
+            log.warning("%s key #%d transient error (%s); rotating", self._name, state.index,
+                        describe_error(err), extra={"error": error})  # fmt: skip
 
 
 @dataclass(frozen=True)
