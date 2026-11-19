@@ -33,7 +33,7 @@
 | BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
-| BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | in_progress | v2.2.0 | ARC-08c | bugfix | — | claude/tender-gates-7feyr1 |
+| BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1 |
 
 ---
 
@@ -506,9 +506,22 @@ After the admin stops allowing the OpenAI model, the meeting uses the current ch
 **Actual**
 Every later run reuses the locked pair and fails again with the same `NoUsableKeys openai` error.
 
-**Root cause** (confirmed by code reading; not yet reproduced in a test)
+**Root cause** (confirmed: reproduced by the regression tests below)
 - `app/api/app/services/ai/model_lock.py:61` `lock_model` returns the stored pair whenever one exists, without checking it against `generation.allowed_models`; it only resolves (and checks allowed) when the meeting has none.
 - Callers that reuse the lock: `app/api/app/worker/start.py:82` (every start, incl. reprocess), `app/api/app/worker/analyse.py:72`, `app/api/app/routers/meetings.py:424` (regenerate), `app/api/app/routers/chat.py:134` `_check_meeting` (chat).
 - The lock is meant to keep one meeting on one model (v1 AIP-03), but nothing releases it when the admin withdraws that model, so a meeting locked to a provider without keys can never recover.
 
-**Fix** (proposed, not done): a stored pair that is no longer allowed (not in `allowed_models`) is re-resolved through the normal chain (upload pick → profile default → system default) and the new pair is stored; an allowed lock keeps working as today.
+**Fix** (bugfix on `main`, owner choice; no migration)
+- `app/api/app/domain/models.py` `lock_is_valid(held, allowed, default)`: a stored pair is kept only while it is allowed
+  (`generation.allowed_models` + registered) or is the system default.
+- `app/api/app/services/ai/model_lock.py`: `lock_model` re-resolves an invalid lock (upload pick → profile default → system
+  default) and stores it, only over the pair it replaces (`IS NOT DISTINCT FROM` the old pair: concurrent runs keep one);
+  `usable_lock` (read-only) is used by meeting chat (`routers/chat.py`), which falls back to the system default and never writes.
+- Ops: to move meetings off GPT, remove the OpenAI models from the allowed models at `/admin`; the next run / regenerate
+  uses the current choice. Until then chat on such a meeting uses the system default, while the next run may store the
+  owner's allowed default (accepted).
+- Regression tests: `test_domain_models.py::test_bug_023_a_lock_on_a_model_no_longer_allowed_is_not_valid`,
+  `::test_bug_023_an_allowed_lock_or_the_system_default_stays`,
+  `test_worker_analyse_integration.py::test_bug_023_a_lock_the_admin_no_longer_allows_is_re_resolved`,
+  `test_chat_integration.py::test_bug_023_a_meeting_locked_to_a_model_no_longer_allowed_uses_the_system_default`
+  (all failed before the fix).
