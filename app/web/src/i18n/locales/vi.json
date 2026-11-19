@@ -5,6 +5,7 @@
     "privacy": "Cuộc họp của bạn là riêng tư"
   },
   "nav": {
+    "version": "Phiên bản {{version}}",
     "main": "Điều hướng chính",
     "mobile": "Điều hướng trên di động",
     "meetings": "Cuộc họp",

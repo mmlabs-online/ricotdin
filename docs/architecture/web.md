@@ -10,6 +10,9 @@
 - **Boot** (`src/main.tsx`): i18n → `GET /config.json` (`parseRuntimeConfig`: `apiUrl` / `authUrl` are
   plain origins, https or http on localhost, no path) → providers (error boundary, theme, TanStack
   Query, auth, router). A bad config shows a localized error screen.
+- **Sidebar version (OPS-09):** the sidebar footer shows the running release from the public
+  `GET /version.json` (`api/version.ts`, `lib/version.ts` `versionLabel`: `v2.2.3`, a 7-char commit, or nothing for
+  `unknown` / anything else); fetched once (`staleTime: Infinity`), hidden when the sidebar is collapsed.
 - **Auth** (`src/auth/session.ts`, contract §0.3a; AUT-05 replaced ricotdin's own `/auth/refresh`,
   removed in AUT-06): access token only in memory, refreshed from **mmlabs** (`authUrl`,
   `credentials: 'include'` for the mmlabs device cookie) at start, before a request when the token

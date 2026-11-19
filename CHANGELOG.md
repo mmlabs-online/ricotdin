@@ -15,6 +15,8 @@
 
 - Phát hành bằng tên nhánh: push nhánh mới `release/X.Y.Z` là tự tạo tag `vX.Y.Z`, build image và tự merge PR deployment (tức là deploy luôn); không cần bump version hay tag tay. Bản hotfix cho dòng cũ hơn bản mới nhất chỉ mở PR, không tự deploy (OPS-09).
 
+- Cuối thanh bên trái hiện phiên bản đang chạy (ví dụ "Phiên bản v2.2.3"), lấy từ `GET /version.json` (OPS-09).
+
 ### Sửa lỗi
 - Phân tích cuộc họp và chat bằng Gemini không còn lỗi "The AI service could not process this meeting" (Google trả 404 cho `gemini-2.5-flash` với project mới): model mặc định là `gemini-3.8-flash`; cuộc họp và cài đặt đang ghi `gemini-2.5-flash` tự gọi `gemini-3.8-flash` (bấm chạy lại cuộc họp lỗi). Kiểm tra key Gemini giờ gọi thử đúng model này, nên key không dùng được model sẽ không còn hiện "healthy" (BUG-022).
 - Cuộc họp đã khoá vào một model mà admin không còn cho phép (ví dụ GPT khi không có khoá OpenAI) không còn lỗi "No usable openai API keys" mãi: lần chạy lại / tạo lại tiếp theo dùng model đang được chọn (ví dụ Gemini) và lưu lại; chat của cuộc họp đó dùng model mặc định hệ thống. Bỏ model khỏi danh sách được phép ở `/admin` để chuyển các cuộc họp đó. Lưu ý khi deploy: cài đặt gốc cho phép sẵn `gpt-4o` và `gpt-4o-mini`, nên nếu không có khoá OpenAI hãy bỏ hai model này ở `/admin` sau khi deploy, nếu không bản sửa chưa có tác dụng (BUG-023).

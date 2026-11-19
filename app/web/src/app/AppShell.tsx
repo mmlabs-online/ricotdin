@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
+import { useAppVersion } from '../api/version'
 import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { ThemeSwatches } from '../components/ui/ThemeSwatches'
@@ -44,6 +45,7 @@ export function AppShell() {
   const language = i18n.resolvedLanguage === 'vi' ? 'vi' : 'en'
   useApplyAccountLocale()
   const setLocale = useChooseLocale() // PRF-06: also saved on the account
+  const version = useAppVersion()
 
   useEffect(() => {
     if (!menuOpen) return
@@ -126,6 +128,7 @@ export function AppShell() {
             </NavLink>
           </div>
         )}
+        {version && !collapsed && <small className="sidebar-version">{t('nav.version', { version })}</small>}
       </aside>
 
       <main className="main">
