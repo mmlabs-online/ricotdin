@@ -71,7 +71,7 @@
     `StorageError` (503). `check()` → `StorageHealth` (token, root present, `shared_root` if anyone
     else has access, quota).
   - Reads always take `max_bytes`.
-  - botocore, boto3, s3transfer, urllib3, httpx2 and httpcore2 log at WARNING, redacted (Google
+  - urllib3, httpx2, httpcore2 and anthropic log at WARNING, redacted (Google
     `ya29.`/`1//` tokens, `GOCSPX-` secrets and `upload_id=` are redaction patterns).
   - The shared `DriveClient` is never closed under live streams: a failed config lookup only
     raises; a reconnect retires the old client, which is closed at shutdown.
