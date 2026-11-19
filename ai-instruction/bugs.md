@@ -591,12 +591,13 @@ Every attempt on both keys ends without an HTTP answer; the user message suggest
   `AIUnavailable` message names keys and quota for any failure (`app/api/app/services/keys/pool.py:81`), so the two causes
   cannot be told apart from the logs.
 
-**Root cause update (2026-11-19, while fixing)**
-- Not the 300 s read timeout: a worker step is cancelled after 12 min (`app/api/app/worker/policy.py:13` `STEP_TIMEOUT_S`),
-  so 4 completed attempts each failed in under ~3 min. The calls failed fast with a network error (connect / DNS /
-  connection reset or a connect timeout of 30 s) — something between the server and Google, which code cannot fix.
-  Raising the read timeout (owner's chosen option) was therefore dropped: it would not help and would collide with the
-  step timeout.
+**Root cause update (2026-11-19, while fixing; corrected by the Reality Checker)**
+- Analyse runs under the 12-min step timeout (`app/api/app/worker/runner.py:175`, `policy.py:13` `STEP_TIMEOUT_S`); the
+  read timeout is 300 s and the pool makes 4 attempts for 2 keys. 4 finished attempts within 12 min mean **at least 2
+  failed fast** (network: connect / DNS / reset / 30 s connect timeout); 1-2 read timeouts are still possible.
+- So the cause is still open. Raising the read timeout (owner's option) is deferred until the new log line names the
+  error: `ReadTimeout` → raise it (keeping 2 × timeout under the step limit); `ConnectError` / `ConnectTimeout` → the
+  server's network to `generativelanguage.googleapis.com` (DNS, firewall, proxy), not code.
 
 **Fix** (bugfix on `main`, owner choice; no migration)
 - `app/api/app/services/keys/pool.py` `AllKeysExhausted`: when the last error is a network error or timeout
