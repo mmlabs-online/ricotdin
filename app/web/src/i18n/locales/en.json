@@ -5,6 +5,7 @@
     "privacy": "Your meetings are private"
   },
   "nav": {
+    "version": "Version {{version}}",
     "main": "Main navigation",
     "mobile": "Mobile navigation",
     "meetings": "Meetings",
