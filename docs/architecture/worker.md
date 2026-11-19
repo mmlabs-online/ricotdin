@@ -110,10 +110,12 @@
     (`tokens`, `ok` / `rate_limited` / `error`, `key_id` only if the admin key exists), best effort.
     New adapters: map bad-key and out-of-credits answers to 401 (`types.py` docstring). Read timeout
     300 s.
-  - Model lock (`model_lock.py`): stored pair wins; else upload pick (`payload.preferred_*`) →
-    `profiles.default_*` → `generation.system_default` (each only if allowed + registered), written
-    once (`WHERE generation_provider IS NULL`) at `start` (or at `analyse` / `regenerate` for older
-    meetings).
+  - Model lock (`model_lock.py`): stored pair wins while it is allowed or is the system default
+    (`lock_is_valid`); else upload pick (`payload.preferred_*`) → `profiles.default_*` →
+    `generation.system_default` (each only if allowed + registered), written at `start` (or at
+    `analyse` / `regenerate` for older meetings) only over the pair it replaces (concurrent locks keep
+    the first). BUG-023: a model the admin withdraws (e.g. GPT without OpenAI keys) moves its meetings
+    to the current choice on the next run; meeting chat then uses the system default (never writes).
   - Analysis (`analysis.py`): v1 prompt format (`[N] Speaker (s.s): text`, MEETING_DATE), prompt
     text from `ai-instruction/ai-gen/generate-meeting.md` (`prompts.py`: only the repository root —
     five levels above the module — or `/app`, where the image carries it; never a walk up the tree). Untrusted output: fields fall back one by one, bad items
@@ -129,8 +131,7 @@
     transcript, 10 per user per
     hour (`app.state.regenerate_limiter`), the locked model, overwrites summary + notes and sets
     `done` (v1); to-dos/calendar untouched. `app.state.ai` is the API's `AIService`.
-  - Open / accepted: regenerate's limiter is per process; a stored model lock is not re-checked against the allow-list (v1
-    AIP-03); a provider error during the strict retry rotates and starts the attempt again; a key
+  - Open / accepted: regenerate's limiter is per process; a provider error during the strict retry rotates and starts the attempt again; a key
     pool rebuild (key set changed, e.g. after a 401) forgets the other keys' cooldowns.
 - **Step `embed` (08d, `embed.py` + pure `chunk.py`, v1 `chunk.ts`):** ~1 200 characters per
   chunk with one segment of overlap; `AIService.embed` = `catalog.EMBEDDING` (Gemini

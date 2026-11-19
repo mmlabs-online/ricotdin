@@ -17,6 +17,8 @@
 
 ### Sửa lỗi
 - Phân tích cuộc họp và chat bằng Gemini không còn lỗi "The AI service could not process this meeting" (Google trả 404 cho `gemini-2.5-flash` với project mới): model mặc định là `gemini-3.8-flash`; cuộc họp và cài đặt đang ghi `gemini-2.5-flash` tự gọi `gemini-3.8-flash` (bấm chạy lại cuộc họp lỗi). Kiểm tra key Gemini giờ gọi thử đúng model này, nên key không dùng được model sẽ không còn hiện "healthy" (BUG-022).
+- Cuộc họp đã khoá vào một model mà admin không còn cho phép (ví dụ GPT khi không có khoá OpenAI) không còn lỗi "No usable openai API keys" mãi: lần chạy lại / tạo lại tiếp theo dùng model đang được chọn (ví dụ Gemini) và lưu lại; chat của cuộc họp đó dùng model mặc định hệ thống. Bỏ model khỏi danh sách được phép ở `/admin` để chuyển các cuộc họp đó (BUG-023).
+- CI API xanh lại: hai test chat còn ghi cứng `gemini-2.5-flash` làm release 2.2.1 không build được (BUG-022).
 
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.

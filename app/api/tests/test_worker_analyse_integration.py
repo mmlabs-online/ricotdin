@@ -171,6 +171,25 @@ def test_model_lock_is_written_once(
     ) == (expected)
 
 
+def test_bug_023_a_lock_the_admin_no_longer_allows_is_re_resolved(world: dict[str, Any]) -> None:
+    # Locked to GPT, then the admin allows only Gemini: the next run (reprocess) must not call
+    # OpenAI again (NoUsableKeys openai) but take the current choice and store it.
+    case = _seed(world)
+    _sql(world["db"], "UPDATE meetings SET generation_provider = 'openai', generation_model = "
+         "'gpt-4o' WHERE id = %s", case.meeting)  # fmt: skip
+    before = _sql(world["db"], "SELECT value FROM app_settings WHERE key = "
+                  "'generation.allowed_models'")[0][0]  # fmt: skip
+    _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = 'generation.allowed_models'",
+         json.dumps([{"provider": "gemini", "model": "gemini-2.5-flash"}]))  # fmt: skip
+    try:
+        assert _lock(world, case, {}) == ("gemini", "gemini-2.5-flash")  # the system default
+        assert _rows(world, "SELECT generation_provider, generation_model FROM meetings "
+                     "WHERE id = %s", case) == [("gemini", "gemini-2.5-flash")]  # fmt: skip
+    finally:
+        _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = "
+             "'generation.allowed_models'", json.dumps(before))  # fmt: skip
+
+
 # --- analyse ------------------------------------------------------------------------------------
 
 

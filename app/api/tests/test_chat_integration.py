@@ -450,6 +450,23 @@ def test_a_meeting_without_a_locked_model_uses_the_system_default(
     ]  # chat never locks a model
 
 
+def test_bug_023_a_meeting_locked_to_a_model_no_longer_allowed_uses_the_system_default(
+    client: TestClient, world: dict[str, Any], ai: Provider
+) -> None:
+    _queries(world, "a")
+    mid = _meeting(world, "a")  # locked to openai/gpt-4o
+    before = _sql(world["db"], "SELECT value FROM app_settings WHERE key = "
+                  "'generation.allowed_models'")[0][0]  # fmt: skip
+    _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = 'generation.allowed_models'",
+         json.dumps([{"provider": "gemini", "model": "gemini-2.5-flash"}]))  # fmt: skip
+    try:
+        assert _ask(client, "a", meetingId=str(mid)).status_code == 200
+        assert ai.models == [f"gemini:{GEMINI_DEFAULT}"]  # not openai: NoUsableKeys before
+    finally:
+        _sql(world["db"], "UPDATE app_settings SET value = %s WHERE key = "
+             "'generation.allowed_models'", json.dumps(before))  # fmt: skip
+
+
 def test_the_ai_sees_the_speaker_names(
     client: TestClient, world: dict[str, Any], ai: Provider
 ) -> None:

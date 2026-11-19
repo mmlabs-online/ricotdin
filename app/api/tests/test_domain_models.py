@@ -8,6 +8,7 @@ from app.domain.models import (
     REGISTERED,
     allowed_models,
     is_model_allowed,
+    lock_is_valid,
     model_label,
 )
 
@@ -78,3 +79,22 @@ def test_regenerate_charge_is_the_transcribed_length() -> None:
     assert regenerate_charge_seconds(0, 0) == 1  # never free
     assert regenerate_charge_seconds(None, None) == 1
     assert regenerate_charge_seconds(10**12, None) == 86_400  # quota wrapper bound
+
+
+def test_bug_023_a_lock_on_a_model_no_longer_allowed_is_not_valid() -> None:
+    # The admin switched to Gemini and stopped allowing GPT: a meeting locked to GPT must not
+    # keep calling OpenAI (NoUsableKeys openai on every reprocess, regenerate and chat).
+    gemini = ("gemini", "gemini-3.8-flash")
+    allowed = [gemini]
+    assert lock_is_valid(("openai", "gpt-4o"), allowed, gemini) is False
+    assert lock_is_valid(gemini, allowed, gemini) is True
+
+
+def test_bug_023_an_allowed_lock_or_the_system_default_stays() -> None:
+    gemini = ("gemini", "gemini-3.8-flash")
+    gpt = ("openai", "gpt-4o")
+    assert lock_is_valid(gpt, [gemini, gpt], gemini) is True  # still allowed: unchanged
+    assert lock_is_valid(gemini, [gpt], gemini) is True  # the system default is always usable
+    assert (
+        lock_is_valid(("openai", "not-registered"), [("openai", "not-registered")], gemini) is False
+    )

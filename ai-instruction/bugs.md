@@ -33,6 +33,7 @@
 | BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
+| BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | in_progress | v2.2.0 | ARC-08c | bugfix | — | claude/tender-gates-7feyr1 |
 
 ---
 
@@ -489,3 +490,25 @@ Please update your code to use models/gemini-3.8-flash" (owner's direct call wit
   `test_worker_tasks.py::test_bug_022_gemini_probe_generates_with_the_default_model` (all failed before the fix).
 - Follow-ups (not done): admins may add `gemini-3.8-flash` to the allowed models and make it the system default at
   `/admin` (the 2.5 entry keeps working meanwhile); a clearer health detail for a 404 ("probe model unavailable").
+
+## BUG-023 — Meeting stays locked to a model the admin no longer allows (keeps calling OpenAI after the switch to Gemini)
+
+**Reported:** 2026-11-19 · **Severity:** S2 (the meeting cannot be processed, regenerated or chatted with; no workaround for the user) · **Found in:** v2.2.0 · **Feature:** ARC-08c
+
+**Steps to reproduce**
+1. Production v2.2.0: an OpenAI model (e.g. GPT-4o) is allowed and picked (system default, profile default or the upload's pick) while no usable OpenAI key exists.
+2. Upload a meeting: its first start locks `meetings.generation_provider/model = openai/gpt-…`; analyse fails with `NoUsableKeys: No usable openai API keys: none configured (env or admin UI) or all rejected with 401`.
+3. The admin switches back to Gemini (system default + allowed models) and the user clicks "Run processing again" (or Regenerate, or chats with the meeting).
+
+**Expected**
+After the admin stops allowing the OpenAI model, the meeting uses the current choice (Gemini) and succeeds.
+
+**Actual**
+Every later run reuses the locked pair and fails again with the same `NoUsableKeys openai` error.
+
+**Root cause** (confirmed by code reading; not yet reproduced in a test)
+- `app/api/app/services/ai/model_lock.py:61` `lock_model` returns the stored pair whenever one exists, without checking it against `generation.allowed_models`; it only resolves (and checks allowed) when the meeting has none.
+- Callers that reuse the lock: `app/api/app/worker/start.py:82` (every start, incl. reprocess), `app/api/app/worker/analyse.py:72`, `app/api/app/routers/meetings.py:424` (regenerate), `app/api/app/routers/chat.py:134` `_check_meeting` (chat).
+- The lock is meant to keep one meeting on one model (v1 AIP-03), but nothing releases it when the admin withdraws that model, so a meeting locked to a provider without keys can never recover.
+
+**Fix** (proposed, not done): a stored pair that is no longer allowed (not in `allowed_models`) is re-resolved through the normal chain (upload pick → profile default → system default) and the new pair is stored; an allowed lock keeps working as today.
