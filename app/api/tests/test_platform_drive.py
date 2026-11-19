@@ -7,7 +7,7 @@ import pytest
 
 from app.services.platform import Platform
 from app.services.storage.base import StorageNotConfigured
-from app.services.storage.config import DriveConfig, DriveConfigSource, StorageConfigSource
+from app.services.storage.config import DriveConfig, DriveConfigSource
 from app.services.storage.media_token import MediaTokenSigner, derive_media_key
 
 MASTER = bytes(range(32))
@@ -28,7 +28,6 @@ def platform() -> tuple[Platform, Source]:
     p = Platform(
         keys=None,  # type: ignore[arg-type]
         config=None,  # type: ignore[arg-type]
-        storage_config=StorageConfigSource(MASTER),
         drive_config=src,
         media_signer=MediaTokenSigner(derive_media_key(MASTER)),
     )

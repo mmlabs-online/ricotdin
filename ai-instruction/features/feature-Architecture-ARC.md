@@ -208,7 +208,7 @@ Owner chose to migrate everything. Supabase stores bcrypt password hashes (porta
 
 **Test Plan**
 - Pure: `app/api/app/migration/transform.py` → `map_auth_user()`, `map_row()` — `app/api/tests/test_migration_transform.py`.
-- Rehearsal report saved under `docs/ops/v2-migration-rehearsal.md`.
+- Rehearsal report saved under `docs/ops/v2-migration-rehearsal.md` (never run; deleted in ARC-16 part 2).
 
 **Structural flags**
 - Reads production Supabase with the service role (secret handling), writes Neon + R2. Never logs secrets or content.
@@ -223,7 +223,7 @@ Owner chose to migrate everything. Supabase stores bcrypt password hashes (porta
 - `app/api/scripts/migrate_from_supabase.py` (I/O), `app/api/app/migration/{transform,plan,checksum,report}.py` (pure)
 - Tests: `app/api/tests/test_migration_transform.py`, `test_migration_integration.py` (v1 replay with
   GoTrue columns + `storage.objects` → v2 at head; includes a real v2 login with the old password)
-- Runbook + rehearsal log: `docs/ops/v2-migration-rehearsal.md`
+- Runbook + rehearsal log: `docs/ops/v2-migration-rehearsal.md` (deleted in ARC-16 part 2)
 
 **Delivered**
 - All five acceptance criteria are covered by integration tests on synthetic data.
@@ -880,7 +880,7 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
 ---
 
 ### ARC-16 — Remove legacy & decommission Supabase
-**Priority:** Medium | **Status:** 🟡 Part 1 done (repo), part 2 after the cutover
+**Priority:** Medium | **Status:** ✅ Done in the repo (2026-11-19, no final backup — owner); Supabase / v1 R2 shutdown and `apps/ricotdin/` in the deployment repo are owner steps outside the repo
 
 **Progress**
 - Part 1 (owner decision 2026-11-12, before the cutover; the owner kept a backup of `legacy/`):
@@ -892,14 +892,20 @@ v1 stays on Supabase until this point. Rollback must be possible because Supabas
   history and on `release/1.1`, which must no longer be merged into `main`/`dev`.
 - Part 2 (after ARC-15 and a stable period): delete `scripts/migrate_from_supabase.py`,
   `app/migration/`, `services/storage/r2.py`, the v1 fixtures and the Supabase/R2 bits of
-  `backup.yml`; final Supabase backup, then shut down Supabase and the v1 R2 buckets; remove
-  `apps/ricotdin/` from the deployment repo. Irreversible steps — the owner confirms each.
+  `backup.yml`; shut down Supabase and the v1 R2 buckets; remove `apps/ricotdin/` from the
+  deployment repo. Irreversible steps — the owner confirms each. **No final Supabase backup**
+  (owner decision 2026-11-19, roadmap): v2 started empty and needs no v1 data.
+- Part 2 repo cleanup (2026-11-19): migration tooling, `r2.py`, `gen_baseline` + the v1 replay,
+  the v1 schema fixture and the parity/migration tests deleted; `0001_baseline.sql` is now frozen;
+  `docs/architecture/data-migration.md` (§0.5) and `docs/ops/v2-migration-rehearsal.md` deleted and
+  every doc instruction about Supabase removed. Remaining (owner): shut down the Supabase project
+  and the v1 R2 buckets.
 
 **User Story**  
 As a developer, I want all v1 code and Supabase dependencies removed so that the repo only contains `app/api`, `app/web`, `ai-instruction`, `docs` and tooling.
 
 **Context**
-Final repo layout approved by the owner. Supabase is shut down only after v2 has run stably (e.g. 30 days) and a final backup exists.
+Final repo layout approved by the owner. Supabase is shut down only after v2 has run stably (e.g. 30 days). No final backup is taken (owner decision 2026-11-19).
 
 **Use Cases**
 1. New contributor clones the repo and only sees the v2 layout.
@@ -908,7 +914,7 @@ Final repo layout approved by the owner. Supabase is shut down only after v2 has
 - n/a.
 
 **Backend**
-- Delete `legacy/`, root Next/Supabase configs, old TS tests, Supabase scripts; rewrite CLAUDE.md for v2; update skills/agents paths; final Supabase backup then project shutdown.
+- Delete `legacy/`, root Next/Supabase configs, old TS tests, Supabase scripts; rewrite CLAUDE.md for v2; update skills/agents paths; Supabase project shutdown (no final backup, owner decision 2026-11-19).
 
 **Acceptance Criteria**
 - `git grep -i supabase` and `git grep "next/"` return nothing outside `CHANGELOG.md` / docs history.
@@ -1001,7 +1007,7 @@ v1 and ARC-06 store files in R2 (presigned PUT/GET). The owner has a personal Go
 ---
 
 ### ARC-18 — Migration copies files to Google Drive
-**Priority:** High | **Status:** ✅ Done (code, 2026-11-05) — the done check (two rehearsals with the Drive copy, owner) is pending and also closes ARC-03
+**Priority:** High | **Status:** ✅ Done (code, 2026-11-05) — ⛔ the rehearsals were never run (superseded by ARC-20: no data carried over); the code was deleted in ARC-16 part 2
 
 **User Story**  
 As the owner, I want the v1 → v2 migration to copy every audio file and avatar (v1 R2 bucket and legacy Supabase Storage) into Google Drive so that no file is lost at cutover.
@@ -1021,7 +1027,7 @@ ARC-03 copies only legacy Supabase Storage objects into R2 and assumes R2 files 
 - Skip when a `storage_objects` row with the same size + md5 exists (idempotent). Source is never written or deleted.
 - Flags: `--confirm-drive-folder <id>` must equal the folder in the target's `drive_config`, replacing `--r2-bucket`; `--skip-storage` kept.
 - Report: copied / skipped / rejected (ownership) / failed counts and an order-independent digest of (key, size, md5); no row values or messages from Drive.
-- Runbook `docs/ops/v2-migration-rehearsal.md` rewritten: rehearsal folder via `connect_gdrive --folder ricotdin-rehearsal` on the rehearsal branch, deleted afterwards.
+- Runbook `docs/ops/v2-migration-rehearsal.md` (deleted in ARC-16 part 2) rewritten: rehearsal folder via `connect_gdrive --folder ricotdin-rehearsal` on the rehearsal branch, deleted afterwards.
 
 **Acceptance Criteria**
 - Given one meeting whose audio is in the v1 R2 bucket and one in Supabase Storage, when the script runs, then both exist in the target Drive folder with matching size and md5 and a `storage_objects` row.
@@ -1038,14 +1044,14 @@ ARC-03 copies only legacy Supabase Storage objects into R2 and assumes R2 files 
 - Reads v1 R2 credentials (secrets) → SEC review of logging. No new migration.
 
 **Done check**
-- Two rehearsals with a PASS report including storage, logged in `docs/ops/v2-migration-rehearsal.md` (this also closes ARC-03).
+- Two rehearsals with a PASS report including storage, logged in `docs/ops/v2-migration-rehearsal.md` (this also closes ARC-03). Superseded: never run (ARC-20); tooling and runbook deleted in ARC-16 part 2.
 
 **Out of scope**
 - Deleting the v1 R2 buckets and the Supabase bucket (ARC-16, after a stable period).
 
 **Key files (expected)**
 - `app/api/scripts/migrate_from_supabase.py`, `app/api/app/migration/{plan,report,storage_plan}.py`
-- `app/api/tests/test_migration_storage.py`, `docs/ops/v2-migration-rehearsal.md`
+- `app/api/tests/test_migration_storage.py`, `docs/ops/v2-migration-rehearsal.md` (both deleted in ARC-16 part 2)
 
 **As built**
 - `storage_plan.py`: `plan_object_copies` → copy / check (already mapped: compare with the source)
@@ -1082,7 +1088,7 @@ Architecture review 2026-11-12 (owner decisions in `roadmap.md`, same date). Fin
 **Backend**
 - Slice 1 (now, docs only): CLAUDE.md split verbatim into root (≤ 25 KB), `docs/architecture/*.md` (§0.1–§0.11) and `legacy/CLAUDE.md` (v1 sections).
 - After cutover: `app/modules/{meetings,folders,chat,auth,profile,content,admin}/{router,service,repo,rules}.py` + `app/platform/{db,crypto,keys,storage,ai,stt,email,config}`; one access-checked service-write helper; `app/jobs` queue contract shared by API and worker (no router→worker imports); runtime prompt moved into the api package (build context `app/api`); one-off tooling moved out of the runtime package or deleted with ARC-16.
-- Before deleting `legacy/` (ARC-16): freeze `0001_baseline.sql` as static SQL and remove the dependency of `scripts.gen_baseline` and `test_schema_parity_integration` on `legacy/schema.sql` + `legacy/migrations/`.
+- Before deleting `legacy/` (ARC-16): freeze `0001_baseline.sql` as static SQL and remove the dependency of `scripts.gen_baseline` and `test_schema_parity_integration` on `legacy/schema.sql` + `legacy/migrations/`. Done in ARC-16 part 2: `0001_baseline.sql` is frozen; `gen_baseline` and the parity test are deleted.
 - Trim `.claude/agents` to the agents the skills actually call.
 
 **Acceptance Criteria**

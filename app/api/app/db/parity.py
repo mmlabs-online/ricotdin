@@ -1,62 +1,23 @@
-"""v1 ↔ v2 schema parity (ARC-02): snapshot → comparable catalog, plus the intended differences.
+"""A comparable snapshot of the v2 schema (``introspect.Schema`` → ``catalog.Catalog``).
 
-The v1 side is the replayed Supabase schema; its SQL and role names are mapped to v2 first
-(``v1_rewrite``), so any remaining difference is either listed in ``ALLOWED`` or a bug.
+The migration tests compare two snapshots (e.g. before and after a downgrade + upgrade round
+trip); any difference is a bug. (The v1 ↔ v2 parity rules went with the v1 schema, ARC-16.)
 """
 
 import json
-from collections.abc import Callable
+import re
 
-from app.db.catalog import Allowed, Catalog, normalize_sql
-from app.db.grants import restrict_app_grants
 from app.db.introspect import Schema
-from app.db.v1_rewrite import map_role, rewrite_v1_sql
 
-# v1 functions with no v2 counterpart (Supabase-only).
-SKIPPED_V1_FUNCTIONS = {"custom_access_token_hook"}
-# v1 functions re-implemented by hand for v2 (migrations/src/overrides/<name>.sql).
-OVERRIDDEN_FUNCTIONS = {"prevent_role_escalation"}
+Catalog = dict[str, dict[str, str]]  # {section: {key: canonical value}}
 
-_V2_AUTH_TABLES = ("users", "refresh_tokens", "email_tokens")
-
-ALLOWED: list[Allowed] = [
-    *(
-        Allowed("extra", section, pattern, "v2 own auth tables (replace Supabase auth)")
-        for table in _V2_AUTH_TABLES
-        for section, pattern in [
-            ("tables", table),
-            ("columns", f"{table}.*"),
-            ("constraints", f"{table}.*"),
-            ("indexes", f"{table}.*"),
-            ("rls", table),
-            ("policies", f"{table}.*"),
-            ("table_grants", f"{table}|*"),
-            ("comments", f"{table}*"),
-            ("triggers", f"{table}.*"),
-        ]
-    ),
-    Allowed("extra", "functions", "public.app_user_id()", "v2 RLS request context"),
-    Allowed("extra", "functions", "public.app_user_role()", "v2 RLS request context"),
-    Allowed("extra", "functions", "public.sync_profile_role()", "profiles.role mirrors users.role"),
-    Allowed("extra", "function_acl", "public.app_user_id()", "v2 RLS request context"),
-    Allowed("extra", "function_acl", "public.app_user_role()", "v2 RLS request context"),
-    Allowed("extra", "function_acl", "public.sync_profile_role()", "trigger function, revoked"),
-    Allowed(
-        "changed",
-        "functions",
-        "public.prevent_role_escalation()",
-        "reads the v2 request context instead of request.jwt.claims (override)",
-    ),
-    Allowed("extra", "policies", "*.service_all", "ricotdin_service access without BYPASSRLS"),
-]
+_PUBLIC = re.compile(r"\bpublic\.")  # Postgres may or may not print the schema
+_WS = re.compile(r"\s+")
 
 
-def _identity(x: str) -> str:
-    return x
-
-
-def _v2_role(role: str) -> str | None:
-    return role
+def normalize_sql(text: str) -> str:
+    """Canonical form of a SQL fragment for comparison: unqualified, whitespace collapsed."""
+    return _WS.sub(" ", _PUBLIC.sub("", text)).strip()
 
 
 def _seed_value(rows_json: str) -> str:
@@ -66,12 +27,9 @@ def _seed_value(rows_json: str) -> str:
     return json.dumps(sorted(cleaned, key=lambda r: json.dumps(r, sort_keys=True)), sort_keys=True)
 
 
-def to_catalog(schema: Schema, *, v1: bool) -> Catalog:
-    rewrite: Callable[[str], str] = rewrite_v1_sql if v1 else _identity
-    role_of: Callable[[str], str | None] = map_role if v1 else _v2_role
-
+def to_catalog(schema: Schema) -> Catalog:
     def n(text: str | None) -> str:
-        return "" if text is None else normalize_sql(rewrite(text))
+        return "" if text is None else normalize_sql(text)
 
     s = schema
     cat: Catalog = {
@@ -96,36 +54,19 @@ def to_catalog(schema: Schema, *, v1: bool) -> Catalog:
     }
 
     for f in s.functions:
-        if v1 and f.name in SKIPPED_V1_FUNCTIONS:
-            continue
-        body = (
-            "<v1, overridden in v2>" if v1 and f.name in OVERRIDDEN_FUNCTIONS else n(f.definition)
-        )
-        cat["functions"][f.signature] = f"{f.security_definer}|{f.volatility}|{body}"
+        cat["functions"][f.signature] = f"{f.security_definer}|{f.volatility}|{n(f.definition)}"
         if f.grantees is None:
             cat["function_acl"][f.signature] = "<default>"
         else:
-            mapped = {r for g in f.grantees if (r := role_of(g)) is not None}
-            cat["function_acl"][f.signature] = ",".join(sorted(mapped))
+            cat["function_acl"][f.signature] = ",".join(sorted(set(f.grantees)))
 
     for p in s.policies:
-        mapped_roles: set[str] = set()
-        for r in p.roles:
-            policy_role = "ricotdin_app" if v1 and r == "public" else role_of(r)
-            if policy_role is not None:
-                mapped_roles.add(policy_role)
-        roles = sorted(mapped_roles)
-        if not roles:
-            continue
+        roles = sorted(set(p.roles))
         cat["policies"][f"{p.table}.{p.name}"] = (
             f"{p.permissive}|{p.cmd}|{','.join(roles)}|{n(p.qual)}|{n(p.with_check)}"
         )
 
     for t, grants in s.table_grants.items():
-        if v1:
-            grants = restrict_app_grants(t, grants, s.policies)
         for grantee, privilege, column in grants:
-            role = role_of(grantee)
-            if role is not None:
-                cat["table_grants"][f"{t}|{role}|{privilege}|{column or ''}"] = "y"
+            cat["table_grants"][f"{t}|{grantee}|{privilege}|{column or ''}"] = "y"
     return cat

@@ -1,7 +1,6 @@
 """ARC-02: snapshot ordering must not depend on the database collation (Neon vs CI differ)."""
 
-from app.db.ddl import Column, Policy
-from app.db.introspect import Function, Schema, canonical_order
+from app.db.introspect import Column, Function, Policy, Schema, canonical_order
 
 
 def test_overloads_and_names_sort_by_codepoint_not_collation() -> None:

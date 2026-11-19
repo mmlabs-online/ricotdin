@@ -62,13 +62,3 @@ def v2_baseline_db() -> Iterator[str]:
     with scratch_database("v2base") as url:
         alembic_upgrade(url, "0001_baseline")
         yield url
-
-
-@pytest.fixture(scope="session")
-def v1_replay_db() -> Iterator[str]:
-    from app.db.replay import replay_v1
-    from app.db.scratch import scratch_database
-
-    with scratch_database("v1") as url:
-        replay_v1(url)
-        yield url

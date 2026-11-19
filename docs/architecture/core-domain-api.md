@@ -25,7 +25,7 @@
   after the row delete (an upload confirmed in between). Known, accepted for now: Drive HTTP calls
   run inside the service transaction (holds a connection and the row lock, ≤ ~2 min with retries);
   the avatar map is committed before the profile UPDATE (a failed UPDATE leaves an unreferenced
-  2 MB file); deleting a v1 (`r2`/`supabase`) meeting is a Drive no-op until ARC-18 copies files.
+  2 MB file); deleting a meeting with a v1 provider (`r2`/`supabase`; none exist since ARC-20) is a Drive no-op.
 - **Editing summary / notes (PRO-06; 6a API + history, 6b web editor + history UI, §0.10):**
   `PATCH /meetings/{id}/content {field: summary|notes, content, baseHash}` (editor+, `done`
   meetings only else 409, `baseHash` = sha-256 hex of the UTF-8 text the edit started from, NULL =
@@ -76,8 +76,7 @@
   available". A folder deleted between the check and the write → 404 (FK). The web Record page sends
   an explicit `folderId` from one select (preselected with the default; locked only while a file is
   being sent) for both the recorder and the file upload; if the preferences cannot be loaded it
-  offers "your default folder" and sends no `folderId`. The v1 → v2 copy skips the column
-  (`V2_ONLY_COLUMNS`, §0.5).
+  offers "your default folder" and sends no `folderId`.
 - **UI language (PRF-06, migration `0009`):** `profiles.locale` (`'en' | 'vi'` or NULL, CHECK
   `profiles_locale_check`). `GET /profile/preferences` returns `locale`; `PATCH` takes `locale`
   (`"en"`, `"vi"` or null, else 422) independently of the model and the folder. The web applies the

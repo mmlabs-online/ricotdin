@@ -3,7 +3,7 @@
 Record meetings in the browser → AI transcript + summary + notes + to-dos + a RAG chatbot over
 your meetings, with timestamp citations.
 
-**Stack (v2):** FastAPI (Python 3.12, uv) · Vite + React SPA · Neon Postgres + pgvector ·
+**Stack (v2):** FastAPI (Python 3.12, uv) · Vite + React SPA · self-hosted Postgres 17 + pgvector ·
 Google Drive (audio and avatars) · Gemini / OpenAI-compatible providers · Speechmatics · Docker
 
 ## Layout
@@ -16,8 +16,8 @@ Google Drive (audio and avatars) · Gemini / OpenAI-compatible providers · Spee
 | `docs/architecture/` | Design rules per area (the `§0.x` sections cited in code) |
 | `docs/ops/` | Owner runbooks: go-live, database, backup/restore |
 
-The v1 app (Next.js + Supabase) was removed from `dev` in ARC-16. It is kept in git history and
-on the `release/1.1` branch (tags ≤ v1.1.1).
+The v1 app (Next.js + Supabase) is retired and was removed from `main` in ARC-16; nothing of it is
+operated or migrated any more. It is kept in git history and on the `release/1.1` branch (tags ≤ v1.1.1).
 
 ## Development
 

@@ -169,22 +169,20 @@
     goes in a URL; details never carry bodies or keys. Keys are not auto-disabled (v1).
   - `retention_purge` (24 h, v1 §9m): off unless `storage.audio_retention_days` is 1–3650; `done`
     meetings created strictly before the cutoff with no queued/running job, oldest first,
-    ≤ 500/run; own key and Drive only — both filtered in SQL, so v1 `r2`/`supabase` meetings
-    (waiting for ARC-18) never fill the batch; the row is re-read (`FOR UPDATE`) right before the
+    ≤ 500/run; own key and Drive only — both filtered in SQL, so a meeting with a v1 provider
+    (`r2`/`supabase`; none exist since ARC-20) never fills the batch; the row is re-read (`FOR UPDATE`) right before the
     delete (its own step), then CAS `audio_path = NULL, audio_purged_at = now()` +
     `retention_purge_audit` (SECURITY DEFINER, forced `system:retention`; only a `done` meeting
     purged in the last hour, its own key no longer mapped, days 1–3650, one row per meeting).
     Accepted: a reprocess queued between the committed Drive delete and the CAS leaves
     `audio_path` pointing at a deleted file (that job fails terminally). Runs at the first worker
-    start (no 60 s delay as in v1): **ARC-15:** set `storage.audio_retention_days` only after the
-    ARC-18 copy.
+    start (no 60 s delay as in v1).
   - `wallet_reconcile` (5 min, v1 QUO-04): `quota_reconcile_wallets(run)` (SECURITY DEFINER; a run
     already going → returns at once; candidates found without locks, then each re-checked under
     `FOR UPDATE SKIP LOCKED` — never all wallets locked): a wallet ≠ its ledger sum is SET to the
     sum with a zero-delta `adjustment` row (`reconcile:<user>:<run>`, before/after in metadata).
     v1 added the drift to both sides, so it never closed and moved the balance every run
-    (BUG-021, v1 only). **ARC-15:** the first run after the data migration rewrites any v1 drift:
-    count drifted wallets on the rehearsal data first.
+    (BUG-021, v1 only).
   - `stuck_meetings` (5 min): `processing` for > 30 min (`updated_at`) with no queued/running job
     → `failed` + the timeout message + `processing_failed`, and `legacy_reserve_refund` (SECURITY
     DEFINER) returns a v1 meeting-keyed reserve (`gen:<meeting>:reserve`, no settle/refund, once,
@@ -193,9 +191,8 @@
     push `last_started_at` into the future (ARC-10's admin view should flag a stale
     `last_finished_at`); each stuck meeting is handled in its own savepoint; the lease is released also on shutdown (shielded, ≤ 5 s). Key health skips the
     run when `KEY_ENCRYPTION_SECRET` is unset; one bad key is `unknown`, never fatal.
-- **ARC-15 ordering:** jobs of v1 meetings (`storage_provider` `r2`/`supabase`) fail terminally in
-  `start` until the migration has copied their files to Drive (ARC-18, `--confirm-drive-folder`) —
-  run the full migration before starting the worker (or keep the worker stopped until then).
+- **v1 providers:** a job of a meeting whose `storage_provider` is `r2`/`supabase` fails terminally
+  in `start` (no such meeting exists: v2 started empty, ARC-20, and nothing is migrated).
 - **ffmpeg/ffprobe on untrusted files** (`audio.py`): `-protocol_whitelist file`, `-format_whitelist`
   of our upload demuxers (an HLS/concat playlist disguised as audio is refused), stdin `/dev/null`,
   a minimal environment (`PATH`, `LANG`/`LC_ALL=C`: no database URL, no `KEY_ENCRYPTION_SECRET`),
@@ -224,6 +221,3 @@
   balances), refunding a failed v1 meeting's own reserve, and delaying schedulers ≤ 1 h per lease.
   **ARC-15 follow-up:** run ffmpeg/ffprobe sandboxed — separate uid, no network, seccomp / read-only
   root (or a separate sidecar without database or key access).
-- **Data migration (§0.5):** the ARC-03 preflight blocks when v1 has more than one queued/running job
-  per meeting (the unique index would abort the copy) and prints the `UPDATE` that fails the extras
-  in Supabase (keeps the newest).

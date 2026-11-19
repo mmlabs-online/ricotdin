@@ -113,7 +113,7 @@ Guardrails (every request writes real data):
 - **No owner `DATABASE_URL`**: schema changes go through the deploy only. The script builds only the
   three runtime logins and always through the tunnel.
 - **Never run against production:** the worker (it would claim real users' jobs and race the
-  production worker), `alembic`, `pytest`, `provision_db_roles`, `gen_baseline`, `connect_gdrive`.
+  production worker), `alembic`, `pytest`, `provision_db_roles`, `connect_gdrive`.
 - **`KEY_ENCRYPTION_SECRET` is unset by default.** Stored provider keys and Drive are then
   unavailable (media, uploads fail). For a session that needs them, use `--with-key` and type the
   production value (from `api.env` on the Mac) only. Never another key: anything saved locally

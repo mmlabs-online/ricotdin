@@ -89,9 +89,6 @@ def test_worker_env_needs_its_own_login_only() -> None:
         "DATABASE_URL_SERVICE",
         "JWT_PRIVATE_KEY",
         "SMTP_PASSWORD",
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "SUPABASE_DB_URL",
-        "MIGRATION_TARGET_DATABASE_URL",
     ],
 )
 def test_worker_refuses_credentials_it_must_not_hold(name: str) -> None:
