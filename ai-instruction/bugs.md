@@ -33,7 +33,7 @@
 | BUG-020 | Migration preflight blocks every run: v2-only tables drive_config / storage_objects (migration 0003) not skipped | S2 | fixed | dev | ARC-17 | bugfix | dev | fix/BUG-020-migration-v2-only-tables, PR #42 |
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
-| BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1 |
+| BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #127 |
 
 ---
 
