@@ -31,7 +31,7 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 
 | Item | Codes | Why now | Done when |
 |---|---|---|---|
-| 1. Owner: rotate the Gemini key leaked in git history (`AQ.A…`); take a final encrypted Supabase dump (`pg_dump -Fc` + `age`, kept offline) before Supabase is shut down | ARC-16 prep, CLAUDE.md §0.11 | Not confirmed done (repo cannot show it); the leaked key may still work and v1's data has no other copy | Old key rejected; dump stored offline |
+| 1. Owner: rotate the Gemini key leaked in git history (`AQ.A…`) | ARC-16 prep, CLAUDE.md §0.11 | Not confirmed done (repo cannot show it); the leaked key may still work | Old key rejected |
 | 2. Owner: check the production deploy checklist — `/version.json` = the latest release, Turnstile site key set, old JWT/SMTP secrets removed, `gpt-4o`/`gpt-4o-mini` removed at `/admin` if there is no OpenAI key (BUG-023), first `pg-backup` dump + `restore-test.sh ricotdin` | ARC-20, OPS-03 | Success measures (2) and (3) of the goal are not confirmed | All checked |
 | 3. Agent: last phase-1 tickets (see Next) | PRO-01 | Highest open feature | Code `[x]` |
 | 4. Phase 3: production findings → `/fix-bug`; BUG-025 follow-up once the next Gemini failure logs `ReadTimeout` or `ConnectError` | `BUG-NNN` | v2 is in use | No open S1/S2 bug |
@@ -54,7 +54,7 @@ Done since 2026-11-17: PRF-09, PRO-05, PRO-04, ADM-11 + PRF-13 (v2.1.2), OPS-09 
 | Post-go-live restructure: feature-sliced api/web, repo layer + access-checked write helper, `app/jobs`, prompt into the api package, trim agents (slice 1 = CLAUDE.md split, done) | ARC-19 | After go-live, module by module (owner 2026-11-12) |
 | Drive orphan sweeper, ffmpeg sandbox | needs `/add-feature` | After go-live (owner 2026-11-09) |
 | `storage.audio_retention_days` | — | Any time after go-live (no migration copy to wait for) |
-| Remove the Supabase tooling (`migrate_from_supabase`, `app/migration/`, `r2.py`), shut down Supabase and the v1 R2 buckets, delete the Neon project | ARC-16 | After the final Supabase dump (Now 2). Irreversible — owner confirms |
+| ARC-16 part 2: Supabase tooling and docs removed from the repo (2026-11-19); remaining: owner shuts down the Supabase project and the v1 R2 buckets, deletes the Neon project | ARC-16 | No final Supabase dump (decision 2026-11-19). Irreversible — owner confirms |
 | Small v2 follow-ups: `KEY_ENCRYPTION_SECRET` rotation, `--border-strong` contrast, `/process` on a `done` meeting, CI Node = image Node | `/add-feature` / `/fix-bug` | Low risk, internal use |
 
 ## Not doing (explicitly parked)
@@ -158,3 +158,8 @@ supersedes it.
 - **Why:** one push per release, no version-file drift, no manual merge step.
 - **Revisit if:** a bad release reaches production because the deployment PR is merged without review, or two release branches race.
 
+### 2026-11-19 — No final Supabase backup; remove all v1/Supabase connections (ARC-16 part 2)
+- **Decision:** No final Supabase backup is taken ("không cần backup"). Everything in the repo that connects to, migrates from, backs up or operates v1, Supabase or the v1 R2 buckets is removed: `migrate_from_supabase`, `app/migration/`, `r2.py`, `gen_baseline` + the v1 replay, the v1 schema fixture and the parity/migration tests, `docs/architecture/data-migration.md` (§0.5) and `docs/ops/v2-migration-rehearsal.md`. `0001_baseline.sql` is now the frozen source of the schema. What remains is the owner's shutdown of the Supabase project and the v1 R2 buckets.
+- **Options considered:** take a final encrypted dump (`pg_dump -Fc` + `age`, kept offline) before the shutdown (not chosen); no backup (chosen).
+- **Why:** v2 started empty (ARC-20) and the owner does not need the v1 data.
+- **Revisit if:** v1 data turns out to be needed — then only what Supabase still holds before its shutdown can be recovered.

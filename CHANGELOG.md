@@ -8,6 +8,10 @@
 ### Tính năng
 - Cuối thanh bên trái hiện phiên bản đang chạy (ví dụ "Phiên bản v2.2.3"), lấy từ `GET /version.json` (OPS-09).
 
+### Dọn dẹp
+- Bỏ mọi phần còn nối với v1/Supabase trong repo: công cụ chuyển dữ liệu `migrate_from_supabase`, `app/migration/`, đọc bucket R2 (`r2.py`, `storage_config`), fixture schema v1 + `supabase_shim`, bộ sinh baseline / test parity v1 (`gen_baseline`, `ddl`, `grants`, `v1_rewrite`) và tài liệu hướng dẫn chuyển dữ liệu; `0001_baseline.sql` là nguồn schema cố định. Không lấy bản backup Supabase cuối (quyết định của owner). Bỏ dependency `boto3`, `bcrypt` (ARC-16).
+- Việc của owner ngoài repo: tắt project Supabase và bucket R2 của v1, xoá secret Supabase/R2, xoá `apps/ricotdin/` trong repo deployment (ARC-16).
+
 ## [2.2.3] — 2026-11-19
 
 ### Sửa lỗi

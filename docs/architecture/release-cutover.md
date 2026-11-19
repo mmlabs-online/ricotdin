@@ -50,5 +50,5 @@
   migrations + logins, Cloudflare hostnames, deploy, first admin, Google Drive, provider keys).
 - **Known history finding (2026-11-05):** commits of 2026-06-09/10/13 (`README.md`, on `main` and
   `release/1.0`/`1.1`) contain a Supabase `service_role` JWT, the anon JWT and a Gemini API key.
-  Rotate them (Supabase: JWT secret rotation / new API keys; Google: delete the key); history is
-  not rewritten.
+  The Supabase keys die with the Supabase project (shut down by the owner, ARC-16; no final backup,
+  owner decision 2026-11-19); delete the Gemini key at Google (roadmap Now 1). History is not rewritten.

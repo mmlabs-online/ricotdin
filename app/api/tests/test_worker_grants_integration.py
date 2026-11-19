@@ -459,7 +459,7 @@ def test_0005_resolves_duplicates_and_its_downgrade_restores_0004() -> None:
 
     with scratch_database("w0005") as url:
         alembic_upgrade(url, "0004_meetings_gdrive")
-        expected = to_catalog(read_schema(url), v1=False)
+        expected = to_catalog(read_schema(url))
         with psycopg.connect(url, autocommit=True) as conn:
             conn.execute(
                 "INSERT INTO users (id, email, password_hash, role) VALUES (%s, 'd@example.test', 'x', 'user')",
@@ -495,4 +495,4 @@ def test_0005_resolves_duplicates_and_its_downgrade_restores_0004() -> None:
             conn.execute("DELETE FROM meetings")
             conn.execute("DELETE FROM users")
         alembic_downgrade(url, "0004_meetings_gdrive")
-        assert to_catalog(read_schema(url), v1=False) == expected
+        assert to_catalog(read_schema(url)) == expected

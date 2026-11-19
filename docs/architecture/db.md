@@ -22,25 +22,21 @@
 - **Schema = Alembic** in `app/api/migrations/` (version table in schema `alembic`).
   `uv run --env-file .env alembic upgrade head`. New schema changes = new Alembic revisions, never
   edits to `0001`.
-- **`0001_baseline.sql` is GENERATED**: `uv run --env-file .env python -m scripts.gen_baseline`
-  replays `legacy/schema.sql` + `legacy/migrations/*` with a Supabase shim, introspects and renders
-  (`app/db/{replay,introspect,baseline,ddl,v1_rewrite}.py`). Hand-written parts live in
-  `migrations/src/` (prelude: roles, request context, `users`/`refresh_tokens`/`email_tokens`;
-  epilogue; `overrides/` for v1 functions that cannot be rewritten). Edit those, regenerate, commit.
-  `tests/test_schema_parity_integration.py` fails if the file is stale or v2 drifts from v1 beyond
-  `app/db/parity.py` `ALLOWED`.
+- **`0001_baseline.sql` is FROZEN** (ARC-16 part 2): it was generated once from the v1 schema and is
+  now the source of the schema itself; the v1 replay, `gen_baseline`, `app/db/{grants,ddl}.py` and the v1 parity test
+  are deleted; the RLS/grants integration tests check the privileges. Never edit it (deployed databases already ran it); every change is a new revision.
 - **Roles** (both NOLOGIN, NOBYPASSRLS): `ricotdin_app` (API requests; RLS applies) and
   `ricotdin_service` (worker/admin/auth; permissive `service_all` policy on every RLS table).
   `anon` does not exist in v2. `users`, `refresh_tokens`, `email_tokens`, `admin_config`,
   `storage_config` are not readable by `ricotdin_app`.
-- **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
+- **App privileges are narrower than v1** (frozen in `0001_baseline.sql`): v1 `authenticated` grants minus
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN (RLS does not govern them), and INSERT/UPDATE/DELETE only
   where a policy for that command exists. All meeting content is SELECT-only for the app, so
   **editor-level writes are enforced in the API** (`can_access_meeting(..., 'editor')`) and executed
   as `ricotdin_service`. PUBLIC has no TEMP on the database and no CREATE in `public`; functions
   later created by the migrating role are not PUBLIC-executable by default (tested). v1 policies without `TO`
   are scoped `TO ricotdin_app`. SECURITY DEFINER functions use `search_path = public, pg_temp`.
-- **RLS request context** replaces the Supabase JWT: `app_user_id()` / `app_user_role()` read
+- **RLS request context** replaces v1's JWT claims: `app_user_id()` / `app_user_role()` read
   `current_setting('app.user_id' | 'app.role')`. These are plain GUCs any session can set, so RLS
   stops API logic bugs, **not** SQL injection or a leaked app credential (same trust model as v1's
   `request.jwt.claims`). ARC-04 requirements (security review of PR #33):

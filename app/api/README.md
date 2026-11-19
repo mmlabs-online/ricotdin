@@ -22,8 +22,10 @@ The deployed database (shared self-hosted Postgres, no published port) is handle
 
 ```bash
 uv run --env-file .env alembic upgrade head               # migrate the dev database
-uv run --env-file .env python -m scripts.gen_baseline     # regenerate migrations/sql/0001_baseline.sql
 ```
+
+`migrations/sql/0001_baseline.sql` is frozen (ARC-16): never edit it; a schema change is a new
+Alembic revision.
 
 Runtime logins (one per role, `CLAUDE.md` §0.2) — creates/rotates them and writes
 `DATABASE_URL_APP` / `_SERVICE` / `_WORKER` into `.env`:

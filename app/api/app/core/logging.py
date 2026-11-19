@@ -22,9 +22,6 @@ REDACTED_LOGGERS = (
     "uvicorn.access",
     "sqlalchemy",
     "asyncpg",
-    "botocore",
-    "boto3",
-    "s3transfer",
     "urllib3",
     "httpx2",
     "httpcore2",
@@ -88,7 +85,7 @@ def setup_logging(level: str = "INFO") -> None:
     # debug/info logs carry signed headers, Drive upload session URIs and bearer tokens
     # (anthropic at DEBUG logs whole request bodies: prompts and transcripts)
     for name in (
-        "botocore", "boto3", "s3transfer", "urllib3", "httpx2", "httpcore2", "anthropic",
+        "urllib3", "httpx2", "httpcore2", "anthropic",
     ):  # fmt: skip
         logging.getLogger(name).setLevel(logging.WARNING)
 

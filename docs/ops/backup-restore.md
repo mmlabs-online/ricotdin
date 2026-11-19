@@ -21,6 +21,6 @@ Not in the dumps: roles (cluster-wide; ricotdin's are recreated by its migration
 `KEY_ENCRYPTION_SECRET` offline: without it a restored database cannot decrypt the stored provider keys
 or the Drive grant. The worst case today is one day of data loss (no WAL archiving).
 
-The previous backup workflow (`backup.yml`: Supabase, then Neon, uploaded to R2 under `db/` and
-`db-v2/`) is removed. Objects it already wrote age out under that bucket's lifecycle, or the owner
-deletes them.
+The previous backup workflow (`backup.yml`, uploads under `db/` and `db-v2/` of an R2 bucket) is
+removed. v1/Supabase is never backed up again: no final dump is taken (owner decision 2026-11-19,
+ARC-16). Objects the old workflow wrote age out under that bucket's lifecycle, or the owner deletes them.

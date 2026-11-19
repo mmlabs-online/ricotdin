@@ -23,8 +23,6 @@ from app.services.config import AppConfigReader
 from app.services.crypto import encrypt_with_key
 from app.services.keys.source import KeySource
 from app.services.platform import Platform
-from app.services.storage.config import StorageConfigSource
-from app.services.storage.r2 import StorageNotConfigured
 from tests.conftest import alembic_upgrade, requires_db
 
 pytestmark = requires_db
@@ -148,61 +146,6 @@ def test_without_master_key_stored_keys_are_unusable_and_env_is_used(env: dict[s
             return [k.key for k in await source.active_keys(conn, "openai")]
 
     assert _with_db(env, body) == ["env-openai"]
-
-
-def _add_storage(env: dict[str, Any], bucket: str, *, key: bytes = KEY, status: str = "active",
-                 offset_s: int = 0) -> None:  # fmt: skip
-    s = encrypt_with_key(f"secret-{bucket}", key)
-    _sql(
-        env,
-        "INSERT INTO storage_config (provider, label, account_id, access_key_id, bucket, "
-        "secret_ciphertext, secret_iv, secret_auth_tag, secret_last4, status, created_at) "
-        "VALUES ('r2', 'l', '0123456789abcdef0123456789abcdef', 'AKID', %s, %s, %s, %s, 'last', %s, "
-        "now() + make_interval(secs => %s))",
-        bucket, s.ciphertext, s.iv, s.auth_tag, status, offset_s,
-    )  # fmt: skip
-
-
-def test_storage_config_newest_active_row_wins_and_none_without_rows(env: dict[str, Any]) -> None:
-    source = StorageConfigSource(KEY)
-
-    async def empty(db: Database) -> Any:
-        # ricotdin_service: the worker has no access to storage_config (migration 0005).
-        async with db.role_transaction("ricotdin_service") as conn:
-            return await source.r2(conn)
-
-    assert _with_db(env, empty) is None
-    source.invalidate()
-    _add_storage(env, "old-bucket", offset_s=-86400)
-    _add_storage(env, "new-bucket")
-    _add_storage(env, "disabled-bucket", status="disabled", offset_s=86400)
-
-    async def body(db: Database) -> Any:
-        async with db.role_transaction("ricotdin_service") as conn:
-            return await source.r2(conn)
-
-    cfg = _with_db(env, body)
-    assert (cfg.bucket, cfg.secret_access_key, cfg.account_id) == (
-        "new-bucket",
-        "secret-new-bucket",
-        "0123456789abcdef0123456789abcdef",
-    )
-
-
-def test_platform_r2_raises_a_typed_error_when_the_secret_does_not_decrypt(
-    env: dict[str, Any],
-) -> None:
-    _add_storage(env, "foreign-bucket", key=OTHER, offset_s=172800)
-    platform = Platform.from_settings(
-        Settings.model_validate({"KEY_ENCRYPTION_SECRET": KEY.hex()}), env={}
-    )
-
-    async def body(db: Database) -> None:
-        async with db.role_transaction("ricotdin_service") as conn:
-            await platform.r2(conn)
-
-    with pytest.raises(StorageNotConfigured):
-        _with_db(env, body)
 
 
 def test_app_config_flags_read_through_the_cache_and_fall_back(env: dict[str, Any]) -> None:

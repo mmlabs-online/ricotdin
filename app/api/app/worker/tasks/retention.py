@@ -2,7 +2,7 @@
 §9m). Off unless ``app_config['storage.audio_retention_days']`` is a whole number 1–3650 (fails
 closed). Oldest first, at most 500 per run, only ``done`` meetings created strictly before
 now − N days that still have audio, only their own key (``owned_audio_path``) and only Google
-Drive files (v1 ``r2``/``supabase`` meetings wait for the ARC-18 copy). Per meeting: delete the
+Drive files. Per meeting: delete the
 file (its own committed step), then compare-and-set ``audio_path = NULL, audio_purged_at = now()``
 (still ``done`` with the same key) and the audit row through ``retention_purge_audit`` (forced
 ``system:retention`` actor), in one transaction. A failed delete leaves the row for the next run.

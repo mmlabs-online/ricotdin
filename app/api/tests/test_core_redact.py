@@ -25,7 +25,7 @@ def test_mapping_values_under_secret_looking_keys_are_masked_recursively() -> No
     data = {
         "user": "u1",
         "password": "p",
-        "nested": {"SUPABASE_SERVICE_ROLE_KEY": "x", "api_key": "y", "items": [{"token": "z"}]},
+        "nested": {"SERVICE_ROLE_KEY": "x", "api_key": "y", "items": [{"token": "z"}]},
         "secret_access_key": "w",
         "authorization": "Bearer t",
     }
@@ -33,7 +33,7 @@ def test_mapping_values_under_secret_looking_keys_are_masked_recursively() -> No
         "user": "u1",
         "password": REDACTED,
         "nested": {
-            "SUPABASE_SERVICE_ROLE_KEY": REDACTED,
+            "SERVICE_ROLE_KEY": REDACTED,
             "api_key": REDACTED,
             "items": [{"token": REDACTED}],
         },

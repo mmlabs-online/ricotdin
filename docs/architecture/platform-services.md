@@ -4,13 +4,13 @@
 
 - **`Platform`** (`app/services/platform.py`, `app.state.platform`, `get_platform`): `keys`
   (`KeySource`), `config` (`AppConfigReader`), `drive_config`, `storage(conn)` (Google Drive),
-  `media_signer`, `media_slots`; `storage_config` + `r2(conn)` only for the ARC-18 v1 source.
+  `media_signer`, `media_slots`.
   Use them only inside `db.role_transaction('ricotdin_service' | 'ricotdin_worker')`;
   `ricotdin_app` cannot read `admin_config` / `storage_config` / `drive_config` / `storage_objects`.
-- **Crypto** (`crypto.py`): AES-256-GCM, byte-compatible with v1 (fixture test).
-  `KEY_ENCRYPTION_SECRET` must be the **same value as v1**: 64 hex chars or standard base64 of 32
-  bytes. A malformed value stops startup. An unset value means stored keys and R2 are unusable;
-  only an error is logged. No rotation path yet (open follow-up).
+- **Crypto** (`crypto.py`): AES-256-GCM (v1's format). `KEY_ENCRYPTION_SECRET`: 64 hex chars or
+  standard base64 of 32 bytes (production's own value; v1's is irrelevant since ARC-20). A malformed
+  value stops startup. An unset value means stored keys and Drive are unusable; only an error is
+  logged. No rotation path yet (open follow-up).
 - **Keys** (`keys/source.py`, `pool.py`): active `admin_config` rows, decrypted and cached 30 s.
   If none, the env fallback (`GEMINI_API_KEYS`, then `GEMINI_API_KEY_1..20`, then
   `GEMINI_API_KEY`; `SPEECHMATICS_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY` / `GROK_API_KEY`).
@@ -22,7 +22,7 @@
   PATCH. `coerce_config_bool` / `parse_int_setting` fail closed.
 - **Storage = Google Drive** (ARC-17, `storage/`; owner decision 2026-10-29). Code against the
   `Storage` protocol (`base.py`); `platform.storage(conn)` returns `DriveStorage` (`gdrive.py`).
-  `r2.py` is only the ARC-18 reader of the v1 bucket (removed in ARC-16). No Google SDK (httpx2).
+  There is no other backend (the v1 R2 reader was removed in ARC-16). No Google SDK (httpx2).
   - **Callers must check ownership first** (`owned_audio_path` / `is_owned_audio_key` /
     `is_owned_avatar_key`); storage accepts any key (≤ 121 bytes, the Drive appProperty limit).
   - **Account:** one row in `drive_config` (migration `0003`), written by

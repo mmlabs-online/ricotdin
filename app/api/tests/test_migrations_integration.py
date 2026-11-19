@@ -192,8 +192,8 @@ def test_0002_downgrade_restores_the_0001_privileges(v2_baseline_db: str) -> Non
     from app.db.introspect import read_schema
     from app.db.parity import to_catalog
 
-    expected = to_catalog(read_schema(v2_baseline_db), v1=False)
+    expected = to_catalog(read_schema(v2_baseline_db))
     with scratch_database("mig2") as url:
         alembic_upgrade(url)  # head
         alembic_downgrade(url, "0001_baseline")
-        assert to_catalog(read_schema(url), v1=False) == expected
+        assert to_catalog(read_schema(url)) == expected

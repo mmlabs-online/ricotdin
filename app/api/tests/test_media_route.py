@@ -15,7 +15,7 @@ from app.db.session import get_database
 from app.main import create_app
 from app.services.platform import Platform
 from app.services.storage.base import StoredObject
-from app.services.storage.config import DriveConfigSource, StorageConfigSource
+from app.services.storage.config import DriveConfigSource
 from app.services.storage.gdrive import DriveClient, DriveStorage, MemoryObjectMap
 from app.services.storage.media_token import MediaTokenSigner, derive_media_key
 from tests.fake_drive import CONFIG, FakeDrive
@@ -59,7 +59,6 @@ def env() -> Any:
     platform = FakePlatform(
         keys=None,  # type: ignore[arg-type]
         config=None,  # type: ignore[arg-type]
-        storage_config=StorageConfigSource(MASTER),
         drive_config=DriveConfigSource(MASTER),
         media_signer=SIGNER,
     )

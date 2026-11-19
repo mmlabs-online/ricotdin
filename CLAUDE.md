@@ -19,9 +19,10 @@ docs/  .claude/  .github/  CLAUDE.md  CHANGELOG.md  README.md
   `release/1.1` (tags ≤ v1.1.1, v1 at the repo root there). **v1 is retired** (owner decision
   2026-11-12, ARC-20): no hotfixes, no data carried over; v2 is the only ricotdin.
   Its rules and designs: `docs/architecture/v1-rules.md` (was `legacy/CLAUDE.md`).
-- The frozen v1 schema (`schema.sql` + migrations 001–038) is a test fixture in
-  `app/api/tests/fixtures/v1/schema/`: the migration integration test, the schema parity test and
-  `scripts.gen_baseline` replay it. Never edit it.
+- **`app/api/migrations/sql/0001_baseline.sql` is the frozen source of the schema** (ARC-16 part 2:
+  no longer regenerated from v1; the v1 schema fixture, the parity test, `gen_baseline` and `app/db/{grants,ddl}.py` are gone).
+  Never edit it; schema changes are new Alembic revisions. Supabase and the v1 data are retired:
+  there is nothing to connect to, migrate from or back up (owner decision 2026-11-19).
 - **Commands:**
   - api: `cd app/api && uv sync && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest -q`
   - web: `cd app/web && npm ci && npm run typecheck && npm test && npm run build`
@@ -46,8 +47,8 @@ through this table. **Read the file before working in that area**; its rules are
 | §0.1 | `docs/architecture/db.md` | self-hosted Postgres (ARC-20), schema, Alembic, DB roles, RLS request context, grants |
 | §0.2 | `docs/architecture/api-runtime.md` | FastAPI factory, middleware, logins/pools, `Database` session, image |
 | §0.3 | `docs/architecture/auth.md` | sign-in with the mmlabs account (§0.3a, AUT-05); ricotdin's own auth removed (AUT-06) |
-| §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive / R2 storage |
-| §0.5 | `docs/architecture/data-migration.md` | v1 → v2 data + file migration (not used since ARC-20; tooling kept until ARC-16) |
+| §0.4 | `docs/architecture/platform-services.md` | crypto, key pool, app config, Google Drive storage |
+| §0.5 | removed (ARC-16) | v1 → v2 data migration: never run (ARC-20), tooling and docs deleted in ARC-16 part 2 |
 | §0.6 | `docs/architecture/core-domain-api.md` | meetings, folders/shares, content, profile, quota routes |
 | §0.7 | `docs/architecture/worker.md` | pipeline worker, transcription, AI analyse, embed, schedulers |
 | §0.8 | `docs/architecture/chat-rag.md` | chat sessions, retrieval scope, grounded answers, citations |
@@ -71,7 +72,7 @@ From §0.1 (`docs/architecture/db.md`):
   attribute; only ALTER when the role has it). Tests + CI: a superuser container, never the shared server.
   The owner (never an agent) may run the API only against production through the pg tunnel (2026-11-17),
   runtime logins only, passwords typed at runtime (`app/web/scripts/start-dev.sh`, never a file).
-- **App privileges are narrower than v1** (`app/db/grants.py`): v1 `authenticated` grants minus
+- **App privileges are narrower than v1** (frozen in `0001_baseline.sql`): v1 `authenticated` grants minus
   TRUNCATE/TRIGGER/REFERENCES/MAINTAIN (RLS does not govern them), and INSERT/UPDATE/DELETE only
   where a policy for that command exists. All meeting content is SELECT-only for the app, so
   **editor-level writes are enforced in the API** (`can_access_meeting(..., 'editor')`) and executed
@@ -100,6 +101,7 @@ From §0.7 (`docs/architecture/worker.md`):
 From v1 §5 / §6 (`docs/architecture/v1-rules.md`; the same rules bind v2 per §0):
 
   **The Gemini API key and the Supabase service role key must NEVER reach the browser.**
+  (v2 has no Supabase; read it as every server secret: DB logins, `KEY_ENCRYPTION_SECRET`, provider keys.)
 - Any server code that signs, downloads or deletes a storage key read from a DB row MUST check the key
   belongs to that row: `ownedAudioPath` / `isOwnedAudioKey` (meetings), `isOwnedAvatarKey` (profiles).
 - Every `SECURITY DEFINER` function MUST `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` and grant

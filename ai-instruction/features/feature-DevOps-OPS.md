@@ -93,6 +93,10 @@ v2 has CI and a tag-driven production release (`release.yml` → deployment PR, 
 ### OPS-03 — Periodic DB backup (Supabase Free)
 **Priority:** High | **Status:** ⚠️ Partial — code done; pending owner setup, first green run from `main` and one test restore
 
+> **Superseded (ARC-20 / ARC-16):** the Supabase/Neon `backup.yml` workflow below is removed and its
+> pending setup steps are dropped; Supabase is never backed up again (no final dump, owner decision
+> 2026-11-19). Backups are now the shared Postgres's nightly dumps: `docs/ops/backup-restore.md`.
+
 **User Story**  
 As the owner, I want an encrypted off-site copy of the database every day so that I can recover meetings and accounts after a mistake or an incident.
 

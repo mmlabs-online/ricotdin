@@ -17,9 +17,7 @@ from app.services.crypto import (
     parse_master_key,
 )
 
-FIXTURE = json.loads(
-    (Path(__file__).parent / "fixtures" / "v1" / "crypto_v1.json").read_text("utf-8")
-)
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "crypto_v1.json").read_text("utf-8"))
 V1_KEY = bytes.fromhex(FIXTURE["key_hex"])
 KEY = bytes(range(32))
 OTHER = bytes(32)

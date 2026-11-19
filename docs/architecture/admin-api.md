@@ -82,7 +82,7 @@
   changed_fields}`), `GET /admin/health` (database, Drive `check()`, per-provider active keys from
   the last check — no live probe, unlike v1 — and stale worker tasks; 503 when any check fails),
   `GET /admin/storage` (Drive health + map totals). v1's R2 `storage` config / orphans / cleanup
-  routes are not ported (storage is Drive; R2 is only the ARC-18 source).
+  routes are not ported (storage is Drive).
 - 10c review follow-ups: key changes take a per-provider advisory lock first (two admins
   disabling two keys of one provider no longer deadlock); a provider's 401 marks expire after
   1 h (`INVALID_TTL_S`: the worker never sees the API's `invalidate`, so a topped-up key comes

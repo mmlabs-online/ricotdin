@@ -1,7 +1,8 @@
 """Read the `public` schema of a live database into plain rows (ARC-02).
 
-Shared by the baseline generator (rows → DDL via ``ddl``) and the parity test (rows →
-``catalog.Catalog``). Extension-owned objects (pgvector, pgcrypto) are excluded.
+Used by the migration tests (a schema snapshot → ``parity.to_catalog``) to check that a
+downgrade + upgrade round trip leaves the schema unchanged. Extension-owned objects (pgvector,
+pgcrypto) are excluded.
 """
 
 import json
@@ -11,7 +12,26 @@ from typing import Any, LiteralString
 import psycopg
 from psycopg import sql
 
-from app.db.ddl import Column, Policy
+
+@dataclass(frozen=True)
+class Column:
+    name: str
+    type: str
+    not_null: bool
+    default: str | None = None
+    identity: str = ""  # '' | 'a' (ALWAYS) | 'd' (BY DEFAULT)
+    generated: str | None = None  # stored generation expression
+
+
+@dataclass(frozen=True)
+class Policy:
+    table: str
+    name: str
+    permissive: bool
+    cmd: str  # ALL | SELECT | INSERT | UPDATE | DELETE
+    roles: list[str]
+    qual: str | None
+    with_check: str | None
 
 
 @dataclass

@@ -1,5 +1,10 @@
 # v1 rules and designs (reference)
 
+> **Retired (ARC-16, owner decisions 2026-11-12 and 2026-11-19).** The v1 app, its Supabase project
+> and its R2 buckets are shut down; no final backup was taken. Nothing in this file is to be operated,
+> connected to or migrated from. It stays only because the root `CLAUDE.md` binds §5–§7, §9b, §9f
+> and §9m to v2, and as the design record the v2 ports cite.
+
 > Was `legacy/CLAUDE.md` (ARC-19). The v1 code (`legacy/`) was deleted from `dev` in ARC-16; it
 > lives on in git history and on `release/1.1` (tags ≤ v1.1.1), where every path below is relative
 > to the repo root. The rules marked as binding for v2 in the root `CLAUDE.md` ("Never" list:

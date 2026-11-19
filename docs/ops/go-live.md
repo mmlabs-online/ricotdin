@@ -111,7 +111,8 @@ curl -fsS https://ricotdin-api.mmlabs.online/version.json
 ## 8. Afterwards (irreversible, owner confirms each)
 
 - Delete the Neon project `ricotdin-sg`.
-- Shut down the v1 Supabase project after its final backup (ARC-16).
+- Shut down the v1 Supabase project and delete the v1 R2 buckets (ARC-16). No final backup is taken
+  (owner decision 2026-11-19): v2 started empty and needs no v1 data.
 - Install rclone on the Mac and finish the offsite backup setup (deployment repo
   `ops/backup/RESTORE.md`). Until then only the local nightly dumps exist.
 
