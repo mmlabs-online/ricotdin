@@ -34,7 +34,7 @@
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
 | BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #127 |
-| BUG-024 | Retired model gemini-2.5-flash is still offered: admin model list, profile picker and the seeded allowed list / system default still show it | S3 | in_progress | v2.2.2 | ARC-08c | bugfix | — | claude/tender-gates-7feyr1 |
+| BUG-024 | Retired model gemini-2.5-flash is still offered: admin model list, profile picker and the seeded allowed list / system default still show it | S3 | fixed | v2.2.2 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1 |
 
 ---
 
@@ -545,4 +545,16 @@ It is listed as registered (admin can add it), shown as allowed / default, and o
 **Root cause** (confirmed by code reading)
 - `app/api/app/services/ai/catalog.py:65` keeps `gemini-2.5-flash` in `MODELS` (BUG-022 kept it so stored rows stay valid), so `domain/models.py:10` `REGISTERED` contains it.
 - `app/api/app/routers/admin/config.py:318` lists every `REGISTERED` pair; `allowed_models()` / `system_default()` (`domain/models.py:16`, `:63`) return the stored pairs as they are, so the seeded 2.5 entries reach `/admin` and `/profile/preferences` (`routers/profile.py:193`).
+
+**Fix** (bugfix on `main`, owner choice: hide, no migration)
+- `app/api/app/domain/models.py`: `SELECTABLE` (registered minus `catalog.RETIRED`) and `current_pick()`; `allowed_models()`,
+  `system_default()` and `resolve_generation_model()` read a retired pair as its replacement, so stored settings, profile
+  defaults and queued upload picks naming `gemini-2.5-flash` mean `gemini-3.8-flash`. The pair stays in `MODELS` / `REGISTERED`.
+- `/admin` generation config lists and accepts only `SELECTABLE`; `GET /profile/preferences` shows a retired stored default
+  as its replacement. With BUG-023, a meeting locked to 2.5 stores 3.8 on its next run; new locks store 3.8.
+- Regression tests: `test_domain_models.py::test_bug_024_a_retired_model_is_not_offered`,
+  `::test_bug_024_stored_settings_read_the_retired_model_as_its_replacement`,
+  `::test_bug_024_a_retired_preference_still_counts_as_its_replacement` (code review round 1),
+  `test_admin_config_integration.py::test_generation_config`, `test_core_domain_integration.py::test_preferences`
+  (all failed before the fix).
 

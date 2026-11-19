@@ -12,6 +12,7 @@ from app.domain.models import (
     is_model_allowed,
     lock_is_valid,
     model_label,
+    resolve_generation_model,
     system_default,
 )
 
@@ -118,3 +119,11 @@ def test_bug_024_stored_settings_read_the_retired_model_as_its_replacement() -> 
     assert system_default({"provider": "gemini", "model": "gemini-2.5-flash"}) == (
         "gemini", "gemini-3.8-flash",
     )  # fmt: skip
+
+
+def test_bug_024_a_retired_preference_still_counts_as_its_replacement() -> None:
+    gemini, gpt = ("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")
+    retired = ("gemini", "gemini-2.5-flash")
+    # a profile default or an upload pick stored as 2.5 is the user's choice of 3.8, not "none"
+    assert resolve_generation_model([gemini, gpt], gpt, retired, None) == gemini
+    assert resolve_generation_model([gemini, gpt], gpt, None, retired) == gemini

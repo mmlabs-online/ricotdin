@@ -83,8 +83,10 @@ def resolve_generation_model(
     """v1 AIP-06 chain: the upload's pick, then the user's default (each only if allowed and
     registered), then the system default."""
     for candidate in (pick, user_pref):
-        if candidate is not None and is_model_allowed(*candidate, allowed):
-            return candidate
+        if candidate is not None:
+            candidate = current_pick(candidate)  # BUG-024: a retired choice is its replacement
+            if is_model_allowed(*candidate, allowed):
+                return candidate
     return default
 
 
