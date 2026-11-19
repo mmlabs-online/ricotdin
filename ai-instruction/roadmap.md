@@ -15,6 +15,11 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 
 ## Current goal
 
+> **Status 2026-11-19:** phase 2 is done — v2 has been live on `ricotdin.mmlabs.online` since v2.0.0
+> (2026-11-13); production runs **v2.2.3**. Phase 1 is done except PRO-01 → PRO-03 → PRF-10 and CST-01 → COM-03.
+> Phase 3 (bugs from production use) is running: BUG-022…025 fixed in v2.2.2–v2.2.3. Releases are cut as
+> `release/X.Y.Z` branches (OPS-09), not `release/2.0` hotfixes.
+
 | Field | Value |
 |---|---|
 | Goal | **Finish the backlog on v2, then go live on an empty production and test there, then fix the bugs found.** Owner decisions 2026-11-09 + 2026-11-12. **Phase 1 – build:** every open ticket that has its own UI and its own API. **Phase 2 – go-live + test:** deploy v2.0.0 to the only environment (`ricotdin.mmlabs.online`, database `ricotdin` on the shared self-hosted Postgres, started empty) following `docs/ops/go-live.md`, then the owner tests every phase-1 feature there. **Phase 3 – bugs:** each finding becomes a `BUG-NNN` via `/fix-bug`, shipped as `v2.0.x` hotfixes. v1, staging and Neon are retired; no data migration (ARC-20). |
@@ -26,17 +31,17 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 
 | Item | Codes | Why now | Done when |
 |---|---|---|---|
-| 1. Owner: merge the ARC-20 PRs (ricotdin + deployment PR #54) | ARC-20 | Production deploy path and docs are ready only after both are merged | Both merged; `deploy-ricotdin-v2.yml` on the deployment repo's `main` |
-| 2. Owner: rotate the Gemini key leaked in git history (`AQ.A…`); take a final encrypted Supabase dump (`pg_dump -Fc` + `age`, kept offline) before Supabase is shut down | ARC-16 prep, CLAUDE.md §0.11 | The leaked key still works; v1's data has no other copy | Old key rejected; dump stored offline |
-| 3. Agent: next phase-1 tickets (see Next) | PRF-09, PRO-05 | Phase 1 continues | Codes `[x]` |
+| 1. Owner: rotate the Gemini key leaked in git history (`AQ.A…`); take a final encrypted Supabase dump (`pg_dump -Fc` + `age`, kept offline) before Supabase is shut down | ARC-16 prep, CLAUDE.md §0.11 | Not confirmed done (repo cannot show it); the leaked key may still work and v1's data has no other copy | Old key rejected; dump stored offline |
+| 2. Owner: check the production deploy checklist — `/version.json` = the latest release, Turnstile site key set, old JWT/SMTP secrets removed, `gpt-4o`/`gpt-4o-mini` removed at `/admin` if there is no OpenAI key (BUG-023), first `pg-backup` dump + `restore-test.sh ricotdin` | ARC-20, OPS-03 | Success measures (2) and (3) of the goal are not confirmed | All checked |
+| 3. Agent: last phase-1 tickets (see Next) | PRO-01 | Highest open feature | Code `[x]` |
+| 4. Phase 3: production findings → `/fix-bug`; BUG-025 follow-up once the next Gemini failure logs `ReadTimeout` or `ConnectError` | `BUG-NNN` | v2 is in use | No open S1/S2 bug |
 
-## Next (phase 1, in this order unless a spec changes it)
+## Next (rest of phase 1, in this order unless a spec changes it)
+
+Done since 2026-11-17: PRF-09, PRO-05, PRO-04, ADM-11 + PRF-13 (v2.1.2), OPS-09 (v2.2.0).
 
 | Item | Codes | Depends on |
 |---|---|---|
-| Own activity feed; library search | PRF-09, PRO-05 | — |
-| Speaker naming / personalised diarization | PRO-04 | — |
-| Admin data retention + user export / full erase (built together) | ADM-11, PRF-13 | — |
 | Auto-email results; proactive reminders; notification settings | PRO-01, PRO-03, PRF-10 | PRO-03 + PRF-10 after PRO-01; **PRO-03 lifts the CLAUDE.md §1 exclusion (owner 2026-11-09): update §1 in that PR** |
 | Cost model by usage (admin); then subscription plans + per-plan quota | CST-01, COM-03 | COM-03 after CST-01; COM-03 spec must name the payment provider and stays internal-test only until COM-02 legal docs exist |
 
@@ -44,8 +49,8 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 
 | Item | Codes | Note |
 |---|---|---|
-| **Phase 2 – go-live + test (owner sessions):** retire staging, production secrets (incl. SMTP), tag `v2.0.0`, migrations + logins on the Mac, Cloudflare hostnames, deploy, first admin, Drive, keys (`docs/ops/go-live.md`); then a manual test of every phase-1 feature on production; rclone offsite backup + one `restore-test.sh ricotdin` | ARC-15, ARC-20 | After phase 1 |
-| **Phase 3 – bugs:** owner reports, `/fix-bug` per finding (S1/S2 first), shipped as `v2.0.x` hotfixes on `release/2.0` | `BUG-NNN` | After phase 2 |
+| ~~Phase 2 – go-live~~ **done 2026-11-13** (v2.0.0; ARC-15, ARC-20 `[x]`). Still open from it: the owner's manual test of every phase-1 feature on production, rclone offsite backup + one `restore-test.sh ricotdin` (see Now 2) | ARC-15, ARC-20 | — |
+| **Phase 3 – bugs:** owner reports, `/fix-bug` per finding (S1/S2 first), shipped as a new `release/X.Y.Z` (OPS-09) | `BUG-NNN` | Running since v2.2.x (moved to Now 4) |
 | Post-go-live restructure: feature-sliced api/web, repo layer + access-checked write helper, `app/jobs`, prompt into the api package, trim agents (slice 1 = CLAUDE.md split, done) | ARC-19 | After go-live, module by module (owner 2026-11-12) |
 | Drive orphan sweeper, ffmpeg sandbox | needs `/add-feature` | After go-live (owner 2026-11-09) |
 | `storage.audio_retention_days` | — | Any time after go-live (no migration copy to wait for) |
@@ -63,7 +68,7 @@ Postgres on the home server and our own auth, no Supabase, no Neon).
 | Dependabot | Owner decision 2026-11-09 | — |
 | PRV-01 Gemini billing | Owner decision 2026-10-23 | Outside users, commercialisation, legal requirement |
 | PRV-03, CST-02 | Superseded (PRV-02 purge; storage is Drive, ARC-17) — close CST-02 | — |
-| Staging environment, v1, v1 → v2 data migration (ARC-03, BUG-021) | Retired 2026-11-12 (ARC-20): production starts empty, no v1 data | v2 opens to outside users and needs a pre-production check |
+| Staging environment, v1, v1 → v2 data migration (ARC-03, OPS-02 — both closed as superseded 2026-11-19; BUG-021) | Retired 2026-11-12 (ARC-20): production starts empty, no v1 data | v2 opens to outside users and needs a pre-production check |
 | WebM remux, 39 v1 lint warnings | Low impact | Users complain |
 
 ---
@@ -146,3 +151,10 @@ supersedes it.
 - **Options considered:** a separate `/bug` command with its own ticket folder, as in TuDoCuaTui (not chosen: a second bug system next to `bugs.md`); extend `/fix-bug` (chosen).
 - **Why:** Phase 3 turns the owner's test findings into bugs; recording several before fixing, or recording now and fixing later, needs no code change in the same PR.
 - **Revisit if:** record PRs pile up unfixed, or batches mix bugfixes and hotfixes often enough that the per-line PRs get confusing.
+
+### 2026-11-17 — Release by branch name, deploy at once (OPS-09; logged 2026-11-19)
+- **Decision:** A release is a new branch `release/X.Y.Z` cut from `main`: pushing it tags `vX.Y.Z`, builds both images and opens **and merges** the deployment PR (= production deploy). Version files are no longer bumped. Hotfixes are a new `release/X.Y.(Z+1)` branch. Supersedes the "tag-driven" release of the 2026-11-12 entry. (Owner decision recorded in CLAUDE.md §9k; added here so the log is complete.)
+- **Options considered:** keep tag + version-file releases with a manual deployment-PR merge; branch-name releases with an automatic merge (chosen).
+- **Why:** one push per release, no version-file drift, no manual merge step.
+- **Revisit if:** a bad release reaches production because the deployment PR is merged without review, or two release branches race.
+

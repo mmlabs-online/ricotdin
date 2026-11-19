@@ -6,23 +6,43 @@
 ## [Unreleased]
 
 ### Tính năng
+- Cuối thanh bên trái hiện phiên bản đang chạy (ví dụ "Phiên bản v2.2.3"), lấy từ `GET /version.json` (OPS-09).
+
+## [2.2.3] — 2026-11-19
+
+### Sửa lỗi
+- `gemini-2.5-flash` (Google đã ngừng) không còn hiện ở `/admin` và ở lựa chọn model trong hồ sơ; cài đặt, mặc định hồ sơ và cuộc họp còn ghi model này được hiểu là `gemini-3.8-flash` (không cần migration) (BUG-024).
+- Khi Gemini không trả lời (lỗi mạng hoặc timeout), lỗi không còn báo "check key validity and quota" mà ghi rõ "did not answer" kèm loại lỗi (ví dụ `gemini ConnectError`); log của worker cũng ghi loại lỗi đó (BUG-025).
+
+## [2.2.2] — 2026-11-19
+
+Bản đầu tiên deploy được sau 2.2.0: gồm cả bản sửa của 2.2.1 (2.2.1 có tag nhưng CI đỏ nên không build image, không deploy).
+
+### Sửa lỗi
+- Phân tích cuộc họp và chat bằng Gemini không còn lỗi "The AI service could not process this meeting" (Google trả 404 cho `gemini-2.5-flash` với project mới): model mặc định là `gemini-3.8-flash`; cuộc họp và cài đặt đang ghi `gemini-2.5-flash` tự gọi `gemini-3.8-flash` (bấm chạy lại cuộc họp lỗi). Kiểm tra key Gemini giờ gọi thử đúng model này, nên key không dùng được model sẽ không còn hiện "healthy" (BUG-022).
+- Cuộc họp đã khoá vào một model mà admin không còn cho phép (ví dụ GPT khi không có khoá OpenAI) không còn lỗi "No usable openai API keys" mãi: lần chạy lại / tạo lại tiếp theo dùng model đang được chọn (ví dụ Gemini) và lưu lại; chat của cuộc họp đó dùng model mặc định hệ thống. Bỏ model khỏi danh sách được phép ở `/admin` để chuyển các cuộc họp đó. Lưu ý khi deploy: cài đặt gốc cho phép sẵn `gpt-4o` và `gpt-4o-mini`, nên nếu không có khoá OpenAI hãy bỏ hai model này ở `/admin` sau khi deploy, nếu không bản sửa chưa có tác dụng (BUG-023).
+- CI API xanh lại: hai test chat còn ghi cứng `gemini-2.5-flash` làm release 2.2.1 không build được (BUG-022).
+
+## [2.2.1] — 2026-11-18
+
+Có tag nhưng không phát hành: CI đỏ (hai test chat, sửa ở 2.2.2) nên không build image và không deploy. Nội dung (BUG-022, script dev `start-dev` của OPS-08) đi cùng 2.2.2.
+
+## [2.2.0] — 2026-11-17
+
+### Tính năng
+- Phát hành bằng tên nhánh: push nhánh mới `release/X.Y.Z` là tự tạo tag `vX.Y.Z`, build image và tự merge PR deployment (tức là deploy luôn); không cần bump version hay tag tay. Bản hotfix cho dòng cũ hơn bản mới nhất chỉ mở PR, không tự deploy (OPS-09).
+
+## [2.1.2] — 2026-11-17
+
+Đăng nhập bằng tài khoản mmlabs, tìm kiếm, tên người nói, hoạt động và dữ liệu của bạn.
+
+### Tính năng
 - Đăng nhập Ricotdin bằng tài khoản mmlabs (tài khoản chung cho mọi app mmlabs, ở `api.mmlabs.online`): đăng nhập, đăng ký, xác minh email, quên/đặt lại mật khẩu đều qua mmlabs, có Cloudflare Turnstile; "Tiếp tục với <email>" khi trình duyệt đã đăng nhập mmlabs ở app khác. Lần đầu đăng nhập, tài khoản Ricotdin cùng email được nối tự động (giữ nguyên cuộc họp); quyền admin lấy từ role mmlabs `ricotdin:admin` (cập nhật trong ≤ 15 phút), không đổi role trong Ricotdin nữa. Đổi mật khẩu trong hồ sơ chuyển sang link quên mật khẩu (AUT-05).
 - Bỏ hệ đăng nhập riêng của Ricotdin: mật khẩu, JWT, refresh token, email xác minh/đặt lại mật khẩu, đổi mật khẩu trong hồ sơ và "đặt lại mật khẩu" của admin; API chỉ nhận token mmlabs. Mật khẩu cũ, phiên cũ và link email cũ bị xoá (AUT-06).
 - Mục "Hoạt động" trong hồ sơ: xem lại hoạt động của chính mình (tạo/xóa cuộc họp, xử lý, ghi âm, chat) kèm thiết bị và IP, và các lần chia sẻ / gỡ chia sẻ thư mục với người khác (cả hai bên đều thấy); lọc theo loại, "Xem thêm" (PRF-09).
 - Trang Tìm kiếm (`/search`, mở từ ô tìm ở trang Cuộc họp): tìm trong bản ghi lời, tóm tắt và ghi chú của mọi cuộc họp bạn được xem, không cần gõ dấu, kèm tìm theo ý nghĩa; kết quả nhóm theo cuộc họp, từ khớp được tô, bấm để mở đúng giây hoặc đúng tab; lọc theo thư mục (PRO-05).
 - Đặt tên người nói: trong tab Bản ghi lời, chủ cuộc họp và người chỉnh sửa đặt tên thật cho Speaker 1, Speaker 2… (có gợi ý các tên đã dùng); tên hiện trong bản ghi lời, file tải về, câu trả lời chat và tóm tắt ở lần tạo lại. Chép lại bản ghi lời sẽ xóa tên cũ (PRO-04).
 - Dữ liệu của bạn: tải toàn bộ dữ liệu của mình (file ZIP gồm cuộc họp dạng Markdown + JSON, chat, nhật ký hoạt động, hồ sơ; không gồm audio) và tự xóa tài khoản Ricotdin (nhập tên người dùng để xác nhận; tài khoản mmlabs vẫn giữ, đăng nhập lại tạo tài khoản mới trống, không được tặng lại quota). Admin xuất được dữ liệu của một người dùng (PRF-13, ADM-11).
-
-- Phát hành bằng tên nhánh: push nhánh mới `release/X.Y.Z` là tự tạo tag `vX.Y.Z`, build image và tự merge PR deployment (tức là deploy luôn); không cần bump version hay tag tay. Bản hotfix cho dòng cũ hơn bản mới nhất chỉ mở PR, không tự deploy (OPS-09).
-
-- Cuối thanh bên trái hiện phiên bản đang chạy (ví dụ "Phiên bản v2.2.3"), lấy từ `GET /version.json` (OPS-09).
-
-### Sửa lỗi
-- Phân tích cuộc họp và chat bằng Gemini không còn lỗi "The AI service could not process this meeting" (Google trả 404 cho `gemini-2.5-flash` với project mới): model mặc định là `gemini-3.8-flash`; cuộc họp và cài đặt đang ghi `gemini-2.5-flash` tự gọi `gemini-3.8-flash` (bấm chạy lại cuộc họp lỗi). Kiểm tra key Gemini giờ gọi thử đúng model này, nên key không dùng được model sẽ không còn hiện "healthy" (BUG-022).
-- Cuộc họp đã khoá vào một model mà admin không còn cho phép (ví dụ GPT khi không có khoá OpenAI) không còn lỗi "No usable openai API keys" mãi: lần chạy lại / tạo lại tiếp theo dùng model đang được chọn (ví dụ Gemini) và lưu lại; chat của cuộc họp đó dùng model mặc định hệ thống. Bỏ model khỏi danh sách được phép ở `/admin` để chuyển các cuộc họp đó. Lưu ý khi deploy: cài đặt gốc cho phép sẵn `gpt-4o` và `gpt-4o-mini`, nên nếu không có khoá OpenAI hãy bỏ hai model này ở `/admin` sau khi deploy, nếu không bản sửa chưa có tác dụng (BUG-023).
-- `gemini-2.5-flash` (Google đã ngừng) không còn hiện ở `/admin` và ở lựa chọn model trong hồ sơ; cài đặt, mặc định hồ sơ và cuộc họp còn ghi model này được hiểu là `gemini-3.8-flash` (không cần migration) (BUG-024).
-- Khi Gemini không trả lời (lỗi mạng hoặc timeout), lỗi không còn báo "check key validity and quota" mà ghi rõ "did not answer" kèm loại lỗi (ví dụ `gemini ConnectError`); log của worker cũng ghi loại lỗi đó (BUG-025).
-- CI API xanh lại: hai test chat còn ghi cứng `gemini-2.5-flash` làm release 2.2.1 không build được (BUG-022).
 
 ### Checklist deploy (AUT-05 + AUT-06, release cùng nhau)
 - Migration `0010_mmlabs_identity` (thêm `users.mmlabs_sub`, `password_hash` cho phép NULL); bước `database` của deploy tự chạy.

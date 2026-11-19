@@ -41,7 +41,7 @@ As a developer, I want automated tests to run before deploy to catch bugs early.
 ---
 
 ### OPS-02 — Staging deploy from staging branches
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ⛔ Superseded (owner 2026-11-12, ARC-20): staging retired; production only.
 
 **User Story**  
 As the owner, I want pushing a staging/X.Y.Z branch to deploy v2 to ricotdin-staging.mmlabs.online so that I can try a release on the real server before production.

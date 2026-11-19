@@ -179,7 +179,7 @@ Today the schema relies on `auth.users`, `auth.uid()`, `auth.jwt()`, the custom 
 ---
 
 ### ARC-03 — Data migration Supabase → Neon (+ legacy storage → R2)
-**Priority:** High | **Status:** ⚠️ Partial — script + tests done; the two owner rehearsals (done check) are pending
+**Priority:** High | **Status:** ⛔ Superseded (owner 2026-11-12, ARC-20): no data carried over from v1.
 
 **User Story**  
 As the owner, I want a repeatable script that copies all users, meetings, transcripts, embeddings, keys and files from Supabase into v2 so that nobody loses data or has to reset their password.
@@ -832,7 +832,7 @@ Uses ARC-10. Same guards shown in UI (You badge, disabled self-actions, confirm 
 ---
 
 ### ARC-15 — Cutover & v2.0.0 release
-**Priority:** High | **Status:** ❌ Not started
+**Priority:** High | **Status:** ✅ Done (2026-11-13): v2.0.0 live without a data move (ARC-20).
 
 **User Story**  
 As the owner, I want a rehearsed, reversible switch from v1 to v2 so that users move to v2 with all their data and minimal downtime.
@@ -1107,6 +1107,7 @@ Architecture review 2026-11-12 (owner decisions in `roadmap.md`, same date). Fin
 ---
 
 ### ARC-20 — Self-hosted Postgres instead of Neon
+**Status:** ✅ Done (2026-11-13): production only, shared self-hosted Postgres.
 
 **User story:** As the owner, I want v2's database on the shared self-hosted Postgres of the
 deployment repository instead of Neon so that it runs next to the other apps, is backed up by the
