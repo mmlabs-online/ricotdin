@@ -9,7 +9,7 @@ import { AdminHead, NoticeBanner, useFormatters, useNotice } from '../../compone
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Status } from '../../components/ui/Status'
-import { configErrorKey, healthStatusKind, keyGroups, keyProblem } from '../../lib/admin/config'
+import { configErrorKey, healthStatusKind, keyGroups, keyModelResults, keyProblem, modelResultKind } from '../../lib/admin/config'
 import { ApiError } from '../../api/errors'
 import { displayText } from '../../lib/text'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -126,6 +126,7 @@ export function AdminKeysPage() {
                       <small>{k.last_used_at ? t('admin.keys.lastUsed', { time: f.dateTime(k.last_used_at) }) : t('admin.keys.neverUsed')}</small>
                       {k.health_checked_at && <small>{t('admin.keys.checkedAt', { time: f.dateTime(k.health_checked_at) })}</small>}
                       {k.status === 'disabled' && k.disabled_reason && <small className="bidi-isolate">{t('admin.keys.reason', { reason: displayText(k.disabled_reason) })}</small>}
+                      <KeyModels raw={k.health_models} />
                     </div>
                     <div className="key-actions">
                       <Button
@@ -283,5 +284,27 @@ function AddKeyForm({ providers, onNotice }: { providers: string[]; onNotice: (k
         </Button>
       </form>
     </section>
+  )
+}
+
+/** ADM-12: which allowed models the key could call at the last check. */
+function KeyModels({ raw }: { raw: unknown }) {
+  const { t } = useTranslation()
+  const rows = keyModelResults(raw)
+  if (rows === null) return null
+  if (rows.length === 0) return <small>{t('admin.keys.models.none')}</small>
+  return (
+    <div className="key-models">
+      <small>{t('admin.keys.models.title')}</small>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.model}>
+            <Status type={modelResultKind(r.result)}>
+              <span className="bidi-isolate">{displayText(r.model)}</span>: {t(`admin.keys.models.result.${r.result}`)}
+            </Status>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

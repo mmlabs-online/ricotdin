@@ -163,6 +163,9 @@
     chat POST: Grok; Speechmatics `GET /v2/jobs?limit=1`): 2xx/429 healthy, 401/403 unhealthy,
     else / network unknown, undecryptable → unhealthy → `health_*` columns. Unlike v1 no key ever
     goes in a URL; details never carry bodies or keys. Keys are not auto-disabled (v1).
+    ADM-12: a healthy key then generates one token with each allowed model of its provider
+    (`generation.allowed_models`; a retired model as its replacement, one call for both) →
+    `health_models` `{model: ok|limited|unavailable|unknown}` (NULL = not checked; migration 0016).
   - `retention_purge` (24 h, v1 §9m): off unless `storage.audio_retention_days` is 1–3650; `done`
     meetings created strictly before the cutoff with no queued/running job, oldest first,
     ≤ 500/run; own key and Drive only — both filtered in SQL, so v1 `r2`/`supabase` meetings

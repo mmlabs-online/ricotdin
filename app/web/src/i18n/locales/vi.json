@@ -665,7 +665,17 @@
       "endingIn": "key kết thúc bằng {{last4}}",
       "statusLabel": "Trạng thái:",
       "healthLabel": "Tình trạng:",
-      "checkedAt": "Kiểm tra lúc {{time}}"
+      "checkedAt": "Kiểm tra lúc {{time}}",
+      "models": {
+        "title": "Các model được phép mà key gọi được:",
+        "none": "Nhà cung cấp này không có model nào được bật.",
+        "result": {
+          "ok": "dùng được",
+          "limited": "bị giới hạn tốc độ",
+          "unavailable": "không dùng được",
+          "unknown": "chưa rõ"
+        }
+      }
     },
     "config": {
       "subtitle": "Cài đặt chung. Mỗi thay đổi đều hỏi xác nhận và được ghi vào nhật ký kiểm toán.",

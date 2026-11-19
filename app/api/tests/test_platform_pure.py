@@ -156,10 +156,12 @@ def test_mask_admin_config_never_exposes_ciphertext() -> None:
     row = {
         "id": "1", "created_at": "t", "config_key": "gemini_api_key", "label": "main", "last4": "abcd",
         "status": "active", "disabled_reason": None, "last_used_at": None, "health_status": "healthy",
-        "health_checked_at": None, "health_detail": None, **SENSITIVE,
+        "health_checked_at": None, "health_detail": None, "health_models": {"gpt-4o": "ok"},
+        **SENSITIVE,
     }  # fmt: skip
     masked = mask_admin_config(row)
     assert masked["last4"] == "abcd" and masked["health_status"] == "healthy"
+    assert masked["health_models"] == {"gpt-4o": "ok"}  # ADM-12
     blob = repr(masked)
     for value in SENSITIVE.values():
         assert value not in blob

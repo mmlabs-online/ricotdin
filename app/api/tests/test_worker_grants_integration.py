@@ -165,7 +165,7 @@ def test_worker_updates_only_key_health_columns(db: str) -> None:
     _allowed(
         db,
         "UPDATE admin_config SET health_status = 'healthy', health_checked_at = now(), "
-        "health_detail = 'ok', last_used_at = now()",
+        "health_detail = 'ok', last_used_at = now(), health_models = '{\"gpt-4o\": \"ok\"}'",
     )
     _denied(db, "UPDATE admin_config SET value_ciphertext = 'x'")
     _denied(db, "UPDATE admin_config SET status = 'disabled'")

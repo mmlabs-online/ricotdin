@@ -665,7 +665,17 @@
       "endingIn": "key ending in {{last4}}",
       "statusLabel": "Status:",
       "healthLabel": "Health:",
-      "checkedAt": "Checked {{time}}"
+      "checkedAt": "Checked {{time}}",
+      "models": {
+        "title": "Allowed models this key can call:",
+        "none": "No allowed models for this provider.",
+        "result": {
+          "ok": "works",
+          "limited": "rate-limited",
+          "unavailable": "not available",
+          "unknown": "inconclusive"
+        }
+      }
     },
     "config": {
       "subtitle": "Workspace settings. Each change asks first and is written to the audit log.",

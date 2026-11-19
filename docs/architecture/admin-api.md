@@ -71,7 +71,8 @@
   deleted — 422, rows locked `FOR NO KEY UPDATE`; `keys.invalidate(provider)` after every commit;
   audit `admin_config.create|enable|disable|delete {configKey, label[, disabled_reason]}`),
   `GET|POST /admin/keys/healthcheck` (POST runs `run_key_health(group=SERVICE)` now, 10/h per
-  process for all admins, audit `admin_config.healthcheck {summary}`), `GET /admin/config`,
+  process for all admins, audit `admin_config.healthcheck {summary}`; key rows carry
+  `health_models`, ADM-12), `GET /admin/config`,
   `PATCH /admin/config/{key} {value}` (known keys typed: `storage.audio_retention_days` null or
   1–3650, `user_hack_audio_render` boolean; strings ≤ 2000; `platform.config.invalidate`; audit
   `config.update {value}`; values read as `value::text` — the jsonb codec already decodes),

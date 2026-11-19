@@ -55,7 +55,7 @@ Plat = Annotated[Platform, Depends(get_platform)]
 KEY_CHECKS_PER_HOUR = 10  # each run calls every provider with every stored key
 _KEY_COLUMNS = (
     "id, created_at, updated_at, config_key, label, last4, status, disabled_reason, "
-    "last_used_at, health_status, health_checked_at, health_detail"
+    "last_used_at, health_status, health_checked_at, health_detail, health_models"
 )
 _ENTRY_NOT_FOUND = "Config entry not found."
 _ALL_ADMINS = uuid.UUID(int=0)  # one shared rate-limit bucket
@@ -228,8 +228,8 @@ async def run_key_check(
             await conn.execute(
                 text(
                     "SELECT id, config_key, label, last4, health_status, health_detail, "
-                    "health_checked_at FROM public.admin_config WHERE config_key = ANY(:keys) "
-                    "ORDER BY config_key, created_at, id"
+                    "health_models, health_checked_at FROM public.admin_config "
+                    "WHERE config_key = ANY(:keys) ORDER BY config_key, created_at, id"
                 ),
                 {"keys": list(KEY_CONFIG_KEYS)},
             )

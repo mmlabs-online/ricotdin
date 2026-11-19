@@ -48,6 +48,7 @@ V2_ONLY_COLUMNS: dict[str, frozenset[str]] = {
     # PRF-07 (migration 0008), PRF-06 (migration 0009)
     "profiles": frozenset({"default_folder_id", "locale"}),
     "meetings": frozenset({"speaker_names"}),  # PRO-04 (migration 0014)
+    "admin_config": frozenset({"health_models"}),  # ADM-12 (migration 0016)
 }
 
 

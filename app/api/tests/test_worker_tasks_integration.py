@@ -158,6 +158,45 @@ def test_key_health_probes_every_key_without_putting_it_in_a_url(world: dict[str
                                           "api.x.ai"}  # fmt: skip
 
 
+def test_key_health_records_which_allowed_models_each_key_can_call(world: dict[str, Any]) -> None:
+    # ADM-12: a healthy key is asked for one token with each allowed model of its provider.
+    _sql(world["db"], "DELETE FROM admin_config")
+    allowed = [{"provider": "openai", "model": "gpt-4o"},
+               {"provider": "openai", "model": "gpt-4o-mini"},
+               {"provider": "gemini", "model": "gemini-3.8-flash"},
+               {"provider": "gemini", "model": "gemini-2.5-flash"}]  # fmt: skip
+    _sql(
+        world["db"],
+        "INSERT INTO app_settings (key, value) VALUES ('generation.allowed_models', %s::jsonb) "
+        "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        json.dumps(allowed),
+    )
+    oa = _key(world, "openai_api_key", "oa-ok")
+    gem = _key(world, "gemini_api_key", "gem-ok")
+    dead = _key(world, "anthropic_api_key", "an-dead")
+    sm = _key(world, "speechmatics_api_key", "sm-ok")
+    calls: list[tuple[str, str]] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.read() or b"{}")
+        calls.append((request.url.host, request.url.path))
+        if request.url.host == "api.anthropic.com":
+            return httpx2.Response(401)
+        if body.get("model") == "gpt-4o":
+            return httpx2.Response(404, json={"error": {"code": "model_not_found"}})
+        return httpx2.Response(200, json={})
+
+    _with(world, lambda db, p: run_key_health(db, p, transport=httpx2.MockTransport(handle)))
+    models = dict(_sql(world["db"], "SELECT id, health_models FROM admin_config"))
+    assert models[oa] == {"gpt-4o": "unavailable", "gpt-4o-mini": "ok"}
+    # the retired gemini-2.5-flash is called as gemini-3.8-flash: one call answers both
+    assert models[gem] == {"gemini-3.8-flash": "ok", "gemini-2.5-flash": "ok"}
+    assert models[dead] is None and models[sm] is None  # refused key / no generation models
+    gemini_calls = [c for c in calls if c[0] == "generativelanguage.googleapis.com"]
+    assert len(gemini_calls) == 2  # the key check + one model call
+    assert ("api.anthropic.com", "/v1/messages") not in calls  # no model calls for a dead key
+
+
 # --- retention purge ----------------------------------------------------------------------------------
 
 

@@ -300,6 +300,35 @@ Re-specced 2026-11-17 (owner Q&A), built together with PRF-13 (the user-facing h
 
 ---
 
+### ADM-12 — Key model check
+**Status:** ✅ Done
+
+**User Story**  
+As an admin, I want the key health check to tell me which allowed models each key can actually call so that I see a broken model before users hit `NoUsableKeys`.
+
+**Context**
+Before ADM-12 the check proved only that a key authenticates (OpenAI, Anthropic: `GET /models`; Gemini, Grok: one token with one fixed model). A key could be "healthy" and still fail for the model users picked (no access, out of credits). Owner decisions 2026-11-19: probe only the models allowed in `/admin` → AI models (not the whole catalog); no warning in the AI models section.
+
+**Design** (`app/api/app/worker/tasks/keyhealth.py`)
+- The key check is unchanged. Only a **healthy** key is then asked for one token (`max_tokens` / `maxOutputTokens` = 1, prompt `ping`) with each allowed model of its provider (`app_settings['generation.allowed_models']`), in allow-list order. A retired model is called as its replacement (`catalog.api_model`); one call answers both.
+- Result per model: 2xx → `ok`; error code `model_not_found` / `insufficient_quota` / `not_found_error` / `permission_error`, or 401/403/404 → `unavailable`; other 429 → `limited`; anything else / network → `unknown`.
+- Stored in `admin_config.health_models jsonb` (migration 0016; worker gets column UPDATE). NULL = not checked (key failed its check, or Speechmatics). Same daily worker run and `POST /admin/keys/healthcheck`; keys never in a URL, bodies never stored or logged (only the error code is read).
+
+**Frontend**
+- `/admin/keys`: under each key, "Allowed models this key can call:" with a badge per model (works / rate-limited / not available / inconclusive), or "No allowed models for this provider."
+
+**Acceptance Criteria**
+- Given an allowed OpenAI model the key cannot use (404 `model_not_found`), when the check runs, then that model shows `unavailable` and the others `ok`.
+- Given a key that fails its check (401), then no model calls are made and `health_models` is NULL.
+- Given `gemini-2.5-flash` and `gemini-3.8-flash` both allowed, then one model call answers both.
+- No probe puts the key in a URL.
+
+**Test Plan**
+- Pure: `app/api/tests/test_worker_tasks.py` (models to check, probe shapes per kind, retired model, classification, error code); `app/web/src/lib/admin/config.test.ts` (result parsing, badge kind).
+- Integration: `test_worker_tasks_integration.py::test_key_health_records_which_allowed_models_each_key_can_call`; `test_worker_grants_integration.py` (worker may update `health_models`).
+
+**Key files:** `keyhealth.py`, `migrations/sql/0016_key_health_models{,_down}.sql`, `app/routers/admin/config.py`, `app/services/keys/guards.py`, `app/web/src/routes/admin/AdminKeysPage.tsx`, `app/web/src/lib/admin/config.ts`.
+
 ## Dependencies
 
 - **Depends on:** AUT-03 (role enforcement), PRP-07 (pipeline status)

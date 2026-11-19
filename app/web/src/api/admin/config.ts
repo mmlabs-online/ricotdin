@@ -20,6 +20,8 @@ export interface KeyRow {
   health_status: string | null
   health_checked_at: string | null
   health_detail: string | null
+  /** ADM-12: {model: ok | limited | unavailable | unknown} for the allowed models; null = not checked */
+  health_models?: Record<string, string> | null
 }
 export interface ConfigRow {
   key: string

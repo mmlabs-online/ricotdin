@@ -16,6 +16,7 @@ ADMIN_CONFIG_SAFE_FIELDS = (
     "health_status",
     "health_checked_at",
     "health_detail",
+    "health_models",
 )
 
 

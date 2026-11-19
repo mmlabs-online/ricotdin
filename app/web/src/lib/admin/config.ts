@@ -51,6 +51,22 @@ export function healthStatusKind(status: string | null): 'success' | 'danger' | 
   return status === 'healthy' ? 'success' : status === 'unhealthy' ? 'danger' : 'processing'
 }
 
+export type ModelResult = 'ok' | 'limited' | 'unavailable' | 'unknown'
+const MODEL_RESULTS: readonly string[] = ['ok', 'limited', 'unavailable', 'unknown']
+
+/** ADM-12 `health_models` → rows in API order; null = models not checked (key failed or never checked). */
+export function keyModelResults(raw: unknown): { model: string; result: ModelResult }[] | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  return Object.entries(raw as Record<string, unknown>).map(([model, v]) => ({
+    model,
+    result: typeof v === 'string' && MODEL_RESULTS.includes(v) ? (v as ModelResult) : 'unknown',
+  }))
+}
+
+export function modelResultKind(result: ModelResult): 'success' | 'danger' | 'processing' {
+  return result === 'ok' ? 'success' : result === 'unavailable' ? 'danger' : 'processing'
+}
+
 // --- app config ----------------------------------------------------------------------------------
 
 export type ConfigKind = 'retention' | 'flag' | 'bool' | 'number' | 'string' | 'readonly'

@@ -11,7 +11,9 @@ import {
   generationProblem,
   healthStatusKind,
   keyProblem,
+  keyModelResults,
   listText,
+  modelResultKind,
   parseConfigInput,
   parseList,
   providerOfKey,
@@ -43,6 +45,28 @@ describe('provider keys', () => {
     expect(healthStatusKind('unhealthy')).toBe('danger')
     expect(healthStatusKind('unknown')).toBe('processing')
     expect(healthStatusKind(null)).toBe('processing')
+  })
+
+  it('per-model results (ADM-12): null = not checked, unknown values read as unknown', () => {
+    expect(keyModelResults(null)).toBeNull()
+    expect(keyModelResults(undefined)).toBeNull()
+    expect(keyModelResults('x')).toBeNull()
+    expect(keyModelResults([1])).toBeNull()
+    expect(keyModelResults({})).toEqual([])
+    expect(keyModelResults({ 'gpt-4o': 'ok', 'gpt-4o-mini': 'unavailable', a: 'limited', b: 'weird', c: 3 })).toEqual([
+      { model: 'gpt-4o', result: 'ok' },
+      { model: 'gpt-4o-mini', result: 'unavailable' },
+      { model: 'a', result: 'limited' },
+      { model: 'b', result: 'unknown' },
+      { model: 'c', result: 'unknown' },
+    ])
+  })
+
+  it('model result → badge kind', () => {
+    expect(modelResultKind('ok')).toBe('success')
+    expect(modelResultKind('unavailable')).toBe('danger')
+    expect(modelResultKind('limited')).toBe('processing')
+    expect(modelResultKind('unknown')).toBe('processing')
   })
 })
 
