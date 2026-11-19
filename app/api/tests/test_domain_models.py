@@ -127,3 +127,11 @@ def test_bug_024_a_retired_preference_still_counts_as_its_replacement() -> None:
     # a profile default or an upload pick stored as 2.5 is the user's choice of 3.8, not "none"
     assert resolve_generation_model([gemini, gpt], gpt, retired, None) == gemini
     assert resolve_generation_model([gemini, gpt], gpt, None, retired) == gemini
+
+
+def test_bug_024_a_meeting_locked_to_the_retired_model_keeps_its_lock() -> None:
+    # 2.5 is the old default, so most meetings hold it: it means 3.8, it must not be re-resolved
+    # to another provider (e.g. the user's GPT default) just because the settings now read as 3.8.
+    gemini, gpt = ("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")
+    assert lock_is_valid(("gemini", "gemini-2.5-flash"), [gemini, gpt], gpt) is True
+    assert lock_is_valid(("gemini", "gemini-2.5-flash"), [gpt], gemini) is True

@@ -94,6 +94,7 @@ def lock_is_valid(held: Pick, allowed: list[Pick], default: Pick) -> bool:
     """BUG-023: a meeting's locked pair is kept only while the admin still allows it (or it is the
     system default); otherwise it is resolved again, so withdrawing a model (e.g. one without keys)
     moves its meetings to the current choice."""
+    held = current_pick(held)  # BUG-024: a lock on a retired model means its replacement
     return held == default or is_model_allowed(*held, allowed)
 
 

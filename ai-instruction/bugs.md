@@ -555,6 +555,8 @@ It is listed as registered (admin can add it), shown as allowed / default, and o
 - Regression tests: `test_domain_models.py::test_bug_024_a_retired_model_is_not_offered`,
   `::test_bug_024_stored_settings_read_the_retired_model_as_its_replacement`,
   `::test_bug_024_a_retired_preference_still_counts_as_its_replacement` (code review round 1),
+  `::test_bug_024_a_meeting_locked_to_the_retired_model_keeps_its_lock` (Reality Checker round 1: `lock_is_valid` reads the
+  lock through `current_pick`, so a 2.5 lock stays and is called as 3.8 instead of being re-resolved to another provider),
   `test_admin_config_integration.py::test_generation_config`, `test_core_domain_integration.py::test_preferences`
   (all failed before the fix).
 
