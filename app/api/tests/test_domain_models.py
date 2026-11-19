@@ -6,10 +6,13 @@ from typing import Any
 from app.domain.models import (
     FALLBACK_ALLOWED,
     REGISTERED,
+    SELECTABLE,
     allowed_models,
+    current_pick,
     is_model_allowed,
     lock_is_valid,
     model_label,
+    system_default,
 )
 
 SEED = [
@@ -29,7 +32,7 @@ def test_registry_has_the_v1_models() -> None:
 
 def test_allowed_models_from_config() -> None:
     assert allowed_models(SEED) == [
-        ("gemini", "gemini-2.5-flash"),
+        ("gemini", "gemini-3.8-flash"),  # the seeded retired model reads as its replacement
         ("openai", "gpt-4o"),
         ("openai", "gpt-4o-mini"),
     ]
@@ -98,3 +101,20 @@ def test_bug_023_an_allowed_lock_or_the_system_default_stays() -> None:
     assert (
         lock_is_valid(("openai", "not-registered"), [("openai", "not-registered")], gemini) is False
     )
+
+
+def test_bug_024_a_retired_model_is_not_offered() -> None:
+    assert ("gemini", "gemini-2.5-flash") not in SELECTABLE
+    assert ("gemini", "gemini-3.8-flash") in SELECTABLE
+    assert current_pick(("gemini", "gemini-2.5-flash")) == ("gemini", "gemini-3.8-flash")
+    assert current_pick(("openai", "gpt-4o")) == ("openai", "gpt-4o")
+
+
+def test_bug_024_stored_settings_read_the_retired_model_as_its_replacement() -> None:
+    seeded = [{"provider": "gemini", "model": "gemini-2.5-flash"},
+              {"provider": "gemini", "model": "gemini-3.8-flash"},
+              {"provider": "openai", "model": "gpt-4o"}]  # fmt: skip
+    assert allowed_models(seeded) == [("gemini", "gemini-3.8-flash"), ("openai", "gpt-4o")]
+    assert system_default({"provider": "gemini", "model": "gemini-2.5-flash"}) == (
+        "gemini", "gemini-3.8-flash",
+    )  # fmt: skip

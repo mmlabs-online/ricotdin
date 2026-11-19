@@ -10,6 +10,7 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services.ai.catalog import GEMINI_DEFAULT
 from tests.conftest import requires_db
 from tests.test_admin_users_integration import _new_user, _token, admin  # noqa: F401
 from tests.test_meetings_storage_integration import (  # noqa: F401 - fixtures
@@ -187,10 +188,17 @@ def test_generation_config(
     client: TestClient, world: dict[str, Any], admin: dict[str, str]
 ) -> None:
     got = client.get("/admin/generation-config", headers=admin).json()
-    assert {"provider": "gemini", "model": "gemini-2.5-flash"} in [
-        {"provider": m["provider"], "model": m["model"]} for m in got["registeredModels"]
-    ]
-    body = {"allowedModels": [{"provider": "gemini", "model": "gemini-2.5-flash"},
+    listed = [{"provider": m["provider"], "model": m["model"]} for m in got["registeredModels"]]
+    assert {"provider": "gemini", "model": GEMINI_DEFAULT} in listed
+    # BUG-024: the retired model is not offered, and the seeded settings read as its replacement
+    assert {"provider": "gemini", "model": "gemini-2.5-flash"} not in listed
+    assert got["systemDefault"] == {"provider": "gemini", "model": GEMINI_DEFAULT}
+    assert {"provider": "gemini", "model": "gemini-2.5-flash"} not in got["allowedModels"]
+    retired = client.patch("/admin/generation-config", headers=admin,
+                           json={"allowedModels": [{"provider": "gemini",
+                                                    "model": "gemini-2.5-flash"}]})  # fmt: skip
+    assert retired.status_code == 400
+    body = {"allowedModels": [{"provider": "gemini", "model": GEMINI_DEFAULT},
                               {"provider": "openai", "model": "gpt-4o"}],
             "systemDefault": {"provider": "openai", "model": "gpt-4o"}}  # fmt: skip
     r = client.patch("/admin/generation-config", headers=admin, json=body)
@@ -199,7 +207,7 @@ def test_generation_config(
     # dropping the current default from the allow-list is refused
     r = client.patch("/admin/generation-config", headers=admin,
                      json={"allowedModels": [{"provider": "gemini",
-                                              "model": "gemini-2.5-flash"}]})  # fmt: skip
+                                              "model": GEMINI_DEFAULT}]})  # fmt: skip
     assert r.status_code == 400
     bad = client.patch("/admin/generation-config", headers=admin,
                        json={"allowedModels": [{"provider": "x", "model": "y"}]})  # fmt: skip

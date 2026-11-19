@@ -148,7 +148,7 @@ def test_the_whole_pipeline_reaches_done(world: dict[str, Any]) -> None:
     status, summary, provider_, model = _sql(
         world["db"], "SELECT status, summary, generation_provider, generation_model FROM meetings "
         "WHERE id = %s", case.meeting)[0]  # fmt: skip
-    assert (summary, provider_, model) == ("Roadmap sync.", "gemini", "gemini-2.5-flash")
+    assert (summary, provider_, model) == ("Roadmap sync.", "gemini", "gemini-3.8-flash")  # BUG-024
     counts = _sql(world["db"], "SELECT (SELECT count(*) FROM transcript_segments WHERE "
                   "meeting_id = %s), (SELECT count(*) FROM todos WHERE meeting_id = %s), "
                   "(SELECT count(*) FROM transcript_chunks WHERE meeting_id = %s)",

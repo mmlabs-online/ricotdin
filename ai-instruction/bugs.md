@@ -34,6 +34,7 @@
 | BUG-021 | Wallet reconcile never closes a drift: the adjustment moves wallet and ledger by the same amount, so each 5-min run shifts the balance again | S1 | open | v1.1.1 | QUO-04 | hotfix | — | v1 frozen + not deployed; v2 fixed by design in ARC-08e (wallet set to the ledger sum) |
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
 | BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #127 |
+| BUG-024 | Retired model gemini-2.5-flash is still offered: admin model list, profile picker and the seeded allowed list / system default still show it | S3 | in_progress | v2.2.2 | ARC-08c | bugfix | — | claude/tender-gates-7feyr1 |
 
 ---
 
@@ -525,3 +526,23 @@ Every later run reuses the locked pair and fails again with the same `NoUsableKe
   `test_worker_analyse_integration.py::test_bug_023_a_lock_the_admin_no_longer_allows_is_re_resolved`,
   `test_chat_integration.py::test_bug_023_a_meeting_locked_to_a_model_no_longer_allowed_uses_the_system_default`
   (all failed before the fix).
+
+## BUG-024 — Retired model gemini-2.5-flash is still offered in the model pickers
+
+**Reported:** 2026-11-19 · **Severity:** S3 (works through the BUG-022 mapping, but admins and users can still pick a model Google no longer serves) · **Found in:** v2.2.2 · **Feature:** ARC-08c
+
+**Steps to reproduce**
+1. Production v2.2.2 with the seeded settings (`generation.allowed_models` = gemini-2.5-flash, gpt-4o, gpt-4o-mini; `generation.system_default` = gemini-2.5-flash).
+2. `/admin` → generation config: "Gemini — gemini-2.5-flash" is listed, allowed and the system default.
+3. `/profile` → default model: "Gemini — gemini-2.5-flash" is offered.
+
+**Expected**
+A retired model is not offered anywhere; data that still names it keeps working (owner choice: hide it, no migration).
+
+**Actual**
+It is listed as registered (admin can add it), shown as allowed / default, and offered in the profile and upload pickers.
+
+**Root cause** (confirmed by code reading)
+- `app/api/app/services/ai/catalog.py:65` keeps `gemini-2.5-flash` in `MODELS` (BUG-022 kept it so stored rows stay valid), so `domain/models.py:10` `REGISTERED` contains it.
+- `app/api/app/routers/admin/config.py:318` lists every `REGISTERED` pair; `allowed_models()` / `system_default()` (`domain/models.py:16`, `:63`) return the stored pairs as they are, so the seeded 2.5 entries reach `/admin` and `/profile/preferences` (`routers/profile.py:193`).
+

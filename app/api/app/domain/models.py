@@ -3,14 +3,22 @@ v1 preferences route). Pure. The model list lives in ``app.services.ai.catalog``
 
 from typing import Any
 
-from app.services.ai.catalog import GEMINI_DEFAULT, MODELS
+from app.services.ai.catalog import GEMINI_DEFAULT, MODELS, RETIRED
 
 Pick = tuple[str, str]  # (provider, model)
 
 REGISTERED: tuple[Pick, ...] = tuple((m.provider, m.model) for m in MODELS)
+# BUG-024: what admins and users may pick: the registered models minus the retired ones (those stay
+# registered so stored rows keep working, but are read as their replacement).
+SELECTABLE: tuple[Pick, ...] = tuple(p for p in REGISTERED if p not in RETIRED)
 _LABELS = {(m.provider, m.model): m.label for m in MODELS}
 SYSTEM_DEFAULT: Pick = ("gemini", GEMINI_DEFAULT)
 FALLBACK_ALLOWED: list[Pick] = [SYSTEM_DEFAULT]
+
+
+def current_pick(pick: Pick) -> Pick:
+    """A retired (provider, model) read as its replacement (BUG-024); anything else unchanged."""
+    return (pick[0], RETIRED[pick]) if pick in RETIRED else pick
 
 
 def allowed_models(raw: Any) -> list[Pick]:
@@ -27,7 +35,7 @@ def allowed_models(raw: Any) -> list[Pick]:
         provider, model = item.get("provider"), item.get("model")
         if not isinstance(provider, str) or not isinstance(model, str):
             continue
-        pick = (provider, model)
+        pick = current_pick((provider, model))
         if pick in REGISTERED and pick not in out:
             out.append(pick)
     return out
@@ -64,6 +72,8 @@ def parse_pick(raw: Any) -> Pick | None:
 def system_default(raw: Any) -> Pick:
     """``app_settings['generation.system_default']``; an unregistered value → the built-in."""
     pick = parse_pick(raw)
+    if pick is not None:
+        pick = current_pick(pick)
     return pick if pick is not None and pick in REGISTERED else SYSTEM_DEFAULT
 
 
