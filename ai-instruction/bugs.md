@@ -35,7 +35,7 @@
 | BUG-022 | Meeting analyse fails with "AIRejected: gemini HTTP 404": Google no longer serves gemini-2.5-flash to new users, while the key health check says healthy | S1 | fixed | v2.2.0 | ARC-08c, ARC-08e | bugfix | main | fix/BUG-022-gemini-model-retired, PR #126 |
 | BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #127 |
 | BUG-024 | Retired model gemini-2.5-flash is still offered: admin model list, profile picker and the seeded allowed list / system default still show it | S3 | fixed | v2.2.2 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #128 |
-| BUG-025 | Meeting analyse fails with "AIUnavailable: all 2 gemini key(s) exhausted after 4 attempt(s) (last error ProviderTransportError)": no HTTP answer from Gemini (suspected read timeout), logged without the cause | S2 | open | v2.2.2 | ARC-08c | — | — | |
+| BUG-025 | Meeting analyse fails with "AIUnavailable: all 2 gemini key(s) exhausted after 4 attempt(s) (last error ProviderTransportError)": no HTTP answer from Gemini (network failure, not keys or quota), logged without the cause | S2 | fixed | v2.2.2 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1 |
 
 ---
 
@@ -591,7 +591,22 @@ Every attempt on both keys ends without an HTTP answer; the user message suggest
   `AIUnavailable` message names keys and quota for any failure (`app/api/app/services/keys/pool.py:81`), so the two causes
   cannot be told apart from the logs.
 
-**Fix** (proposed, not done): log the transport subtype; say "the AI service did not answer in time" instead of keys / quota
-for transport errors; then, if it is a timeout, raise the read timeout for analyse and/or bound the output (thinking budget,
-`maxOutputTokens`, or chunked analysis), with a test on the timeout path.
+**Root cause update (2026-11-19, while fixing)**
+- Not the 300 s read timeout: a worker step is cancelled after 12 min (`app/api/app/worker/policy.py:13` `STEP_TIMEOUT_S`),
+  so 4 completed attempts each failed in under ~3 min. The calls failed fast with a network error (connect / DNS /
+  connection reset or a connect timeout of 30 s) — something between the server and Google, which code cannot fix.
+  Raising the read timeout (owner's chosen option) was therefore dropped: it would not help and would collide with the
+  step timeout.
 
+**Fix** (bugfix on `main`, owner choice; no migration)
+- `app/api/app/services/keys/pool.py` `AllKeysExhausted`: when the last error is a network error or timeout
+  (`ConnectionError` / `TimeoutError`, e.g. `ProviderTransportError`), the message says
+  "<provider> did not answer … network error or timeout (last error ProviderTransportError: gemini ConnectError)" instead of
+  "check key validity and quota". Key / quota failures keep the old message.
+- `describe_error()`: the pool's "transient error; rotating" log line now carries the transport error text
+  (`ProviderTransportError: gemini ReadTimeout`), so logs tell a timeout from a connect failure. Other errors keep only the
+  class name (a provider error body could carry anything).
+- Regression tests: `test_key_pool.py::test_bug_025_a_network_failure_is_not_reported_as_a_key_or_quota_problem`,
+  `::test_bug_025_the_log_names_the_transport_error` (both failed before the fix).
+- Owner follow-up: after deploying, the next failure's log / `last_error` names the exact error. A `ConnectError` /
+  `ConnectTimeout` points at the server's network to `generativelanguage.googleapis.com` (DNS, firewall, proxy).

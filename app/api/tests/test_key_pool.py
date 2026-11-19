@@ -472,3 +472,29 @@ def test_invalid_keys_are_reported_so_later_pools_skip_them() -> None:
 
     _run(go)
     assert reported == ["k0"]
+
+
+def test_bug_025_a_network_failure_is_not_reported_as_a_key_or_quota_problem() -> None:
+    # Gemini never answered (connect / read timeout): the message must say so and name the
+    # transport error, not send the admin to check keys and quota.
+    class Transport(ConnectionError):
+        pass
+
+    exc = AllKeysExhausted("gemini", 2, 4, Transport("gemini ConnectTimeout"))
+    assert "check key validity and quota" not in str(exc)
+    assert "did not answer" in str(exc) and "gemini ConnectTimeout" in str(exc)
+    timeout = AllKeysExhausted("gemini", 2, 4, TimeoutError("gemini ReadTimeout"))
+    assert "did not answer" in str(timeout) and "gemini ReadTimeout" in str(timeout)
+    # a key / quota failure keeps the old hint
+    assert "check key validity and quota" in str(AllKeysExhausted("gemini", 2, 4, None))
+
+
+def test_bug_025_the_log_names_the_transport_error() -> None:
+    from app.services.keys.pool import describe_error
+
+    assert describe_error(ConnectionError("gemini ConnectTimeout")) == (
+        "ConnectionError: gemini ConnectTimeout"
+    )
+    assert describe_error(TimeoutError("gemini ReadTimeout")) == "TimeoutError: gemini ReadTimeout"
+    # other errors keep only the class name (an HTTP error body could carry anything)
+    assert describe_error(ValueError("secret-ish body")) == "ValueError"
