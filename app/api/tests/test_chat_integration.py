@@ -22,6 +22,7 @@ from app.routers.chat import (
     RETRIEVAL_ERROR_REPLY,
     chat_limiter,
 )
+from app.services.ai.catalog import GEMINI_DEFAULT
 from app.services.ai.service import AIService
 from app.services.keys.pool import KeyWithMeta
 from tests.conftest import requires_db
@@ -265,7 +266,7 @@ def test_folder_scope_searches_only_the_folder(
     in_folder = {str(r[0]) for r in _sql(world["db"], "SELECT id FROM meetings WHERE "
                                           "folder_id = %s", world["f"])}  # fmt: skip
     assert str(inside) in cited and cited <= in_folder
-    assert ai.models == ["gemini:gemini-2.5-flash"]  # cross-meeting: the system default
+    assert ai.models == [f"gemini:{GEMINI_DEFAULT}"]  # cross-meeting: the system default
     history = client.get(f"/chat?folderId={world['f']}", headers=_as(client, "c"))
     assert history.status_code == 200 and len(history.json()["messages"]) == 2
     assert client.get(f"/chat?folderId={world['f']}", headers=_as(client, "d")).status_code == 403
@@ -443,7 +444,7 @@ def test_a_meeting_without_a_locked_model_uses_the_system_default(
     _queries(world, "a")
     mid = _meeting(world, "a", locked=False)
     assert _ask(client, "a", meetingId=str(mid)).status_code == 200
-    assert ai.models == ["gemini:gemini-2.5-flash"]
+    assert ai.models == [f"gemini:{GEMINI_DEFAULT}"]
     assert _sql(world["db"], "SELECT generation_provider FROM meetings WHERE id = %s", mid) == [
         (None,)
     ]  # chat never locks a model
