@@ -53,12 +53,13 @@ describe('provider keys', () => {
     expect(keyModelResults('x')).toBeNull()
     expect(keyModelResults([1])).toBeNull()
     expect(keyModelResults({})).toEqual([])
-    expect(keyModelResults({ 'gpt-4o': 'ok', 'gpt-4o-mini': 'unavailable', a: 'limited', b: 'weird', c: 3 })).toEqual([
-      { model: 'gpt-4o', result: 'ok' },
-      { model: 'gpt-4o-mini', result: 'unavailable' },
+    // sorted by name: jsonb keeps no key order
+    expect(keyModelResults({ 'gpt-4o-mini': 'unavailable', c: 3, 'gpt-4o': 'ok', b: 'weird', a: 'limited' })).toEqual([
       { model: 'a', result: 'limited' },
       { model: 'b', result: 'unknown' },
       { model: 'c', result: 'unknown' },
+      { model: 'gpt-4o', result: 'ok' },
+      { model: 'gpt-4o-mini', result: 'unavailable' },
     ])
   })
 

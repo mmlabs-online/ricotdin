@@ -54,13 +54,15 @@ export function healthStatusKind(status: string | null): 'success' | 'danger' | 
 export type ModelResult = 'ok' | 'limited' | 'unavailable' | 'unknown'
 const MODEL_RESULTS: readonly string[] = ['ok', 'limited', 'unavailable', 'unknown']
 
-/** ADM-12 `health_models` → rows in API order; null = models not checked (key failed or never checked). */
+/** ADM-12 `health_models` → rows sorted by model (jsonb keeps no key order); null = models not checked. */
 export function keyModelResults(raw: unknown): { model: string; result: ModelResult }[] | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  return Object.entries(raw as Record<string, unknown>).map(([model, v]) => ({
-    model,
-    result: typeof v === 'string' && MODEL_RESULTS.includes(v) ? (v as ModelResult) : 'unknown',
-  }))
+  return Object.entries(raw as Record<string, unknown>)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([model, v]) => ({
+      model,
+      result: typeof v === 'string' && MODEL_RESULTS.includes(v) ? (v as ModelResult) : 'unknown',
+    }))
 }
 
 export function modelResultKind(result: ModelResult): 'success' | 'danger' | 'processing' {

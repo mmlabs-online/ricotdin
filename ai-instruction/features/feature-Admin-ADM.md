@@ -311,7 +311,8 @@ Before ADM-12 the check proved only that a key authenticates (OpenAI, Anthropic:
 
 **Design** (`app/api/app/worker/tasks/keyhealth.py`)
 - The key check is unchanged. Only a **healthy** key is then asked for one token (`max_tokens` / `maxOutputTokens` = 1, prompt `ping`) with each allowed model of its provider (`app_settings['generation.allowed_models']`), in allow-list order. A retired model is called as its replacement (`catalog.api_model`); one call answers both.
-- Result per model: 2xx → `ok`; error code `model_not_found` / `insufficient_quota` / `not_found_error` / `permission_error`, or 401/403/404 → `unavailable`; other 429 → `limited`; anything else / network → `unknown`.
+- Result per model: 2xx → `ok`; error code `model_not_found` / `insufficient_quota` / `not_found_error` / `permission_error` / `billing_error`, an Anthropic 400 naming the "credit balance", or 401/403/404 → `unavailable`; other 429 → `limited`; anything else / network → `unknown`. Known limit: Gemini answers "no quota for this model" with the same 429 as a rate limit, so it reads `limited`.
+- A key's models are probed concurrently; each key's result is written as soon as it is checked (a run cut short keeps the keys already done). The web sorts models by name (jsonb keeps no key order).
 - Stored in `admin_config.health_models jsonb` (migration 0016; worker gets column UPDATE). NULL = not checked (key failed its check, or Speechmatics). Same daily worker run and `POST /admin/keys/healthcheck`; keys never in a URL, bodies never stored or logged (only the error code is read).
 
 **Frontend**

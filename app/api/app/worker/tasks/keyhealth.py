@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import anyio
 import httpx2
 from sqlalchemy import text
 
@@ -40,8 +41,11 @@ MODEL_UNAVAILABLE = "unavailable"  # refused: no access, unknown model, or out o
 MODEL_UNKNOWN = "unknown"  # provider error or network: inconclusive
 # error codes that mean "this key cannot use this model", whatever the HTTP status
 _UNAVAILABLE_CODES = frozenset(
-    {"model_not_found", "insufficient_quota", "not_found_error", "permission_error"}
-)
+    {"model_not_found", "insufficient_quota", "not_found_error", "permission_error",
+     "billing_error"}
+)  # fmt: skip
+# Known limit: Gemini answers "no quota for this model" (free tier limit 0, no billing) with the
+# same 429 RESOURCE_EXHAUSTED as a rate limit, so such a model reads "limited", not "unavailable".
 
 
 @dataclass(frozen=True)
@@ -97,6 +101,8 @@ def _generate(info: catalog.ProviderInfo, model: str, key: str) -> Probe | None:
             {"contents": [{"role": "user", "parts": [{"text": PING}]}],
              "generationConfig": {"maxOutputTokens": 1}},
         )  # fmt: skip
+    # max_tokens, as the adapters send: OpenAI reasoning models (o-series, gpt-5) reject it for
+    # max_completion_tokens and would read "unknown" if added to the catalog.
     chat = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": PING}]}
     if info.kind == "openai_compat":
         return Probe(
@@ -138,9 +144,18 @@ def model_error_code(body: Any) -> str | None:
     return None
 
 
-def classify_model(status: int, code: str | None) -> str:
+def model_error_message(body: Any) -> str:
+    """``error.message`` of a provider error body; only matched, never stored or logged."""
+    err = body.get("error") if isinstance(body, dict) else None
+    msg = err.get("message") if isinstance(err, dict) else None
+    return msg if isinstance(msg, str) else ""
+
+
+def classify_model(status: int, code: str | None, message: str = "") -> str:
     if 200 <= status < 300:
         return MODEL_OK
+    if status == 400 and "credit balance" in message.lower():  # Anthropic, as its adapter reads it
+        return MODEL_UNAVAILABLE
     if code in _UNAVAILABLE_CODES or status in (401, 403, 404):
         return MODEL_UNAVAILABLE
     if status == 429:
@@ -186,13 +201,13 @@ async def probe_model(http: httpx2.AsyncClient, p: Probe) -> str:
         resp = await http.request(p.method, p.url, headers=p.headers, json=p.body)
     except Exception:  # noqa: BLE001 - network, or a key that is not a valid header
         return MODEL_UNKNOWN
-    code = None
+    body: Any = None
     if not 200 <= resp.status_code < 300:
         try:
-            code = model_error_code(resp.json())
+            body = resp.json()
         except ValueError:  # not JSON
-            code = None
-    return classify_model(resp.status_code, code)
+            body = None
+    return classify_model(resp.status_code, model_error_code(body), model_error_message(body))
 
 
 async def check_models(
@@ -202,17 +217,24 @@ async def check_models(
     replacement share one call. None when the provider has no generation models."""
     if provider_of(config_key) not in catalog.PROVIDERS:
         return None
-    out: dict[str, str] = {}
-    by_api: dict[str, str] = {}
+    name = provider_of(config_key) or ""
+    probes: dict[str, Probe] = {}  # api model id -> probe: a retired model shares its call
+    wanted: list[tuple[str, str]] = []
     for model in models_to_check(config_key, allowed):
         p = model_probe_for(config_key, model, key)
-        if p is None:
-            continue
-        api = catalog.api_model(provider_of(config_key) or "", model)
-        if api not in by_api:
-            by_api[api] = await probe_model(http, p)
-        out[model] = by_api[api]
-    return out
+        if p is not None:
+            api = catalog.api_model(name, model)
+            probes.setdefault(api, p)
+            wanted.append((model, api))
+    results: dict[str, str] = {}
+
+    async def one(api: str, p: Probe) -> None:
+        results[api] = await probe_model(http, p)
+
+    async with anyio.create_task_group() as tg:  # one key's models at once: ≤ the allow-list
+        for api, p in probes.items():
+            tg.start_soon(one, api, p)
+    return {model: results[api] for model, api in wanted}
 
 
 async def run_key_health(
@@ -236,26 +258,11 @@ async def run_key_health(
             )
         ).scalar_one_or_none()
     allowed = allowed_models(json.loads(raw) if isinstance(raw, str) else raw)  # jsonb may be text
-    verdicts: list[tuple[str, Verdict, dict[str, str] | None]] = []
-    async with httpx2.AsyncClient(
-        transport=transport, timeout=PROBE_TIMEOUT_S, follow_redirects=False
-    ) as http:
-        for stored in keys:
-            if stored.key is None:
-                verdicts.append(
-                    (stored.id, Verdict("unhealthy", "Key could not be decrypted"), None)
-                )
-                continue
-            p = probe_for(stored.config_key, stored.key)
-            if p is None:
-                continue
-            v = await probe(http, p)
-            models = None
-            if v.status == "healthy":  # a refused or unreachable key: its models stay unchecked
-                models = await check_models(http, stored.config_key, stored.key, allowed)
-            verdicts.append((stored.id, v, models))
-    async with db.role_transaction(group) as conn:
-        for key_id, v, models in verdicts:
+    verdicts: list[Verdict] = []
+
+    async def record(key_id: str, v: Verdict, models: dict[str, str] | None) -> None:
+        # each key on its own: a run cut short by the task timeout keeps the keys already checked
+        async with db.role_transaction(group) as conn:
             await conn.execute(
                 text(
                     "UPDATE admin_config SET health_status = :s, health_detail = :d, "
@@ -264,6 +271,23 @@ async def run_key_health(
                 {"s": v.status, "d": v.detail, "id": key_id,
                  "m": None if models is None else json.dumps(models)},
             )  # fmt: skip
-    counts = summarize([v for _, v, _ in verdicts])
+        verdicts.append(v)
+
+    async with httpx2.AsyncClient(
+        transport=transport, timeout=PROBE_TIMEOUT_S, follow_redirects=False
+    ) as http:
+        for stored in keys:
+            if stored.key is None:
+                await record(stored.id, Verdict("unhealthy", "Key could not be decrypted"), None)
+                continue
+            p = probe_for(stored.config_key, stored.key)
+            if p is None:
+                continue
+            v = await probe(http, p)
+            models = None
+            if v.status == "healthy":  # a refused or unreachable key: its models stay unchecked
+                models = await check_models(http, stored.config_key, stored.key, allowed)
+            await record(stored.id, v, models)
+    counts = summarize(verdicts)
     log.info("key health check done", extra=counts)
     return counts

@@ -20,6 +20,7 @@ from app.worker.tasks.keyhealth import (
     classify_model,
     classify_status,
     model_error_code,
+    model_error_message,
     model_probe_for,
     models_to_check,
     probe_for,
@@ -217,10 +218,25 @@ def test_model_probes_never_put_the_key_in_the_url() -> None:
      (429, "insufficient_quota", MODEL_UNAVAILABLE),  # out of credits: every call fails
      (404, None, MODEL_UNAVAILABLE), (403, None, MODEL_UNAVAILABLE), (401, None, MODEL_UNAVAILABLE),
      (400, "model_not_found", MODEL_UNAVAILABLE), (400, None, MODEL_UNKNOWN),
-     (500, None, MODEL_UNKNOWN), (503, None, MODEL_UNKNOWN), (302, None, MODEL_UNKNOWN)],
+     (500, None, MODEL_UNKNOWN), (503, None, MODEL_UNKNOWN), (302, None, MODEL_UNKNOWN),
+     (400, "billing_error", MODEL_UNAVAILABLE)],  # Anthropic out of credits
 )  # fmt: skip
 def test_classify_model(status: int, code: str | None, result: str) -> None:
     assert classify_model(status, code) == result
+
+
+def test_anthropic_low_credit_400_is_unavailable() -> None:
+    # same rule as the adapter (adapters/anthropic.py): a 400 naming the credit balance
+    msg = "Your credit balance is too low to access the Anthropic API."
+    assert classify_model(400, "invalid_request_error", msg) == MODEL_UNAVAILABLE
+    assert classify_model(400, "invalid_request_error", "max_tokens too small") == MODEL_UNKNOWN
+    assert classify_model(429, None, "credit balance") == MODEL_LIMITED  # only for a 400
+
+
+def test_model_error_message() -> None:
+    assert model_error_message({"error": {"message": "Credit Balance low"}}) == "Credit Balance low"
+    for body in ({"error": {"message": 3}}, {"error": "x"}, {}, None, [1]):
+        assert model_error_message(body) == ""
 
 
 @pytest.mark.parametrize(
