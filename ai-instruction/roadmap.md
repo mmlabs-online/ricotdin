@@ -67,7 +67,7 @@ Done since 2026-11-17: PRF-09, PRO-05, PRO-04, ADM-11 + PRF-13 (v2.1.2), OPS-09 
 | PRF-11 sessions / devices, PRF-12 2FA (superseded 2026-11-17) | Since AUT-05 sign-in is the mmlabs account: sessions, devices and a second factor belong to mmlabs (org-admin), shared by every mmlabs app | If mmlabs adds them, ricotdin only links to its account page |
 | Dependabot | Owner decision 2026-11-09 | — |
 | PRV-01 Gemini billing | Owner decision 2026-10-23 | Outside users, commercialisation, legal requirement |
-| PRV-03, CST-02 | Superseded (PRV-02 purge; storage is Drive, ARC-17) — close CST-02 | — |
+| PRV-03, CST-02, OPS-03, OPS-05 | Superseded (PRV-02 purge; storage is Drive, ARC-17; backups = shared Postgres dumps; v2 deploy = OPS-04/09) — all closed 2026-11-19 | — |
 | Staging environment, v1, v1 → v2 data migration (ARC-03, OPS-02 — both closed as superseded 2026-11-19; BUG-021) | Retired 2026-11-12 (ARC-20): production starts empty, no v1 data | v2 opens to outside users and needs a pre-production check |
 | WebM remux, 39 v1 lint warnings | Low impact | Users complain |
 

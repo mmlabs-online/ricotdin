@@ -91,7 +91,7 @@ v2 has CI and a tag-driven production release (`release.yml` → deployment PR, 
 ---
 
 ### OPS-03 — Periodic DB backup (Supabase Free)
-**Priority:** High | **Status:** ⚠️ Partial — code done; pending owner setup, first green run from `main` and one test restore
+**Priority:** High | **Status:** ⛔ Superseded (owner 2026-11-19): Supabase retired; nightly dumps of the shared Postgres back up v2.
 
 > **Superseded (ARC-20 / ARC-16):** the Supabase/Neon `backup.yml` workflow below is removed and its
 > pending setup steps are dropped; Supabase is never backed up again (no final dump, owner decision
@@ -235,7 +235,7 @@ deployment PR. Rejected: replacing with the bare template (loses verify/guards);
 ---
 
 ### OPS-05 — Deployment-repo setup + release verification
-**Priority:** High | **Status:** ⚠️ Partial — drafts done; pending owner copy + first pipeline deploy + verification prompt
+**Priority:** High | **Status:** ⛔ Superseded (owner 2026-11-19): v2 deploys via `apps/ricotdin-v2` (OPS-04, OPS-09).
 
 **User Story**  
 As the owner, I want ricotdin set up in mmlabs-online/deployment and a repeatable check that a release really runs there so that merging a release PR is proven to deploy the right version.
