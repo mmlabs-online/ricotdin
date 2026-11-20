@@ -51,7 +51,7 @@ As the product owner, I want to compute costs at real scale to understand the ec
 ---
 
 ### CST-02 — Audio storage offload
-**Status:** ❌ Not started
+**Status:** ⛔ Superseded (owner 2026-11-19): audio lives on Google Drive (ARC-17), purged by retention (PRV-02).
 
 **User Story**  
 As the system, I want to move audio to R2 or purge after processing so I don't hit the storage cap.
