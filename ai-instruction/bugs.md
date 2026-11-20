@@ -36,6 +36,16 @@
 | BUG-023 | A meeting locked to a model the admin no longer allows (e.g. OpenAI GPT) keeps calling it on reprocess, regenerate and chat: NoUsableKeys openai after switching to Gemini | S2 | fixed | v2.2.0 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #127 |
 | BUG-024 | Retired model gemini-2.5-flash is still offered: admin model list, profile picker and the seeded allowed list / system default still show it | S3 | fixed | v2.2.2 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #128 |
 | BUG-025 | Meeting analyse fails with "AIUnavailable: all 2 gemini key(s) exhausted after 4 attempt(s) (last error ProviderTransportError)": no HTTP answer from Gemini (network failure, not keys or quota), logged without the cause | S2 | fixed | v2.2.2 | ARC-08c | bugfix | main | claude/tender-gates-7feyr1, PR #129 |
+| BUG-026 | Meeting chat answers only after ~80 s with no streaming; a reload while it runs shows the question with no answer and no pending state | S3 | open | v2.2.3 | RAG-01, RAG-03 | — | — | |
+| BUG-027 | WebM meetings have no duration: player shows 0:00 / 0:00 and its bar jumps, list and Admin Pipeline show no length | S3 | open | v2.2.3 | MTD-02, REC-05 | — | — | |
+| BUG-028 | Unreadable upload (m4a "moov atom not found") is accepted, fails in the worker, and the owner sees only a generic "Processing failed" plus a retry that cannot succeed | S3 | open | v2.2.3 | REC-05, PRP-07 | — | — | |
+| BUG-029 | Every request gets the proxy IP 192.168.97.8: activity and audit logs record the wrong IP and all clients share one per-IP rate-limit bucket | S3 | open | v2.2.3 | PRF-09, ADM-07, ARC-04 | — | — | |
+| BUG-030 | Meeting chat composer keeps the sent question until the answer arrives (cleared only on success) | S4 | open | v2.2.3 | RAG-01 | — | — | |
+| BUG-031 | Admin Pipeline "Error" column shows a failed attempt's error on jobs that later succeeded (Done) | S4 | open | v2.2.3 | ADM-04 | — | — | |
+| BUG-032 | Meeting time differs between list (started_at, 11:22) and detail / Admin Pipeline (created_at, 11:23) | S4 | open | v2.2.3 | MMG-01 | — | — | |
+| BUG-033 | Admin Usage: Gemini total tokens exceed input + output (thinking tokens not recorded) and embedding calls show 0 tokens | S4 | open | v2.2.3 | ADM-05 | — | — | |
+| BUG-034 | Search in content admits unrelated "related" meetings (cosine floor 0.5) and counts them as matches | S4 | open | v2.2.3 | PRO-05 | — | — | |
+| BUG-035 | Profile Balance: "Audio minutes left" shows hours + minutes and large numbers have no thousands separator | S4 | open | v2.2.3 | QUO-05 | — | — | |
 
 ---
 
@@ -611,3 +621,225 @@ Every attempt on both keys ends without an HTTP answer; the user message suggest
   `::test_bug_025_the_log_names_the_transport_error` (both failed before the fix).
 - Owner follow-up: after deploying, the next failure's log / `last_error` names the exact error. A `ConnectError` /
   `ConnectTimeout` points at the server's network to `generativelanguage.googleapis.com` (DNS, firewall, proxy).
+
+## BUG-026 — Meeting chat answers only after ~80 s with no streaming; a reload while it runs shows the question with no answer
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S3 (chat works but looks hung; users reload, resend and spend quota twice) · **Found in:** v2.2.3 · **Feature:** RAG-01, RAG-03
+
+**Steps to reproduce**
+1. Production, meeting "DaSSO PoC sharing" (`/meetings/0558993a-ecb1-4b81-ad80-a38befaae301`), panel "Ask about this meeting".
+2. Ask "What is Phase 1 about?" and send.
+3. Second run: ask "Who presented the Grafana demo?", wait ~100 s, then reload the page.
+
+**Expected**
+The answer starts within a few seconds (streamed) or the UI shows progress / a timeout. After a reload, a question still being answered shows as pending and the answer appears when ready.
+
+**Actual**
+- Only "Thinking…" until the whole answer arrives: the `/chat` request returned `200 application/json` after **80,337 ms** (measured in the browser), no bytes before that.
+- After the reload the question shows as a normal bubble with no answer and no "Thinking…"; the answer appears only after another manual reload (the server finished it in the background).
+- An older question in the same chat ended with "I encountered an error while generating an answer. Please try again."
+
+**Root cause** (non-streaming design and reload state: confirmed by reading code; source of the 80 s: suspected)
+- `app/api/app/routers/chat.py:236-322` `POST /chat` returns one `dict`: it commits the user question (:278-284) and the quota charge (:290-298) first, then runs retrieval (`_retrieve`, :424-465) and one blocking `ai.generate_json(...)` (:408-416), and stores the assistant reply only after it (:314-315). No `StreamingResponse` / SSE.
+- `app/api/app/services/ai/service.py:145` read timeout 300 s; key pool `POOL_CONFIG` (:56-59) auto attempts `min(2*keys, 16)` with backoff and up to 30 s cooldown waits (`app/api/app/services/keys/pool.py:232-233, 258-275`). The web client has no timeout / AbortSignal.
+- Pending state lives only in component memory: `app/web/src/components/meeting/MeetingChat.tsx:28, 49, 62` (`asked`); `app/web/src/components/chat/ChatMessages.tsx:47-60` shows "Thinking…" only while `asked` is set. `GET /chat?meetingId=` (`chat.py:189-230`) returns no pending flag and `useMeetingChat` (`app/web/src/api/meetingDetail.ts:204-214`) does not poll (`refetchOnWindowFocus: false` at :211).
+- The 80 s is most likely model generation time with structured output, plus any key rotation after errors (Admin Usage: 16 errors out of 24 `gemini-3.8-flash` calls in the last 30 days). Check `usage_log` rows for these chat calls (`status`, `http_code`, `key_id`, latency) to split generation from retries.
+
+**Fix**
+—
+
+## BUG-027 — WebM meetings have no duration: player 0:00 / 0:00, jumping bar, no length in list and Admin Pipeline
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S3 (cannot scrub the recording; workaround: transcript and citation chips still seek) · **Found in:** v2.2.3 · **Feature:** MTD-02, REC-05
+
+**Steps to reproduce**
+1. Production, open "DaSSO PoC sharing" (WebM; also "Nov 19, 2026, 8:14 AM" and "8:10 AM").
+2. Look at the player, press play, then click a chat citation chip (e.g. 45:30).
+3. Look at the meetings list row and Admin → Pipeline "Length".
+
+**Expected**
+Player shows `0:00 / 47:xx` and a stable progress bar; list shows "· NN min"; Admin Length shows the time.
+
+**Actual**
+- `audio.duration === Infinity`; the player shows `0:00 / 0:00`, later only the current time. Seeking via the chip works (`currentTime` 2730 s) but the bar shows ~35 %, ~65 % and ~99 % for the same position.
+- List shows no duration; Admin Pipeline Length is "—" for the three meetings. An uploaded m4a meeting shows "18 min".
+- `/media` serves the file fine (`206`, `audio/webm`): the container has no Duration / Cues.
+
+**Root cause** (confirmed by reading code; which client path sent null: suspected)
+- MediaRecorder output is live WebM without Duration or Cues (`app/web/src/lib/audio/useRecorder.ts:108-131`); nothing remuxes it (known limit noted in MTD-02 and `app/web/src/lib/audio/useAudioDurationFix.ts:11-12`).
+- The server never stores a duration: `meetings.duration_seconds` is written only at create from the client value (`app/api/app/routers/meetings.py:599-614`, `app/api/app/domain/uploads.py:115-117`). The worker's ffprobe duration (`app/api/app/worker/start.py:119-124`, `app/api/app/worker/probe.py:46-57`) is used only for the quota estimate (`app/api/app/worker/quota.py:29-33`).
+- A `.webm` uploaded through the file panel sends null: `app/web/src/components/FileUploadPanel.tsx:31` turns Infinity into 0 and :95 sends `duration || null`. (The Recorder sends `rec.elapsedSeconds`, `app/web/src/components/Recorder.tsx:102`; check the create payload if these came from the Recorder.)
+- The player's duration scan (`useAudioDurationFix.ts:94`) runs only with flag `user_hack_audio_render`, default false (`app/api/migrations/sql/0001_baseline.sql:1128`).
+- Possible direction: write the ffprobe duration (after a `-c copy` remux, or by decoding) to `meetings.duration_seconds` in the worker, and remux recorded WebM so it carries Duration / Cues.
+
+**Fix**
+—
+
+## BUG-028 — Unreadable upload is accepted, fails in the worker, and the owner sees only a generic failure with a useless retry
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S3 · **Found in:** v2.2.3 · **Feature:** REC-05, PRP-07
+
+**Steps to reproduce**
+1. Production, open meeting "Nov 19, 2026, 8:01 AM" (`/meetings/7f8adcf2-7500-48a5-897e-b2208d3e2ef9`).
+2. Compare with Admin → Pipeline for the same meeting.
+
+**Expected**
+A file that cannot be read is rejected at upload, or at least the owner sees why it failed and is not offered a re-run that cannot succeed.
+
+**Actual**
+- Owner page: "Processing failed — Run it again, or ask an administrator if it keeps failing." and a **Process again** button. Player `0:00 / 0:00`, `audio.error.code = 4`.
+- Admin Pipeline: `failed · start · try 1` — "The file could not be read. Please upload a valid audio or video file. — ffprobe failed to analyse the file: … moov atom not found … source.m4a: Invalid data found when processing input". The stored file has a valid `ftyp M4A` header but no `moov` atom (truncated).
+- Same pattern: "Nov 19, 2026, 11:12 AM" (another user) failed with "Invalid file: File contains no audio stream".
+
+**Root cause** (confirmed by reading code; whether the source file was already broken or truncated on upload: unknown)
+- `POST /meetings/{id}/uploaded` (`app/api/app/routers/meetings.py:628-687`) confirms only Drive id, folder, size, type and md5 (`app/api/app/services/storage/gdrive.py:512-555`) and queues the job (:684); the first probe is in the worker (`app/api/app/worker/start.py:123`, `app/api/app/worker/audio.py:132-135`). REC-05 in tracking.md still describes ffprobe validation before the pipeline.
+- The worker stores the user-safe text in `meetings.error_message` (`app/api/app/worker/runner.py:250-253, 271-295`; `app/api/app/worker/messages.py:48-51`) and the API returns it (`meetings.py:91`), but the page uses it only to detect quota failures (`app/web/src/lib/meetings/detail.ts:43-45`) and always shows the fixed text (`app/web/src/routes/MeetingDetailPage.tsx:379-392`, `app/web/src/i18n/locales/en.json:1088-1090`).
+- "Process again" is shown for any failed meeting with audio (`detail.ts:145-147` `canReprocess`), including terminal file errors.
+
+**Fix**
+—
+
+## BUG-029 — Every request gets the proxy IP 192.168.97.8 (activity / audit IP wrong, one shared rate-limit bucket)
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S3 (audit data wrong; one client hitting a per-IP limit throttles everyone) · **Found in:** v2.2.3 · **Feature:** PRF-09, ADM-07, ARC-04
+
+**Steps to reproduce**
+1. Production, Profile → Activity.
+2. Look at the IP of events from different browsers and days.
+
+**Expected**
+The client's public IP (from Cloudflare / the trusted proxy).
+
+**Actual**
+Every event (questions, uploads, folder shares, recording notice; Chrome and Edge, Nov 19 and Nov 20) shows `192.168.97.8`.
+
+**Root cause** (confirmed by reading code and deploy config; that 192.168.97.8 is the cloudflared container: suspected)
+- `app/api/app/auth/deps.py:72-75` `client_ip()` returns `request.client.host` only; no `CF-Connecting-IP` / `X-Forwarded-For` handling. Callers: `app/api/app/routers/activity.py:58`, `meetings.py:551`, `admin/_common.py:53`, `profile.py:328`; the rate-limit key `ip_key` (`deps.py:78`) uses the same value.
+- `app/api/Dockerfile:57-59` runs uvicorn with `--proxy-headers` but no `--forwarded-allow-ips`; production leaves `FORWARDED_ALLOW_IPS` unset on purpose (`docs/ops/deployment-repo/.github/workflows/deploy-ricotdin-v2.yml:165-167`, `docs/ops/deployment-repo/README.md:65-66`, `docs/ops/deployment-repo/apps/ricotdin-v2/compose.yml:25`), so uvicorn ignores the header. `app/api/deploy/compose.example.yml:22` expects `FORWARDED_ALLOW_IPS=${PROXY_SUBNET}`. Also noted in the ARC-04 review (`ai-instruction/features/feature-Architecture-ARC.md:864`).
+- The fix touches the deployment repo (owner decision): trust only the proxy subnet, never `*`.
+
+**Fix**
+—
+
+## BUG-030 — Meeting chat composer keeps the sent question until the answer arrives
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** RAG-01
+
+**Steps to reproduce**
+1. Meeting detail → "Ask about this meeting", type a question, press Enter.
+
+**Expected**
+The input clears as soon as the question bubble appears; it is restored only if sending fails.
+
+**Actual**
+The text stays in the (still editable) textarea for the whole wait (~80 s, see BUG-026) and clears only when the answer arrives.
+
+**Root cause** (confirmed by reading code)
+`app/web/src/components/meeting/MeetingChat.tsx:55` calls `setDraft('')` only in `onSuccess`; nothing clears it at send (:47-50). Only the button is `aria-disabled` while pending (:135, :141).
+
+**Fix**
+—
+
+## BUG-031 — Admin Pipeline "Error" column shows a failed attempt's error on jobs that later succeeded
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** ADM-04
+
+**Steps to reproduce**
+1. Production, Admin → Pipeline, filter All.
+2. Look at "DaSSO PoC sharing" and "Nov 19, 2026, 11:22 AM" (another user).
+
+**Expected**
+No error (or "recovered after retry") on a Done meeting whose latest job is done.
+
+**Actual**
+Status Done, latest job `done · embed · try 1`, Error "AIUnavailable: all 2 gemini key(s) exhausted after 4 attempt(s); check key validity and quota (last error ProviderTransportError / ProviderHTTPError 503)". Chat and content search work for DaSSO, so the embed did finish.
+
+**Root cause** (confirmed by reading code)
+- A transient retry writes `jobs.last_error` (`app/api/app/worker/runner.py:237-245`, also the sweeper at :342-349); the Advance and Done updates (:187-193, :203-208) never clear it. `meetings.error_message` is cleared (`start.py:37`, `embed.py:96`), `jobs.last_error` is not.
+- `app/web/src/routes/admin/AdminPipelinePage.tsx:179` shows `j.job?.last_error ?? j.error_message` regardless of job status (data from `app/api/app/routers/admin/ops.py:98-148`).
+
+**Fix**
+—
+
+## BUG-032 — Meeting time differs between the list and the detail page / Admin Pipeline
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** MMG-01
+
+**Steps to reproduce**
+1. Production, meetings list: "DaSSO PoC sharing" shows Nov 19, 2026, 11:22 AM.
+2. Open it: header shows 11:23 AM; Admin Pipeline "Created" and Profile Activity "You added a meeting" also 11:23 AM.
+
+**Expected**
+One time for the same meeting on every screen (or clearly labelled "started" vs "added").
+
+**Actual**
+11:22 in the list, 11:23 elsewhere.
+
+**Root cause** (confirmed by reading code)
+List uses `meeting.started_at ?? meeting.created_at` (`app/web/src/components/meetings/MeetingRow.tsx:45-48`); detail header uses `meeting.created_at` (`app/web/src/routes/MeetingDetailPage.tsx:289`); Admin Pipeline uses `m.created_at` (`app/web/src/routes/admin/AdminPipelinePage.tsx:189`, `app/api/app/routers/admin/ops.py:121`). `started_at` is the recording start / chosen meeting date (`Recorder.tsx:76`, `FileUploadPanel.tsx:96`, `meetings.py:599-603`); `created_at` is the row insert.
+
+**Fix**
+—
+
+## BUG-033 — Admin Usage: Gemini total tokens exceed input + output, embedding calls show 0 tokens
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** ADM-05
+
+**Steps to reproduce**
+1. Production, Admin → Usage, range Oct 21 – Nov 20, 2026.
+
+**Expected**
+Total = the sum of the shown columns (or the extra part, e.g. thinking tokens, is shown); embedding calls report their tokens.
+
+**Actual**
+- `gemini-3.8-flash` key `mmlabs-mmlabs`: 22,855 + 1,906 = 24,761, Total 28,173 (gap 3,412).
+- `gemini-3.8-flash` key `mmlabs-default`: 15,409 + 481 = 15,890, Total 17,869 (gap 1,979).
+- `gemini-embedding-001`: 12 calls, 0 in every token column.
+
+**Root cause** (recording logic confirmed by reading code; that the gap is thinking tokens and that embed responses carry no `usageMetadata`: suspected)
+- `app/api/app/services/ai/adapters/gemini.py:75-82` stores `promptTokenCount` / `candidatesTokenCount` / `totalTokenCount` and ignores `thoughtsTokenCount`.
+- Embeddings: `gemini.py:95-103` reads `usageMetadata.totalTokenCount` from `batchEmbedContents` (usually absent) and `app/api/app/services/ai/service.py:319, 335-341` writes `inp=None, out=None`; the admin query sums with `COALESCE(...,0)` (`app/api/app/routers/admin/ops.py:293-295, 328-330`).
+
+**Fix**
+—
+
+## BUG-034 — Search in content admits unrelated "related" meetings and counts them as matches
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** PRO-05
+
+**Steps to reproduce**
+1. Production, Meetings → Search in content → "Grafana".
+
+**Expected**
+Only meetings that mention or are clearly about Grafana; the header counts real matches.
+
+**Actual**
+"3 meetings for 'Grafana'": DaSSO (correct) plus "Nov 19, 2026, 8:10 AM" and "8:14 AM" — English talk about measures and queries, tagged "· related", with identical snippets in both.
+
+**Root cause** (merge, floor and count: confirmed by reading code; 0.5 being too low for these embeddings and the duplicate content of the two meetings: suspected)
+- `_semantic` (`app/api/app/routers/search.py:124-158`) keeps chunks with `similarity >= SIMILARITY_FLOOR` = 0.5 (`app/api/app/rag/scope.py:18-19`, v1's chat value); `match_transcript_chunks` is plain top-k.
+- `fuse()` (`app/api/app/domain/search.py:181-226`) turns each semantic-only chunk into its own meeting group (:211-217); the count is `data.groups.length` (`app/web/src/routes/SearchPage.tsx:68-70`).
+- `embed_body` (`app/api/app/services/ai/adapters/gemini.py:85-92`) sends no `taskType` (RETRIEVAL_QUERY / RETRIEVAL_DOCUMENT).
+- Identical snippets: with no term match, `excerpt()` takes the first 240 chars of the chunk (`app/api/app/domain/search.py:116-136`); the 8:10 and 8:14 meetings probably hold the same audio.
+
+**Fix**
+—
+
+## BUG-035 — Profile Balance: "Audio minutes left" shows hours + minutes; large numbers have no separator
+
+**Reported:** 2026-11-20 (UAT on production) · **Severity:** S4 · **Found in:** v2.2.3 · **Feature:** QUO-05
+
+**Steps to reproduce**
+1. Production, Profile → Balance.
+
+**Expected**
+Label matches the unit; numbers formatted for the locale (e.g. "100,047").
+
+**Actual**
+"Audio minutes left — 1666 h 3 min"; "Chat questions left — 100047 questions".
+
+**Root cause** (confirmed by reading code)
+`app/web/src/routes/ProfilePage.tsx:474-488` renders `quotaParts(...)` (`app/web/src/lib/profile/profile.ts:5-8`) into `"audioValue": "{{h}} h {{m}} min"` under the label `"audio": "Audio minutes left"` (`app/web/src/i18n/locales/en.json:1396-1400`, same keys in `vi.json`), and passes raw numbers to i18next with no number format (`app/web/src/i18n/index.ts:21`). Same pattern in `app/web/src/routes/admin/AdminUserDetailPage.tsx:252-257`.
+
+**Fix**
+—
